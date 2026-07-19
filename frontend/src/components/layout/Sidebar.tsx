@@ -75,7 +75,7 @@ const navGroups = [
     items: [
       { title: "Staff Management", href: "/staff", icon: Users },
       { title: "Recruitment", href: "/recruitment", icon: UserCheck },
-      { title: "Leave Management", href: "/leaves", icon: Calendar },
+      { title: "Leave Management", href: "/leave", icon: Calendar },
       { title: "Performance", href: "/performance", icon: Trophy },
     ],
   },
