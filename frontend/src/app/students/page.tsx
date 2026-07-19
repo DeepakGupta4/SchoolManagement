@@ -1,158 +1,274 @@
 "use client";
 import React, { useState } from "react";
-import { Search, Plus, Filter, Download, Eye, Edit, Trash2, GraduationCap } from "lucide-react";
-import { Card, CardContent, CardHeader } from "@/components/ui/Card";
-import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
+import { Search, Plus, Filter, Download, Eye, Edit, Trash2, GraduationCap, Phone } from "lucide-react";
 
 const students = [
-  { id: "S001", name: "Aarav Sharma", class: "10-A", roll: 1, gender: "Male", fees: "Paid", attendance: 94, phone: "98765XXXXX", status: "active" },
-  { id: "S002", name: "Priya Patel", class: "10-A", roll: 2, gender: "Female", fees: "Paid", attendance: 98, phone: "87654XXXXX", status: "active" },
-  { id: "S003", name: "Rohan Verma", class: "9-B", roll: 5, gender: "Male", fees: "Pending", attendance: 72, phone: "76543XXXXX", status: "active" },
-  { id: "S004", name: "Sneha Gupta", class: "11-C", roll: 12, gender: "Female", fees: "Paid", attendance: 88, phone: "65432XXXXX", status: "active" },
-  { id: "S005", name: "Karan Singh", class: "8-A", roll: 3, gender: "Male", fees: "Overdue", attendance: 65, phone: "54321XXXXX", status: "inactive" },
-  { id: "S006", name: "Ananya Joshi", class: "12-B", roll: 8, gender: "Female", fees: "Paid", attendance: 96, phone: "43210XXXXX", status: "active" },
-  { id: "S007", name: "Vikram Nair", class: "7-A", roll: 15, gender: "Male", fees: "Pending", attendance: 80, phone: "32109XXXXX", status: "active" },
-  { id: "S008", name: "Meera Iyer", class: "6-B", roll: 7, gender: "Female", fees: "Paid", attendance: 91, phone: "21098XXXXX", status: "active" },
+  { id: "S001", name: "Aarav Sharma",  class: "10-A", roll: 1,  gender: "Male",   fees: "Paid",    attendance: 94, phone: "98765XXXXX", status: "active"   },
+  { id: "S002", name: "Priya Patel",   class: "10-A", roll: 2,  gender: "Female", fees: "Paid",    attendance: 98, phone: "87654XXXXX", status: "active"   },
+  { id: "S003", name: "Rohan Verma",   class: "9-B",  roll: 5,  gender: "Male",   fees: "Pending", attendance: 72, phone: "76543XXXXX", status: "active"   },
+  { id: "S004", name: "Sneha Gupta",   class: "11-C", roll: 12, gender: "Female", fees: "Paid",    attendance: 88, phone: "65432XXXXX", status: "active"   },
+  { id: "S005", name: "Karan Singh",   class: "8-A",  roll: 3,  gender: "Male",   fees: "Overdue", attendance: 65, phone: "54321XXXXX", status: "inactive" },
+  { id: "S006", name: "Ananya Joshi",  class: "12-B", roll: 8,  gender: "Female", fees: "Paid",    attendance: 96, phone: "43210XXXXX", status: "active"   },
+  { id: "S007", name: "Vikram Nair",   class: "7-A",  roll: 15, gender: "Male",   fees: "Pending", attendance: 80, phone: "32109XXXXX", status: "active"   },
+  { id: "S008", name: "Meera Iyer",    class: "6-B",  roll: 7,  gender: "Female", fees: "Paid",    attendance: 91, phone: "21098XXXXX", status: "active"   },
+  { id: "S009", name: "Arjun Reddy",   class: "9-A",  roll: 4,  gender: "Male",   fees: "Paid",    attendance: 87, phone: "11987XXXXX", status: "active"   },
+  { id: "S010", name: "Pooja Mishra",  class: "10-B", roll: 9,  gender: "Female", fees: "Overdue", attendance: 60, phone: "10876XXXXX", status: "inactive" },
 ];
 
-const feeColor: Record<string, "success" | "warning" | "danger"> = {
-  Paid: "success",
-  Pending: "warning",
-  Overdue: "danger",
+const feeStyles: Record<string, { bg: string; color: string }> = {
+  Paid:    { bg: "#f0fdf4", color: "#16a34a" },
+  Pending: { bg: "#fffbeb", color: "#d97706" },
+  Overdue: { bg: "#fff1f2", color: "#e11d48" },
 };
 
-export default function StudentsPage() {
-  const [search, setSearch] = useState("");
-  const [classFilter, setClassFilter] = useState("All");
+const avatarGradients = [
+  "linear-gradient(135deg,#6366f1,#8b5cf6)",
+  "linear-gradient(135deg,#10b981,#059669)",
+  "linear-gradient(135deg,#f59e0b,#d97706)",
+  "linear-gradient(135deg,#f43f5e,#e11d48)",
+  "linear-gradient(135deg,#06b6d4,#0891b2)",
+  "linear-gradient(135deg,#8b5cf6,#7c3aed)",
+];
 
-  const filtered = students.filter((s) => {
+export default function StudentsPage() {
+  const [search, setSearch]           = useState("");
+  const [classFilter, setClassFilter] = useState("All");
+  const [activePage, setActivePage]   = useState(1);
+
+  const filtered = students.filter(s => {
     const matchSearch = s.name.toLowerCase().includes(search.toLowerCase()) || s.id.includes(search);
-    const matchClass = classFilter === "All" || s.class.startsWith(classFilter);
+    const matchClass  = classFilter === "All" || s.class.startsWith(classFilter);
     return matchSearch && matchClass;
   });
 
   return (
-    <div className="space-y-5">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+    <div style={{ maxWidth: "1600px", display: "flex", flexDirection: "column", gap: "24px" }}>
+
+      {/* ── Header ── */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div>
-          <h1 className="text-xl font-bold text-gray-900 dark:text-white">Students</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Manage all student records</p>
+          <h1 style={{ fontSize: "22px", fontWeight: 800, color: "#0f172a", letterSpacing: "-0.3px" }}>Students</h1>
+          <p style={{ fontSize: "13px", color: "#94a3b8", marginTop: "4px" }}>Manage all student records & profiles</p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm"><Download size={14} /> Export</Button>
-          <Button size="sm"><Plus size={14} /> Add Student</Button>
+        <div style={{ display: "flex", gap: "10px" }}>
+          <button style={{ display: "flex", alignItems: "center", gap: "6px", padding: "9px 16px", borderRadius: "12px", border: "1px solid #e2e8f0", background: "#fff", fontSize: "13px", fontWeight: 600, color: "#334155", cursor: "pointer" }}>
+            <Download size={14} /> Export
+          </button>
+          <button style={{ display: "flex", alignItems: "center", gap: "6px", padding: "9px 18px", borderRadius: "12px", border: "none", background: "linear-gradient(135deg,#6366f1,#8b5cf6)", fontSize: "13px", fontWeight: 600, color: "#fff", cursor: "pointer", boxShadow: "0 4px 12px rgba(99,102,241,0.35)" }}>
+            <Plus size={14} /> Add Student
+          </button>
         </div>
       </div>
 
-      {/* Stats Row */}
-      <div className="grid grid-cols-4 gap-4">
+      {/* ── Stats ── */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "16px" }}>
         {[
-          { label: "Total Students", value: "1,240", color: "text-indigo-600" },
-          { label: "Active", value: "1,198", color: "text-emerald-600" },
-          { label: "Fee Defaulters", value: "42", color: "text-red-500" },
-          { label: "Avg Attendance", value: "91.4%", color: "text-amber-600" },
-        ].map((s) => (
-          <Card key={s.label}>
-            <CardContent className="p-4">
-              <p className="text-xs text-gray-500">{s.label}</p>
-              <p className={`text-xl font-bold mt-1 ${s.color}`}>{s.value}</p>
-            </CardContent>
-          </Card>
+          { label: "Total Students",  value: "1,240", color: "#6366f1", bg: "#eff6ff",  icon: "👨‍🎓" },
+          { label: "Active",          value: "1,198", color: "#10b981", bg: "#f0fdf4",  icon: "✅" },
+          { label: "Fee Defaulters",  value: "42",    color: "#e11d48", bg: "#fff1f2",  icon: "⚠️" },
+          { label: "Avg Attendance",  value: "91.4%", color: "#d97706", bg: "#fffbeb",  icon: "📊" },
+        ].map(s => (
+          <div key={s.label} style={{ background: "#fff", borderRadius: "16px", border: "1px solid #f1f5f9", padding: "20px", boxShadow: "0 1px 4px rgba(0,0,0,0.04)", display: "flex", alignItems: "center", gap: "14px" }}>
+            <div style={{ width: "48px", height: "48px", borderRadius: "14px", background: s.bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "22px", flexShrink: 0 }}>
+              {s.icon}
+            </div>
+            <div>
+              <p style={{ fontSize: "12px", color: "#64748b", fontWeight: 500 }}>{s.label}</p>
+              <p style={{ fontSize: "26px", fontWeight: 800, color: s.color, lineHeight: 1.1, letterSpacing: "-0.5px" }}>{s.value}</p>
+            </div>
+          </div>
         ))}
       </div>
 
-      {/* Table Card */}
-      <Card>
-        <CardHeader className="flex flex-row items-center gap-3">
-          <div className="relative flex-1 max-w-sm">
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+      {/* ── Table Card ── */}
+      <div style={{ background: "#fff", borderRadius: "16px", border: "1px solid #f1f5f9", boxShadow: "0 1px 4px rgba(0,0,0,0.04)", overflow: "hidden" }}>
+
+        {/* Filters bar */}
+        <div style={{ padding: "16px 20px", borderBottom: "1px solid #f8fafc", display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+          {/* Search */}
+          <div style={{ position: "relative", flex: 1, maxWidth: "320px" }}>
+            <Search size={14} color="#94a3b8" style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)" }} />
             <input
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={e => setSearch(e.target.value)}
               placeholder="Search by name or ID..."
-              className="w-full pl-9 pr-4 py-2 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              style={{ width: "100%", paddingLeft: "36px", paddingRight: "16px", paddingTop: "9px", paddingBottom: "9px", fontSize: "13px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "12px", outline: "none", color: "#334155", fontFamily: "inherit" }}
+              onFocus={e => { e.target.style.borderColor = "#6366f1"; e.target.style.boxShadow = "0 0 0 3px rgba(99,102,241,0.1)"; }}
+              onBlur={e  => { e.target.style.borderColor = "#e2e8f0"; e.target.style.boxShadow = "none"; }}
             />
           </div>
+
+          {/* Class filter */}
           <select
             value={classFilter}
-            onChange={(e) => setClassFilter(e.target.value)}
-            className="px-3 py-2 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            onChange={e => setClassFilter(e.target.value)}
+            style={{ padding: "9px 14px", fontSize: "13px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "12px", outline: "none", color: "#334155", cursor: "pointer", fontFamily: "inherit" }}
           >
-            {["All", "6", "7", "8", "9", "10", "11", "12"].map((c) => (
-              <option key={c}>{c === "All" ? "All Classes" : `Class ${c}`}</option>
+            {["All", "6", "7", "8", "9", "10", "11", "12"].map(c => (
+              <option key={c} value={c}>{c === "All" ? "All Classes" : `Class ${c}`}</option>
             ))}
           </select>
-          <Button variant="outline" size="sm"><Filter size={14} /> More Filters</Button>
-        </CardHeader>
-        <div className="overflow-x-auto">
-          <table className="w-full">
+
+          <button style={{ display: "flex", alignItems: "center", gap: "6px", padding: "9px 14px", borderRadius: "12px", border: "1px solid #e2e8f0", background: "#f8fafc", fontSize: "13px", color: "#64748b", cursor: "pointer", fontWeight: 500 }}>
+            <Filter size={13} /> More Filters
+          </button>
+
+          <p style={{ marginLeft: "auto", fontSize: "12px", color: "#94a3b8" }}>
+            {filtered.length} students found
+          </p>
+        </div>
+
+        {/* Table */}
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
-              <tr className="border-b border-gray-100 dark:border-gray-800">
-                {["Student", "Class", "Roll No", "Attendance", "Fee Status", "Contact", "Status", "Actions"].map((h) => (
-                  <th key={h} className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{h}</th>
+              <tr style={{ background: "#fafafa", borderBottom: "1px solid #f1f5f9" }}>
+                {["Student", "Class", "Roll No", "Gender", "Attendance", "Fee Status", "Contact", "Status", "Actions"].map(h => (
+                  <th key={h} style={{ padding: "12px 20px", textAlign: "left", fontSize: "11px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em", whiteSpace: "nowrap" }}>
+                    {h}
+                  </th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
-              {filtered.map((s) => (
-                <tr key={s.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                  <td className="px-6 py-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 bg-indigo-100 dark:bg-indigo-950 rounded-xl flex items-center justify-center">
-                        <GraduationCap size={15} className="text-indigo-600" />
+            <tbody>
+              {filtered.map((s, i) => {
+                const fs = feeStyles[s.fees];
+                const grad = avatarGradients[i % avatarGradients.length];
+                const attColor = s.attendance >= 90 ? "#10b981" : s.attendance >= 75 ? "#f59e0b" : "#ef4444";
+
+                return (
+                  <tr
+                    key={s.id}
+                    style={{ borderBottom: i < filtered.length - 1 ? "1px solid #f8fafc" : "none", transition: "background 0.15s" }}
+                    onMouseEnter={e => (e.currentTarget as HTMLTableRowElement).style.background = "#fafafa"}
+                    onMouseLeave={e => (e.currentTarget as HTMLTableRowElement).style.background = "transparent"}
+                  >
+                    {/* Student */}
+                    <td style={{ padding: "14px 20px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                        <div style={{ width: "40px", height: "40px", borderRadius: "12px", background: grad, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: "15px", fontWeight: 700, flexShrink: 0, boxShadow: "0 2px 8px rgba(0,0,0,0.12)" }}>
+                          {s.name.charAt(0)}
+                        </div>
+                        <div>
+                          <p style={{ fontSize: "13px", fontWeight: 600, color: "#0f172a" }}>{s.name}</p>
+                          <p style={{ fontSize: "11px", color: "#94a3b8", marginTop: "1px" }}>{s.id}</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-sm font-medium text-gray-900 dark:text-white">{s.name}</p>
-                        <p className="text-xs text-gray-400">{s.id}</p>
+                    </td>
+
+                    {/* Class */}
+                    <td style={{ padding: "14px 20px" }}>
+                      <span style={{ fontSize: "12px", fontWeight: 600, padding: "4px 10px", borderRadius: "20px", background: "#eff6ff", color: "#2563eb" }}>
+                        Class {s.class}
+                      </span>
+                    </td>
+
+                    {/* Roll */}
+                    <td style={{ padding: "14px 20px", fontSize: "13px", color: "#64748b", fontWeight: 500 }}>
+                      #{String(s.roll).padStart(2, "0")}
+                    </td>
+
+                    {/* Gender */}
+                    <td style={{ padding: "14px 20px" }}>
+                      <span style={{ fontSize: "12px", fontWeight: 600, padding: "4px 10px", borderRadius: "20px", background: s.gender === "Male" ? "#eff6ff" : "#fdf4ff", color: s.gender === "Male" ? "#2563eb" : "#9333ea" }}>
+                        {s.gender}
+                      </span>
+                    </td>
+
+                    {/* Attendance */}
+                    <td style={{ padding: "14px 20px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <div style={{ width: "64px", height: "6px", background: "#f1f5f9", borderRadius: "99px", overflow: "hidden" }}>
+                          <div style={{ height: "100%", width: `${s.attendance}%`, background: attColor, borderRadius: "99px", transition: "width 0.4s ease" }} />
+                        </div>
+                        <span style={{ fontSize: "12px", fontWeight: 700, color: attColor }}>{s.attendance}%</span>
                       </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-3 text-sm text-gray-600 dark:text-gray-400">{s.class}</td>
-                  <td className="px-6 py-3 text-sm text-gray-600 dark:text-gray-400">{s.roll}</td>
-                  <td className="px-6 py-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-16 h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full ${s.attendance >= 90 ? "bg-emerald-500" : s.attendance >= 75 ? "bg-amber-500" : "bg-red-500"}`}
-                          style={{ width: `${s.attendance}%` }}
-                        />
+                    </td>
+
+                    {/* Fee Status */}
+                    <td style={{ padding: "14px 20px" }}>
+                      <span style={{ fontSize: "12px", fontWeight: 700, padding: "4px 10px", borderRadius: "20px", background: fs.bg, color: fs.color }}>
+                        {s.fees}
+                      </span>
+                    </td>
+
+                    {/* Contact */}
+                    <td style={{ padding: "14px 20px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "12px", color: "#64748b" }}>
+                        <Phone size={11} color="#94a3b8" />
+                        {s.phone}
                       </div>
-                      <span className="text-xs text-gray-600 dark:text-gray-400">{s.attendance}%</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-3">
-                    <Badge variant={feeColor[s.fees]}>{s.fees}</Badge>
-                  </td>
-                  <td className="px-6 py-3 text-sm text-gray-600 dark:text-gray-400">{s.phone}</td>
-                  <td className="px-6 py-3">
-                    <Badge variant={s.status === "active" ? "success" : "default"}>{s.status}</Badge>
-                  </td>
-                  <td className="px-6 py-3">
-                    <div className="flex items-center gap-1">
-                      <button className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-gray-500 transition-colors"><Eye size={14} /></button>
-                      <button className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-gray-500 transition-colors"><Edit size={14} /></button>
-                      <button className="p-1.5 hover:bg-red-50 dark:hover:bg-red-950 rounded-lg text-red-400 transition-colors"><Trash2 size={14} /></button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+
+                    {/* Status */}
+                    <td style={{ padding: "14px 20px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: s.status === "active" ? "#22c55e" : "#94a3b8", display: "inline-block" }} />
+                        <span style={{ fontSize: "12px", fontWeight: 600, color: s.status === "active" ? "#16a34a" : "#64748b", textTransform: "capitalize" }}>
+                          {s.status}
+                        </span>
+                      </div>
+                    </td>
+
+                    {/* Actions */}
+                    <td style={{ padding: "14px 20px" }}>
+                      <div style={{ display: "flex", gap: "4px" }}>
+                        {[
+                          { Icon: Eye,    hoverBg: "#eff6ff", color: "#2563eb" },
+                          { Icon: Edit,   hoverBg: "#f0fdf4", color: "#16a34a" },
+                          { Icon: Trash2, hoverBg: "#fff1f2", color: "#e11d48" },
+                        ].map(({ Icon, hoverBg, color }, idx) => (
+                          <button
+                            key={idx}
+                            style={{ padding: "7px", borderRadius: "9px", border: "none", background: "transparent", cursor: "pointer", color: "#94a3b8", transition: "all 0.15s", display: "flex", alignItems: "center", justifyContent: "center" }}
+                            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = hoverBg; (e.currentTarget as HTMLButtonElement).style.color = color; }}
+                            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; (e.currentTarget as HTMLButtonElement).style.color = "#94a3b8"; }}
+                          >
+                            <Icon size={14} />
+                          </button>
+                        ))}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
+
           {filtered.length === 0 && (
-            <div className="text-center py-12 text-gray-400 text-sm">No students found</div>
+            <div style={{ textAlign: "center", padding: "48px", color: "#94a3b8", fontSize: "14px" }}>
+              <GraduationCap size={40} color="#e2e8f0" style={{ margin: "0 auto 12px" }} />
+              <p style={{ fontWeight: 600 }}>No students found</p>
+              <p style={{ fontSize: "12px", marginTop: "4px" }}>Try adjusting your search or filters</p>
+            </div>
           )}
         </div>
-        <div className="px-6 py-3 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between">
-          <p className="text-xs text-gray-500">Showing {filtered.length} of {students.length} students</p>
-          <div className="flex items-center gap-1">
-            {[1, 2, 3, "...", 12].map((p, i) => (
-              <button key={i} className={`w-7 h-7 text-xs rounded-lg transition-colors ${p === 1 ? "bg-indigo-600 text-white" : "hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400"}`}>{p}</button>
+
+        {/* Pagination */}
+        <div style={{ padding: "14px 20px", borderTop: "1px solid #f8fafc", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <p style={{ fontSize: "12px", color: "#94a3b8" }}>
+            Showing <strong style={{ color: "#334155" }}>{filtered.length}</strong> of <strong style={{ color: "#334155" }}>1,240</strong> students
+          </p>
+          <div style={{ display: "flex", gap: "4px" }}>
+            {[1, 2, 3, 4, "...", 12].map((p, i) => (
+              <button
+                key={i}
+                onClick={() => typeof p === "number" && setActivePage(p)}
+                style={{
+                  width: "32px", height: "32px", borderRadius: "9px", border: "none",
+                  cursor: "pointer", fontSize: "12px", fontWeight: 600,
+                  background: activePage === p ? "linear-gradient(135deg,#6366f1,#8b5cf6)" : "#f8fafc",
+                  color: activePage === p ? "#fff" : "#64748b",
+                  boxShadow: activePage === p ? "0 2px 8px rgba(99,102,241,0.3)" : "none",
+                  transition: "all 0.15s",
+                }}
+              >
+                {p}
+              </button>
             ))}
           </div>
         </div>
-      </Card>
+      </div>
     </div>
   );
 }
