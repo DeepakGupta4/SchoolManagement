@@ -8,11 +8,11 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const variants = {
-  primary: "bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm",
-  secondary: "bg-gray-100 hover:bg-gray-200 text-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-200",
-  ghost: "hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400",
-  danger: "bg-red-600 hover:bg-red-700 text-white",
-  outline: "border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300",
+  primary: "bg-primary hover:bg-primary-hover text-white shadow-sm",
+  secondary: "bg-surface-hover hover:bg-border text-text",
+  ghost: "hover:bg-surface-hover text-muted hover:text-text",
+  danger: "bg-danger hover:brightness-110 text-white shadow-sm",
+  outline: "border border-border hover:bg-surface-hover hover:border-border-strong text-text",
 };
 
 const sizes = {
@@ -25,7 +25,7 @@ export function Button({ variant = "primary", size = "md", children, className, 
   return (
     <button
       className={cn(
-        "inline-flex items-center gap-2 font-medium rounded-xl transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed",
+        "focus-ring inline-flex items-center justify-center gap-2 rounded-md font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50",
         variants[variant],
         sizes[size],
         className

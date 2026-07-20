@@ -12,7 +12,7 @@ export function Card({ children, className, onClick }: CardProps) {
     <div
       onClick={onClick}
       className={cn(
-        "bg-white rounded-2xl border border-slate-100 shadow-sm",
+        "rounded-lg border border-border bg-surface-raised shadow-sm",
         onClick && "cursor-pointer card-hover",
         className
       )}
@@ -24,7 +24,12 @@ export function Card({ children, className, onClick }: CardProps) {
 
 export function CardHeader({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={cn("px-5 py-4 border-b border-slate-100 flex items-center justify-between gap-3", className)}>
+    <div
+      className={cn(
+        "flex items-center justify-between gap-3 border-b border-border px-5 py-4",
+        className
+      )}
+    >
       {children}
     </div>
   );

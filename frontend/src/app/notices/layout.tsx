@@ -2,6 +2,6 @@
 import React from "react";
 import { AppShell } from "@/components/layout/AppShell";
 
-export default function TeachersLayout({ children }: { children: React.ReactNode }) {
+export default function NoticesLayout({ children }: { children: React.ReactNode }) {
   return <AppShell>{children}</AppShell>;
 }

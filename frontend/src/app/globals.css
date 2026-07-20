@@ -1,36 +1,202 @@
 @import "tailwindcss";
 
+/* Dark mode is class-driven (next-themes sets .dark on <html>) */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ---------------------------------------------------------------
+   Design tokens
+   Raw values live here under semantic names. Components never
+   hardcode hex — they use the Tailwind utilities mapped in @theme
+   below (bg-surface, text-muted, border-border, shadow-md, ...).
+   Every token has a light value here and a dark override in .dark.
+   --------------------------------------------------------------- */
+:root {
+  /* Surfaces */
+  --bg: #f8fafc;
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --surface-hover: #f1f5f9;
+  --surface-sunken: #f8fafc;
+
+  /* Text */
+  --text: #0f172a;
+  --text-muted: #64748b;
+  --text-subtle: #94a3b8;
+  --text-inverted: #ffffff;
+
+  /* Lines */
+  --border: #e2e8f0;
+  --border-strong: #cbd5e1;
+
+  /* Brand */
+  --primary: #6366f1;
+  --primary-hover: #4f46e5;
+  --primary-soft: #eef2ff;
+  --primary-text: #4338ca;
+
+  /* Status */
+  --success: #10b981;
+  --success-soft: #d1fae5;
+  --success-text: #047857;
+  --warning: #f59e0b;
+  --warning-soft: #fef3c7;
+  --warning-text: #b45309;
+  --danger: #f43f5e;
+  --danger-soft: #ffe4e6;
+  --danger-text: #be123c;
+  --info: #0ea5e9;
+  --info-soft: #e0f2fe;
+  --info-text: #0369a1;
+
+  /* Elevation */
+  --elevation-sm: 0 1px 3px rgb(15 23 42 / 0.06);
+  --elevation-md: 0 4px 12px rgb(15 23 42 / 0.08);
+  --elevation-lg: 0 12px 32px rgb(15 23 42 / 0.12);
+  --elevation-overlay: 0 24px 64px rgb(15 23 42 / 0.22);
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --duration-fast: 120ms;
+  --duration-base: 200ms;
+}
+
+.dark {
+  --bg: #0b1120;
+  --surface: #111827;
+  --surface-raised: #172033;
+  --surface-hover: #1e293b;
+  --surface-sunken: #0f172a;
+
+  --text: #f1f5f9;
+  --text-muted: #94a3b8;
+  --text-subtle: #64748b;
+  --text-inverted: #0f172a;
+
+  --border: #1e293b;
+  --border-strong: #334155;
+
+  --primary: #818cf8;
+  --primary-hover: #a5b4fc;
+  --primary-soft: #1e1b4b;
+  --primary-text: #c7d2fe;
+
+  --success: #34d399;
+  --success-soft: #064e3b;
+  --success-text: #6ee7b7;
+  --warning: #fbbf24;
+  --warning-soft: #451a03;
+  --warning-text: #fcd34d;
+  --danger: #fb7185;
+  --danger-soft: #4c0519;
+  --danger-text: #fda4af;
+  --info: #38bdf8;
+  --info-soft: #082f49;
+  --info-text: #7dd3fc;
+
+  --elevation-sm: 0 1px 3px rgb(0 0 0 / 0.4);
+  --elevation-md: 0 4px 12px rgb(0 0 0 / 0.45);
+  --elevation-lg: 0 12px 32px rgb(0 0 0 / 0.55);
+  --elevation-overlay: 0 24px 64px rgb(0 0 0 / 0.65);
+}
+
+/* Map tokens onto Tailwind's utility namespaces. `inline` keeps the
+   var() reference live so .dark overrides apply without recompiling. */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-hover: var(--surface-hover);
+  --color-surface-sunken: var(--surface-sunken);
+
+  --color-text: var(--text);
+  --color-muted: var(--text-muted);
+  --color-subtle: var(--text-subtle);
+  --color-inverted: var(--text-inverted);
+
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-soft: var(--primary-soft);
+  --color-primary-text: var(--primary-text);
+
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-success-text: var(--success-text);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-warning-text: var(--warning-text);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-danger-text: var(--danger-text);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-info-text: var(--info-text);
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+
+  --shadow-sm: var(--elevation-sm);
+  --shadow-md: var(--elevation-md);
+  --shadow-lg: var(--elevation-lg);
+  --shadow-overlay: var(--elevation-overlay);
+
+  --font-sans: var(--font-inter), system-ui, sans-serif;
+}
+
 * {
   box-sizing: border-box;
   padding: 0;
   margin: 0;
 }
 
-html, body {
+html,
+body {
   max-width: 100vw;
   overflow-x: hidden;
-  font-family: var(--font-inter), system-ui, sans-serif;
+  font-family: var(--font-sans);
+  background: var(--bg);
+  color: var(--text);
 }
 
 /* Custom scrollbar */
-::-webkit-scrollbar { width: 4px; height: 4px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 99px; }
-::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 99px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-subtle);
+}
+
+/* Shared focus ring — every interactive primitive uses this */
+.focus-ring:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
 
 /* Sidebar nav active indicator */
 .nav-active {
   position: relative;
 }
 .nav-active::before {
-  content: '';
+  content: "";
   position: absolute;
   left: 0;
   top: 50%;
   transform: translateY(-50%);
   width: 3px;
   height: 60%;
-  background: #6366f1;
+  background: var(--primary);
   border-radius: 0 4px 4px 0;
 }
 
@@ -44,17 +210,38 @@ html, body {
 
 /* Card hover effect */
 .card-hover {
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition: transform var(--duration-base) var(--ease-out),
+    box-shadow var(--duration-base) var(--ease-out);
 }
 .card-hover:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(0,0,0,0.08);
+  box-shadow: var(--elevation-md);
 }
 
-/* Smooth transitions */
-.sidebar-transition {
-  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+/* Overlay animations (Modal, Drawer, Toast) */
+@keyframes overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
-.content-transition {
-  transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+@keyframes modal-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes toast-in {
+  from { opacity: 0; transform: translateX(16px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
