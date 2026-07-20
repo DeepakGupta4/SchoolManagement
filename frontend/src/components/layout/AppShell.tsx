@@ -9,7 +9,9 @@ import { useSidebarStore } from "@/store";
  * The authenticated app chrome: sidebar + topbar + content well.
  *
  * Every route layout renders this, so shell changes happen in one place.
- * (The sidebar offset is dynamic, so it stays an inline style.)
+ * Below `lg` the sidebar becomes an overlay drawer and the content well
+ * takes the full width, so the rail offset is applied via a CSS variable
+ * that only the desktop breakpoint consumes.
  */
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { isCollapsed } = useSidebarStore();
@@ -19,13 +21,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <Sidebar />
       <Topbar />
       <main
-        className="min-h-screen pt-16"
+        className="min-h-screen pt-16 lg:ml-[var(--rail)]"
         style={{
-          marginLeft: isCollapsed ? "64px" : "260px",
+          ["--rail" as string]: isCollapsed ? "72px" : "260px",
           transition: "margin-left 0.3s cubic-bezier(0.4,0,0.2,1)",
         }}
       >
-        <div className="px-7 pb-12 pt-7">{children}</div>
+        <div className="px-4 pb-12 pt-6 sm:px-7 sm:pt-7">{children}</div>
       </main>
     </div>
   );

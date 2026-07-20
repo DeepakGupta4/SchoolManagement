@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { persist } from "zustand/middleware";
 import { User } from "@/types";
 
 interface AuthStore {
@@ -23,11 +24,27 @@ export const useAuthStore = create<AuthStore>((set) => ({
 }));
 
 interface SidebarStore {
+  /** Desktop rail collapse. Persisted — it's a deliberate user preference. */
   isCollapsed: boolean;
   toggle: () => void;
+  /** Mobile overlay drawer. Never persisted; always starts closed. */
+  isMobileOpen: boolean;
+  openMobile: () => void;
+  closeMobile: () => void;
 }
 
-export const useSidebarStore = create<SidebarStore>((set) => ({
-  isCollapsed: false,
-  toggle: () => set((s) => ({ isCollapsed: !s.isCollapsed })),
-}));
+export const useSidebarStore = create<SidebarStore>()(
+  persist(
+    (set) => ({
+      isCollapsed: false,
+      toggle: () => set((s) => ({ isCollapsed: !s.isCollapsed })),
+      isMobileOpen: false,
+      openMobile: () => set({ isMobileOpen: true }),
+      closeMobile: () => set({ isMobileOpen: false }),
+    }),
+    {
+      name: "sidebar-preferences",
+      partialize: (s) => ({ isCollapsed: s.isCollapsed }),
+    }
+  )
+);

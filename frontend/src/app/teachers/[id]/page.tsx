@@ -5,13 +5,15 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
+  Award,
+  BriefcaseBusiness,
   CalendarDays,
-  Droplet,
+  GraduationCap,
   Mail,
   MapPin,
   Pencil,
   Phone,
-  Stethoscope,
+  Star,
   Trash2,
   UserRound,
 } from "lucide-react";
@@ -27,15 +29,20 @@ import {
   Skeleton,
   useToast,
 } from "@/components/ui";
-import { getStudent, deleteStudent, updateStudent } from "@/lib/api/students";
-import { fullName, type Student, type StudentFormValues, type StudentStatus } from "@/types/student";
-import { StudentFormModal } from "../StudentFormModal";
+import { getTeacher, deleteTeacher, updateTeacher } from "@/lib/api/teachers";
+import {
+  teacherName,
+  type Teacher,
+  type TeacherFormValues,
+  type TeacherStatus,
+} from "@/types/teacher";
+import { TeacherFormModal } from "../TeacherFormModal";
 
-const STATUS_VARIANT: Record<StudentStatus, "success" | "default" | "info" | "warning"> = {
+const STATUS_VARIANT: Record<TeacherStatus, "success" | "warning" | "default" | "danger"> = {
   active: "success",
+  "on-leave": "warning",
   inactive: "default",
-  alumni: "info",
-  transferred: "warning",
+  resigned: "danger",
 };
 
 const inr = new Intl.NumberFormat("en-IN", {
@@ -78,11 +85,7 @@ function MetricCard({
   percent?: number;
   tone: "primary" | "success" | "warning";
 }) {
-  const barColor = {
-    primary: "bg-primary",
-    success: "bg-success",
-    warning: "bg-warning",
-  }[tone];
+  const barColor = { primary: "bg-primary", success: "bg-success", warning: "bg-warning" }[tone];
 
   return (
     <Card>
@@ -119,8 +122,8 @@ function DetailSkeleton() {
           </div>
         </CardContent>
       </Card>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        {[0, 1, 2].map((i) => (
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
+        {[0, 1, 2, 3].map((i) => (
           <Skeleton key={i} className="h-28" />
         ))}
       </div>
@@ -128,13 +131,13 @@ function DetailSkeleton() {
   );
 }
 
-export default function StudentDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default function TeacherDetailPage({ params }: { params: Promise<{ id: string }> }) {
   // Next 16 passes `params` as a Promise; `use` unwraps it in a Client Component.
   const { id } = use(params);
   const router = useRouter();
   const { toast } = useToast();
 
-  const [student, setStudent] = useState<Student | null>(null);
+  const [teacher, setTeacher] = useState<Teacher | null>(null);
   const [loading, setLoading] = useState(true);
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -147,10 +150,10 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
 
     (async () => {
       try {
-        const data = await getStudent(id);
-        if (!cancelled) setStudent(data);
+        const data = await getTeacher(id);
+        if (!cancelled) setTeacher(data);
       } catch {
-        if (!cancelled) setStudent(null);
+        if (!cancelled) setTeacher(null);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -161,15 +164,15 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
     };
   }, [id]);
 
-  const handleUpdate = async (values: StudentFormValues) => {
+  const handleUpdate = async (values: TeacherFormValues) => {
     try {
-      const updated = await updateStudent(id, values);
-      setStudent(updated);
+      const updated = await updateTeacher(id, values);
+      setTeacher(updated);
       setEditOpen(false);
-      toast({ title: "Student updated", description: `${fullName(updated)}'s record was saved.` });
+      toast({ title: "Teacher updated", description: `${teacherName(updated)}'s record was saved.` });
     } catch (e) {
       toast({
-        title: "Could not save student",
+        title: "Could not save teacher",
         description: e instanceof Error ? e.message : "Something went wrong.",
         variant: "error",
       });
@@ -177,15 +180,15 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
   };
 
   const handleDelete = async () => {
-    if (!student) return;
+    if (!teacher) return;
     setIsDeleting(true);
     try {
-      await deleteStudent(student.id);
-      toast({ title: "Student removed", description: `${fullName(student)} was deleted.` });
-      router.push("/students");
+      await deleteTeacher(teacher.id);
+      toast({ title: "Teacher removed", description: `${teacherName(teacher)} was deleted.` });
+      router.push("/teachers");
     } catch (e) {
       toast({
-        title: "Could not delete student",
+        title: "Could not delete teacher",
         description: e instanceof Error ? e.message : "Something went wrong.",
         variant: "error",
       });
@@ -195,16 +198,16 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
 
   if (loading) return <DetailSkeleton />;
 
-  if (!student) {
+  if (!teacher) {
     return (
       <Card>
         <EmptyState
           icon={<UserRound className="size-5" />}
-          title="Student not found"
-          description={`No student exists with the id "${id}". It may have been deleted.`}
+          title="Teacher not found"
+          description={`No teacher exists with the id "${id}". They may have been deleted.`}
           action={
-            <Link href="/students">
-              <Button variant="outline">Back to students</Button>
+            <Link href="/teachers">
+              <Button variant="outline">Back to teachers</Button>
             </Link>
           }
         />
@@ -216,11 +219,11 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
     <div className="flex flex-col gap-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Link
-          href="/students"
+          href="/teachers"
           className="focus-ring inline-flex items-center gap-2 rounded-md text-sm text-muted transition-colors hover:text-text"
         >
           <ArrowLeft className="size-4" />
-          Back to students
+          Back to teachers
         </Link>
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={() => setEditOpen(true)}>
@@ -237,43 +240,48 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
       {/* Identity header */}
       <Card>
         <CardContent className="flex flex-wrap items-center gap-5">
-          <Avatar name={fullName(student)} src={student.avatar} size="xl" />
+          <Avatar name={teacherName(teacher)} src={teacher.avatar} size="xl" />
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2.5">
-              <h1 className="text-xl font-semibold text-text">{fullName(student)}</h1>
-              <Badge variant={STATUS_VARIANT[student.status]} className="capitalize">
-                {student.status}
+              <h1 className="text-xl font-semibold text-text">{teacherName(teacher)}</h1>
+              <Badge variant={STATUS_VARIANT[teacher.status]} className="capitalize">
+                {teacher.status.replace("-", " ")}
               </Badge>
+              {teacher.isClassTeacher && <Badge variant="info">Class teacher</Badge>}
             </div>
             <p className="mt-1 text-sm text-muted">
-              {student.className} · Section {student.section} · Roll {student.rollNo}
+              {teacher.department} · {teacher.qualification}
             </p>
             <p className="mt-0.5 text-xs text-subtle">
-              Admission {student.admissionNo} · Enrolled {formatDate(student.admissionDate)}
+              {teacher.employeeId} · Joined {formatDate(teacher.joiningDate)}
             </p>
+            <div className="mt-2.5 flex flex-wrap gap-1.5">
+              {teacher.subjects.map((s) => (
+                <Badge key={s} variant="info">
+                  {s}
+                </Badge>
+              ))}
+            </div>
           </div>
         </CardContent>
       </Card>
 
       {/* Metrics */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard
           label="Attendance"
-          value={`${student.attendancePercent}%`}
-          percent={student.attendancePercent}
-          tone={student.attendancePercent < 75 ? "warning" : "success"}
+          value={`${teacher.attendancePercent}%`}
+          percent={teacher.attendancePercent}
+          tone={teacher.attendancePercent < 85 ? "warning" : "success"}
         />
         <MetricCard
-          label="Performance"
-          value={`${student.performancePercent}%`}
-          percent={student.performancePercent}
+          label="Rating"
+          value={teacher.rating > 0 ? `${teacher.rating.toFixed(1)} / 5` : "Not rated"}
+          percent={teacher.rating > 0 ? (teacher.rating / 5) * 100 : undefined}
           tone="primary"
         />
-        <MetricCard
-          label="Fee due"
-          value={student.feeDue > 0 ? inr.format(student.feeDue) : "Cleared"}
-          tone={student.feeDue > 0 ? "warning" : "success"}
-        />
+        <MetricCard label="Weekly periods" value={String(teacher.weeklyPeriods)} tone="primary" />
+        <MetricCard label="Monthly salary" value={inr.format(teacher.salary)} tone="success" />
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -282,59 +290,48 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
             <h2 className="text-sm font-semibold text-text">Personal &amp; contact</h2>
           </CardHeader>
           <CardContent className="divide-y divide-border py-1">
-            <DetailRow icon={Mail} label="Email" value={student.email} />
-            <DetailRow icon={Phone} label="Phone" value={student.phone} />
-            <DetailRow icon={CalendarDays} label="Date of birth" value={formatDate(student.dateOfBirth)} />
-            <DetailRow icon={UserRound} label="Gender" value={student.gender} />
-            <DetailRow icon={Droplet} label="Blood group" value={student.bloodGroup} />
-            <DetailRow icon={MapPin} label="Address" value={student.address} />
+            <DetailRow icon={Mail} label="Email" value={teacher.email} />
+            <DetailRow icon={Phone} label="Phone" value={teacher.phone} />
+            <DetailRow icon={CalendarDays} label="Date of birth" value={formatDate(teacher.dateOfBirth)} />
+            <DetailRow icon={UserRound} label="Gender" value={teacher.gender} />
+            <DetailRow icon={MapPin} label="Address" value={teacher.address} />
           </CardContent>
         </Card>
 
-        <div className="flex flex-col gap-4">
-          <Card>
-            <CardHeader>
-              <h2 className="text-sm font-semibold text-text">Guardian</h2>
-            </CardHeader>
-            <CardContent className="divide-y divide-border py-1">
-              <DetailRow
-                icon={UserRound}
-                label={student.guardian.relation}
-                value={student.guardian.name}
-              />
-              <DetailRow icon={Phone} label="Phone" value={student.guardian.phone} />
-              <DetailRow icon={Mail} label="Email" value={student.guardian.email} />
-              <DetailRow icon={UserRound} label="Occupation" value={student.guardian.occupation} />
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <h2 className="text-sm font-semibold text-text">Medical</h2>
-            </CardHeader>
-            <CardContent className="py-1">
-              <DetailRow
-                icon={Stethoscope}
-                label="Notes"
-                value={student.medicalNotes || "No medical notes on record."}
-              />
-            </CardContent>
-          </Card>
-        </div>
+        <Card>
+          <CardHeader>
+            <h2 className="text-sm font-semibold text-text">Employment</h2>
+          </CardHeader>
+          <CardContent className="divide-y divide-border py-1">
+            <DetailRow
+              icon={BriefcaseBusiness}
+              label="Employment type"
+              value={teacher.employmentType.replace("-", " ")}
+            />
+            <DetailRow icon={GraduationCap} label="Qualification" value={teacher.qualification} />
+            <DetailRow icon={Award} label="Experience" value={`${teacher.experienceYears} years`} />
+            <DetailRow
+              icon={Star}
+              label="Assigned classes"
+              value={teacher.classes.length ? teacher.classes.join(", ") : "Unassigned"}
+            />
+            <DetailRow icon={CalendarDays} label="Joining date" value={formatDate(teacher.joiningDate)} />
+          </CardContent>
+        </Card>
       </div>
 
-      <StudentFormModal
+      <TeacherFormModal
         open={editOpen}
         onOpenChange={setEditOpen}
-        student={student}
+        teacher={teacher}
         onSubmit={handleUpdate}
       />
 
       <ConfirmDialog
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
-        title="Delete student?"
-        description={`${fullName(student)} (${student.admissionNo}) will be permanently removed. This cannot be undone.`}
+        title="Delete teacher?"
+        description={`${teacherName(teacher)} (${teacher.employeeId}) will be permanently removed. This cannot be undone.`}
         confirmLabel="Delete"
         destructive
         loading={isDeleting}
