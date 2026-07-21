@@ -17,12 +17,13 @@ interface UseAsyncListResult<T> {
  */
 export function useAsyncList<T>(
   fetcher: () => Promise<T[]>,
-  { debounceMs = 250 }: { debounceMs?: number } = {}
+  { debounceMs = 200 }: { debounceMs?: number } = {}
 ): UseAsyncListResult<T> {
   const [items, setItems] = useState<T[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const requestId = useRef(0);
+  const hasFetched = useRef(false);
 
   const run = useCallback(async () => {
     const id = ++requestId.current;
@@ -41,8 +42,15 @@ export function useAsyncList<T>(
   }, [fetcher]);
 
   useEffect(() => {
-    // Debounce so each keystroke in a search box isn't a request.
-    const timer = setTimeout(run, debounceMs);
+    // The first fetch of a page fires immediately — debouncing it just makes
+    // every navigation feel slow for no benefit. Only subsequent fetches
+    // (filter changes, search keystrokes) are debounced.
+    // A 0ms timer rather than a direct call: `run` sets loading state before
+    // its first await, and setState must not run synchronously in an effect.
+    const wait = hasFetched.current ? debounceMs : 0;
+    hasFetched.current = true;
+
+    const timer = setTimeout(run, wait);
     return () => clearTimeout(timer);
   }, [run, debounceMs]);
 

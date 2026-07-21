@@ -54,6 +54,18 @@ export interface Resource<T extends ResourceRecord, F, G extends keyof T = never
   reset: () => void;
 }
 
+/**
+ * Simulated round-trip. Kept deliberately small: it exists so loading and
+ * error states stay exercised during development, NOT to imitate a slow
+ * server. Anything above ~100ms on a read makes every page feel sluggish,
+ * because the user pays it on each navigation.
+ *
+ * Reads are near-instant; writes keep a touch more so the saving state on a
+ * submit button is actually visible.
+ */
+const READ_LATENCY_MS = 60;
+const WRITE_LATENCY_MS = 180;
+
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export function createResource<
@@ -86,18 +98,18 @@ export function createResource<
 
   return {
     async list(filters) {
-      await delay(400);
+      await delay(READ_LATENCY_MS);
       if (!filters) return [...rows];
       return rows.filter((row) => matches(row, filters));
     },
 
     async get(id) {
-      await delay(250);
+      await delay(READ_LATENCY_MS);
       return rows.find((row) => row.id === id) ?? null;
     },
 
     async create(values) {
-      await delay(400);
+      await delay(WRITE_LATENCY_MS);
 
       const record = {
         ...defaults,
@@ -116,7 +128,7 @@ export function createResource<
     },
 
     async update(id, values) {
-      await delay(400);
+      await delay(WRITE_LATENCY_MS);
 
       const existing = rows.find((row) => row.id === id);
       if (!existing) throw new Error("Record not found.");
@@ -128,7 +140,7 @@ export function createResource<
     },
 
     async remove(id) {
-      await delay(300);
+      await delay(WRITE_LATENCY_MS);
       if (!rows.some((row) => row.id === id)) throw new Error("Record not found.");
       rows = rows.filter((row) => row.id !== id);
     },
