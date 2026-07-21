@@ -47,6 +47,9 @@
   --info: #0ea5e9;
   --info-soft: #e0f2fe;
   --info-text: #0369a1;
+  --violet: #8b5cf6;
+  --violet-soft: #f5f3ff;
+  --violet-text: #6d28d9;
 
   /* Elevation */
   --elevation-sm: 0 1px 3px rgb(15 23 42 / 0.06);
@@ -92,6 +95,9 @@
   --info: #38bdf8;
   --info-soft: #082f49;
   --info-text: #7dd3fc;
+  --violet: #a78bfa;
+  --violet-soft: #2e1065;
+  --violet-text: #ddd6fe;
 
   --elevation-sm: 0 1px 3px rgb(0 0 0 / 0.4);
   --elevation-md: 0 4px 12px rgb(0 0 0 / 0.45);
@@ -133,6 +139,9 @@
   --color-info: var(--info);
   --color-info-soft: var(--info-soft);
   --color-info-text: var(--info-text);
+  --color-violet: var(--violet);
+  --color-violet-soft: var(--violet-soft);
+  --color-violet-text: var(--violet-text);
 
   --radius-sm: 8px;
   --radius-md: 12px;

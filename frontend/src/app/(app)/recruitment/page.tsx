@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Search,
   Plus,
@@ -18,6 +18,9 @@ import {
   Avatar,
   Badge,
   Button,
+  Card,
+  CardContent,
+  ConfirmDialog,
   Input,
   PageHeader,
   Select,
@@ -25,30 +28,28 @@ import {
   Table,
   type Column,
 } from "@/components/ui";
-
-const jobs = [
-  { id: "JB001", title: "Mathematics Teacher",    dept: "Teaching",       type: "Full-time", posted: "01 Jul 2025", deadline: "31 Jul 2025", applicants: 18, status: "Open" },
-  { id: "JB002", title: "Physics Teacher",         dept: "Teaching",       type: "Full-time", posted: "05 Jul 2025", deadline: "05 Aug 2025", applicants: 12, status: "Open" },
-  { id: "JB003", title: "IT Administrator",        dept: "IT",             type: "Full-time", posted: "20 Jun 2025", deadline: "20 Jul 2025", applicants: 25, status: "Closed" },
-  { id: "JB004", title: "Accountant",              dept: "Finance",        type: "Full-time", posted: "10 Jul 2025", deadline: "10 Aug 2025", applicants: 9,  status: "Open" },
-  { id: "JB005", title: "School Counselor",        dept: "HR",             type: "Part-time", posted: "12 Jul 2025", deadline: "12 Aug 2025", applicants: 7,  status: "Open" },
-  { id: "JB006", title: "Security Guard",          dept: "Security",       type: "Full-time", posted: "15 Jun 2025", deadline: "15 Jul 2025", applicants: 30, status: "Closed" },
-];
+import { useResource } from "@/hooks/useResource";
+import {
+  jobPostingsApi,
+  JOB_DEPT_OPTIONS,
+  type JobPosting,
+} from "@/lib/api/jobPostings";
+import type { JobPostingSchema } from "@/lib/schemas/jobPosting";
+import { JobPostingFormModal } from "./JobPostingFormModal";
 
 const applicants = [
-  { id: "AP001", name: "Arjun Mehta",     job: "Mathematics Teacher",  dept: "Teaching",  exp: "5 yrs", applied: "03 Jul 2025", status: "Shortlisted", phone: "98765-11111", email: "arjun@email.com" },
-  { id: "AP002", name: "Sneha Kapoor",    job: "Mathematics Teacher",  dept: "Teaching",  exp: "3 yrs", applied: "04 Jul 2025", status: "Under Review", phone: "98765-22222", email: "sneha@email.com" },
-  { id: "AP003", name: "Rahul Desai",     job: "Physics Teacher",      dept: "Teaching",  exp: "7 yrs", applied: "06 Jul 2025", status: "Shortlisted", phone: "98765-33333", email: "rahul@email.com" },
-  { id: "AP004", name: "Pooja Nair",      job: "IT Administrator",     dept: "IT",        exp: "4 yrs", applied: "22 Jun 2025", status: "Hired",       phone: "98765-44444", email: "pooja@email.com" },
-  { id: "AP005", name: "Vikram Joshi",    job: "IT Administrator",     dept: "IT",        exp: "6 yrs", applied: "23 Jun 2025", status: "Rejected",    phone: "98765-55555", email: "vikram@email.com" },
-  { id: "AP006", name: "Ananya Singh",    job: "Accountant",           dept: "Finance",   exp: "2 yrs", applied: "11 Jul 2025", status: "Under Review", phone: "98765-66666", email: "ananya@email.com" },
-  { id: "AP007", name: "Karan Sharma",    job: "School Counselor",     dept: "HR",        exp: "3 yrs", applied: "13 Jul 2025", status: "Shortlisted", phone: "98765-77777", email: "karan@email.com" },
-  { id: "AP008", name: "Meera Iyer",      job: "Security Guard",       dept: "Security",  exp: "8 yrs", applied: "16 Jun 2025", status: "Hired",       phone: "98765-88888", email: "meera@email.com" },
-  { id: "AP009", name: "Rohit Verma",     job: "Physics Teacher",      dept: "Teaching",  exp: "2 yrs", applied: "07 Jul 2025", status: "Under Review", phone: "98765-99999", email: "rohit@email.com" },
-  { id: "AP010", name: "Divya Patel",     job: "Accountant",           dept: "Finance",   exp: "5 yrs", applied: "12 Jul 2025", status: "Shortlisted", phone: "98765-10101", email: "divya@email.com" },
+  { id: "AP001", name: "Arjun Mehta",  job: "Mathematics Teacher", dept: "Teaching", exp: "5 yrs", applied: "03 Jul 2025", status: "Shortlisted",  phone: "98765-11111", email: "arjun@email.com" },
+  { id: "AP002", name: "Sneha Kapoor", job: "Mathematics Teacher", dept: "Teaching", exp: "3 yrs", applied: "04 Jul 2025", status: "Under Review", phone: "98765-22222", email: "sneha@email.com" },
+  { id: "AP003", name: "Rahul Desai",  job: "Physics Teacher",     dept: "Teaching", exp: "7 yrs", applied: "06 Jul 2025", status: "Shortlisted",  phone: "98765-33333", email: "rahul@email.com" },
+  { id: "AP004", name: "Pooja Nair",   job: "IT Administrator",    dept: "IT",       exp: "4 yrs", applied: "22 Jun 2025", status: "Hired",        phone: "98765-44444", email: "pooja@email.com" },
+  { id: "AP005", name: "Vikram Joshi", job: "IT Administrator",    dept: "IT",       exp: "6 yrs", applied: "23 Jun 2025", status: "Rejected",     phone: "98765-55555", email: "vikram@email.com" },
+  { id: "AP006", name: "Ananya Singh", job: "Accountant",          dept: "Finance",  exp: "2 yrs", applied: "11 Jul 2025", status: "Under Review", phone: "98765-66666", email: "ananya@email.com" },
+  { id: "AP007", name: "Karan Sharma", job: "School Counselor",    dept: "HR",       exp: "3 yrs", applied: "13 Jul 2025", status: "Shortlisted",  phone: "98765-77777", email: "karan@email.com" },
+  { id: "AP008", name: "Meera Iyer",   job: "Security Guard",      dept: "Security", exp: "8 yrs", applied: "16 Jun 2025", status: "Hired",        phone: "98765-88888", email: "meera@email.com" },
+  { id: "AP009", name: "Rohit Verma",  job: "Physics Teacher",     dept: "Teaching", exp: "2 yrs", applied: "07 Jul 2025", status: "Under Review", phone: "98765-99999", email: "rohit@email.com" },
+  { id: "AP010", name: "Divya Patel",  job: "Accountant",          dept: "Finance",  exp: "5 yrs", applied: "12 Jul 2025", status: "Shortlisted",  phone: "98765-10101", email: "divya@email.com" },
 ];
 
-type Job = (typeof jobs)[number];
 type Applicant = (typeof applicants)[number];
 
 type BadgeVariant = "default" | "success" | "warning" | "danger" | "info";
@@ -75,22 +76,12 @@ const DEPT_VARIANT: Record<string, BadgeVariant> = {
 
 const tabs = ["Job Postings", "Applicants"] as const;
 
-function RowActions({ label }: { label: string }) {
+/** Read-only actions for the applicant pipeline, which has no backend yet. */
+function ApplicantActions({ label }: { label: string }) {
   return (
     <div className="flex items-center justify-end gap-1">
       <Button variant="ghost" size="sm" className="px-2" aria-label={`View ${label}`}>
         <Eye className="size-4" />
-      </Button>
-      <Button variant="ghost" size="sm" className="px-2" aria-label={`Edit ${label}`}>
-        <Pencil className="size-4" />
-      </Button>
-      <Button
-        variant="ghost"
-        size="sm"
-        className="px-2 hover:bg-danger-soft hover:text-danger"
-        aria-label={`Delete ${label}`}
-      >
-        <Trash2 className="size-4" />
       </Button>
     </div>
   );
@@ -102,14 +93,28 @@ export default function RecruitmentPage() {
   const [statusFilter, setStatusFilter] = useState("All");
   const [deptFilter, setDeptFilter] = useState("All");
 
-  const filteredJobs = jobs.filter((j) => {
-    const matchSearch =
-      j.title.toLowerCase().includes(search.toLowerCase()) ||
-      j.id.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = statusFilter === "All" || j.status === statusFilter;
-    const matchDept = deptFilter === "All" || j.dept === deptFilter;
-    return matchSearch && matchStatus && matchDept;
-  });
+  const isJobs = tab === "Job Postings";
+
+  // The applicants tab reuses the same controls, so the job list keeps its own
+  // filters unfiltered while that tab is active.
+  const filters = useMemo(
+    () => ({
+      search: isJobs ? search : "",
+      dept: isJobs ? deptFilter : "All",
+      status: isJobs ? statusFilter : "All",
+    }),
+    [isJobs, search, deptFilter, statusFilter]
+  );
+
+  const { items, loading, error, refetch, save, remove, saving, deleting } = useResource(
+    jobPostingsApi,
+    filters,
+    { label: "job posting", describe: (j) => j.title }
+  );
+
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<JobPosting | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<JobPosting | null>(null);
 
   const filteredApplicants = applicants.filter((a) => {
     const matchSearch =
@@ -121,12 +126,31 @@ export default function RecruitmentPage() {
     return matchSearch && matchStatus && matchDept;
   });
 
-  const openJobs = jobs.filter((j) => j.status === "Open").length;
+  const openJobs = items.filter((j) => j.status === "Open").length;
   const totalApps = applicants.length;
   const shortlisted = applicants.filter((a) => a.status === "Shortlisted").length;
   const hired = applicants.filter((a) => a.status === "Hired").length;
 
-  const jobColumns: Column<Job>[] = [
+  const openCreate = () => {
+    setEditing(null);
+    setFormOpen(true);
+  };
+
+  const handleSubmit = async (values: JobPostingSchema) => {
+    const ok = await save(values, editing);
+    if (ok) {
+      setFormOpen(false);
+      setEditing(null);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!pendingDelete) return;
+    const ok = await remove(pendingDelete);
+    if (ok) setPendingDelete(null);
+  };
+
+  const jobColumns: Column<JobPosting>[] = [
     {
       key: "title",
       header: "Job Title",
@@ -138,7 +162,7 @@ export default function RecruitmentPage() {
           </div>
           <div className="min-w-0">
             <p className="truncate font-medium text-text">{j.title}</p>
-            <p className="truncate text-xs text-subtle">{j.id}</p>
+            <p className="truncate text-xs text-subtle">{j.code}</p>
           </div>
         </div>
       ),
@@ -199,7 +223,27 @@ export default function RecruitmentPage() {
       key: "actions",
       header: "",
       align: "right",
-      render: (j) => <RowActions label={j.title} />,
+      render: (j) => (
+        <div className="flex items-center justify-end gap-1">
+          <button
+            onClick={() => {
+              setEditing(j);
+              setFormOpen(true);
+            }}
+            aria-label={`Edit ${j.title}`}
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+          >
+            <Pencil className="size-4" />
+          </button>
+          <button
+            onClick={() => setPendingDelete(j)}
+            aria-label={`Delete ${j.title}`}
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-danger-soft hover:text-danger"
+          >
+            <Trash2 className="size-4" />
+          </button>
+        </div>
+      ),
     },
   ];
 
@@ -264,11 +308,9 @@ export default function RecruitmentPage() {
       key: "actions",
       header: "",
       align: "right",
-      render: (a) => <RowActions label={a.name} />,
+      render: (a) => <ApplicantActions label={a.name} />,
     },
   ];
-
-  const isJobs = tab === "Job Postings";
 
   return (
     <div className="flex flex-col gap-5">
@@ -281,7 +323,7 @@ export default function RecruitmentPage() {
               <Download className="size-4" />
               Export
             </Button>
-            <Button>
+            <Button onClick={openCreate}>
               <Plus className="size-4" />
               Post Job
             </Button>
@@ -341,10 +383,7 @@ export default function RecruitmentPage() {
             onChange={(e) => setDeptFilter(e.target.value)}
             options={[
               { label: "All Departments", value: "All" },
-              ...["Teaching", "IT", "Finance", "HR", "Security"].map((d) => ({
-                label: d,
-                value: d,
-              })),
+              ...JOB_DEPT_OPTIONS.map((d) => ({ label: d, value: d })),
             ]}
             aria-label="Filter by department"
           />
@@ -366,18 +405,36 @@ export default function RecruitmentPage() {
         </div>
 
         <p className="ml-auto text-xs text-subtle">
-          {isJobs ? `${filteredJobs.length} jobs` : `${filteredApplicants.length} applicants`}
+          {isJobs ? `${items.length} jobs` : `${filteredApplicants.length} applicants`}
         </p>
       </div>
 
       {isJobs ? (
-        <Table
-          columns={jobColumns}
-          rows={filteredJobs}
-          rowKey={(j) => j.id}
-          emptyTitle="No jobs found"
-          emptyDescription="Try adjusting your filters"
-        />
+        error ? (
+          <Card>
+            <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+              <p className="text-sm font-medium text-danger">{error}</p>
+              <Button variant="outline" onClick={refetch}>
+                Try again
+              </Button>
+            </CardContent>
+          </Card>
+        ) : (
+          <Table
+            columns={jobColumns}
+            rows={items}
+            rowKey={(j) => j.id}
+            loading={loading}
+            emptyTitle="No jobs found"
+            emptyDescription="Try adjusting your filters"
+            emptyAction={
+              <Button variant="outline" onClick={openCreate}>
+                <Plus className="size-4" />
+                Post Job
+              </Button>
+            }
+          />
+        )
       ) : (
         <Table
           columns={applicantColumns}
@@ -392,13 +449,9 @@ export default function RecruitmentPage() {
         <p>
           Showing{" "}
           <strong className="font-semibold text-text">
-            {isJobs ? filteredJobs.length : filteredApplicants.length}
+            {isJobs ? items.length : filteredApplicants.length}
           </strong>{" "}
-          of{" "}
-          <strong className="font-semibold text-text">
-            {isJobs ? jobs.length : applicants.length}
-          </strong>{" "}
-          {isJobs ? "jobs" : "applicants"}
+          {isJobs ? "jobs" : `of ${applicants.length} applicants`}
         </p>
         {!isJobs && (
           <div className="flex flex-wrap items-center gap-4">
@@ -414,6 +467,29 @@ export default function RecruitmentPage() {
           </div>
         )}
       </div>
+
+      <JobPostingFormModal
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        record={editing}
+        saving={saving}
+        onSubmit={handleSubmit}
+      />
+
+      <ConfirmDialog
+        open={Boolean(pendingDelete)}
+        onOpenChange={(open) => !open && setPendingDelete(null)}
+        title="Delete job posting?"
+        description={
+          pendingDelete
+            ? `${pendingDelete.title} (${pendingDelete.code}) and its ${pendingDelete.applicants} applicant record(s) will be permanently removed. This cannot be undone.`
+            : ""
+        }
+        confirmLabel="Delete"
+        destructive
+        loading={deleting}
+        onConfirm={handleDelete}
+      />
     </div>
   );
 }

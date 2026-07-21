@@ -24,7 +24,7 @@ import {
   StatCard,
   type StatTone,
 } from "@/components/ui";
-import { useChartTheme } from "@/hooks/useChartTheme";
+import { useChartTheme, toneClass, type ChartTone } from "@/hooks/useChartTheme";
 import { cn } from "@/lib/utils";
 
 const monthlyAdmissions = [
@@ -99,7 +99,8 @@ function ChartTitle({
 }: {
   title: string;
   subtitle: string;
-  legend?: { color: string; label: string }[];
+  /** Swatches are classed, never inline-styled — see toneClass in useChartTheme. */
+  legend?: { tone: ChartTone; label: string }[];
 }) {
   return (
     <CardHeader>
@@ -111,7 +112,7 @@ function ChartTitle({
         <div className="flex shrink-0 items-center gap-3.5">
           {legend.map((l) => (
             <span key={l.label} className="flex items-center gap-1.5 text-xs text-muted">
-              <span className="size-2.5 rounded-sm" style={{ background: l.color }} />
+              <span className={cn("size-2.5 rounded-sm", toneClass[l.tone])} />
               {l.label}
             </span>
           ))}
@@ -172,8 +173,8 @@ export default function AnalyticsPage() {
             title="Admissions Trend"
             subtitle="Monthly admissions vs withdrawals"
             legend={[
-              { color: t.series.primary, label: "Admissions" },
-              { color: withdrawals, label: "Withdrawals" },
+              { tone: "primary", label: "Admissions" },
+              { tone: "danger", label: "Withdrawals" },
             ]}
           />
           <CardContent>
@@ -227,13 +228,10 @@ export default function AnalyticsPage() {
               </PieChart>
             </ResponsiveContainer>
             <div className="mt-1 flex items-center gap-6">
-              {genderData.map((g, i) => (
+              {genderData.map((g) => (
                 <div key={g.name} className="text-center">
                   <div className="flex items-center justify-center gap-1.5">
-                    <span
-                      className="size-2.5 rounded-full"
-                      style={{ background: genderColors[i] }}
-                    />
+                    <span className={cn("size-2.5 rounded-full", toneClass[g.tone])} />
                     <span className="text-xs text-muted">{g.name}</span>
                   </div>
                   <p className="mt-0.5 text-lg font-semibold text-text">{g.value}</p>
@@ -353,13 +351,10 @@ export default function AnalyticsPage() {
               </PieChart>
             </ResponsiveContainer>
             <div className="flex w-full flex-col gap-2">
-              {feeStatusData.map((f, i) => (
+              {feeStatusData.map((f) => (
                 <div key={f.name} className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <span
-                      className="size-2.5 rounded-sm"
-                      style={{ background: feeStatusColors[i] }}
-                    />
+                    <span className={cn("size-2.5 rounded-sm", toneClass[f.tone])} />
                     <span className="text-sm text-muted">{f.name}</span>
                   </div>
                   <span className="text-sm font-semibold text-text">{f.value}</span>

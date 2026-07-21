@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Search,
   Plus,
@@ -17,6 +17,9 @@ import {
   Avatar,
   Badge,
   Button,
+  Card,
+  CardContent,
+  ConfirmDialog,
   Input,
   PageHeader,
   Select,
@@ -25,6 +28,14 @@ import {
   type Column,
 } from "@/components/ui";
 import { cn } from "@/lib/utils";
+import { useResource } from "@/hooks/useResource";
+import {
+  medicinesApi,
+  MEDICINE_STOCK_STATUS_OPTIONS,
+  type Medicine,
+} from "@/lib/api/medicines";
+import type { MedicineSchema } from "@/lib/schemas/medicine";
+import { MedicineFormModal } from "./MedicineFormModal";
 
 const patients = [
   { id: "P001", name: "Aarav Sharma",  class: "10-A", issue: "Fever",        status: "Recovered", date: "12 Jul 2025", doctor: "Dr. Mehta",  type: "Student" },
@@ -37,18 +48,7 @@ const patients = [
   { id: "P008", name: "Vikram Nair",   class: "6-B",  issue: "Cold & Cough", status: "Recovered", date: "09 Jul 2025", doctor: "Dr. Mehta",  type: "Student" },
 ];
 
-const medicines = [
-  { id: "M001", name: "Paracetamol 500mg", category: "Analgesic",    stock: 240, unit: "Tablets", expiry: "Dec 2026", status: "In Stock" },
-  { id: "M002", name: "Amoxicillin 250mg", category: "Antibiotic",   stock: 80,  unit: "Capsules",expiry: "Jun 2026", status: "In Stock" },
-  { id: "M003", name: "ORS Sachets",       category: "Electrolyte",  stock: 12,  unit: "Sachets", expiry: "Mar 2026", status: "Low Stock" },
-  { id: "M004", name: "Ibuprofen 400mg",   category: "Analgesic",    stock: 0,   unit: "Tablets", expiry: "Sep 2026", status: "Out of Stock" },
-  { id: "M005", name: "Antacid Syrup",     category: "Antacid",      stock: 6,   unit: "Bottles", expiry: "Nov 2025", status: "Low Stock" },
-  { id: "M006", name: "Bandages",          category: "First Aid",    stock: 50,  unit: "Rolls",   expiry: "—",        status: "In Stock" },
-  { id: "M007", name: "Antiseptic Cream",  category: "First Aid",    stock: 18,  unit: "Tubes",   expiry: "Aug 2026", status: "In Stock" },
-];
-
 type Patient = (typeof patients)[number];
-type Medicine = (typeof medicines)[number];
 
 type BadgeVariant = "default" | "success" | "warning" | "danger" | "info";
 
@@ -76,6 +76,34 @@ export default function HealthPage() {
   const [statusFilter, setStatusFilter] = useState("All");
   const [typeFilter, setTypeFilter] = useState("All");
 
+  const isMedicines = tab === "medicines";
+
+  const filters = useMemo(
+    () => ({
+      search: isMedicines ? search : "",
+      status: isMedicines ? statusFilter : "All",
+    }),
+    [isMedicines, search, statusFilter]
+  );
+
+  const {
+    items: medicines,
+    loading,
+    error,
+    refetch,
+    save,
+    remove,
+    saving,
+    deleting,
+  } = useResource(medicinesApi, filters, {
+    label: "medicine",
+    describe: (m) => m.name,
+  });
+
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<Medicine | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Medicine | null>(null);
+
   const filteredPatients = patients.filter((p) => {
     const matchStatus = statusFilter === "All" || p.status === statusFilter;
     const matchType = typeFilter === "All" || p.type === typeFilter;
@@ -86,15 +114,28 @@ export default function HealthPage() {
     return matchStatus && matchType && matchSearch;
   });
 
-  const filteredMedicines = medicines.filter(
-    (m) =>
-      m.name.toLowerCase().includes(search.toLowerCase()) ||
-      m.category.toLowerCase().includes(search.toLowerCase())
-  );
-
   const recovered = patients.filter((p) => p.status === "Recovered").length;
   const underTreatment = patients.filter((p) => p.status === "Under Treatment").length;
   const lowStock = medicines.filter((m) => m.status !== "In Stock").length;
+
+  const openCreate = () => {
+    setEditing(null);
+    setFormOpen(true);
+  };
+
+  const handleSubmit = async (values: MedicineSchema) => {
+    const ok = await save(values, editing);
+    if (ok) {
+      setFormOpen(false);
+      setEditing(null);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!pendingDelete) return;
+    const ok = await remove(pendingDelete);
+    if (ok) setPendingDelete(null);
+  };
 
   const patientColumns: Column<Patient>[] = [
     {
@@ -232,7 +273,16 @@ export default function HealthPage() {
       align: "right",
       render: (m) => (
         <div className="flex items-center justify-end gap-1">
-          <Button variant="ghost" size="sm" className="px-2" aria-label={`Edit ${m.name}`}>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="px-2"
+            aria-label={`Edit ${m.name}`}
+            onClick={() => {
+              setEditing(m);
+              setFormOpen(true);
+            }}
+          >
             <Pencil className="size-4" />
           </Button>
           <Button
@@ -240,6 +290,7 @@ export default function HealthPage() {
             size="sm"
             className="px-2 hover:bg-danger-soft hover:text-danger"
             aria-label={`Delete ${m.name}`}
+            onClick={() => setPendingDelete(m)}
           >
             <Trash2 className="size-4" />
           </Button>
@@ -259,9 +310,9 @@ export default function HealthPage() {
               <Download className="size-4" />
               Export
             </Button>
-            <Button>
+            <Button onClick={isMedicines ? openCreate : undefined}>
               <Plus className="size-4" />
-              Add record
+              {isMedicines ? "Add medicine" : "Add record"}
             </Button>
           </>
         }
@@ -295,7 +346,7 @@ export default function HealthPage() {
           ))}
         </div>
 
-        {tab === "patients" && (
+        {tab === "patients" ? (
           <>
             <div className="w-44">
               <Select
@@ -323,6 +374,18 @@ export default function HealthPage() {
               />
             </div>
           </>
+        ) : (
+          <div className="w-44">
+            <Select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              aria-label="Filter by stock status"
+              options={[
+                { label: "All stock", value: "All" },
+                ...MEDICINE_STOCK_STATUS_OPTIONS.map((s) => ({ label: s, value: s })),
+              ]}
+            />
+          </div>
         )}
 
         <div className="min-w-60 flex-1">
@@ -337,9 +400,7 @@ export default function HealthPage() {
         </div>
 
         <p className="text-xs text-muted">
-          {tab === "patients"
-            ? `${filteredPatients.length} records`
-            : `${filteredMedicines.length} items`}
+          {tab === "patients" ? `${filteredPatients.length} records` : `${medicines.length} items`}
         </p>
       </div>
 
@@ -351,13 +412,33 @@ export default function HealthPage() {
           emptyTitle="No records found"
           emptyDescription="Try adjusting your filters or search."
         />
+      ) : error ? (
+        <Card>
+          <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+            <p className="text-sm font-medium text-danger">{error}</p>
+            <Button variant="outline" onClick={refetch}>
+              Try again
+            </Button>
+          </CardContent>
+        </Card>
       ) : (
         <Table
           columns={medicineColumns}
-          rows={filteredMedicines}
+          rows={medicines}
           rowKey={(m) => m.id}
+          loading={loading}
           emptyTitle="No medicines found"
-          emptyDescription="Try a different search term."
+          emptyDescription={
+            search || statusFilter !== "All"
+              ? "Try clearing your filters to see more results."
+              : "Add your first medicine to get started."
+          }
+          emptyAction={
+            <Button variant="outline" onClick={openCreate}>
+              <Plus className="size-4" />
+              Add medicine
+            </Button>
+          }
         />
       )}
 
@@ -365,13 +446,15 @@ export default function HealthPage() {
         <p className="text-xs text-muted">
           Showing{" "}
           <span className="font-medium text-text">
-            {tab === "patients" ? filteredPatients.length : filteredMedicines.length}
+            {tab === "patients" ? filteredPatients.length : medicines.length}
           </span>{" "}
-          of{" "}
-          <span className="font-medium text-text">
-            {tab === "patients" ? patients.length : medicines.length}
-          </span>{" "}
-          {tab === "patients" ? "records" : "items"}
+          {tab === "patients" ? (
+            <>
+              of <span className="font-medium text-text">{patients.length}</span> records
+            </>
+          ) : (
+            "items"
+          )}
         </p>
         {tab === "patients" && (
           <div className="flex flex-wrap items-center gap-4">
@@ -387,6 +470,29 @@ export default function HealthPage() {
           </div>
         )}
       </div>
+
+      <MedicineFormModal
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        record={editing}
+        saving={saving}
+        onSubmit={handleSubmit}
+      />
+
+      <ConfirmDialog
+        open={Boolean(pendingDelete)}
+        onOpenChange={(open) => !open && setPendingDelete(null)}
+        title="Delete medicine?"
+        description={
+          pendingDelete
+            ? `${pendingDelete.name} will be permanently removed from the infirmary stock. This cannot be undone.`
+            : ""
+        }
+        confirmLabel="Delete"
+        destructive
+        loading={deleting}
+        onConfirm={handleDelete}
+      />
     </div>
   );
 }

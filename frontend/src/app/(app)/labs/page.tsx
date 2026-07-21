@@ -8,8 +8,10 @@ import {
   Microscope,
   Monitor,
   Package,
+  Pencil,
   Plus,
   Search,
+  Trash2,
   TriangleAlert,
   Users,
   Wrench,
@@ -21,6 +23,7 @@ import {
   Card,
   CardContent,
   CardHeader,
+  ConfirmDialog,
   Input,
   PageHeader,
   Pagination,
@@ -30,240 +33,19 @@ import {
   Tooltip,
   type Column,
 } from "@/components/ui";
+import { useResource } from "@/hooks/useResource";
+import {
+  labsApi,
+  LAB_STATUS_OPTIONS,
+  LAB_TYPE_OPTIONS,
+  type Lab,
+  type LabStatus,
+  type LabType,
+} from "@/lib/api/labs";
+import type { LabSchema } from "@/lib/schemas/lab";
+import { LabFormModal } from "./LabFormModal";
 
 const PAGE_SIZE = 10;
-
-type LabType = "Physics" | "Chemistry" | "Biology" | "Computer";
-type LabStatus = "operational" | "maintenance" | "closed";
-
-interface Lab {
-  id: string;
-  name: string;
-  type: LabType;
-  block: string;
-  capacity: number;
-  inCharge: string;
-  assistant: string;
-  equipmentTotal: number;
-  equipmentWorking: number;
-  weeklyPracticals: number;
-  nextPractical: string;
-  nextPracticalClass: string;
-  status: LabStatus;
-}
-
-const LABS: Lab[] = [
-  {
-    id: "LB-01",
-    name: "Physics Lab I",
-    type: "Physics",
-    block: "Science Block, Ground Floor",
-    capacity: 40,
-    inCharge: "Dr. Anjali Deshmukh",
-    assistant: "Sandeep More",
-    equipmentTotal: 186,
-    equipmentWorking: 179,
-    weeklyPracticals: 14,
-    nextPractical: "2026-07-22",
-    nextPracticalClass: "XII-A · Ohm's Law verification",
-    status: "operational",
-  },
-  {
-    id: "LB-02",
-    name: "Physics Lab II",
-    type: "Physics",
-    block: "Science Block, First Floor",
-    capacity: 36,
-    inCharge: "Suresh Patil",
-    assistant: "Sandeep More",
-    equipmentTotal: 142,
-    equipmentWorking: 121,
-    weeklyPracticals: 9,
-    nextPractical: "2026-07-23",
-    nextPracticalClass: "XI-B · Simple pendulum",
-    status: "maintenance",
-  },
-  {
-    id: "LB-03",
-    name: "Chemistry Lab I",
-    type: "Chemistry",
-    block: "Science Block, Ground Floor",
-    capacity: 32,
-    inCharge: "Kavita Joshi",
-    assistant: "Ravi Gaikwad",
-    equipmentTotal: 214,
-    equipmentWorking: 208,
-    weeklyPracticals: 16,
-    nextPractical: "2026-07-22",
-    nextPracticalClass: "XII-B · Salt analysis",
-    status: "operational",
-  },
-  {
-    id: "LB-04",
-    name: "Chemistry Lab II",
-    type: "Chemistry",
-    block: "Science Block, First Floor",
-    capacity: 32,
-    inCharge: "Nikhil Bansal",
-    assistant: "Ravi Gaikwad",
-    equipmentTotal: 168,
-    equipmentWorking: 160,
-    weeklyPracticals: 11,
-    nextPractical: "2026-07-24",
-    nextPracticalClass: "XI-A · Titration practice",
-    status: "operational",
-  },
-  {
-    id: "LB-05",
-    name: "Biology Lab I",
-    type: "Biology",
-    block: "Science Block, Second Floor",
-    capacity: 34,
-    inCharge: "Dr. Shobha Menon",
-    assistant: "Pooja Salunke",
-    equipmentTotal: 156,
-    equipmentWorking: 151,
-    weeklyPracticals: 12,
-    nextPractical: "2026-07-25",
-    nextPracticalClass: "XII-A · Mitosis in onion root tip",
-    status: "operational",
-  },
-  {
-    id: "LB-06",
-    name: "Biology Lab II",
-    type: "Biology",
-    block: "Science Block, Second Floor",
-    capacity: 30,
-    inCharge: "Priyanka Shinde",
-    assistant: "Pooja Salunke",
-    equipmentTotal: 98,
-    equipmentWorking: 74,
-    weeklyPracticals: 7,
-    nextPractical: "2026-07-28",
-    nextPracticalClass: "X-C · Photosynthesis demo",
-    status: "maintenance",
-  },
-  {
-    id: "LB-07",
-    name: "Computer Lab 1",
-    type: "Computer",
-    block: "IT Block, Ground Floor",
-    capacity: 48,
-    inCharge: "Arjun Mehta",
-    assistant: "Sagar Kadam",
-    equipmentTotal: 52,
-    equipmentWorking: 50,
-    weeklyPracticals: 22,
-    nextPractical: "2026-07-21",
-    nextPracticalClass: "XI-A · Python data structures",
-    status: "operational",
-  },
-  {
-    id: "LB-08",
-    name: "Computer Lab 2",
-    type: "Computer",
-    block: "IT Block, First Floor",
-    capacity: 48,
-    inCharge: "Farhan Qureshi",
-    assistant: "Sagar Kadam",
-    equipmentTotal: 50,
-    equipmentWorking: 46,
-    weeklyPracticals: 20,
-    nextPractical: "2026-07-21",
-    nextPracticalClass: "XII-B · SQL queries",
-    status: "operational",
-  },
-  {
-    id: "LB-09",
-    name: "Robotics & AtalTinkering Lab",
-    type: "Computer",
-    block: "IT Block, Second Floor",
-    capacity: 24,
-    inCharge: "Arjun Mehta",
-    assistant: "Sagar Kadam",
-    equipmentTotal: 134,
-    equipmentWorking: 128,
-    weeklyPracticals: 8,
-    nextPractical: "2026-07-26",
-    nextPracticalClass: "IX-A · Arduino sensors",
-    status: "operational",
-  },
-  {
-    id: "LB-10",
-    name: "Junior Science Lab",
-    type: "Biology",
-    block: "Primary Block, Ground Floor",
-    capacity: 28,
-    inCharge: "Shalini Kapoor",
-    assistant: "Pooja Salunke",
-    equipmentTotal: 76,
-    equipmentWorking: 72,
-    weeklyPracticals: 10,
-    nextPractical: "2026-07-23",
-    nextPracticalClass: "VII-B · Plant cell slides",
-    status: "operational",
-  },
-  {
-    id: "LB-11",
-    name: "Physics Demonstration Room",
-    type: "Physics",
-    block: "Science Block, Ground Floor",
-    capacity: 60,
-    inCharge: "Suresh Patil",
-    assistant: "Sandeep More",
-    equipmentTotal: 64,
-    equipmentWorking: 61,
-    weeklyPracticals: 5,
-    nextPractical: "2026-07-29",
-    nextPracticalClass: "X-A · Optics demo",
-    status: "operational",
-  },
-  {
-    id: "LB-12",
-    name: "Chemistry Prep & Store Room",
-    type: "Chemistry",
-    block: "Science Block, Ground Floor",
-    capacity: 12,
-    inCharge: "Kavita Joshi",
-    assistant: "Ravi Gaikwad",
-    equipmentTotal: 320,
-    equipmentWorking: 316,
-    weeklyPracticals: 0,
-    nextPractical: "2026-08-03",
-    nextPracticalClass: "Stock audit — no class",
-    status: "closed",
-  },
-  {
-    id: "LB-13",
-    name: "Language & Multimedia Lab",
-    type: "Computer",
-    block: "Arts Block, First Floor",
-    capacity: 40,
-    inCharge: "Meenakshi Iyer",
-    assistant: "Sagar Kadam",
-    equipmentTotal: 44,
-    equipmentWorking: 38,
-    weeklyPracticals: 6,
-    nextPractical: "2026-07-27",
-    nextPracticalClass: "VIII-A · Phonetics session",
-    status: "operational",
-  },
-  {
-    id: "LB-14",
-    name: "Advanced Biotech Lab",
-    type: "Biology",
-    block: "Science Block, Second Floor",
-    capacity: 20,
-    inCharge: "Dr. Shobha Menon",
-    assistant: "Pooja Salunke",
-    equipmentTotal: 112,
-    equipmentWorking: 88,
-    weeklyPracticals: 4,
-    nextPractical: "2026-08-01",
-    nextPracticalClass: "XII-A · DNA extraction",
-    status: "maintenance",
-  },
-];
 
 const LAB_ICON: Record<LabType, typeof Atom> = {
   Physics: Atom,
@@ -294,6 +76,18 @@ export default function LabsPage() {
   const [status, setStatus] = useState("");
   const [page, setPage] = useState(1);
 
+  const filters = useMemo(() => ({ search, type, status }), [search, type, status]);
+
+  const { items, loading, error, refetch, save, remove, saving, deleting } = useResource(
+    labsApi,
+    filters,
+    { label: "lab", describe: (l) => l.name }
+  );
+
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<Lab | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Lab | null>(null);
+
   // A narrowed filter can strand you past the last page, so every filter
   // change resets to page 1.
   const applyFilter = (setter: (value: string) => void) => (value: string) => {
@@ -301,45 +95,50 @@ export default function LabsPage() {
     setPage(1);
   };
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return LABS.filter((lab) => {
-      const matchesSearch =
-        !q ||
-        lab.name.toLowerCase().includes(q) ||
-        lab.inCharge.toLowerCase().includes(q) ||
-        lab.block.toLowerCase().includes(q) ||
-        lab.nextPracticalClass.toLowerCase().includes(q);
-      const matchesType = !type || lab.type === type;
-      const matchesStatus = !status || lab.status === status;
-      return matchesSearch && matchesType && matchesStatus;
-    });
-  }, [search, type, status]);
-
   const stats = useMemo(() => {
-    const equipment = LABS.reduce((sum, l) => sum + l.equipmentTotal, 0);
-    const faulty = LABS.reduce((sum, l) => sum + (l.equipmentTotal - l.equipmentWorking), 0);
-    const practicals = LABS.reduce((sum, l) => sum + l.weeklyPracticals, 0);
-    return { labs: LABS.length, equipment, faulty, practicals };
-  }, []);
+    const equipment = items.reduce((sum, l) => sum + l.equipmentTotal, 0);
+    const faulty = items.reduce((sum, l) => sum + (l.equipmentTotal - l.equipmentWorking), 0);
+    const practicals = items.reduce((sum, l) => sum + l.weeklyPracticals, 0);
+    return { labs: items.length, equipment, faulty, practicals };
+  }, [items]);
 
-  const paged = useMemo(
-    () => filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
-    [filtered, page]
+  const typeSummary = useMemo(
+    () =>
+      LAB_TYPE_OPTIONS.map(({ value }) => {
+        const group = items.filter((l) => l.type === value);
+        return {
+          type: value,
+          count: group.length,
+          seats: group.reduce((sum, l) => sum + l.capacity, 0),
+          practicals: group.reduce((sum, l) => sum + l.weeklyPracticals, 0),
+        };
+      }),
+    [items]
   );
 
-  const typeSummary = useMemo(() => {
-    const types: LabType[] = ["Physics", "Chemistry", "Biology", "Computer"];
-    return types.map((t) => {
-      const group = LABS.filter((l) => l.type === t);
-      return {
-        type: t,
-        count: group.length,
-        seats: group.reduce((sum, l) => sum + l.capacity, 0),
-        practicals: group.reduce((sum, l) => sum + l.weeklyPracticals, 0),
-      };
-    });
-  }, []);
+  // Clamp during render — resetting page state from an effect is not allowed.
+  const totalPages = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const paged = items.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+
+  const openCreate = () => {
+    setEditing(null);
+    setFormOpen(true);
+  };
+
+  const handleSubmit = async (values: LabSchema) => {
+    const ok = await save(values, editing);
+    if (ok) {
+      setFormOpen(false);
+      setEditing(null);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!pendingDelete) return;
+    const ok = await remove(pendingDelete);
+    if (ok) setPendingDelete(null);
+  };
 
   const columns: Column<Lab>[] = [
     {
@@ -395,9 +194,11 @@ export default function LabsPage() {
       key: "equipmentWorking",
       header: "Equipment",
       sortable: true,
-      sortValue: (l) => l.equipmentWorking / l.equipmentTotal,
+      sortValue: (l) => (l.equipmentTotal ? l.equipmentWorking / l.equipmentTotal : 0),
       render: (l) => {
-        const pct = Math.round((l.equipmentWorking / l.equipmentTotal) * 100);
+        const pct = l.equipmentTotal
+          ? Math.round((l.equipmentWorking / l.equipmentTotal) * 100)
+          : 0;
         const faulty = l.equipmentTotal - l.equipmentWorking;
         return (
           <div className="min-w-32">
@@ -458,6 +259,32 @@ export default function LabsPage() {
         </Badge>
       ),
     },
+    {
+      key: "actions",
+      header: "",
+      align: "right",
+      render: (l) => (
+        <div className="flex items-center justify-end gap-1">
+          <button
+            onClick={() => {
+              setEditing(l);
+              setFormOpen(true);
+            }}
+            aria-label={`Edit ${l.name}`}
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+          >
+            <Pencil className="size-4" />
+          </button>
+          <button
+            onClick={() => setPendingDelete(l)}
+            aria-label={`Delete ${l.name}`}
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-danger-soft hover:text-danger"
+          >
+            <Trash2 className="size-4" />
+          </button>
+        </div>
+      ),
+    },
   ];
 
   return (
@@ -471,7 +298,7 @@ export default function LabsPage() {
               <Wrench className="size-4" />
               Log maintenance
             </Button>
-            <Button>
+            <Button onClick={openCreate}>
               <Plus className="size-4" />
               Add lab
             </Button>
@@ -541,12 +368,7 @@ export default function LabsPage() {
             value={type}
             onChange={(e) => applyFilter(setType)(e.target.value)}
             placeholder="All lab types"
-            options={[
-              { label: "Physics", value: "Physics" },
-              { label: "Chemistry", value: "Chemistry" },
-              { label: "Biology", value: "Biology" },
-              { label: "Computer", value: "Computer" },
-            ]}
+            options={LAB_TYPE_OPTIONS}
             aria-label="Filter by lab type"
           />
         </div>
@@ -555,43 +377,87 @@ export default function LabsPage() {
             value={status}
             onChange={(e) => applyFilter(setStatus)(e.target.value)}
             placeholder="All statuses"
-            options={[
-              { label: "Operational", value: "operational" },
-              { label: "Under maintenance", value: "maintenance" },
-              { label: "Closed", value: "closed" },
-            ]}
+            options={LAB_STATUS_OPTIONS}
             aria-label="Filter by status"
           />
         </div>
       </div>
 
-      <Table
-        columns={columns}
-        rows={paged}
-        rowKey={(l) => l.id}
-        rowClassName={(l) => (l.status === "closed" ? "opacity-60" : undefined)}
-        emptyTitle="No labs found"
-        emptyDescription="Try clearing your filters to see more results."
-        emptyAction={
-          <Button
-            variant="outline"
-            onClick={() => {
-              setSearch("");
-              setType("");
-              setStatus("");
-              setPage(1);
-            }}
-          >
-            Clear filters
-          </Button>
-        }
+      {error ? (
+        <Card>
+          <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+            <p className="text-sm font-medium text-danger">{error}</p>
+            <Button variant="outline" onClick={refetch}>
+              Try again
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <>
+          <Table
+            columns={columns}
+            rows={paged}
+            rowKey={(l) => l.id}
+            loading={loading}
+            rowClassName={(l) => (l.status === "closed" ? "opacity-60" : undefined)}
+            emptyTitle="No labs found"
+            emptyDescription={
+              search || type || status
+                ? "Try clearing your filters to see more results."
+                : "Add your first lab to get started."
+            }
+            emptyAction={
+              search || type || status ? (
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setSearch("");
+                    setType("");
+                    setStatus("");
+                    setPage(1);
+                  }}
+                >
+                  Clear filters
+                </Button>
+              ) : (
+                <Button variant="outline" onClick={openCreate}>
+                  <Plus className="size-4" />
+                  Add lab
+                </Button>
+              )
+            }
+          />
+
+          <Pagination
+            page={safePage}
+            pageSize={PAGE_SIZE}
+            totalItems={items.length}
+            onPageChange={setPage}
+          />
+        </>
+      )}
+
+      <LabFormModal
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        record={editing}
+        saving={saving}
+        onSubmit={handleSubmit}
       />
 
-      <Pagination
-        page={page}
-        pageSize={PAGE_SIZE}
-        totalItems={filtered.length}
-        onPageChange={setPage}
+      <ConfirmDialog
+        open={Boolean(pendingDelete)}
+        onOpenChange={(open) => !open && setPendingDelete(null)}
+        title="Delete lab?"
+        description={
+          pendingDelete
+            ? `${pendingDelete.name} and its ${pendingDelete.equipmentTotal} equipment record(s) will be permanently removed. This cannot be undone.`
+            : ""
+        }
+        confirmLabel="Delete"
+        destructive
+        loading={deleting}
+        onConfirm={handleDelete}
       />
     </div>
   );

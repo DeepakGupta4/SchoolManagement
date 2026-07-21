@@ -6,7 +6,8 @@ import {
   ResponsiveContainer, BarChart, Bar,
 } from "recharts";
 import { Card, CardContent, CardHeader } from "@/components/ui";
-import { useChartTheme } from "@/hooks/useChartTheme";
+import { useChartTheme, toneClass, type ChartTone } from "@/hooks/useChartTheme";
+import { cn } from "@/lib/utils";
 
 const attendanceData = [
   { day: "Mon", present: 1180, absent: 60 },
@@ -33,7 +34,8 @@ function ChartHeader({
 }: {
   title: string;
   subtitle: string;
-  legend: { color: string; label: string }[];
+  /** Swatches are classed, never inline-styled — see toneClass in useChartTheme. */
+  legend: { tone: ChartTone; label: string }[];
 }) {
   return (
     <CardHeader>
@@ -44,7 +46,7 @@ function ChartHeader({
       <div className="flex shrink-0 items-center gap-3.5">
         {legend.map((l) => (
           <span key={l.label} className="flex items-center gap-1.5 text-xs text-muted">
-            <span className="size-2.5 rounded-sm" style={{ background: l.color }} />
+            <span className={cn("size-2.5 rounded-sm", toneClass[l.tone])} />
             {l.label}
           </span>
         ))}
@@ -55,7 +57,7 @@ function ChartHeader({
 
 export function AttendanceChart() {
   const t = useChartTheme();
-  const absent = t.dark ? "#fda4af" : "#fca5a5";
+  const absent = t.series.danger;
 
   return (
     <Card>
@@ -63,8 +65,8 @@ export function AttendanceChart() {
         title="Weekly Attendance"
         subtitle="Present vs Absent — this week"
         legend={[
-          { color: t.series.primary, label: "Present" },
-          { color: absent, label: "Absent" },
+          { tone: "primary", label: "Present" },
+          { tone: "danger", label: "Absent" },
         ]}
       />
       <CardContent>
@@ -92,8 +94,8 @@ export function FeeCollectionChart() {
         title="Fee Collection"
         subtitle="Monthly collection trend"
         legend={[
-          { color: t.series.primary, label: "Collected" },
-          { color: t.series.warning, label: "Pending" },
+          { tone: "primary", label: "Collected" },
+          { tone: "warning", label: "Pending" },
         ]}
       />
       <CardContent>

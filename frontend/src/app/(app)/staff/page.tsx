@@ -1,11 +1,10 @@
 "use client";
 
-import React, { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Search,
   Plus,
   Download,
-  Eye,
   Pencil,
   Trash2,
   Phone,
@@ -19,6 +18,9 @@ import {
   Avatar,
   Badge,
   Button,
+  Card,
+  CardContent,
+  ConfirmDialog,
   Input,
   PageHeader,
   Select,
@@ -26,23 +28,16 @@ import {
   Table,
   type Column,
 } from "@/components/ui";
-
-const staffList = [
-  { id: "ST001", name: "Mr. Rajesh Sharma",   role: "Principal",         dept: "Administration", type: "Full-time", status: "active",   phone: "98765-11111", email: "rajesh@school.edu",   join: "Jan 2015", salary: "₹85,000" },
-  { id: "ST002", name: "Ms. Sunita Verma",    role: "Vice Principal",    dept: "Administration", type: "Full-time", status: "active",   phone: "98765-22222", email: "sunita@school.edu",   join: "Mar 2017", salary: "₹72,000" },
-  { id: "ST003", name: "Mr. Anil Kumar",      role: "Accountant",        dept: "Finance",        type: "Full-time", status: "active",   phone: "98765-33333", email: "anil@school.edu",     join: "Jun 2018", salary: "₹45,000" },
-  { id: "ST004", name: "Ms. Pooja Mehta",     role: "HR Manager",        dept: "HR",             type: "Full-time", status: "active",   phone: "98765-44444", email: "pooja@school.edu",    join: "Aug 2019", salary: "₹50,000" },
-  { id: "ST005", name: "Mr. Suresh Nair",     role: "IT Administrator",  dept: "IT",             type: "Full-time", status: "active",   phone: "98765-55555", email: "suresh@school.edu",   join: "Feb 2020", salary: "₹55,000" },
-  { id: "ST006", name: "Ms. Kavita Joshi",    role: "Librarian",         dept: "Library",        type: "Full-time", status: "on-leave", phone: "98765-66666", email: "kavita@school.edu",   join: "Apr 2016", salary: "₹38,000" },
-  { id: "ST007", name: "Mr. Deepak Singh",    role: "Security Head",     dept: "Security",       type: "Full-time", status: "active",   phone: "98765-77777", email: "deepak@school.edu",   join: "Jan 2018", salary: "₹32,000" },
-  { id: "ST008", name: "Ms. Anita Gupta",     role: "Receptionist",      dept: "Administration", type: "Full-time", status: "active",   phone: "98765-88888", email: "anita@school.edu",    join: "Sep 2021", salary: "₹28,000" },
-  { id: "ST009", name: "Mr. Ramesh Patel",    role: "Transport Manager", dept: "Transport",      type: "Full-time", status: "active",   phone: "98765-99999", email: "ramesh@school.edu",   join: "Jul 2017", salary: "₹42,000" },
-  { id: "ST010", name: "Ms. Nisha Reddy",     role: "Nurse",             dept: "Health",         type: "Part-time", status: "active",   phone: "98765-10101", email: "nisha@school.edu",    join: "Mar 2022", salary: "₹25,000" },
-  { id: "ST011", name: "Mr. Vinod Tiwari",    role: "Canteen Manager",   dept: "Canteen",        type: "Full-time", status: "active",   phone: "98765-11211", email: "vinod@school.edu",    join: "Nov 2019", salary: "₹30,000" },
-  { id: "ST012", name: "Ms. Rekha Iyer",      role: "Counselor",         dept: "HR",             type: "Part-time", status: "inactive", phone: "98765-12121", email: "rekha@school.edu",    join: "Jan 2023", salary: "₹22,000" },
-];
-
-type Staff = (typeof staffList)[number];
+import { useResource } from "@/hooks/useResource";
+import {
+  staffApi,
+  STAFF_DEPT_OPTIONS,
+  STAFF_TYPE_OPTIONS,
+  STAFF_STATUS_OPTIONS,
+  type StaffMember,
+} from "@/lib/api/staff";
+import type { StaffSchema } from "@/lib/schemas/staff";
+import { StaffFormModal } from "./StaffFormModal";
 
 type BadgeVariant = "default" | "success" | "warning" | "danger" | "info";
 
@@ -65,7 +60,7 @@ const STATUS_META: Record<string, { variant: BadgeVariant; dot: string; label: s
   inactive: { variant: "default", dot: "bg-subtle", label: "Inactive" },
 };
 
-const departments = ["All", ...Array.from(new Set(staffList.map((s) => s.dept)))];
+const inr = (value: number) => `₹${value.toLocaleString("en-IN")}`;
 
 export default function StaffPage() {
   const [search, setSearch] = useState("");
@@ -73,27 +68,60 @@ export default function StaffPage() {
   const [typeFilter, setTypeFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState("All");
 
-  const filtered = staffList.filter((s) => {
-    const matchSearch =
-      s.name.toLowerCase().includes(search.toLowerCase()) ||
-      s.role.toLowerCase().includes(search.toLowerCase()) ||
-      s.id.toLowerCase().includes(search.toLowerCase());
-    const matchDept = deptFilter === "All" || s.dept === deptFilter;
-    const matchType = typeFilter === "All" || s.type === typeFilter;
-    const matchStatus = statusFilter === "All" || s.status === statusFilter;
-    return matchSearch && matchDept && matchType && matchStatus;
-  });
+  const filters = useMemo(
+    () => ({ search, dept: deptFilter, type: typeFilter, status: statusFilter }),
+    [search, deptFilter, typeFilter, statusFilter]
+  );
 
-  const totalActive = staffList.filter((s) => s.status === "active").length;
-  const totalOnLeave = staffList.filter((s) => s.status === "on-leave").length;
-  const totalPartTime = staffList.filter((s) => s.type === "Part-time").length;
+  const { items, loading, error, refetch, save, remove, saving, deleting } = useResource(
+    staffApi,
+    filters,
+    { label: "staff member", describe: (s) => s.name }
+  );
 
-  const deptCounts = staffList.reduce<Record<string, number>>((acc, s) => {
-    acc[s.dept] = (acc[s.dept] || 0) + 1;
-    return acc;
-  }, {});
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<StaffMember | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<StaffMember | null>(null);
 
-  const columns: Column<Staff>[] = [
+  const stats = useMemo(
+    () => ({
+      total: items.length,
+      active: items.filter((s) => s.status === "active").length,
+      onLeave: items.filter((s) => s.status === "on-leave").length,
+      partTime: items.filter((s) => s.type === "Part-time").length,
+    }),
+    [items]
+  );
+
+  const deptCounts = useMemo(
+    () =>
+      STAFF_DEPT_OPTIONS.map((dept) => ({
+        dept,
+        count: items.filter((s) => s.dept === dept).length,
+      })),
+    [items]
+  );
+
+  const openCreate = () => {
+    setEditing(null);
+    setFormOpen(true);
+  };
+
+  const handleSubmit = async (values: StaffSchema) => {
+    const ok = await save(values, editing);
+    if (ok) {
+      setFormOpen(false);
+      setEditing(null);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!pendingDelete) return;
+    const ok = await remove(pendingDelete);
+    if (ok) setPendingDelete(null);
+  };
+
+  const columns: Column<StaffMember>[] = [
     {
       key: "name",
       header: "Staff Member",
@@ -103,7 +131,7 @@ export default function StaffPage() {
           <Avatar name={s.name} size="sm" />
           <div className="min-w-0">
             <p className="truncate font-medium text-text">{s.name}</p>
-            <p className="truncate text-xs text-subtle">{s.id}</p>
+            <p className="truncate text-xs text-subtle">{s.employeeId}</p>
           </div>
         </div>
       ),
@@ -133,7 +161,7 @@ export default function StaffPage() {
       header: "Salary",
       sortable: true,
       align: "right",
-      render: (s) => <span className="whitespace-nowrap font-medium text-text">{s.salary}</span>,
+      render: (s) => <span className="whitespace-nowrap font-medium text-text">{inr(s.salary)}</span>,
     },
     {
       key: "join",
@@ -161,7 +189,7 @@ export default function StaffPage() {
       header: "Status",
       sortable: true,
       render: (s) => {
-        const meta = STATUS_META[s.status];
+        const meta = STATUS_META[s.status] ?? STATUS_META.inactive;
         return <Badge variant={meta.variant}>{meta.label}</Badge>;
       },
     },
@@ -171,20 +199,23 @@ export default function StaffPage() {
       align: "right",
       render: (s) => (
         <div className="flex items-center justify-end gap-1">
-          <Button variant="ghost" size="sm" className="px-2" aria-label={`View ${s.name}`}>
-            <Eye className="size-4" />
-          </Button>
-          <Button variant="ghost" size="sm" className="px-2" aria-label={`Edit ${s.name}`}>
+          <button
+            onClick={() => {
+              setEditing(s);
+              setFormOpen(true);
+            }}
+            aria-label={`Edit ${s.name}`}
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+          >
             <Pencil className="size-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="px-2 hover:bg-danger-soft hover:text-danger"
+          </button>
+          <button
+            onClick={() => setPendingDelete(s)}
             aria-label={`Delete ${s.name}`}
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-danger-soft hover:text-danger"
           >
             <Trash2 className="size-4" />
-          </Button>
+          </button>
         </div>
       ),
     },
@@ -201,7 +232,7 @@ export default function StaffPage() {
               <Download className="size-4" />
               Export
             </Button>
-            <Button>
+            <Button onClick={openCreate}>
               <Plus className="size-4" />
               Add Staff
             </Button>
@@ -210,15 +241,15 @@ export default function StaffPage() {
       />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Total Staff" value={staffList.length} icon={Users} tone="cyan" />
-        <StatCard label="Active" value={totalActive} icon={UserCheck} tone="emerald" />
-        <StatCard label="On Leave" value={totalOnLeave} icon={Clock} tone="amber" />
-        <StatCard label="Part-time" value={totalPartTime} icon={Briefcase} tone="violet" />
+        <StatCard label="Total Staff" value={stats.total} icon={Users} tone="cyan" />
+        <StatCard label="Active" value={stats.active} icon={UserCheck} tone="emerald" />
+        <StatCard label="On Leave" value={stats.onLeave} icon={Clock} tone="amber" />
+        <StatCard label="Part-time" value={stats.partTime} icon={Briefcase} tone="violet" />
       </div>
 
       {/* Department summary — each tile toggles the department filter */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6">
-        {Object.entries(deptCounts).map(([dept, count]) => {
+        {deptCounts.map(({ dept, count }) => {
           const active = deptFilter === dept;
           return (
             <button
@@ -260,7 +291,10 @@ export default function StaffPage() {
           <Select
             value={deptFilter}
             onChange={(e) => setDeptFilter(e.target.value)}
-            options={departments.map((d) => ({ label: d === "All" ? "All Departments" : d, value: d }))}
+            options={[
+              { label: "All Departments", value: "All" },
+              ...STAFF_DEPT_OPTIONS.map((d) => ({ label: d, value: d })),
+            ]}
             aria-label="Filter by department"
           />
         </div>
@@ -270,8 +304,7 @@ export default function StaffPage() {
             onChange={(e) => setTypeFilter(e.target.value)}
             options={[
               { label: "All Types", value: "All" },
-              { label: "Full-time", value: "Full-time" },
-              { label: "Part-time", value: "Part-time" },
+              ...STAFF_TYPE_OPTIONS.map((t) => ({ label: t, value: t })),
             ]}
             aria-label="Filter by employment type"
           />
@@ -280,35 +313,47 @@ export default function StaffPage() {
           <Select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            options={[
-              { label: "All Status", value: "All" },
-              { label: "Active", value: "active" },
-              { label: "On Leave", value: "on-leave" },
-              { label: "Inactive", value: "inactive" },
-            ]}
+            options={[{ label: "All Status", value: "All" }, ...STAFF_STATUS_OPTIONS]}
             aria-label="Filter by status"
           />
         </div>
-        <p className="ml-auto text-xs text-subtle">{filtered.length} staff members</p>
+        <p className="ml-auto text-xs text-subtle">{items.length} staff members</p>
       </div>
 
-      <Table
-        columns={columns}
-        rows={filtered}
-        rowKey={(s) => s.id}
-        emptyTitle="No staff found"
-        emptyDescription="Try adjusting your filters"
-      />
+      {error ? (
+        <Card>
+          <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+            <p className="text-sm font-medium text-danger">{error}</p>
+            <Button variant="outline" onClick={refetch}>
+              Try again
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <Table
+          columns={columns}
+          rows={items}
+          rowKey={(s) => s.id}
+          loading={loading}
+          emptyTitle="No staff found"
+          emptyDescription="Try adjusting your filters"
+          emptyAction={
+            <Button variant="outline" onClick={openCreate}>
+              <Plus className="size-4" />
+              Add Staff
+            </Button>
+          }
+        />
+      )}
 
       <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted">
         <p>
-          Showing <strong className="font-semibold text-text">{filtered.length}</strong> of{" "}
-          <strong className="font-semibold text-text">{staffList.length}</strong> staff members
+          Showing <strong className="font-semibold text-text">{items.length}</strong> staff members
         </p>
         <div className="flex flex-wrap items-center gap-4">
           {["active", "on-leave", "inactive"].map((st) => {
             const meta = STATUS_META[st];
-            const count = filtered.filter((s) => s.status === st).length;
+            const count = items.filter((s) => s.status === st).length;
             return (
               <span key={st} className="flex items-center gap-1.5">
                 <span className={`size-2 rounded-full ${meta.dot}`} />
@@ -318,6 +363,29 @@ export default function StaffPage() {
           })}
         </div>
       </div>
+
+      <StaffFormModal
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        record={editing}
+        saving={saving}
+        onSubmit={handleSubmit}
+      />
+
+      <ConfirmDialog
+        open={Boolean(pendingDelete)}
+        onOpenChange={(open) => !open && setPendingDelete(null)}
+        title="Delete staff member?"
+        description={
+          pendingDelete
+            ? `${pendingDelete.name} (${pendingDelete.employeeId}) will be permanently removed. This cannot be undone.`
+            : ""
+        }
+        confirmLabel="Delete"
+        destructive
+        loading={deleting}
+        onConfirm={handleDelete}
+      />
     </div>
   );
 }

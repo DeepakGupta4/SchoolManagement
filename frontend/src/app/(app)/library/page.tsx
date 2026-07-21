@@ -1,13 +1,12 @@
 "use client";
 
-import React, { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Search,
   Plus,
   Download,
   Pencil,
   Trash2,
-  Eye,
   BookOpen,
   BookCheck,
   BookMarked,
@@ -20,6 +19,9 @@ import {
 import {
   Badge,
   Button,
+  Card,
+  CardContent,
+  ConfirmDialog,
   Input,
   PageHeader,
   Select,
@@ -28,19 +30,10 @@ import {
   type Column,
 } from "@/components/ui";
 import { cn } from "@/lib/utils";
-
-const books = [
-  { id: "BK001", title: "Mathematics NCERT Class 10",    author: "NCERT",              category: "Textbook",  total: 45, available: 12, isbn: "978-81-7450-001-1", publisher: "NCERT",        year: 2023 },
-  { id: "BK002", title: "Physics Part I Class 11",       author: "NCERT",              category: "Textbook",  total: 40, available: 8,  isbn: "978-81-7450-002-2", publisher: "NCERT",        year: 2023 },
-  { id: "BK003", title: "Wings of Fire",                 author: "A.P.J. Abdul Kalam", category: "Biography", total: 10, available: 3,  isbn: "978-81-7371-146-6", publisher: "Universities Press", year: 2020 },
-  { id: "BK004", title: "The Alchemist",                 author: "Paulo Coelho",       category: "Fiction",   total: 8,  available: 5,  isbn: "978-0-06-231500-7", publisher: "HarperCollins", year: 2019 },
-  { id: "BK005", title: "Chemistry NCERT Class 12",      author: "NCERT",              category: "Textbook",  total: 38, available: 15, isbn: "978-81-7450-003-3", publisher: "NCERT",        year: 2023 },
-  { id: "BK006", title: "Rich Dad Poor Dad",             author: "Robert Kiyosaki",    category: "Finance",   total: 6,  available: 2,  isbn: "978-1-61268-116-2", publisher: "Plata Publishing", year: 2017 },
-  { id: "BK007", title: "History of Modern India",       author: "Bipan Chandra",      category: "History",   total: 15, available: 9,  isbn: "978-81-250-3684-5", publisher: "Orient Blackswan", year: 2021 },
-  { id: "BK008", title: "English Grammar in Use",        author: "Raymond Murphy",     category: "Reference", total: 20, available: 0,  isbn: "978-1-107-53933-6", publisher: "Cambridge",    year: 2019 },
-  { id: "BK009", title: "Computer Science Class 12",     author: "Sumita Arora",       category: "Textbook",  total: 30, available: 18, isbn: "978-93-5134-234-5", publisher: "Dhanpat Rai",  year: 2023 },
-  { id: "BK010", title: "Atomic Habits",                 author: "James Clear",        category: "Self-Help", total: 5,  available: 1,  isbn: "978-0-7352-1129-2", publisher: "Avery",        year: 2018 },
-];
+import { useResource } from "@/hooks/useResource";
+import { booksApi, CATEGORY_OPTIONS, type Book } from "@/lib/api/books";
+import type { BookSchema } from "@/lib/schemas/book";
+import { BookFormModal } from "./BookFormModal";
 
 const issuedBooks = [
   { id: "ISS001", book: "Wings of Fire",            student: "Aarav Sharma",  class: "10-A", issueDate: "Jul 10, 2025", dueDate: "Jul 24, 2025", status: "issued"  },
@@ -53,7 +46,6 @@ const issuedBooks = [
   { id: "ISS008", book: "Mathematics NCERT Class 10",student: "Meera Iyer",   class: "10-A", issueDate: "Jun 28, 2025", dueDate: "Jul 12, 2025", status: "returned"},
 ];
 
-type Book = (typeof books)[number];
 type IssueRecord = (typeof issuedBooks)[number];
 
 /** Category colour coding: a badge tone plus a tile gradient, both tokenised. */
@@ -112,27 +104,6 @@ function Segmented({
   );
 }
 
-function RowActions({ label }: { label: string }) {
-  return (
-    <div className="flex items-center justify-end gap-1">
-      <Button variant="ghost" size="sm" className="px-2" aria-label={`View ${label}`}>
-        <Eye className="size-4" />
-      </Button>
-      <Button variant="ghost" size="sm" className="px-2" aria-label={`Edit ${label}`}>
-        <Pencil className="size-4" />
-      </Button>
-      <Button
-        variant="ghost"
-        size="sm"
-        className="px-2 hover:bg-danger-soft hover:text-danger"
-        aria-label={`Delete ${label}`}
-      >
-        <Trash2 className="size-4" />
-      </Button>
-    </div>
-  );
-}
-
 export default function LibraryPage() {
   const [activeSection, setActiveSection] = useState<"catalog" | "issued">("catalog");
   const [catalogTab, setCatalogTab] = useState("All Books");
@@ -140,17 +111,30 @@ export default function LibraryPage() {
   const [search, setSearch] = useState("");
   const [catFilter, setCatFilter] = useState("All");
 
-  const filteredBooks = books.filter((b) => {
-    const matchCat = catFilter === "All" || b.category === catFilter;
-    const matchSearch =
-      b.title.toLowerCase().includes(search.toLowerCase()) ||
-      b.author.toLowerCase().includes(search.toLowerCase()) ||
-      b.id.toLowerCase().includes(search.toLowerCase());
-    const matchTab =
-      catalogTab === "All Books" ||
-      (catalogTab === "Available" ? b.available > 0 : b.available === 0);
-    return matchCat && matchSearch && matchTab;
-  });
+  const filters = useMemo(
+    () => ({ search, category: catFilter, availability: catalogTab }),
+    [search, catFilter, catalogTab]
+  );
+
+  const { items, loading, error, refetch, save, remove, saving, deleting } = useResource(
+    booksApi,
+    filters,
+    { label: "book", describe: (b) => b.title }
+  );
+
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<Book | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Book | null>(null);
+
+  const stats = useMemo(
+    () => ({
+      total: items.reduce((s, b) => s + b.total, 0),
+      available: items.reduce((s, b) => s + b.available, 0),
+      issued: items.reduce((s, b) => s + (b.total - b.available), 0),
+      overdue: issuedBooks.filter((i) => i.status === "overdue").length,
+    }),
+    [items]
+  );
 
   const filteredIssued = issuedBooks.filter((i) => {
     const matchTab = issueTab === "All" || i.status === issueTab.toLowerCase();
@@ -160,9 +144,24 @@ export default function LibraryPage() {
     return matchTab && matchSearch;
   });
 
-  const totalBooks = books.reduce((s, b) => s + b.total, 0);
-  const totalIssued = books.reduce((s, b) => s + (b.total - b.available), 0);
-  const overdueCount = issuedBooks.filter((i) => i.status === "overdue").length;
+  const openCreate = () => {
+    setEditing(null);
+    setFormOpen(true);
+  };
+
+  const handleSubmit = async (values: BookSchema) => {
+    const ok = await save(values, editing);
+    if (ok) {
+      setFormOpen(false);
+      setEditing(null);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!pendingDelete) return;
+    const ok = await remove(pendingDelete);
+    if (ok) setPendingDelete(null);
+  };
 
   const bookColumns: Column<Book>[] = [
     {
@@ -183,7 +182,7 @@ export default function LibraryPage() {
             </div>
             <div className="min-w-0 max-w-52">
               <p className="truncate font-medium text-text">{b.title}</p>
-              <p className="truncate text-xs text-subtle">{b.id}</p>
+              <p className="truncate text-xs text-subtle">{b.publisher}</p>
             </div>
           </div>
         );
@@ -241,7 +240,27 @@ export default function LibraryPage() {
       key: "actions",
       header: "",
       align: "right",
-      render: (b) => <RowActions label={b.title} />,
+      render: (b) => (
+        <div className="flex items-center justify-end gap-1">
+          <button
+            onClick={() => {
+              setEditing(b);
+              setFormOpen(true);
+            }}
+            aria-label={`Edit ${b.title}`}
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+          >
+            <Pencil className="size-4" />
+          </button>
+          <button
+            onClick={() => setPendingDelete(b)}
+            aria-label={`Delete ${b.title}`}
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-danger-soft hover:text-danger"
+          >
+            <Trash2 className="size-4" />
+          </button>
+        </div>
+      ),
     },
   ];
 
@@ -337,7 +356,7 @@ export default function LibraryPage() {
               <Download className="size-4" />
               Export
             </Button>
-            <Button>
+            <Button onClick={openCreate}>
               <Plus className="size-4" />
               Add book
             </Button>
@@ -346,15 +365,10 @@ export default function LibraryPage() {
       />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Total books" value={totalBooks} icon={BookOpen} tone="indigo" />
-        <StatCard
-          label="Available"
-          value={books.reduce((s, b) => s + b.available, 0)}
-          icon={BookCheck}
-          tone="emerald"
-        />
-        <StatCard label="Issued out" value={totalIssued} icon={BookMarked} tone="amber" />
-        <StatCard label="Overdue" value={overdueCount} icon={AlertCircle} tone="rose" />
+        <StatCard label="Total books" value={stats.total} icon={BookOpen} tone="indigo" />
+        <StatCard label="Available" value={stats.available} icon={BookCheck} tone="emerald" />
+        <StatCard label="Issued out" value={stats.issued} icon={BookMarked} tone="amber" />
+        <StatCard label="Overdue" value={stats.overdue} icon={AlertCircle} tone="rose" />
       </div>
 
       <Segmented
@@ -378,7 +392,7 @@ export default function LibraryPage() {
                 aria-label="Filter by category"
                 options={[
                   { label: "All categories", value: "All" },
-                  ...Object.keys(categoryStyles).map((c) => ({ label: c, value: c })),
+                  ...CATEGORY_OPTIONS.map((c) => ({ label: c, value: c })),
                 ]}
               />
             </div>
@@ -392,16 +406,38 @@ export default function LibraryPage() {
                 aria-label="Search books"
               />
             </div>
-            <p className="text-xs text-muted">{filteredBooks.length} books</p>
+            <p className="text-xs text-muted">{items.length} books</p>
           </div>
 
-          <Table
-            columns={bookColumns}
-            rows={filteredBooks}
-            rowKey={(b) => b.id}
-            emptyTitle="No books found"
-            emptyDescription="Try adjusting your filters or search."
-          />
+          {error ? (
+            <Card>
+              <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+                <p className="text-sm font-medium text-danger">{error}</p>
+                <Button variant="outline" onClick={refetch}>
+                  Try again
+                </Button>
+              </CardContent>
+            </Card>
+          ) : (
+            <Table
+              columns={bookColumns}
+              rows={items}
+              rowKey={(b) => b.id}
+              loading={loading}
+              emptyTitle="No books found"
+              emptyDescription={
+                search || catFilter !== "All" || catalogTab !== "All Books"
+                  ? "Try adjusting your filters or search."
+                  : "Add your first book to get started."
+              }
+              emptyAction={
+                <Button variant="outline" onClick={openCreate}>
+                  <Plus className="size-4" />
+                  Add book
+                </Button>
+              }
+            />
+          )}
         </>
       )}
 
@@ -431,6 +467,29 @@ export default function LibraryPage() {
           />
         </>
       )}
+
+      <BookFormModal
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        record={editing}
+        saving={saving}
+        onSubmit={handleSubmit}
+      />
+
+      <ConfirmDialog
+        open={Boolean(pendingDelete)}
+        onOpenChange={(open) => !open && setPendingDelete(null)}
+        title="Delete book?"
+        description={
+          pendingDelete
+            ? `${pendingDelete.title} and its ${pendingDelete.total} copy record(s) will be permanently removed. This cannot be undone.`
+            : ""
+        }
+        confirmLabel="Delete"
+        destructive
+        loading={deleting}
+        onConfirm={handleDelete}
+      />
     </div>
   );
 }

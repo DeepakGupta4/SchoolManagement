@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   Search,
   Plus,
@@ -20,24 +20,25 @@ import {
   Button,
   Card,
   CardContent,
+  ConfirmDialog,
   EmptyState,
   Input,
   PageHeader,
   Select,
+  Skeleton,
   StatCard,
 } from "@/components/ui";
 import { cn } from "@/lib/utils";
-
-const announcements = [
-  { id: "AN001", title: "Annual Sports Day 2025",           body: "Annual Sports Day will be held on 28th July 2025. All students must participate in at least one event.", author: "Principal", audience: "All",      category: "Event",    date: "10 Jul 2025", pinned: true,  views: 320 },
-  { id: "AN002", title: "Fee Payment Deadline Reminder",    body: "Last date for fee payment for Q2 is 20th July 2025. Late fee will be charged after the deadline.",      author: "Accounts",  audience: "Parents",  category: "Finance",  date: "12 Jul 2025", pinned: true,  views: 210 },
-  { id: "AN003", title: "Staff Meeting – 18 July",          body: "All teaching and non-teaching staff are required to attend the meeting on 18th July at 3:00 PM.",        author: "Principal", audience: "Staff",    category: "Meeting",  date: "13 Jul 2025", pinned: false, views: 85  },
-  { id: "AN004", title: "Exam Schedule Released",           body: "The mid-term exam schedule for classes 6–12 has been released. Check the notice board for details.",     author: "Exam Cell", audience: "Students", category: "Exam",     date: "14 Jul 2025", pinned: false, views: 450 },
-  { id: "AN005", title: "Library Closed on 19 July",        body: "The school library will remain closed on 19th July 2025 due to maintenance work.",                       author: "Librarian", audience: "All",      category: "Notice",   date: "15 Jul 2025", pinned: false, views: 130 },
-  { id: "AN006", title: "New Bus Route Added",              body: "A new bus route covering Sector 14 and Sector 18 has been added from 21st July 2025.",                   author: "Transport", audience: "Parents",  category: "Transport",date: "15 Jul 2025", pinned: false, views: 95  },
-  { id: "AN007", title: "Parent-Teacher Meeting",           body: "PTM for classes 9–12 is scheduled on 26th July 2025 from 9 AM to 1 PM. Attendance is mandatory.",       author: "Principal", audience: "Parents",  category: "Meeting",  date: "16 Jul 2025", pinned: true,  views: 280 },
-  { id: "AN008", title: "Holiday Notice – Eid",             body: "School will remain closed on 17th July 2025 on account of Eid. Classes will resume on 18th July.",       author: "Admin",     audience: "All",      category: "Holiday",  date: "16 Jul 2025", pinned: false, views: 510 },
-];
+import { useResource } from "@/hooks/useResource";
+import {
+  ANNOUNCEMENT_CATEGORIES,
+  AUDIENCE_OPTIONS,
+  announcementsApi,
+  formatNoticeDate,
+  type Announcement,
+} from "@/lib/api/announcements";
+import type { AnnouncementSchema } from "@/lib/schemas/announcement";
+import { AnnouncementFormModal } from "./AnnouncementFormModal";
 
 type BadgeVariant = "default" | "success" | "warning" | "danger" | "info" | "outline";
 
@@ -52,10 +53,9 @@ const categoryConfig: Record<string, { variant: BadgeVariant; icon: React.ReactN
 };
 
 const audienceVariant: Record<string, BadgeVariant> = {
-  All: "info",
+  Students: "success",
   Parents: "warning",
   Staff: "default",
-  Students: "success",
 };
 
 const tabs = ["All", "Pinned"] as const;
@@ -63,21 +63,61 @@ const tabs = ["All", "Pinned"] as const;
 export default function AnnouncementsPage() {
   const [tab, setTab] = useState<(typeof tabs)[number]>("All");
   const [search, setSearch] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState("All");
-  const [audienceFilter, setAudienceFilter] = useState("All");
+  const [categoryFilter, setCategoryFilter] = useState("");
+  const [audienceFilter, setAudienceFilter] = useState("");
 
-  const filtered = announcements.filter((a) => {
-    const matchTab = tab === "All" || a.pinned;
-    const matchSearch =
-      a.title.toLowerCase().includes(search.toLowerCase()) ||
-      a.body.toLowerCase().includes(search.toLowerCase());
-    const matchCategory = categoryFilter === "All" || a.category === categoryFilter;
-    const matchAudience = audienceFilter === "All" || a.audience === audienceFilter;
-    return matchTab && matchSearch && matchCategory && matchAudience;
-  });
+  const filters = useMemo(
+    () => ({
+      search,
+      category: categoryFilter,
+      audience: audienceFilter,
+      pinnedOnly: tab === "Pinned",
+    }),
+    [search, categoryFilter, audienceFilter, tab]
+  );
 
-  const totalViews = announcements.reduce((s, a) => s + a.views, 0);
-  const pinned = announcements.filter((a) => a.pinned).length;
+  const { items, loading, error, refetch, save, remove, saving, deleting } = useResource(
+    announcementsApi,
+    filters,
+    { label: "announcement", describe: (a) => a.title }
+  );
+
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<Announcement | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Announcement | null>(null);
+
+  const stats = useMemo(
+    () => ({
+      total: items.length,
+      pinned: items.filter((a) => a.pinned).length,
+      views: items.reduce((sum, a) => sum + a.views, 0),
+    }),
+    [items]
+  );
+
+  const openCreate = () => {
+    setEditing(null);
+    setFormOpen(true);
+  };
+
+  const handleSubmit = async (values: AnnouncementSchema) => {
+    const ok = await save(
+      { ...values, date: editing?.date ?? formatNoticeDate(new Date()) },
+      editing
+    );
+    if (ok) {
+      setFormOpen(false);
+      setEditing(null);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!pendingDelete) return;
+    const ok = await remove(pendingDelete);
+    if (ok) setPendingDelete(null);
+  };
+
+  const hasFilters = Boolean(search || categoryFilter || audienceFilter) || tab === "Pinned";
 
   return (
     <div className="flex flex-col gap-5">
@@ -90,7 +130,7 @@ export default function AnnouncementsPage() {
               <Download className="size-4" />
               Export
             </Button>
-            <Button>
+            <Button onClick={openCreate}>
               <Plus className="size-4" />
               New announcement
             </Button>
@@ -99,10 +139,10 @@ export default function AnnouncementsPage() {
       />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Total" value={announcements.length} icon={Megaphone} tone="amber" />
-        <StatCard label="Pinned" value={pinned} icon={Pin} tone="indigo" />
-        <StatCard label="Total views" value={totalViews} icon={Eye} tone="cyan" />
-        <StatCard label="Audiences" value={4} icon={Users} tone="emerald" />
+        <StatCard label="Total" value={stats.total} icon={Megaphone} tone="amber" />
+        <StatCard label="Pinned" value={stats.pinned} icon={Pin} tone="indigo" />
+        <StatCard label="Total views" value={stats.views} icon={Eye} tone="cyan" />
+        <StatCard label="Audiences" value={AUDIENCE_OPTIONS.length} icon={Users} tone="emerald" />
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -145,10 +185,8 @@ export default function AnnouncementsPage() {
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value)}
             aria-label="Filter by category"
-            options={[
-              { label: "All categories", value: "All" },
-              ...Object.keys(categoryConfig).map((c) => ({ label: c, value: c })),
-            ]}
+            placeholder="All categories"
+            options={ANNOUNCEMENT_CATEGORIES.map((c) => ({ label: c, value: c }))}
           />
         </div>
 
@@ -157,81 +195,146 @@ export default function AnnouncementsPage() {
             value={audienceFilter}
             onChange={(e) => setAudienceFilter(e.target.value)}
             aria-label="Filter by audience"
-            options={[
-              { label: "All audiences", value: "All" },
-              ...["All", "Parents", "Staff", "Students"].map((a) => ({ label: a, value: a })),
-            ]}
+            placeholder="All audiences"
+            options={AUDIENCE_OPTIONS.map((a) => ({ label: a, value: a }))}
           />
         </div>
 
-        <p className="ml-auto text-xs text-subtle">{filtered.length} announcements</p>
+        <p className="ml-auto text-xs text-subtle">{items.length} announcements</p>
       </div>
 
-      <div className="flex flex-col gap-3">
-        {filtered.map((a) => {
-          const cc = categoryConfig[a.category] ?? {
-            variant: "default" as BadgeVariant,
-            icon: <Bell className="size-3" />,
-          };
-          return (
-            <Card key={a.id} className={cn("card-hover", a.pinned && "border-warning")}>
-              <CardContent className="flex items-start justify-between gap-4">
-                <div className="min-w-0 flex-1">
-                  <div className="mb-2 flex flex-wrap items-center gap-2">
-                    {a.pinned && (
-                      <Badge variant="warning" className="gap-1">
-                        <Pin className="size-3" /> Pinned
-                      </Badge>
-                    )}
-                    <Badge variant={cc.variant} className="gap-1">
-                      {cc.icon} {a.category}
-                    </Badge>
-                    <Badge variant={audienceVariant[a.audience] ?? "default"}>{a.audience}</Badge>
-                  </div>
-
-                  <h3 className="text-sm font-semibold text-text">{a.title}</h3>
-                  <p className="mt-1.5 line-clamp-2 text-sm leading-relaxed text-muted">{a.body}</p>
-
-                  <div className="mt-3 flex flex-wrap items-center gap-4 text-xs text-subtle">
-                    <span>
-                      By <strong className="font-medium text-text">{a.author}</strong>
-                    </span>
-                    <span>{a.date}</span>
-                    <span className="inline-flex items-center gap-1">
-                      <Eye className="size-3.5" /> {a.views} views
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex shrink-0 items-center gap-1">
-                  <button
-                    aria-label={`Edit ${a.title}`}
-                    className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
-                  >
-                    <Edit className="size-4" />
-                  </button>
-                  <button
-                    aria-label={`Delete ${a.title}`}
-                    className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-danger-soft hover:text-danger"
-                  >
-                    <Trash2 className="size-4" />
-                  </button>
-                </div>
+      {error ? (
+        <Card>
+          <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+            <p className="text-sm font-medium text-danger">{error}</p>
+            <Button variant="outline" onClick={refetch}>
+              Try again
+            </Button>
+          </CardContent>
+        </Card>
+      ) : loading ? (
+        <div className="flex flex-col gap-3">
+          {[0, 1, 2, 3].map((i) => (
+            <Card key={i}>
+              <CardContent className="flex flex-col gap-3">
+                <Skeleton className="h-4 w-40" />
+                <Skeleton className="h-4 w-2/3" />
+                <Skeleton className="h-3 w-1/3" />
               </CardContent>
             </Card>
-          );
-        })}
+          ))}
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {items.map((a) => {
+            const cc = categoryConfig[a.category] ?? {
+              variant: "default" as BadgeVariant,
+              icon: <Bell className="size-3" />,
+            };
+            return (
+              <Card key={a.id} className={cn("card-hover", a.pinned && "border-warning")}>
+                <CardContent className="flex items-start justify-between gap-4">
+                  <div className="min-w-0 flex-1">
+                    <div className="mb-2 flex flex-wrap items-center gap-2">
+                      {a.pinned && (
+                        <Badge variant="warning" className="gap-1">
+                          <Pin className="size-3" /> Pinned
+                        </Badge>
+                      )}
+                      <Badge variant={cc.variant} className="gap-1">
+                        {cc.icon} {a.category}
+                      </Badge>
+                      {a.audience.map((aud) => (
+                        <Badge key={aud} variant={audienceVariant[aud] ?? "default"}>
+                          {aud}
+                        </Badge>
+                      ))}
+                    </div>
 
-        {filtered.length === 0 && (
-          <Card>
-            <EmptyState
-              icon={<Megaphone className="size-5" />}
-              title="No announcements found"
-              description="Try clearing your filters to see more results."
-            />
-          </Card>
-        )}
-      </div>
+                    <h3 className="text-sm font-semibold text-text">{a.title}</h3>
+                    <p className="mt-1.5 line-clamp-2 text-sm leading-relaxed text-muted">
+                      {a.body}
+                    </p>
+
+                    <div className="mt-3 flex flex-wrap items-center gap-4 text-xs text-subtle">
+                      <span>
+                        By <strong className="font-medium text-text">{a.author}</strong>
+                      </span>
+                      <span>{a.date}</span>
+                      <span className="inline-flex items-center gap-1">
+                        <Eye className="size-3.5" /> {a.views} views
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex shrink-0 items-center gap-1">
+                    <button
+                      onClick={() => {
+                        setEditing(a);
+                        setFormOpen(true);
+                      }}
+                      aria-label={`Edit ${a.title}`}
+                      className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+                    >
+                      <Edit className="size-4" />
+                    </button>
+                    <button
+                      onClick={() => setPendingDelete(a)}
+                      aria-label={`Delete ${a.title}`}
+                      className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-danger-soft hover:text-danger"
+                    >
+                      <Trash2 className="size-4" />
+                    </button>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+
+          {items.length === 0 && (
+            <Card>
+              <EmptyState
+                icon={<Megaphone className="size-5" />}
+                title="No announcements found"
+                description={
+                  hasFilters
+                    ? "Try clearing your filters to see more results."
+                    : "Publish your first announcement to get started."
+                }
+                action={
+                  <Button variant="outline" onClick={openCreate}>
+                    <Plus className="size-4" />
+                    New announcement
+                  </Button>
+                }
+              />
+            </Card>
+          )}
+        </div>
+      )}
+
+      <AnnouncementFormModal
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        record={editing}
+        saving={saving}
+        onSubmit={handleSubmit}
+      />
+
+      <ConfirmDialog
+        open={Boolean(pendingDelete)}
+        onOpenChange={(open) => !open && setPendingDelete(null)}
+        title="Delete announcement?"
+        description={
+          pendingDelete
+            ? `"${pendingDelete.title}" will be removed from the feed. This cannot be undone.`
+            : ""
+        }
+        confirmLabel="Delete"
+        destructive
+        loading={deleting}
+        onConfirm={handleDelete}
+      />
     </div>
   );
 }

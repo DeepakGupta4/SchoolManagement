@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Plus,
   Search,
@@ -30,6 +30,7 @@ import {
   Card,
   CardContent,
   CardHeader,
+  ConfirmDialog,
   Input,
   PageHeader,
   Select,
@@ -37,21 +38,17 @@ import {
   Table,
   type Column,
 } from "@/components/ui";
-import { useChartTheme } from "@/hooks/useChartTheme";
+import { useChartTheme, toneClass, type ChartTone } from "@/hooks/useChartTheme";
+import { useResource } from "@/hooks/useResource";
+import {
+  menuItemsApi,
+  CATEGORY_OPTIONS,
+  AVAILABILITY_OPTIONS,
+  type MenuItem,
+} from "@/lib/api/menuItems";
+import type { MenuItemSchema } from "@/lib/schemas/menuItem";
 import { cn } from "@/lib/utils";
-
-const menuItems = [
-  { id: "M001", name: "Veg Thali",        category: "Meals",    price: 45,  available: true,  sold: 120, emoji: "🍱" },
-  { id: "M002", name: "Chicken Biryani",  category: "Meals",    price: 70,  available: true,  sold: 85,  emoji: "🍛" },
-  { id: "M003", name: "Paneer Sandwich",  category: "Snacks",   price: 30,  available: true,  sold: 200, emoji: "🥪" },
-  { id: "M004", name: "Cold Coffee",      category: "Drinks",   price: 25,  available: true,  sold: 310, emoji: "☕" },
-  { id: "M005", name: "Samosa (2 pcs)",   category: "Snacks",   price: 15,  available: true,  sold: 450, emoji: "🥟" },
-  { id: "M006", name: "Fresh Lime Soda",  category: "Drinks",   price: 20,  available: false, sold: 95,  emoji: "🍋" },
-  { id: "M007", name: "Chole Bhature",    category: "Meals",    price: 55,  available: true,  sold: 60,  emoji: "🫓" },
-  { id: "M008", name: "Fruit Bowl",       category: "Healthy",  price: 40,  available: true,  sold: 75,  emoji: "🍎" },
-  { id: "M009", name: "Maggi Noodles",    category: "Snacks",   price: 25,  available: true,  sold: 380, emoji: "🍜" },
-  { id: "M010", name: "Lassi",            category: "Drinks",   price: 30,  available: true,  sold: 140, emoji: "🥛" },
-];
+import { MenuItemFormModal } from "./MenuItemFormModal";
 
 const orders = [
   { id: "ORD001", customer: "Rahul Sharma",   class: "10-A", items: "Veg Thali, Cold Coffee",    total: 70,  time: "12:05 PM", status: "delivered" },
@@ -73,12 +70,9 @@ const salesData = [
   { day: "Sat", revenue: 3200 },
 ];
 
-type MenuItem = (typeof menuItems)[number];
 type Order = (typeof orders)[number];
 
 type BadgeVariant = "default" | "success" | "warning" | "danger" | "info";
-
-const categories = ["Meals", "Snacks", "Drinks", "Healthy"];
 
 const categoryVariant: Record<string, BadgeVariant> = {
   Meals: "warning",
@@ -87,8 +81,8 @@ const categoryVariant: Record<string, BadgeVariant> = {
   Healthy: "success",
 };
 
-/** Which `useChartTheme().series` key paints each category in the pie. */
-const categorySeries: Record<string, "warning" | "violet" | "info" | "success"> = {
+/** Tone per category — drives both the pie Cell fill and the legend swatch class. */
+const categorySeries: Record<string, ChartTone> = {
   Meals: "warning",
   Snacks: "violet",
   Drinks: "info",
@@ -101,17 +95,6 @@ const statusConfig: Record<string, { variant: BadgeVariant; label: string }> = {
   pending:   { variant: "info",    label: "⏳ Pending"   },
   cancelled: { variant: "danger",  label: "✕ Cancelled"  },
 };
-
-/** Units sold per category — colours are attached at render time from the theme. */
-const catSales = Object.entries(
-  menuItems.reduce(
-    (acc, m) => {
-      acc[m.category] = (acc[m.category] || 0) + m.sold;
-      return acc;
-    },
-    {} as Record<string, number>
-  )
-).map(([name, value]) => ({ name, value }));
 
 const sections = ["Menu", "Orders"];
 const tabs = ["All", "Delivered", "Preparing", "Pending", "Cancelled"];
@@ -153,17 +136,60 @@ export default function CanteenPage() {
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState("All");
   const [catFilter, setCatFilter] = useState("All");
+  const [availFilter, setAvailFilter] = useState("All");
 
-  const pieData = catSales.map((c) => ({
-    ...c,
-    color: t.series[categorySeries[c.name] ?? "primary"],
-  }));
-
-  const filteredMenu = menuItems.filter(
-    (m) =>
-      (catFilter === "All" || m.category === catFilter) &&
-      m.name.toLowerCase().includes(search.toLowerCase())
+  // The search box is shared with the orders section, so only feed it to the
+  // menu query while the menu is on screen.
+  const filters = useMemo(
+    () => ({
+      search: section === "Menu" ? search : "",
+      category: catFilter,
+      availability: availFilter,
+    }),
+    [section, search, catFilter, availFilter]
   );
+
+  const { items, loading, error, refetch, save, remove, saving, deleting } = useResource(
+    menuItemsApi,
+    filters,
+    { label: "menu item", describe: (m) => m.name }
+  );
+
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<MenuItem | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<MenuItem | null>(null);
+
+  const openCreate = () => {
+    setEditing(null);
+    setFormOpen(true);
+  };
+
+  const handleSubmit = async (values: MenuItemSchema) => {
+    const ok = await save({ ...values, available: values.available === "true" }, editing);
+    if (ok) {
+      setFormOpen(false);
+      setEditing(null);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!pendingDelete) return;
+    const ok = await remove(pendingDelete);
+    if (ok) setPendingDelete(null);
+  };
+
+  /** Units sold per category — colours are attached from the theme at render time. */
+  const pieData = useMemo(() => {
+    const totals = items.reduce<Record<string, number>>((acc, m) => {
+      acc[m.category] = (acc[m.category] || 0) + m.sold;
+      return acc;
+    }, {});
+    return Object.entries(totals).map(([name, value]) => {
+      const tone = categorySeries[name] ?? "primary";
+      // `color` is for recharts only; `tone` is what the DOM swatch uses.
+      return { name, value, tone, color: t.series[tone] };
+    });
+  }, [items, t]);
 
   const filteredOrders = orders.filter((o) => {
     const matchTab = activeTab === "All" || o.status === activeTab.toLowerCase();
@@ -178,7 +204,7 @@ export default function CanteenPage() {
     .reduce((s, o) => s + o.total, 0);
   const totalOrders = orders.length;
   const delivered = orders.filter((o) => o.status === "delivered").length;
-  const activeItems = menuItems.filter((m) => m.available).length;
+  const activeItems = items.filter((m) => m.available).length;
 
   const menuColumns: Column<MenuItem>[] = [
     {
@@ -233,17 +259,23 @@ export default function CanteenPage() {
       align: "right",
       render: (m) => (
         <div className="flex items-center justify-end gap-1">
-          <Button variant="ghost" size="sm" className="px-2" aria-label={`Edit ${m.name}`}>
+          <button
+            onClick={() => {
+              setEditing(m);
+              setFormOpen(true);
+            }}
+            aria-label={`Edit ${m.name}`}
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+          >
             <Pencil className="size-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="px-2 hover:bg-danger-soft hover:text-danger"
+          </button>
+          <button
+            onClick={() => setPendingDelete(m)}
             aria-label={`Delete ${m.name}`}
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-danger-soft hover:text-danger"
           >
             <Trash2 className="size-4" />
-          </Button>
+          </button>
         </div>
       ),
     },
@@ -306,7 +338,7 @@ export default function CanteenPage() {
               <Download className="size-4" />
               Export
             </Button>
-            <Button>
+            <Button onClick={openCreate}>
               <Plus className="size-4" />
               Add item
             </Button>
@@ -334,7 +366,7 @@ export default function CanteenPage() {
               <p className="mt-0.5 text-xs text-muted">Daily canteen sales this week</p>
             </div>
             <span className="flex shrink-0 items-center gap-1.5 text-xs text-muted">
-              <span className="size-2.5 rounded-sm" style={{ background: t.series.success }} />
+              <span className={cn("size-2.5 rounded-sm", toneClass.success)} />
               Revenue
             </span>
           </CardHeader>
@@ -395,7 +427,7 @@ export default function CanteenPage() {
               {pieData.map((c) => (
                 <div key={c.name} className="flex items-center justify-between gap-2">
                   <span className="flex items-center gap-1.5 text-xs text-muted">
-                    <span className="size-2.5 rounded-sm" style={{ background: c.color }} />
+                    <span className={cn("size-2.5 rounded-sm", toneClass[c.tone])} />
                     {c.name}
                   </span>
                   <span className="text-xs font-semibold text-text">{c.value} sold</span>
@@ -414,6 +446,7 @@ export default function CanteenPage() {
           setSearch("");
           setActiveTab("All");
           setCatFilter("All");
+          setAvailFilter("All");
         }}
         size="md"
       />
@@ -428,8 +461,16 @@ export default function CanteenPage() {
                 aria-label="Filter by category"
                 options={[
                   { label: "All categories", value: "All" },
-                  ...categories.map((c) => ({ label: c, value: c })),
+                  ...CATEGORY_OPTIONS.map((c) => ({ label: c, value: c })),
                 ]}
+              />
+            </div>
+            <div className="w-44">
+              <Select
+                value={availFilter}
+                onChange={(e) => setAvailFilter(e.target.value)}
+                aria-label="Filter by availability"
+                options={[{ label: "All statuses", value: "All" }, ...AVAILABILITY_OPTIONS]}
               />
             </div>
             <div className="min-w-60 flex-1">
@@ -442,16 +483,38 @@ export default function CanteenPage() {
                 aria-label="Search menu"
               />
             </div>
-            <p className="text-xs text-muted">{filteredMenu.length} items</p>
+            <p className="text-xs text-muted">{items.length} items</p>
           </div>
 
-          <Table
-            columns={menuColumns}
-            rows={filteredMenu}
-            rowKey={(m) => m.id}
-            emptyTitle="No menu items found"
-            emptyDescription="Try adjusting your category filter or search."
-          />
+          {error ? (
+            <Card>
+              <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+                <p className="text-sm font-medium text-danger">{error}</p>
+                <Button variant="outline" onClick={refetch}>
+                  Try again
+                </Button>
+              </CardContent>
+            </Card>
+          ) : (
+            <Table
+              columns={menuColumns}
+              rows={items}
+              rowKey={(m) => m.id}
+              loading={loading}
+              emptyTitle="No menu items found"
+              emptyDescription={
+                search || catFilter !== "All" || availFilter !== "All"
+                  ? "Try adjusting your category filter or search."
+                  : "Add your first menu item to get started."
+              }
+              emptyAction={
+                <Button variant="outline" onClick={openCreate}>
+                  <Plus className="size-4" />
+                  Add item
+                </Button>
+              }
+            />
+          )}
         </>
       )}
 
@@ -498,6 +561,29 @@ export default function CanteenPage() {
           </div>
         </>
       )}
+
+      <MenuItemFormModal
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        record={editing}
+        saving={saving}
+        onSubmit={handleSubmit}
+      />
+
+      <ConfirmDialog
+        open={Boolean(pendingDelete)}
+        onOpenChange={(open) => !open && setPendingDelete(null)}
+        title="Delete menu item?"
+        description={
+          pendingDelete
+            ? `${pendingDelete.name} will be permanently removed from the canteen menu. This cannot be undone.`
+            : ""
+        }
+        confirmLabel="Delete"
+        destructive
+        loading={deleting}
+        onConfirm={handleDelete}
+      />
     </div>
   );
 }

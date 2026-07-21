@@ -38,7 +38,7 @@ import {
   Table,
   type Column,
 } from "@/components/ui";
-import { useChartTheme } from "@/hooks/useChartTheme";
+import { useChartTheme, toneClass, type ChartTone } from "@/hooks/useChartTheme";
 import { cn } from "@/lib/utils";
 
 const expenses = [
@@ -86,6 +86,9 @@ const categoryBreakdown = Object.entries(
   }, {} as Record<string, number>)
 ).map(([name, value]) => ({ name, value }));
 
+/** Cycled across the category breakdown — keeps the pie and its legend matched. */
+const tonePalette: ChartTone[] = ["primary", "info", "success", "warning", "danger", "violet"];
+
 const tabs = ["All", "Paid", "Pending"];
 
 const inr = new Intl.NumberFormat("en-IN", {
@@ -100,16 +103,11 @@ export default function ExpensesPage() {
   const [activeTab, setActiveTab] = useState("All");
   const [catFilter, setCatFilter] = useState("All");
 
-  // Chart colours must come from the theme — never hardcode them.
-  const palette = [
-    t.series.primary,
-    t.series.info,
-    t.series.success,
-    t.series.warning,
-    t.series.danger,
-    t.series.violet,
-  ];
-  const pieData = categoryBreakdown.map((c, i) => ({ ...c, color: palette[i % palette.length] }));
+  // `color` feeds recharts only; `tone` is what the DOM legend swatch classes off.
+  const pieData = categoryBreakdown.map((c, i) => {
+    const tone = tonePalette[i % tonePalette.length];
+    return { ...c, tone, color: t.series[tone] };
+  });
 
   const filtered = expenses.filter((e) => {
     const matchTab = activeTab === "All" || e.status === activeTab.toLowerCase();
@@ -333,7 +331,7 @@ export default function ExpensesPage() {
               {pieData.map((c) => (
                 <div key={c.name} className="flex items-center justify-between gap-3">
                   <span className="flex items-center gap-1.5 text-xs text-muted">
-                    <span className="size-2 rounded-sm" style={{ background: c.color }} />
+                    <span className={cn("size-2 rounded-sm", toneClass[c.tone])} />
                     {c.name}
                   </span>
                   <span className="text-xs font-semibold text-text">{inr.format(c.value)}</span>

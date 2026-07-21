@@ -1,13 +1,12 @@
 "use client";
 
-import React, { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Search,
   Plus,
   Download,
   Pencil,
   Trash2,
-  Eye,
   Users,
   Home,
   DoorOpen,
@@ -19,6 +18,7 @@ import {
   Button,
   Card,
   CardContent,
+  ConfirmDialog,
   Input,
   PageHeader,
   Select,
@@ -27,6 +27,15 @@ import {
   type Column,
 } from "@/components/ui";
 import { cn } from "@/lib/utils";
+import { useResource } from "@/hooks/useResource";
+import {
+  hostelStudentsApi,
+  HOSTEL_OPTIONS,
+  FEE_STATUS_OPTIONS,
+  type HostelStudent,
+} from "@/lib/api/hostelStudents";
+import type { HostelStudentSchema } from "@/lib/schemas/hostelStudent";
+import { HostelStudentFormModal } from "./HostelStudentFormModal";
 
 const hostels = [
   { id: "H001", name: "Boys Hostel A",   type: "Boys",  totalRooms: 30, occupied: 28, warden: "Mr. Ramesh Gupta",   contact: "98765-11111", floors: 3, amenities: ["WiFi", "Mess", "Gym", "Laundry"] },
@@ -34,21 +43,6 @@ const hostels = [
   { id: "H003", name: "Girls Hostel A",  type: "Girls", totalRooms: 35, occupied: 34, warden: "Ms. Priya Verma",    contact: "98765-33333", floors: 4, amenities: ["WiFi", "Mess", "Gym", "Salon"] },
   { id: "H004", name: "Girls Hostel B",  type: "Girls", totalRooms: 20, occupied: 15, warden: "Ms. Anita Patel",    contact: "98765-44444", floors: 2, amenities: ["WiFi", "Mess", "Library"] },
 ];
-
-const students = [
-  { id: "S001", name: "Aarav Sharma",   class: "10-A", hostel: "Boys Hostel A",  room: "A-101", type: "Boys",  fees: "Paid",    joinDate: "Apr 2025", contact: "98765-XXXXX" },
-  { id: "S002", name: "Rohan Verma",    class: "9-B",  hostel: "Boys Hostel A",  room: "A-102", type: "Boys",  fees: "Pending", joinDate: "Apr 2025", contact: "87654-XXXXX" },
-  { id: "S003", name: "Karan Singh",    class: "11-A", hostel: "Boys Hostel B",  room: "B-201", type: "Boys",  fees: "Paid",    joinDate: "Apr 2025", contact: "76543-XXXXX" },
-  { id: "S004", name: "Vikram Nair",    class: "8-A",  hostel: "Boys Hostel B",  room: "B-105", type: "Boys",  fees: "Overdue", joinDate: "Jan 2025", contact: "65432-XXXXX" },
-  { id: "S005", name: "Priya Patel",    class: "10-A", hostel: "Girls Hostel A", room: "G-301", type: "Girls", fees: "Paid",    joinDate: "Apr 2025", contact: "54321-XXXXX" },
-  { id: "S006", name: "Sneha Gupta",    class: "11-C", hostel: "Girls Hostel A", room: "G-302", type: "Girls", fees: "Paid",    joinDate: "Apr 2025", contact: "43210-XXXXX" },
-  { id: "S007", name: "Ananya Joshi",   class: "12-B", hostel: "Girls Hostel A", room: "G-401", type: "Girls", fees: "Paid",    joinDate: "Jan 2025", contact: "32109-XXXXX" },
-  { id: "S008", name: "Meera Iyer",     class: "6-B",  hostel: "Girls Hostel B", room: "GB-101",type: "Girls", fees: "Pending", joinDate: "Apr 2025", contact: "21098-XXXXX" },
-  { id: "S009", name: "Arjun Reddy",    class: "9-A",  hostel: "Boys Hostel A",  room: "A-205", type: "Boys",  fees: "Paid",    joinDate: "Apr 2025", contact: "11987-XXXXX" },
-  { id: "S010", name: "Pooja Mishra",   class: "10-B", hostel: "Girls Hostel B", room: "GB-202",type: "Girls", fees: "Overdue", joinDate: "Jan 2025", contact: "10876-XXXXX" },
-];
-
-type Student = (typeof students)[number];
 
 const feeVariant: Record<string, "success" | "warning" | "danger"> = {
   Paid: "success",
@@ -73,49 +67,54 @@ function occupancyTone(pct: number) {
   return { bar: "bg-success", text: "text-success" };
 }
 
-function RowActions({ label }: { label: string }) {
-  return (
-    <div className="flex items-center justify-end gap-1">
-      <Button variant="ghost" size="sm" className="px-2" aria-label={`View ${label}`}>
-        <Eye className="size-4" />
-      </Button>
-      <Button variant="ghost" size="sm" className="px-2" aria-label={`Edit ${label}`}>
-        <Pencil className="size-4" />
-      </Button>
-      <Button
-        variant="ghost"
-        size="sm"
-        className="px-2 hover:bg-danger-soft hover:text-danger"
-        aria-label={`Delete ${label}`}
-      >
-        <Trash2 className="size-4" />
-      </Button>
-    </div>
-  );
-}
-
 export default function HostelPage() {
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState("All");
   const [hostelFilter, setHostelFilter] = useState("All");
   const [feeFilter, setFeeFilter] = useState("All");
 
-  const filtered = students.filter((s) => {
-    const matchTab = activeTab === "All" || s.type === activeTab;
-    const matchHostel = hostelFilter === "All" || s.hostel === hostelFilter;
-    const matchFee = feeFilter === "All" || s.fees === feeFilter;
-    const matchSearch =
-      s.name.toLowerCase().includes(search.toLowerCase()) ||
-      s.id.toLowerCase().includes(search.toLowerCase()) ||
-      s.room.toLowerCase().includes(search.toLowerCase());
-    return matchTab && matchHostel && matchFee && matchSearch;
-  });
+  const filters = useMemo(
+    () => ({ search, type: activeTab, hostel: hostelFilter, fees: feeFilter }),
+    [search, activeTab, hostelFilter, feeFilter]
+  );
+
+  const { items, loading, error, refetch, save, remove, saving, deleting } = useResource(
+    hostelStudentsApi,
+    filters,
+    { label: "resident", describe: (s) => s.name }
+  );
+
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<HostelStudent | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<HostelStudent | null>(null);
 
   const totalOccupied = hostels.reduce((s, h) => s + h.occupied, 0);
   const totalRooms = hostels.reduce((s, h) => s + h.totalRooms, 0);
   const totalVacant = totalRooms - totalOccupied;
 
-  const columns: Column<Student>[] = [
+  const hasFilters =
+    Boolean(search) || activeTab !== "All" || hostelFilter !== "All" || feeFilter !== "All";
+
+  const openCreate = () => {
+    setEditing(null);
+    setFormOpen(true);
+  };
+
+  const handleSubmit = async (values: HostelStudentSchema) => {
+    const ok = await save(values, editing);
+    if (ok) {
+      setFormOpen(false);
+      setEditing(null);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!pendingDelete) return;
+    const ok = await remove(pendingDelete);
+    if (ok) setPendingDelete(null);
+  };
+
+  const columns: Column<HostelStudent>[] = [
     {
       key: "name",
       header: "Student",
@@ -125,7 +124,7 @@ export default function HostelPage() {
           <Avatar name={s.name} size="sm" />
           <div className="min-w-0">
             <p className="truncate font-medium text-text">{s.name}</p>
-            <p className="truncate text-xs text-subtle">{s.id}</p>
+            <p className="truncate text-xs text-subtle">{s.studentId}</p>
           </div>
         </div>
       ),
@@ -178,7 +177,27 @@ export default function HostelPage() {
       key: "actions",
       header: "",
       align: "right",
-      render: (s) => <RowActions label={s.name} />,
+      render: (s) => (
+        <div className="flex items-center justify-end gap-1">
+          <button
+            onClick={() => {
+              setEditing(s);
+              setFormOpen(true);
+            }}
+            aria-label={`Edit ${s.name}`}
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+          >
+            <Pencil className="size-4" />
+          </button>
+          <button
+            onClick={() => setPendingDelete(s)}
+            aria-label={`Delete ${s.name}`}
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-danger-soft hover:text-danger"
+          >
+            <Trash2 className="size-4" />
+          </button>
+        </div>
+      ),
     },
   ];
 
@@ -193,7 +212,7 @@ export default function HostelPage() {
               <Download className="size-4" />
               Export
             </Button>
-            <Button>
+            <Button onClick={openCreate}>
               <Plus className="size-4" />
               Add student
             </Button>
@@ -300,7 +319,7 @@ export default function HostelPage() {
             aria-label="Filter by hostel"
             options={[
               { label: "All hostels", value: "All" },
-              ...hostels.map((h) => ({ label: h.name, value: h.name })),
+              ...HOSTEL_OPTIONS.map((h) => ({ label: h, value: h })),
             ]}
           />
         </div>
@@ -312,9 +331,7 @@ export default function HostelPage() {
             aria-label="Filter by fee status"
             options={[
               { label: "All fee status", value: "All" },
-              { label: "Paid", value: "Paid" },
-              { label: "Pending", value: "Pending" },
-              { label: "Overdue", value: "Overdue" },
+              ...FEE_STATUS_OPTIONS.map((f) => ({ label: f, value: f })),
             ]}
           />
         </div>
@@ -330,33 +347,77 @@ export default function HostelPage() {
           />
         </div>
 
-        <p className="text-xs text-muted">{filtered.length} students</p>
+        <p className="text-xs text-muted">{items.length} students</p>
       </div>
 
-      <Table
-        columns={columns}
-        rows={filtered}
-        rowKey={(s) => s.id}
-        emptyTitle="No students found"
-        emptyDescription="Try adjusting your filters."
-      />
+      {error ? (
+        <Card>
+          <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+            <p className="text-sm font-medium text-danger">{error}</p>
+            <Button variant="outline" onClick={refetch}>
+              Try again
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <Table
+          columns={columns}
+          rows={items}
+          rowKey={(s) => s.id}
+          loading={loading}
+          emptyTitle="No students found"
+          emptyDescription={
+            hasFilters
+              ? "Try clearing your filters to see more results."
+              : "Add your first hostel resident to get started."
+          }
+          emptyAction={
+            <Button variant="outline" onClick={openCreate}>
+              <Plus className="size-4" />
+              Add student
+            </Button>
+          }
+        />
+      )}
 
       <div className="flex flex-wrap items-center justify-between gap-3 px-1">
         <p className="text-xs text-muted">
-          Showing <span className="font-medium text-text">{filtered.length}</span> of{" "}
-          <span className="font-medium text-text">{students.length}</span> students
+          Showing <span className="font-medium text-text">{items.length}</span> resident(s)
         </p>
         <div className="flex flex-wrap items-center gap-4">
-          {["Paid", "Pending", "Overdue"].map((status) => (
+          {FEE_STATUS_OPTIONS.map((status) => (
             <span key={status} className="flex items-center gap-1.5 text-xs text-muted">
               <span className={cn("size-2 rounded-full", feeDot[status])} />
               {status}: <span className="font-semibold text-text">
-                {filtered.filter((s) => s.fees === status).length}
+                {items.filter((s) => s.fees === status).length}
               </span>
             </span>
           ))}
         </div>
       </div>
+
+      <HostelStudentFormModal
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        record={editing}
+        saving={saving}
+        onSubmit={handleSubmit}
+      />
+
+      <ConfirmDialog
+        open={Boolean(pendingDelete)}
+        onOpenChange={(open) => !open && setPendingDelete(null)}
+        title="Remove resident?"
+        description={
+          pendingDelete
+            ? `${pendingDelete.name} will be removed from ${pendingDelete.hostel} (room ${pendingDelete.room}). This cannot be undone.`
+            : ""
+        }
+        confirmLabel="Delete"
+        destructive
+        loading={deleting}
+        onConfirm={handleDelete}
+      />
     </div>
   );
 }

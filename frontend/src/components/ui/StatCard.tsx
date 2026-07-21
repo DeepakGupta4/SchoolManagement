@@ -72,6 +72,7 @@ export function StatCard({
             {suffix && <span className="ml-0.5 text-sm font-medium text-subtle">{suffix}</span>}
           </p>
           <p className="mt-1.5 text-xs text-muted">{label}</p>
+          {sub && <p className="mt-0.5 text-[11px] text-subtle">{sub}</p>}
         </CardContent>
       </Card>
     );
@@ -94,6 +95,7 @@ export function StatCard({
             {value}
             {suffix && <span className="ml-0.5 text-sm font-medium text-subtle">{suffix}</span>}
           </p>
+          {sub && <p className="mt-0.5 truncate text-[11px] text-subtle">{sub}</p>}
         </div>
         {badge}
       </CardContent>

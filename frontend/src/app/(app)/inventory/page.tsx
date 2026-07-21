@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   Search,
   Plus,
@@ -18,6 +18,9 @@ import {
 import {
   Badge,
   Button,
+  Card,
+  CardContent,
+  ConfirmDialog,
   Input,
   PageHeader,
   Select,
@@ -26,21 +29,10 @@ import {
   type Column,
 } from "@/components/ui";
 import { cn } from "@/lib/utils";
-
-const inventory = [
-  { id: "INV001", name: "A4 Paper Reams",         category: "Stationery",  qty: 120, minQty: 50,  unit: "Reams",  unitPrice: 280,   supplier: "Paper World",      lastUpdated: "Jul 15, 2025", status: "in-stock"   },
-  { id: "INV002", name: "Whiteboard Markers",      category: "Stationery",  qty: 45,  minQty: 30,  unit: "Boxes",  unitPrice: 150,   supplier: "Office Mart",      lastUpdated: "Jul 12, 2025", status: "in-stock"   },
-  { id: "INV003", name: "Printer Ink Cartridges",  category: "Electronics", qty: 8,   minQty: 10,  unit: "Pcs",    unitPrice: 1200,  supplier: "Tech Supplies",    lastUpdated: "Jul 10, 2025", status: "low-stock"  },
-  { id: "INV004", name: "Classroom Chairs",        category: "Furniture",   qty: 240, minQty: 200, unit: "Pcs",    unitPrice: 2500,  supplier: "Furniture Hub",    lastUpdated: "Jun 20, 2025", status: "in-stock"   },
-  { id: "INV005", name: "Projector Bulbs",         category: "Electronics", qty: 3,   minQty: 5,   unit: "Pcs",    unitPrice: 3500,  supplier: "Tech Supplies",    lastUpdated: "Jul 08, 2025", status: "low-stock"  },
-  { id: "INV006", name: "Cleaning Supplies Kit",   category: "Housekeeping",qty: 60,  minQty: 20,  unit: "Kits",   unitPrice: 450,   supplier: "Clean Pro",        lastUpdated: "Jul 14, 2025", status: "in-stock"   },
-  { id: "INV007", name: "Sports Balls (Football)", category: "Sports",      qty: 0,   minQty: 5,   unit: "Pcs",    unitPrice: 800,   supplier: "Sports World",     lastUpdated: "Jun 28, 2025", status: "out-of-stock"},
-  { id: "INV008", name: "Lab Chemicals Set",       category: "Lab",         qty: 15,  minQty: 10,  unit: "Sets",   unitPrice: 5500,  supplier: "Science Depot",    lastUpdated: "Jul 05, 2025", status: "in-stock"   },
-  { id: "INV009", name: "Notebooks (200 pages)",   category: "Stationery",  qty: 500, minQty: 100, unit: "Pcs",    unitPrice: 60,    supplier: "Paper World",      lastUpdated: "Jul 16, 2025", status: "in-stock"   },
-  { id: "INV010", name: "First Aid Kits",          category: "Medical",     qty: 4,   minQty: 5,   unit: "Kits",   unitPrice: 1800,  supplier: "MedSupply Co.",    lastUpdated: "Jul 01, 2025", status: "low-stock"  },
-  { id: "INV011", name: "Desktops / PCs",          category: "Electronics", qty: 42,  minQty: 40,  unit: "Pcs",    unitPrice: 35000, supplier: "Tech Supplies",    lastUpdated: "Apr 10, 2025", status: "in-stock"   },
-  { id: "INV012", name: "Badminton Rackets",       category: "Sports",      qty: 12,  minQty: 8,   unit: "Pcs",    unitPrice: 600,   supplier: "Sports World",     lastUpdated: "Jun 15, 2025", status: "in-stock"   },
-];
+import { useResource } from "@/hooks/useResource";
+import { inventoryApi, CATEGORY_OPTIONS, type InventoryItem } from "@/lib/api/inventory";
+import type { InventoryItemSchema } from "@/lib/schemas/inventoryItem";
+import { InventoryFormModal } from "./InventoryFormModal";
 
 const purchases = [
   { id: "PO001", item: "A4 Paper Reams",        qty: 100, amount: 28000,  date: "Jul 15, 2025", supplier: "Paper World",   status: "received" },
@@ -50,7 +42,6 @@ const purchases = [
   { id: "PO005", item: "Whiteboard Markers",    qty: 20,  amount: 3000,   date: "Jul 12, 2025", supplier: "Office Mart",   status: "received" },
 ];
 
-type Item = (typeof inventory)[number];
 type Purchase = (typeof purchases)[number];
 
 type BadgeVariant = "default" | "success" | "warning" | "danger" | "info";
@@ -70,6 +61,8 @@ const statusConfig: Record<string, { variant: BadgeVariant; label: string; bar: 
   "low-stock":    { variant: "warning", label: "Low stock",    bar: "bg-warning" },
   "out-of-stock": { variant: "danger",  label: "Out of stock", bar: "bg-danger"  },
 };
+
+const fallbackStatus = { variant: "default" as BadgeVariant, label: "Unknown", bar: "bg-primary" };
 
 const poStatus: Record<string, { variant: BadgeVariant; icon: LucideIcon }> = {
   received: { variant: "success", icon: CheckCircle },
@@ -115,26 +108,51 @@ export default function InventoryPage() {
   const [catFilter, setCatFilter] = useState("All");
   const [search, setSearch] = useState("");
 
-  const filtered = inventory.filter((item) => {
-    const tabMap: Record<string, string> = {
-      "In Stock": "in-stock",
-      "Low Stock": "low-stock",
-      "Out of Stock": "out-of-stock",
-    };
-    const matchTab = activeTab === "All" || item.status === tabMap[activeTab];
-    const matchCat = catFilter === "All" || item.category === catFilter;
-    const matchSearch =
-      item.name.toLowerCase().includes(search.toLowerCase()) ||
-      item.id.toLowerCase().includes(search.toLowerCase()) ||
-      item.supplier.toLowerCase().includes(search.toLowerCase());
-    return matchTab && matchCat && matchSearch;
-  });
+  const filters = useMemo(
+    () => ({ search, category: catFilter, tab: activeTab }),
+    [search, catFilter, activeTab]
+  );
 
-  const lowStockItems = inventory.filter((i) => i.status === "low-stock").length;
-  const outOfStock = inventory.filter((i) => i.status === "out-of-stock").length;
-  const totalValue = inventory.reduce((s, i) => s + i.qty * i.unitPrice, 0);
+  const { items, loading, error, refetch, save, remove, saving, deleting } = useResource(
+    inventoryApi,
+    filters,
+    { label: "item", describe: (i) => i.name }
+  );
 
-  const itemColumns: Column<Item>[] = [
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<InventoryItem | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<InventoryItem | null>(null);
+
+  const stats = useMemo(
+    () => ({
+      total: items.length,
+      lowStock: items.filter((i) => i.status === "low-stock").length,
+      outOfStock: items.filter((i) => i.status === "out-of-stock").length,
+      totalValue: items.reduce((s, i) => s + i.qty * i.unitPrice, 0),
+    }),
+    [items]
+  );
+
+  const openCreate = () => {
+    setEditing(null);
+    setFormOpen(true);
+  };
+
+  const handleSubmit = async (values: InventoryItemSchema) => {
+    const ok = await save(values, editing);
+    if (ok) {
+      setFormOpen(false);
+      setEditing(null);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!pendingDelete) return;
+    const ok = await remove(pendingDelete);
+    if (ok) setPendingDelete(null);
+  };
+
+  const itemColumns: Column<InventoryItem>[] = [
     {
       key: "name",
       header: "Item",
@@ -164,8 +182,10 @@ export default function InventoryPage() {
       header: "Qty",
       sortable: true,
       render: (item) => {
-        const sc = statusConfig[item.status];
-        const stockPct = Math.min(Math.round((item.qty / (item.minQty * 2)) * 100), 100);
+        const sc = statusConfig[item.status] ?? fallbackStatus;
+        const stockPct = item.minQty
+          ? Math.min(Math.round((item.qty / (item.minQty * 2)) * 100), 100)
+          : 100;
         return (
           <div className="flex flex-col gap-1">
             <span
@@ -235,9 +255,10 @@ export default function InventoryPage() {
       key: "status",
       header: "Status",
       sortable: true,
-      render: (item) => (
-        <Badge variant={statusConfig[item.status].variant}>{statusConfig[item.status].label}</Badge>
-      ),
+      render: (item) => {
+        const sc = statusConfig[item.status] ?? fallbackStatus;
+        return <Badge variant={sc.variant}>{sc.label}</Badge>;
+      },
     },
     {
       key: "actions",
@@ -245,17 +266,23 @@ export default function InventoryPage() {
       align: "right",
       render: (item) => (
         <div className="flex items-center justify-end gap-1">
-          <Button variant="ghost" size="sm" className="px-2" aria-label={`Edit ${item.name}`}>
+          <button
+            onClick={() => {
+              setEditing(item);
+              setFormOpen(true);
+            }}
+            aria-label={`Edit ${item.name}`}
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+          >
             <Pencil className="size-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="px-2 hover:bg-danger-soft hover:text-danger"
+          </button>
+          <button
+            onClick={() => setPendingDelete(item)}
             aria-label={`Delete ${item.name}`}
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-danger-soft hover:text-danger"
           >
             <Trash2 className="size-4" />
-          </Button>
+          </button>
         </div>
       ),
     },
@@ -338,7 +365,7 @@ export default function InventoryPage() {
               <Download className="size-4" />
               Export
             </Button>
-            <Button>
+            <Button onClick={openCreate}>
               <Plus className="size-4" />
               Add item
             </Button>
@@ -347,24 +374,26 @@ export default function InventoryPage() {
       />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Total items" value={inventory.length} icon={Package} tone="indigo" />
-        <StatCard label="Low stock" value={lowStockItems} icon={AlertTriangle} tone="amber" />
-        <StatCard label="Out of stock" value={outOfStock} icon={PackageX} tone="rose" />
+        <StatCard label="Total items" value={stats.total} icon={Package} tone="indigo" />
+        <StatCard label="Low stock" value={stats.lowStock} icon={AlertTriangle} tone="amber" />
+        <StatCard label="Out of stock" value={stats.outOfStock} icon={PackageX} tone="rose" />
         <StatCard
           label="Total value"
-          value={`₹${(totalValue / 100000).toFixed(1)}L`}
+          value={`₹${(stats.totalValue / 100000).toFixed(1)}L`}
           icon={Wallet}
           tone="emerald"
         />
       </div>
 
-      {(lowStockItems > 0 || outOfStock > 0) && (
+      {(stats.lowStock > 0 || stats.outOfStock > 0) && (
         <div className="flex flex-wrap items-center gap-3 rounded-lg border border-warning bg-warning-soft px-5 py-3.5">
           <AlertTriangle className="size-4.5 shrink-0 text-warning" />
           <p className="text-sm font-semibold text-warning-text">
-            {outOfStock > 0 && <span className="text-danger-text">{outOfStock} item(s) out of stock</span>}
-            {outOfStock > 0 && lowStockItems > 0 && <span className="mx-2 text-subtle">·</span>}
-            {lowStockItems > 0 && <span>{lowStockItems} item(s) running low</span>}
+            {stats.outOfStock > 0 && (
+              <span className="text-danger-text">{stats.outOfStock} item(s) out of stock</span>
+            )}
+            {stats.outOfStock > 0 && stats.lowStock > 0 && <span className="mx-2 text-subtle">·</span>}
+            {stats.lowStock > 0 && <span>{stats.lowStock} item(s) running low</span>}
             <span className="ml-2 font-normal text-muted">— Consider placing purchase orders</span>
           </p>
         </div>
@@ -391,7 +420,7 @@ export default function InventoryPage() {
                 aria-label="Filter by category"
                 options={[
                   { label: "All categories", value: "All" },
-                  ...Object.keys(categoryStyles).map((c) => ({ label: c, value: c })),
+                  ...CATEGORY_OPTIONS.map((c) => ({ label: c, value: c })),
                 ]}
               />
             </div>
@@ -405,16 +434,38 @@ export default function InventoryPage() {
                 aria-label="Search inventory"
               />
             </div>
-            <p className="text-xs text-muted">{filtered.length} items</p>
+            <p className="text-xs text-muted">{items.length} items</p>
           </div>
 
-          <Table
-            columns={itemColumns}
-            rows={filtered}
-            rowKey={(i) => i.id}
-            emptyTitle="No items found"
-            emptyDescription="Try adjusting your filters or search."
-          />
+          {error ? (
+            <Card>
+              <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+                <p className="text-sm font-medium text-danger">{error}</p>
+                <Button variant="outline" onClick={refetch}>
+                  Try again
+                </Button>
+              </CardContent>
+            </Card>
+          ) : (
+            <Table
+              columns={itemColumns}
+              rows={items}
+              rowKey={(i) => i.id}
+              loading={loading}
+              emptyTitle="No items found"
+              emptyDescription={
+                search || catFilter !== "All" || activeTab !== "All"
+                  ? "Try adjusting your filters or search."
+                  : "Add your first item to get started."
+              }
+              emptyAction={
+                <Button variant="outline" onClick={openCreate}>
+                  <Plus className="size-4" />
+                  Add item
+                </Button>
+              }
+            />
+          )}
         </>
       )}
 
@@ -437,6 +488,29 @@ export default function InventoryPage() {
           />
         </>
       )}
+
+      <InventoryFormModal
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        record={editing}
+        saving={saving}
+        onSubmit={handleSubmit}
+      />
+
+      <ConfirmDialog
+        open={Boolean(pendingDelete)}
+        onOpenChange={(open) => !open && setPendingDelete(null)}
+        title="Delete item?"
+        description={
+          pendingDelete
+            ? `${pendingDelete.name} will be permanently removed from inventory. This cannot be undone.`
+            : ""
+        }
+        confirmLabel="Delete"
+        destructive
+        loading={deleting}
+        onConfirm={handleDelete}
+      />
     </div>
   );
 }
