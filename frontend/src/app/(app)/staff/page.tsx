@@ -26,8 +26,10 @@ import {
   Select,
   StatCard,
   Table,
+  useToast,
   type Column,
 } from "@/components/ui";
+import { exportToCsv } from "@/lib/exportCsv";
 import { useResource } from "@/hooks/useResource";
 import {
   staffApi,
@@ -68,10 +70,14 @@ export default function StaffPage() {
   const [typeFilter, setTypeFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState("All");
 
-  const filters = useMemo(
-    () => ({ search, dept: deptFilter, type: typeFilter, status: statusFilter }),
-    [search, deptFilter, typeFilter, statusFilter]
-  );
+  // `statusFilter` is deliberately left out of the server filters: the stat
+  // cards and the status legend need per-status counts across the whole
+  // (otherwise filtered) set, so status narrowing is applied during render.
+  // Only `search` narrows server-side. `dept`, `type` and `status` are applied
+  // during render instead, because the stat cards and the department tiles
+  // report across the whole roster — filtering them out server-side would make
+  // every card that counts a value you just filtered away read zero.
+  const filters = useMemo(() => ({ search, dept: "All", type: "All" }), [search]);
 
   const { items, loading, error, refetch, save, remove, saving, deleting } = useResource(
     staffApi,
@@ -82,6 +88,19 @@ export default function StaffPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<StaffMember | null>(null);
   const [pendingDelete, setPendingDelete] = useState<StaffMember | null>(null);
+  const { toast } = useToast();
+
+  // Rows for the table only — stat cards keep counting the full `items`.
+  const visible = useMemo(
+    () =>
+      items.filter(
+        (s) =>
+          (statusFilter === "All" || s.status === statusFilter) &&
+          (deptFilter === "All" || s.dept === deptFilter) &&
+          (typeFilter === "All" || s.type === typeFilter)
+      ),
+    [items, statusFilter, deptFilter, typeFilter]
+  );
 
   const stats = useMemo(
     () => ({
@@ -101,6 +120,38 @@ export default function StaffPage() {
       })),
     [items]
   );
+
+  /** Exports exactly the rows the table is showing, filters included. */
+  const handleExport = () => {
+    if (visible.length === 0) {
+      toast({
+        title: "Nothing to export",
+        description: "No staff match the current filters.",
+        variant: "warning",
+      });
+      return;
+    }
+    exportToCsv<StaffMember>(
+      "staff",
+      [
+        { header: "Employee ID", value: (s) => s.employeeId },
+        { header: "Name", value: (s) => s.name },
+        { header: "Role", value: (s) => s.role },
+        { header: "Department", value: (s) => s.dept },
+        { header: "Type", value: (s) => s.type },
+        { header: "Salary", value: (s) => s.salary },
+        { header: "Join Date", value: (s) => s.join },
+        { header: "Phone", value: (s) => s.phone },
+        { header: "Email", value: (s) => s.email },
+        { header: "Status", value: (s) => s.status },
+      ],
+      visible
+    );
+    toast({
+      title: "Export ready",
+      description: `${visible.length} staff member${visible.length === 1 ? "" : "s"} exported to CSV.`,
+    });
+  };
 
   const openCreate = () => {
     setEditing(null);
@@ -228,7 +279,7 @@ export default function StaffPage() {
         description="Manage non-teaching staff across all departments"
         actions={
           <>
-            <Button variant="outline">
+            <Button variant="outline" onClick={handleExport}>
               <Download className="size-4" />
               Export
             </Button>
@@ -317,7 +368,7 @@ export default function StaffPage() {
             aria-label="Filter by status"
           />
         </div>
-        <p className="ml-auto text-xs text-subtle">{items.length} staff members</p>
+        <p className="ml-auto text-xs text-subtle">{visible.length} staff members</p>
       </div>
 
       {error ? (
@@ -332,7 +383,7 @@ export default function StaffPage() {
       ) : (
         <Table
           columns={columns}
-          rows={items}
+          rows={visible}
           rowKey={(s) => s.id}
           loading={loading}
           emptyTitle="No staff found"
@@ -348,7 +399,7 @@ export default function StaffPage() {
 
       <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted">
         <p>
-          Showing <strong className="font-semibold text-text">{items.length}</strong> staff members
+          Showing <strong className="font-semibold text-text">{visible.length}</strong> staff members
         </p>
         <div className="flex flex-wrap items-center gap-4">
           {["active", "on-leave", "inactive"].map((st) => {

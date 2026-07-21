@@ -19,22 +19,15 @@ import {
   PageHeader,
   StatCard,
   Table,
+  useToast,
   type Column,
 } from "@/components/ui";
 import { cn } from "@/lib/utils";
+import { exportToCsv } from "@/lib/exportCsv";
+import { FEE_DEFAULTERS as defaulters, type FeeDefaulter } from "@/lib/api/feeRecords";
 
-const defaulters = [
-  { id: "STU005", name: "Karan Mehta",     class: "12-A", parent: "Suresh Mehta",   phone: "98765-43210", totalFee: 13800, paid: 0,     due: 13800, months: 3, lastPaid: "Apr 2025" },
-  { id: "STU011", name: "Deepak Yadav",    class: "10-B", parent: "Ramesh Yadav",   phone: "87654-32109", totalFee: 10900, paid: 2725,  due: 8175,  months: 2, lastPaid: "May 2025" },
-  { id: "STU018", name: "Pooja Sharma",    class: "9-A",  parent: "Anil Sharma",    phone: "76543-21098", totalFee: 10900, paid: 5450,  due: 5450,  months: 1, lastPaid: "Jun 2025" },
-  { id: "STU023", name: "Amit Tiwari",     class: "11-B", parent: "Rajesh Tiwari",  phone: "65432-10987", totalFee: 13800, paid: 4600,  due: 9200,  months: 2, lastPaid: "May 2025" },
-  { id: "STU031", name: "Sunita Devi",     class: "8-A",  parent: "Mohan Devi",     phone: "54321-09876", totalFee: 8800,  paid: 2200,  due: 6600,  months: 3, lastPaid: "Apr 2025" },
-  { id: "STU042", name: "Ravi Kumar",      class: "7-B",  parent: "Sunil Kumar",    phone: "43210-98765", totalFee: 8800,  paid: 4400,  due: 4400,  months: 1, lastPaid: "Jun 2025" },
-  { id: "STU055", name: "Nisha Pandey",    class: "6-A",  parent: "Vinod Pandey",   phone: "32109-87654", totalFee: 6500,  paid: 0,     due: 6500,  months: 3, lastPaid: "Never"    },
-  { id: "STU067", name: "Gaurav Singh",    class: "12-B", parent: "Harish Singh",   phone: "21098-76543", totalFee: 13800, paid: 6900,  due: 6900,  months: 1, lastPaid: "Jun 2025" },
-];
 
-type Defaulter = (typeof defaulters)[number];
+type Defaulter = FeeDefaulter;
 
 const urgencyConfig = (
   months: number
@@ -55,6 +48,7 @@ const inr = new Intl.NumberFormat("en-IN", {
 export default function DefaultersPage() {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("All");
+  const { toast } = useToast();
 
   const filtered = defaulters.filter((d) => {
     const matchSearch =
@@ -70,6 +64,38 @@ export default function DefaultersPage() {
   });
 
   const totalDue = defaulters.reduce((s, d) => s + d.due, 0);
+
+  const handleExport = () => {
+    if (filtered.length === 0) {
+      toast({
+        title: "Nothing to export",
+        description: "No defaulters match the current filters.",
+        variant: "warning",
+      });
+      return;
+    }
+    exportToCsv<Defaulter>(
+      "fee-defaulters",
+      [
+        { header: "Student ID", value: (d) => d.id },
+        { header: "Name", value: (d) => d.name },
+        { header: "Class", value: (d) => d.class },
+        { header: "Parent", value: (d) => d.parent },
+        { header: "Phone", value: (d) => d.phone },
+        { header: "Total Fee (INR)", value: (d) => d.totalFee },
+        { header: "Paid (INR)", value: (d) => d.paid },
+        { header: "Due (INR)", value: (d) => d.due },
+        { header: "Months Overdue", value: (d) => d.months },
+        { header: "Urgency", value: (d) => urgencyConfig(d.months).label },
+        { header: "Last Paid", value: (d) => d.lastPaid },
+      ],
+      filtered
+    );
+    toast({
+      title: "Export ready",
+      description: `${filtered.length} defaulter${filtered.length === 1 ? "" : "s"} exported to CSV.`,
+    });
+  };
 
   const columns: Column<Defaulter>[] = [
     {
@@ -182,11 +208,13 @@ export default function DefaultersPage() {
         description="Students with pending fee dues"
         actions={
           <>
-            <Button variant="outline">
+            <Button variant="outline" onClick={handleExport}>
               <Download className="size-4" />
               Export
             </Button>
-            <Button variant="danger">
+            {/* Disabled until SMS/WhatsApp delivery is connected — this would
+                message every listed guardian. */}
+            <Button variant="danger" disabled title="Messaging is not connected yet">
               <Send className="size-4" />
               Send Reminders
             </Button>

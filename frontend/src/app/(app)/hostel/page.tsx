@@ -24,10 +24,13 @@ import {
   Select,
   StatCard,
   Table,
+  useToast,
   type Column,
 } from "@/components/ui";
 import { cn } from "@/lib/utils";
+import { exportToCsv } from "@/lib/exportCsv";
 import { useResource } from "@/hooks/useResource";
+import { textMatch } from "@/lib/api/createResource";
 import {
   hostelStudentsApi,
   HOSTEL_OPTIONS,
@@ -37,11 +40,16 @@ import {
 import type { HostelStudentSchema } from "@/lib/schemas/hostelStudent";
 import { HostelStudentFormModal } from "./HostelStudentFormModal";
 
+/**
+ * Static building register: name, warden and capacity. Occupancy is NOT stored
+ * here — it is counted from the live allocation records so that adding or
+ * removing a resident moves the numbers.
+ */
 const hostels = [
-  { id: "H001", name: "Boys Hostel A",   type: "Boys",  totalRooms: 30, occupied: 28, warden: "Mr. Ramesh Gupta",   contact: "98765-11111", floors: 3, amenities: ["WiFi", "Mess", "Gym", "Laundry"] },
-  { id: "H002", name: "Boys Hostel B",   type: "Boys",  totalRooms: 25, occupied: 20, warden: "Mr. Suresh Sharma",  contact: "98765-22222", floors: 2, amenities: ["WiFi", "Mess", "Study Room"] },
-  { id: "H003", name: "Girls Hostel A",  type: "Girls", totalRooms: 35, occupied: 34, warden: "Ms. Priya Verma",    contact: "98765-33333", floors: 4, amenities: ["WiFi", "Mess", "Gym", "Salon"] },
-  { id: "H004", name: "Girls Hostel B",  type: "Girls", totalRooms: 20, occupied: 15, warden: "Ms. Anita Patel",    contact: "98765-44444", floors: 2, amenities: ["WiFi", "Mess", "Library"] },
+  { id: "H001", name: "Boys Hostel A",   type: "Boys",  totalRooms: 30, warden: "Mr. Ramesh Gupta",   contact: "98765-11111", floors: 3, amenities: ["WiFi", "Mess", "Gym", "Laundry"] },
+  { id: "H002", name: "Boys Hostel B",   type: "Boys",  totalRooms: 25, warden: "Mr. Suresh Sharma",  contact: "98765-22222", floors: 2, amenities: ["WiFi", "Mess", "Study Room"] },
+  { id: "H003", name: "Girls Hostel A",  type: "Girls", totalRooms: 35, warden: "Ms. Priya Verma",    contact: "98765-33333", floors: 4, amenities: ["WiFi", "Mess", "Gym", "Salon"] },
+  { id: "H004", name: "Girls Hostel B",  type: "Girls", totalRooms: 20, warden: "Ms. Anita Patel",    contact: "98765-44444", floors: 2, amenities: ["WiFi", "Mess", "Library"] },
 ];
 
 const feeVariant: Record<string, "success" | "warning" | "danger"> = {
@@ -73,10 +81,10 @@ export default function HostelPage() {
   const [hostelFilter, setHostelFilter] = useState("All");
   const [feeFilter, setFeeFilter] = useState("All");
 
-  const filters = useMemo(
-    () => ({ search, type: activeTab, hostel: hostelFilter, fees: feeFilter }),
-    [search, activeTab, hostelFilter, feeFilter]
-  );
+  // No filters go to the server: occupancy is counted per hostel from the live
+  // allocation records, which needs every resident regardless of the table's
+  // current tab/search. The narrowing is applied during render instead.
+  const filters = useMemo(() => ({}), []);
 
   const { items, loading, error, refetch, save, remove, saving, deleting } = useResource(
     hostelStudentsApi,
@@ -87,10 +95,60 @@ export default function HostelPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<HostelStudent | null>(null);
   const [pendingDelete, setPendingDelete] = useState<HostelStudent | null>(null);
+  const { toast } = useToast();
 
-  const totalOccupied = hostels.reduce((s, h) => s + h.occupied, 0);
+  // Rows for the table only — occupancy keeps counting every allocation.
+  const visible = useMemo(
+    () =>
+      items.filter((s) => {
+        if (activeTab !== "All" && s.type !== activeTab) return false;
+        if (hostelFilter !== "All" && s.hostel !== hostelFilter) return false;
+        if (feeFilter !== "All" && s.fees !== feeFilter) return false;
+        return textMatch(search, s.name, s.studentId, s.room);
+      }),
+    [items, activeTab, hostelFilter, feeFilter, search]
+  );
+
+  const handleExport = () => {
+    if (visible.length === 0) {
+      toast({
+        title: "Nothing to export",
+        description: "No residents match the current filters.",
+        variant: "warning",
+      });
+      return;
+    }
+    exportToCsv<HostelStudent>(
+      "hostel-residents",
+      [
+        { header: "Student ID", value: (s) => s.studentId },
+        { header: "Name", value: (s) => s.name },
+        { header: "Class", value: (s) => s.class },
+        { header: "Hostel", value: (s) => s.hostel },
+        { header: "Room", value: (s) => s.room },
+        { header: "Type", value: (s) => s.type },
+        { header: "Fees", value: (s) => s.fees },
+        { header: "Join Date", value: (s) => s.joinDate },
+        { header: "Contact", value: (s) => s.contact },
+      ],
+      visible
+    );
+    toast({
+      title: "Export ready",
+      description: `${visible.length} resident${visible.length === 1 ? "" : "s"} exported to CSV.`,
+    });
+  };
+
+  // One bed per room, so a resident record is an occupied room.
+  const occupiedBy = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const s of items) counts.set(s.hostel, (counts.get(s.hostel) ?? 0) + 1);
+    return counts;
+  }, [items]);
+
   const totalRooms = hostels.reduce((s, h) => s + h.totalRooms, 0);
-  const totalVacant = totalRooms - totalOccupied;
+  const totalOccupied = items.length;
+  const totalVacant = Math.max(0, totalRooms - totalOccupied);
 
   const hasFilters =
     Boolean(search) || activeTab !== "All" || hostelFilter !== "All" || feeFilter !== "All";
@@ -208,7 +266,7 @@ export default function HostelPage() {
         description="Manage hostel rooms, students and wardens."
         actions={
           <>
-            <Button variant="outline">
+            <Button variant="outline" onClick={handleExport}>
               <Download className="size-4" />
               Export
             </Button>
@@ -230,7 +288,10 @@ export default function HostelPage() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {hostels.map((h, idx) => {
           const gradient = hostelGradients[idx % hostelGradients.length];
-          const occupancyPct = Math.round((h.occupied / h.totalRooms) * 100);
+          const occupied = occupiedBy.get(h.name) ?? 0;
+          const occupancyPct = h.totalRooms
+            ? Math.min(100, Math.round((occupied / h.totalRooms) * 100))
+            : 0;
           const tone = occupancyTone(occupancyPct);
           return (
             <Card key={h.id} className="overflow-hidden">
@@ -257,7 +318,7 @@ export default function HostelPage() {
                   <div className="mb-1.5 flex items-center justify-between gap-2">
                     <span className="text-xs text-muted">Occupancy</span>
                     <span className={cn("text-xs font-semibold", tone.text)}>
-                      {h.occupied}/{h.totalRooms} ({occupancyPct}%)
+                      {occupied}/{h.totalRooms} ({occupancyPct}%)
                     </span>
                   </div>
                   <div className="h-1.5 overflow-hidden rounded-full bg-surface-hover">
@@ -347,7 +408,7 @@ export default function HostelPage() {
           />
         </div>
 
-        <p className="text-xs text-muted">{items.length} students</p>
+        <p className="text-xs text-muted">{visible.length} students</p>
       </div>
 
       {error ? (
@@ -362,7 +423,7 @@ export default function HostelPage() {
       ) : (
         <Table
           columns={columns}
-          rows={items}
+          rows={visible}
           rowKey={(s) => s.id}
           loading={loading}
           emptyTitle="No students found"
@@ -382,7 +443,7 @@ export default function HostelPage() {
 
       <div className="flex flex-wrap items-center justify-between gap-3 px-1">
         <p className="text-xs text-muted">
-          Showing <span className="font-medium text-text">{items.length}</span> resident(s)
+          Showing <span className="font-medium text-text">{visible.length}</span> resident(s)
         </p>
         <div className="flex flex-wrap items-center gap-4">
           {FEE_STATUS_OPTIONS.map((status) => (

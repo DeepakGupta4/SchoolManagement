@@ -10,7 +10,12 @@ export interface ResourceRecord {
   id: string;
 }
 
-export interface ResourceConfig<T extends ResourceRecord, F> {
+/**
+ * `G` names the fields `generate` stamps on insert. Listing them keeps
+ * `create` honest: callers must not be forced to invent a value the server
+ * owns, but every other field stays required.
+ */
+export interface ResourceConfig<T extends ResourceRecord, F, G extends keyof T = never> {
   /** Short prefix for generated ids, e.g. "book" -> "book_a1b2c3d". */
   idPrefix: string;
   /** Initial rows. Cloned, so the caller's array is never mutated. */
@@ -21,18 +26,28 @@ export interface ResourceConfig<T extends ResourceRecord, F> {
    */
   matches: (row: T, filters: F) => boolean;
   /**
-   * Field that must stay unique (e.g. "isbn", "employeeId"). Create and update
-   * reject duplicates with a readable message.
+   * Fields that must stay unique (e.g. "isbn", "employeeId", "code"). Create
+   * and update reject duplicates with a readable message. Pass several when a
+   * row has more than one natural key — guarding only one lets duplicates in
+   * through the other.
    */
-  uniqueBy?: { field: keyof T; label: string };
+  uniqueBy?: { field: keyof T; label: string } | { field: keyof T; label: string }[];
   /** Values the server would compute; merged into every newly created row. */
   defaults?: Partial<T>;
+  /**
+   * Per-record values the server would stamp at insert time — reference
+   * numbers, gate passes, certificate codes. Unlike `defaults` this runs once
+   * per create, so each row gets a distinct value. Receives the current row
+   * count so sequences can continue from the seed.
+   * Anything the caller passes in explicitly still wins.
+   */
+  generate?: (count: number) => Pick<T, G>;
 }
 
-export interface Resource<T extends ResourceRecord, F> {
+export interface Resource<T extends ResourceRecord, F, G extends keyof T = never> {
   list: (filters?: F) => Promise<T[]>;
   get: (id: string) => Promise<T | null>;
-  create: (values: Omit<T, "id">) => Promise<T>;
+  create: (values: Omit<T, "id" | G>) => Promise<T>;
   update: (id: string, values: Partial<Omit<T, "id">>) => Promise<T>;
   remove: (id: string) => Promise<void>;
   /** Restores the seed data. Only for tests and story fixtures. */
@@ -41,21 +56,32 @@ export interface Resource<T extends ResourceRecord, F> {
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-export function createResource<T extends ResourceRecord, F = Record<string, unknown>>(
-  config: ResourceConfig<T, F>
-): Resource<T, F> {
-  const { idPrefix, seed, matches, uniqueBy, defaults } = config;
+export function createResource<
+  T extends ResourceRecord,
+  F = Record<string, unknown>,
+  G extends keyof T = never,
+>(config: ResourceConfig<T, F, G>): Resource<T, F, G> {
+  const { idPrefix, seed, matches, uniqueBy, defaults, generate } = config;
 
   let rows: T[] = seed.map((row) => ({ ...row }));
 
+  // Monotonic issue counter for `generate`. It must NOT be derived from
+  // rows.length: deleting a record would wind it back and the next create
+  // would reissue a reference number that is already printed on a document.
+  let issued = seed.length;
+
   const nextId = () => `${idPrefix}_${Math.random().toString(36).slice(2, 9)}`;
 
-  const assertUnique = (value: unknown, ignoreId?: string) => {
-    if (!uniqueBy) return;
-    const clash = rows.some(
-      (row) => row[uniqueBy.field] === value && row.id !== ignoreId
-    );
-    if (clash) throw new Error(`${uniqueBy.label} "${String(value)}" is already in use.`);
+  const uniqueKeys = uniqueBy ? (Array.isArray(uniqueBy) ? uniqueBy : [uniqueBy]) : [];
+
+  /** Checks every declared natural key, skipping ones the caller didn't supply. */
+  const assertUnique = (values: Partial<T>, ignoreId?: string) => {
+    for (const { field, label } of uniqueKeys) {
+      const value = values[field];
+      if (value === undefined) continue;
+      const clash = rows.some((row) => row[field] === value && row.id !== ignoreId);
+      if (clash) throw new Error(`${label} "${String(value)}" is already in use.`);
+    }
   };
 
   return {
@@ -72,9 +98,19 @@ export function createResource<T extends ResourceRecord, F = Record<string, unkn
 
     async create(values) {
       await delay(400);
-      if (uniqueBy) assertUnique((values as Partial<T>)[uniqueBy.field]);
 
-      const record = { ...defaults, ...values, id: nextId() } as T;
+      const record = {
+        ...defaults,
+        ...generate?.(issued),
+        ...values,
+        id: nextId(),
+      } as T;
+
+      // Checked on the assembled record, not the raw input, so generated keys
+      // (reference numbers) are validated too.
+      assertUnique(record);
+
+      issued += 1;
       rows = [record, ...rows];
       return record;
     },
@@ -84,9 +120,7 @@ export function createResource<T extends ResourceRecord, F = Record<string, unkn
 
       const existing = rows.find((row) => row.id === id);
       if (!existing) throw new Error("Record not found.");
-      if (uniqueBy && uniqueBy.field in values) {
-        assertUnique((values as Partial<T>)[uniqueBy.field], id);
-      }
+      assertUnique(values as Partial<T>, id);
 
       const updated = { ...existing, ...values, id } as T;
       rows = rows.map((row) => (row.id === id ? updated : row));

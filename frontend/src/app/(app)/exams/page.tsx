@@ -8,9 +8,8 @@ import {
   CheckCircle,
   Clock,
   Download,
-  Edit,
-  Eye,
   FileText,
+  Pencil,
   Plus,
   Search,
   Trash2,
@@ -24,27 +23,22 @@ import {
   Card,
   CardContent,
   CardHeader,
+  ConfirmDialog,
   Input,
   PageHeader,
   Pagination,
   StatCard,
   Table,
+  useToast,
   type Column,
 } from "@/components/ui";
 import { cn } from "@/lib/utils";
+import { exportToCsv } from "@/lib/exportCsv";
+import { useResource } from "@/hooks/useResource";
+import { examsApi, type Exam } from "@/lib/api/exams";
+import type { ExamSchema } from "@/lib/schemas/exam";
+import { ExamFormModal } from "./ExamFormModal";
 
-const exams = [
-  { id: "EX001", name: "Unit Test 1",       type: "Unit Test", class: "10-A", subject: "Mathematics",  date: "Jul 20, 2025", time: "9:00 AM", duration: "1 hr",   totalMarks: 25,  status: "upcoming",   students: 42 },
-  { id: "EX002", name: "Mid-Term Exam",      type: "Mid-Term",  class: "All", subject: "All Subjects", date: "Jul 28, 2025", time: "8:30 AM", duration: "3 hrs",  totalMarks: 100, status: "upcoming",   students: 1240 },
-  { id: "EX003", name: "Unit Test 1",        type: "Unit Test", class: "9-B", subject: "Physics",      date: "Jul 15, 2025", time: "10:00 AM",duration: "1 hr",   totalMarks: 25,  status: "completed",  students: 38 },
-  { id: "EX004", name: "Practical Exam",     type: "Practical", class: "12-A",subject: "Chemistry",    date: "Jul 10, 2025", time: "9:00 AM", duration: "2 hrs",  totalMarks: 30,  status: "completed",  students: 35 },
-  { id: "EX005", name: "Class Test",         type: "Class Test",class: "8-A", subject: "English",      date: "Jul 18, 2025", time: "11:00 AM",duration: "45 min", totalMarks: 20,  status: "ongoing",    students: 44 },
-  { id: "EX006", name: "Final Exam",         type: "Final",     class: "All", subject: "All Subjects", date: "Oct 15, 2025", time: "8:30 AM", duration: "3 hrs",  totalMarks: 100, status: "upcoming",   students: 1240 },
-  { id: "EX007", name: "Unit Test 2",        type: "Unit Test", class: "11-A",subject: "Biology",      date: "Jul 08, 2025", time: "9:00 AM", duration: "1 hr",   totalMarks: 25,  status: "completed",  students: 40 },
-  { id: "EX008", name: "Assignment Test",    type: "Class Test",class: "7-A", subject: "History",      date: "Jul 22, 2025", time: "10:30 AM",duration: "30 min", totalMarks: 15,  status: "upcoming",   students: 36 },
-];
-
-type Exam = (typeof exams)[number];
 type BadgeVariant = React.ComponentProps<typeof Badge>["variant"];
 
 const PAGE_SIZE = 6;
@@ -55,6 +49,8 @@ const statusConfig: Record<string, { variant: BadgeVariant; icon: LucideIcon; la
   completed: { variant: "success", icon: CheckCircle, label: "Completed" },
   cancelled: { variant: "danger", icon: XCircle, label: "Cancelled" },
 };
+
+const fallbackStatus = { variant: "default" as BadgeVariant, icon: Clock, label: "Unknown" };
 
 /** Per exam-type presentation: badge tone, icon-tile gradient, timeline dot colour. */
 const typeConfig: Record<string, { variant: BadgeVariant; gradient: string; dot: string }> = {
@@ -74,24 +70,21 @@ export default function ExamsPage() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
 
-  const filtered = useMemo(
-    () =>
-      exams.filter((e) => {
-        const matchTab = activeTab === "All" || e.status === activeTab.toLowerCase();
-        const q = search.toLowerCase();
-        const matchSearch =
-          e.name.toLowerCase().includes(q) ||
-          e.subject.toLowerCase().includes(q) ||
-          e.class.toLowerCase().includes(q);
-        return matchTab && matchSearch;
-      }),
-    [activeTab, search]
+  // The status tab is deliberately left out of the server filters: the stat
+  // cards need per-status counts across the whole (otherwise filtered) set, so
+  // the status narrowing is applied during render instead.
+  const filters = useMemo(() => ({ search, status: "All" }), [search]);
+
+  const { items, loading, error, refetch, save, remove, saving, deleting } = useResource(
+    examsApi,
+    filters,
+    { label: "exam", describe: (e) => e.name }
   );
 
-  const paged = useMemo(
-    () => filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
-    [filtered, page]
-  );
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<Exam | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Exam | null>(null);
+  const { toast } = useToast();
 
   // A narrowed filter can strand you past the last page, so every filter
   // change resets to page 1.
@@ -105,13 +98,88 @@ export default function ExamsPage() {
     setPage(1);
   };
 
-  const counts = {
-    upcoming: exams.filter((e) => e.status === "upcoming").length,
-    ongoing: exams.filter((e) => e.status === "ongoing").length,
-    completed: exams.filter((e) => e.status === "completed").length,
+  // Rows for the table only — stat cards keep counting the full `items`.
+  const visible = useMemo(
+    () =>
+      activeTab === "All"
+        ? items
+        : items.filter((e) => e.status === activeTab.toLowerCase()),
+    [items, activeTab]
+  );
+
+  // A delete can empty the current page, so clamp during render rather than
+  // correcting it in an effect.
+  const lastPage = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
+  const safePage = Math.min(page, lastPage);
+
+  const paged = useMemo(
+    () => visible.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
+    [visible, safePage]
+  );
+
+  /** Exports every row the active tab and search leave visible, across pages. */
+  const handleExport = () => {
+    if (visible.length === 0) {
+      toast({
+        title: "Nothing to export",
+        description: "No exams match the current filters.",
+        variant: "warning",
+      });
+      return;
+    }
+    exportToCsv<Exam>(
+      "exams",
+      [
+        { header: "Code", value: (e) => e.code },
+        { header: "Exam", value: (e) => e.name },
+        { header: "Type", value: (e) => e.type },
+        { header: "Subject", value: (e) => e.subject },
+        { header: "Classes", value: (e) => e.classes.join(" / ") },
+        { header: "Date", value: (e) => e.date },
+        { header: "Time", value: (e) => e.time },
+        { header: "Duration", value: (e) => e.duration },
+        { header: "Total Marks", value: (e) => e.totalMarks },
+        { header: "Students", value: (e) => e.students },
+        { header: "Status", value: (e) => e.status },
+      ],
+      visible
+    );
+    toast({
+      title: "Export ready",
+      description: `${visible.length} exam${visible.length === 1 ? "" : "s"} exported to CSV.`,
+    });
   };
 
-  const upcomingExams = exams.filter((e) => e.status === "upcoming");
+  const counts = useMemo(
+    () => ({
+      total: items.length,
+      upcoming: items.filter((e) => e.status === "upcoming").length,
+      ongoing: items.filter((e) => e.status === "ongoing").length,
+      completed: items.filter((e) => e.status === "completed").length,
+    }),
+    [items]
+  );
+
+  const upcomingExams = useMemo(() => items.filter((e) => e.status === "upcoming"), [items]);
+
+  const openCreate = () => {
+    setEditing(null);
+    setFormOpen(true);
+  };
+
+  const handleSubmit = async (values: ExamSchema) => {
+    const ok = await save(values, editing);
+    if (ok) {
+      setFormOpen(false);
+      setEditing(null);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!pendingDelete) return;
+    const ok = await remove(pendingDelete);
+    if (ok) setPendingDelete(null);
+  };
 
   const columns: Column<Exam>[] = [
     {
@@ -132,7 +200,7 @@ export default function ExamsPage() {
             </div>
             <div className="min-w-0">
               <p className="truncate font-medium text-text">{exam.name}</p>
-              <p className="truncate text-xs text-subtle">{exam.id}</p>
+              <p className="truncate text-xs text-subtle">{exam.code}</p>
             </div>
           </div>
         );
@@ -147,10 +215,17 @@ export default function ExamsPage() {
       ),
     },
     {
-      key: "class",
+      key: "classes",
       header: "Class",
-      sortable: true,
-      render: (exam) => <Badge variant="info">{exam.class}</Badge>,
+      render: (exam) => (
+        <div className="flex flex-wrap gap-1">
+          {exam.classes.map((c) => (
+            <Badge key={c} variant="info">
+              {c}
+            </Badge>
+          ))}
+        </div>
+      ),
     },
     {
       key: "subject",
@@ -208,7 +283,7 @@ export default function ExamsPage() {
       header: "Status",
       sortable: true,
       render: (exam) => {
-        const sc = statusConfig[exam.status];
+        const sc = statusConfig[exam.status] ?? fallbackStatus;
         const StatusIcon = sc.icon;
         return (
           <Badge variant={sc.variant} className="gap-1">
@@ -225,18 +300,17 @@ export default function ExamsPage() {
       render: (exam) => (
         <div className="flex items-center justify-end gap-1">
           <button
-            aria-label={`View ${exam.name}`}
-            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
-          >
-            <Eye className="size-4" />
-          </button>
-          <button
+            onClick={() => {
+              setEditing(exam);
+              setFormOpen(true);
+            }}
             aria-label={`Edit ${exam.name}`}
             className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
           >
-            <Edit className="size-4" />
+            <Pencil className="size-4" />
           </button>
           <button
+            onClick={() => setPendingDelete(exam)}
             aria-label={`Delete ${exam.name}`}
             className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-danger-soft hover:text-danger"
           >
@@ -254,11 +328,11 @@ export default function ExamsPage() {
         description="Schedule, manage and track all exams"
         actions={
           <>
-            <Button variant="outline">
+            <Button variant="outline" onClick={handleExport}>
               <Download className="size-4" />
               Export
             </Button>
-            <Button>
+            <Button onClick={openCreate}>
               <Plus className="size-4" />
               Schedule Exam
             </Button>
@@ -267,7 +341,7 @@ export default function ExamsPage() {
       />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Total Exams" value={exams.length} icon={FileText} tone="indigo" />
+        <StatCard label="Total Exams" value={counts.total} icon={FileText} tone="indigo" />
         <StatCard label="Upcoming" value={counts.upcoming} icon={CalendarClock} tone="cyan" />
         <StatCard label="Ongoing" value={counts.ongoing} icon={Clock} tone="amber" />
         <StatCard label="Completed" value={counts.completed} icon={CheckCircle} tone="emerald" />
@@ -303,23 +377,47 @@ export default function ExamsPage() {
           />
         </div>
 
-        <p className="ml-auto text-xs text-muted">{filtered.length} exams</p>
+        <p className="ml-auto text-xs text-muted">{visible.length} exams</p>
       </div>
 
-      <Table
-        columns={columns}
-        rows={paged}
-        rowKey={(e) => e.id}
-        emptyTitle="No exams found"
-        emptyDescription="Try adjusting your filters"
-      />
+      {error ? (
+        <Card>
+          <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+            <p className="text-sm font-medium text-danger">{error}</p>
+            <Button variant="outline" onClick={refetch}>
+              Try again
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <>
+          <Table
+            columns={columns}
+            rows={paged}
+            rowKey={(e) => e.id}
+            loading={loading}
+            emptyTitle="No exams found"
+            emptyDescription={
+              search || activeTab !== "All"
+                ? "Try adjusting your filters"
+                : "Schedule your first exam to get started."
+            }
+            emptyAction={
+              <Button variant="outline" onClick={openCreate}>
+                <Plus className="size-4" />
+                Schedule Exam
+              </Button>
+            }
+          />
 
-      <Pagination
-        page={page}
-        pageSize={PAGE_SIZE}
-        totalItems={filtered.length}
-        onPageChange={setPage}
-      />
+          <Pagination
+            page={safePage}
+            pageSize={PAGE_SIZE}
+            totalItems={visible.length}
+            onPageChange={setPage}
+          />
+        </>
+      )}
 
       <Card>
         <CardHeader>
@@ -329,45 +427,75 @@ export default function ExamsPage() {
           </div>
         </CardHeader>
         <CardContent className="flex flex-col">
-          {upcomingExams.map((exam, i, arr) => {
-            const tc = typeConfig[exam.type] ?? fallbackType;
-            const isLast = i === arr.length - 1;
-            return (
-              <div key={exam.id} className={cn("flex gap-4", !isLast && "pb-5")}>
-                <div className="flex shrink-0 flex-col items-center">
-                  <span className={cn("mt-1.5 size-3 rounded-full", tc.dot)} />
-                  {!isLast && <span className="mt-1 w-px flex-1 bg-border" />}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-sm font-semibold text-text">
-                      {exam.name} — {exam.subject}
-                    </p>
-                    <Badge variant={tc.variant}>{exam.type}</Badge>
+          {upcomingExams.length === 0 ? (
+            <p className="py-2 text-sm text-muted">No upcoming exams.</p>
+          ) : (
+            upcomingExams.map((exam, i, arr) => {
+              const tc = typeConfig[exam.type] ?? fallbackType;
+              const isLast = i === arr.length - 1;
+              return (
+                <div key={exam.id} className={cn("flex gap-4", !isLast && "pb-5")}>
+                  <div className="flex shrink-0 flex-col items-center">
+                    <span className={cn("mt-1.5 size-3 rounded-full", tc.dot)} />
+                    {!isLast && <span className="mt-1 w-px flex-1 bg-border" />}
                   </div>
-                  <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
-                    <span className="inline-flex items-center gap-1.5">
-                      <Calendar className="size-3 text-subtle" />
-                      {exam.date}
-                    </span>
-                    <span className="inline-flex items-center gap-1.5">
-                      <Clock className="size-3 text-subtle" />
-                      {exam.time} · {exam.duration}
-                    </span>
-                    <span className="inline-flex items-center gap-1.5">
-                      <Users className="size-3 text-subtle" />
-                      {exam.students.toLocaleString()} students
-                    </span>
-                    <span>
-                      Class: <strong className="font-semibold text-text">{exam.class}</strong>
-                    </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-sm font-semibold text-text">
+                        {exam.name} — {exam.subject}
+                      </p>
+                      <Badge variant={tc.variant}>{exam.type}</Badge>
+                    </div>
+                    <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
+                      <span className="inline-flex items-center gap-1.5">
+                        <Calendar className="size-3 text-subtle" />
+                        {exam.date}
+                      </span>
+                      <span className="inline-flex items-center gap-1.5">
+                        <Clock className="size-3 text-subtle" />
+                        {exam.time} · {exam.duration}
+                      </span>
+                      <span className="inline-flex items-center gap-1.5">
+                        <Users className="size-3 text-subtle" />
+                        {exam.students.toLocaleString()} students
+                      </span>
+                      <span>
+                        Class:{" "}
+                        <strong className="font-semibold text-text">
+                          {exam.classes.join(", ")}
+                        </strong>
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })
+          )}
         </CardContent>
       </Card>
+
+      <ExamFormModal
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        record={editing}
+        saving={saving}
+        onSubmit={handleSubmit}
+      />
+
+      <ConfirmDialog
+        open={Boolean(pendingDelete)}
+        onOpenChange={(open) => !open && setPendingDelete(null)}
+        title="Delete exam?"
+        description={
+          pendingDelete
+            ? `${pendingDelete.name} (${pendingDelete.code}) will be permanently removed. This cannot be undone.`
+            : ""
+        }
+        confirmLabel="Delete"
+        destructive
+        loading={deleting}
+        onConfirm={handleDelete}
+      />
     </div>
   );
 }

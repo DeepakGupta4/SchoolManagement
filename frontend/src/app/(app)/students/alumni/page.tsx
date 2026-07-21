@@ -1,64 +1,49 @@
 "use client";
 
-import React, { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Award,
   Briefcase,
   Download,
   Mail,
   MapPin,
+  Pencil,
   Phone,
+  Plus,
   Search,
   Send,
+  Trash2,
   Users,
 } from "lucide-react";
 import {
   Avatar,
   Badge,
   Button,
+  Card,
+  CardContent,
+  ConfirmDialog,
   Input,
   PageHeader,
   Pagination,
   Select,
   StatCard,
   Table,
+  useToast,
   type Column,
 } from "@/components/ui";
+import { exportToCsv } from "@/lib/exportCsv";
+import { useResource } from "@/hooks/useResource";
+import {
+  alumniApi,
+  BATCH_OPTIONS,
+  CITY_OPTIONS,
+  STREAM_OPTIONS,
+  type Alumnus,
+} from "@/lib/api/alumni";
+import type { AlumnusSchema } from "@/lib/schemas/alumnus";
+import { AlumnusFormModal } from "./AlumnusFormModal";
 
 const PAGE_SIZE = 10;
-
-const alumni = [
-  { id: "ALM-001", name: "Rohan Deshpande",   batch: "2014", stream: "Science",   occupation: "Software Engineer",   employer: "Infosys",            city: "Pune",       email: "rohan.d@example.in",    phone: "98765-43210", mentor: true  },
-  { id: "ALM-002", name: "Sneha Kulkarni",    batch: "2014", stream: "Commerce",  occupation: "Chartered Accountant", employer: "Deloitte India",     city: "Mumbai",     email: "sneha.k@example.in",    phone: "98450-11223", mentor: true  },
-  { id: "ALM-003", name: "Aditya Menon",      batch: "2015", stream: "Science",   occupation: "Doctor (MBBS, MD)",   employer: "AIIMS Delhi",        city: "New Delhi",  email: "aditya.m@example.in",   phone: "99887-65432", mentor: false },
-  { id: "ALM-004", name: "Priya Raghavan",    batch: "2015", stream: "Arts",      occupation: "Civil Servant (IAS)", employer: "Govt. of Karnataka", city: "Bengaluru",  email: "priya.r@example.in",    phone: "90123-45678", mentor: true  },
-  { id: "ALM-005", name: "Karthik Subraman",  batch: "2016", stream: "Science",   occupation: "Data Scientist",      employer: "Flipkart",           city: "Bengaluru",  email: "karthik.s@example.in",  phone: "88990-11223", mentor: false },
-  { id: "ALM-006", name: "Meera Bhattachar",  batch: "2016", stream: "Commerce",  occupation: "Investment Banker",   employer: "ICICI Securities",   city: "Mumbai",     email: "meera.b@example.in",    phone: "97654-32109", mentor: true  },
-  { id: "ALM-007", name: "Nikhil Chauhan",    batch: "2017", stream: "Science",   occupation: "Mechanical Engineer", employer: "Tata Motors",        city: "Jamshedpur", email: "nikhil.c@example.in",   phone: "96543-21098", mentor: false },
-  { id: "ALM-008", name: "Tanvi Shah",        batch: "2017", stream: "Arts",      occupation: "Journalist",          employer: "The Hindu",          city: "Chennai",    email: "tanvi.s@example.in",    phone: "95432-10987", mentor: false },
-  { id: "ALM-009", name: "Harsh Vardhan",     batch: "2018", stream: "Commerce",  occupation: "Startup Founder",     employer: "GreenCart Pvt Ltd",  city: "Gurugram",   email: "harsh.v@example.in",    phone: "94321-09876", mentor: true  },
-  { id: "ALM-010", name: "Ritika Agarwal",    batch: "2018", stream: "Science",   occupation: "Architect",           employer: "Morphogenesis",      city: "New Delhi",  email: "ritika.a@example.in",   phone: "93210-98765", mentor: false },
-  { id: "ALM-011", name: "Sameer Qureshi",    batch: "2019", stream: "Science",   occupation: "Research Scholar",    employer: "IISc Bengaluru",     city: "Bengaluru",  email: "sameer.q@example.in",   phone: "92109-87654", mentor: false },
-  { id: "ALM-012", name: "Divya Pillai",      batch: "2019", stream: "Commerce",  occupation: "Product Manager",     employer: "Zomato",             city: "Gurugram",   email: "divya.p@example.in",    phone: "91098-76543", mentor: true  },
-  { id: "ALM-013", name: "Abhinav Rathore",   batch: "2020", stream: "Arts",      occupation: "Lawyer",              employer: "AZB & Partners",     city: "Mumbai",     email: "abhinav.r@example.in",  phone: "90987-65432", mentor: false },
-  { id: "ALM-014", name: "Shreya Nambiar",    batch: "2020", stream: "Science",   occupation: "Cardiologist",        employer: "Apollo Hospitals",   city: "Hyderabad",  email: "shreya.n@example.in",   phone: "89876-54321", mentor: true  },
-  { id: "ALM-015", name: "Varun Malhotra",    batch: "2021", stream: "Commerce",  occupation: "Financial Analyst",   employer: "HDFC Bank",          city: "Mumbai",     email: "varun.m@example.in",    phone: "88765-43210", mentor: false },
-  { id: "ALM-016", name: "Ayesha Siddiqui",   batch: "2021", stream: "Science",   occupation: "Civil Engineer",      employer: "L&T Construction",   city: "Chennai",    email: "ayesha.s@example.in",   phone: "87654-32109", mentor: false },
-  { id: "ALM-017", name: "Manav Kapoor",      batch: "2022", stream: "Arts",      occupation: "Graphic Designer",    employer: "Freelance",          city: "Jaipur",     email: "manav.k@example.in",    phone: "86543-21098", mentor: false },
-  { id: "ALM-018", name: "Ishani Barua",      batch: "2022", stream: "Science",   occupation: "M.Tech Student",      employer: "IIT Guwahati",       city: "Guwahati",   email: "ishani.b@example.in",   phone: "85432-10987", mentor: true  },
-];
-
-type Alumnus = (typeof alumni)[number];
-
-const BATCH_OPTIONS = [...new Set(alumni.map((a) => a.batch))]
-  .sort((a, b) => Number(b) - Number(a))
-  .map((b) => ({ label: `Batch of ${b}`, value: b }));
-
-const STREAM_OPTIONS = ["Science", "Commerce", "Arts"].map((s) => ({ label: s, value: s }));
-
-const CITY_OPTIONS = [...new Set(alumni.map((a) => a.city))]
-  .sort()
-  .map((c) => ({ label: c, value: c }));
 
 export default function AlumniPage() {
   const [search, setSearch] = useState("");
@@ -67,28 +52,95 @@ export default function AlumniPage() {
   const [city, setCity] = useState("");
   const [page, setPage] = useState(1);
 
+  const filters = useMemo(
+    () => ({ search, batch, stream, city }),
+    [search, batch, stream, city]
+  );
+
+  const { items, loading, error, refetch, save, remove, saving, deleting } = useResource(
+    alumniApi,
+    filters,
+    { label: "alumnus", describe: (a) => a.name }
+  );
+
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<Alumnus | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Alumnus | null>(null);
+  const { toast } = useToast();
+
+  // Narrowing a filter can strand you past the last page, so reset on change.
   const applyFilter = (setter: (value: string) => void) => (value: string) => {
     setter(value);
     setPage(1);
   };
 
-  const query = search.trim().toLowerCase();
-  const filtered = alumni.filter((a) => {
-    const matchSearch =
-      !query ||
-      a.name.toLowerCase().includes(query) ||
-      a.occupation.toLowerCase().includes(query) ||
-      a.employer.toLowerCase().includes(query);
-    return (
-      matchSearch && (!batch || a.batch === batch) && (!stream || a.stream === stream) && (!city || a.city === city)
+  const stats = useMemo(
+    () => ({
+      total: items.length,
+      batches: new Set(items.map((a) => a.batch)).size,
+      cities: new Set(items.map((a) => a.city)).size,
+      mentors: items.filter((a) => a.mentor).length,
+    }),
+    [items]
+  );
+
+  // Clamp during render — resetting page state from an effect is not allowed.
+  const totalPages = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const paged = items.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+
+  /** Every filter here is applied server-side, so `items` is what the table shows. */
+  const handleExport = () => {
+    if (items.length === 0) {
+      toast({
+        title: "Nothing to export",
+        description: "No alumni match the current filters.",
+        variant: "warning",
+      });
+      return;
+    }
+    exportToCsv<Alumnus>(
+      "alumni",
+      [
+        { header: "Alumni ID", value: (a) => a.id },
+        { header: "Name", value: (a) => a.name },
+        { header: "Batch", value: (a) => a.batch },
+        { header: "Stream", value: (a) => a.stream },
+        { header: "Occupation", value: (a) => a.occupation },
+        { header: "Employer", value: (a) => a.employer },
+        { header: "City", value: (a) => a.city },
+        { header: "Email", value: (a) => a.email },
+        { header: "Phone", value: (a) => a.phone },
+        { header: "Can Help With", value: (a) => a.interests.join("; ") },
+        { header: "Mentor", value: (a) => (a.mentor ? "Yes" : "No") },
+      ],
+      items
     );
-  });
+    toast({
+      title: "Export ready",
+      description: `${items.length} alumn${items.length === 1 ? "us" : "i"} exported to CSV.`,
+    });
+  };
 
-  const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const openCreate = () => {
+    setEditing(null);
+    setFormOpen(true);
+  };
 
-  const mentors = alumni.filter((a) => a.mentor).length;
-  const batches = new Set(alumni.map((a) => a.batch)).size;
-  const cities = new Set(alumni.map((a) => a.city)).size;
+  // The form models mentorship as a yes/no select; the record stores a boolean.
+  const handleSubmit = async (values: AlumnusSchema) => {
+    const ok = await save({ ...values, mentor: values.mentor === "yes" }, editing);
+    if (ok) {
+      setFormOpen(false);
+      setEditing(null);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!pendingDelete) return;
+    const ok = await remove(pendingDelete);
+    if (ok) setPendingDelete(null);
+  };
 
   const columns: Column<Alumnus>[] = [
     {
@@ -153,16 +205,28 @@ export default function AlumniPage() {
       ),
     },
     {
+      key: "interests",
+      header: "Can help with",
+      render: (a) =>
+        a.interests.length ? (
+          <div className="flex flex-wrap gap-1">
+            {a.interests.map((i) => (
+              <Badge key={i} variant="outline">
+                {i}
+              </Badge>
+            ))}
+          </div>
+        ) : (
+          <span className="text-subtle">—</span>
+        ),
+    },
+    {
       key: "mentor",
       header: "Mentorship",
       sortable: true,
       sortValue: (a) => (a.mentor ? 1 : 0),
       render: (a) =>
-        a.mentor ? (
-          <Badge variant="success">Mentor</Badge>
-        ) : (
-          <span className="text-subtle">—</span>
-        ),
+        a.mentor ? <Badge variant="success">Mentor</Badge> : <span className="text-subtle">—</span>,
     },
     {
       key: "actions",
@@ -178,11 +242,21 @@ export default function AlumniPage() {
             <Mail className="size-4" />
           </button>
           <button
-            title="Invite to alumni meet"
-            aria-label={`Invite ${a.name}`}
+            onClick={() => {
+              setEditing(a);
+              setFormOpen(true);
+            }}
+            aria-label={`Edit ${a.name}`}
             className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
           >
-            <Send className="size-4" />
+            <Pencil className="size-4" />
+          </button>
+          <button
+            onClick={() => setPendingDelete(a)}
+            aria-label={`Delete ${a.name}`}
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-danger-soft hover:text-danger"
+          >
+            <Trash2 className="size-4" />
           </button>
         </div>
       ),
@@ -196,23 +270,24 @@ export default function AlumniPage() {
         description="Stay connected with passed-out batches and their career journeys."
         actions={
           <>
-            <Button variant="outline">
-              <Download className="size-4" />
-              Export
-            </Button>
-            <Button>
+            {/* Disabled until email delivery is connected. */}
+            <Button variant="outline" disabled title="Email delivery is not connected yet">
               <Send className="size-4" />
               Invite to Alumni Meet
+            </Button>
+            <Button onClick={openCreate}>
+              <Plus className="size-4" />
+              Add alumnus
             </Button>
           </>
         }
       />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Registered Alumni" value={alumni.length} icon={Users} tone="indigo" />
-        <StatCard label="Batches Covered" value={batches} icon={Award} tone="violet" />
-        <StatCard label="Cities" value={cities} icon={Briefcase} tone="cyan" />
-        <StatCard label="Volunteer Mentors" value={mentors} icon={Award} tone="emerald" />
+        <StatCard label="Registered Alumni" value={stats.total} icon={Users} tone="indigo" />
+        <StatCard label="Batches Covered" value={stats.batches} icon={Award} tone="violet" />
+        <StatCard label="Cities" value={stats.cities} icon={Briefcase} tone="cyan" />
+        <StatCard label="Volunteer Mentors" value={stats.mentors} icon={Award} tone="emerald" />
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -231,7 +306,7 @@ export default function AlumniPage() {
             value={batch}
             onChange={(e) => applyFilter(setBatch)(e.target.value)}
             placeholder="All batches"
-            options={BATCH_OPTIONS}
+            options={BATCH_OPTIONS.map((b) => ({ label: `Batch of ${b}`, value: b }))}
             aria-label="Filter by batch"
           />
         </div>
@@ -240,7 +315,7 @@ export default function AlumniPage() {
             value={stream}
             onChange={(e) => applyFilter(setStream)(e.target.value)}
             placeholder="All streams"
-            options={STREAM_OPTIONS}
+            options={STREAM_OPTIONS.map((s) => ({ label: s, value: s }))}
             aria-label="Filter by stream"
           />
         </div>
@@ -249,25 +324,76 @@ export default function AlumniPage() {
             value={city}
             onChange={(e) => applyFilter(setCity)(e.target.value)}
             placeholder="All cities"
-            options={CITY_OPTIONS}
+            options={CITY_OPTIONS.map((c) => ({ label: c, value: c }))}
             aria-label="Filter by city"
           />
         </div>
+        <Button variant="outline" onClick={handleExport}>
+          <Download className="size-4" />
+          Export
+        </Button>
       </div>
 
-      <Table
-        columns={columns}
-        rows={paged}
-        rowKey={(a) => a.id}
-        emptyTitle="No alumni found"
-        emptyDescription="Try clearing your filters to see more results."
+      {error ? (
+        <Card>
+          <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+            <p className="text-sm font-medium text-danger">{error}</p>
+            <Button variant="outline" onClick={refetch}>
+              Try again
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <>
+          <Table
+            columns={columns}
+            rows={paged}
+            rowKey={(a) => a.id}
+            loading={loading}
+            emptyTitle="No alumni found"
+            emptyDescription={
+              search || batch || stream || city
+                ? "Try clearing your filters to see more results."
+                : "Add your first alumnus to get started."
+            }
+            emptyAction={
+              <Button variant="outline" onClick={openCreate}>
+                <Plus className="size-4" />
+                Add alumnus
+              </Button>
+            }
+          />
+
+          <Pagination
+            page={safePage}
+            pageSize={PAGE_SIZE}
+            totalItems={items.length}
+            onPageChange={setPage}
+          />
+        </>
+      )}
+
+      <AlumnusFormModal
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        record={editing}
+        saving={saving}
+        onSubmit={handleSubmit}
       />
 
-      <Pagination
-        page={page}
-        pageSize={PAGE_SIZE}
-        totalItems={filtered.length}
-        onPageChange={setPage}
+      <ConfirmDialog
+        open={Boolean(pendingDelete)}
+        onOpenChange={(open) => !open && setPendingDelete(null)}
+        title="Delete alumnus?"
+        description={
+          pendingDelete
+            ? `${pendingDelete.name} (batch of ${pendingDelete.batch}) will be permanently removed from the directory. This cannot be undone.`
+            : ""
+        }
+        confirmLabel="Delete"
+        destructive
+        loading={deleting}
+        onConfirm={handleDelete}
       />
     </div>
   );

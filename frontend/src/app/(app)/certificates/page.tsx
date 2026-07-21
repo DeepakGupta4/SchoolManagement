@@ -6,16 +6,22 @@ import {
   Download,
   FileCheck2,
   FileText,
+  Pencil,
   Plus,
   QrCode,
   Search,
   ShieldCheck,
+  Stamp,
+  Trash2,
   XCircle,
 } from "lucide-react";
 import {
   Avatar,
   Badge,
   Button,
+  Card,
+  CardContent,
+  ConfirmDialog,
   Input,
   PageHeader,
   Pagination,
@@ -25,243 +31,22 @@ import {
   Tooltip,
   type Column,
 } from "@/components/ui";
+import { useResource } from "@/hooks/useResource";
+import {
+  CERTIFICATE_STATUS_OPTIONS,
+  CERTIFICATE_TYPE_OPTIONS,
+  certificatesApi,
+  makeVerificationCode,
+  todayIso,
+  type Certificate,
+  type CertificateStatus,
+  type CertificateType,
+} from "@/lib/api/certificates";
+import type { CertificateSchema } from "@/lib/schemas/certificate";
+import { CertificateFormModal } from "./CertificateFormModal";
+import { VerifyCodeModal } from "./VerifyCodeModal";
 
 const PAGE_SIZE = 8;
-
-type CertificateType = "Transfer" | "Bonafide" | "Character" | "Migration";
-type CertificateStatus = "pending" | "in-review" | "issued" | "rejected";
-
-interface Certificate {
-  id: string;
-  student: string;
-  admissionNo: string;
-  className: string;
-  type: CertificateType;
-  requestedBy: string;
-  requestedOn: string;
-  issueDate: string | null;
-  verificationCode: string | null;
-  status: CertificateStatus;
-}
-
-const CERTIFICATES: Certificate[] = [
-  {
-    id: "CR-9001",
-    student: "Aarav Deshpande",
-    admissionNo: "ADM/2019/0412",
-    className: "VI-B",
-    type: "Bonafide",
-    requestedBy: "Sunita Deshpande (Mother)",
-    requestedOn: "2026-07-14",
-    issueDate: "2026-07-16",
-    verificationCode: "VC-8KD2-91XM",
-    status: "issued",
-  },
-  {
-    id: "CR-9002",
-    student: "Ishita Kulkarni",
-    admissionNo: "ADM/2016/0188",
-    className: "X-A",
-    type: "Transfer",
-    requestedBy: "Ramesh Kulkarni (Father)",
-    requestedOn: "2026-07-15",
-    issueDate: null,
-    verificationCode: null,
-    status: "in-review",
-  },
-  {
-    id: "CR-9003",
-    student: "Mohammed Zaid Ansari",
-    admissionNo: "ADM/2014/0071",
-    className: "XII-B",
-    type: "Migration",
-    requestedBy: "Fatima Ansari (Mother)",
-    requestedOn: "2026-07-10",
-    issueDate: "2026-07-13",
-    verificationCode: "VC-3PQ7-45LT",
-    status: "issued",
-  },
-  {
-    id: "CR-9004",
-    student: "Nikhil Krishnan",
-    admissionNo: "ADM/2017/0326",
-    className: "IX-A",
-    type: "Character",
-    requestedBy: "Meera Krishnan (Mother)",
-    requestedOn: "2026-07-18",
-    issueDate: null,
-    verificationCode: null,
-    status: "pending",
-  },
-  {
-    id: "CR-9005",
-    student: "Ananya Iyer",
-    admissionNo: "ADM/2015/0209",
-    className: "XI-A",
-    type: "Bonafide",
-    requestedBy: "Self (Student)",
-    requestedOn: "2026-07-17",
-    issueDate: "2026-07-19",
-    verificationCode: "VC-6RB1-38ZN",
-    status: "issued",
-  },
-  {
-    id: "CR-9006",
-    student: "Rohan Pawar",
-    admissionNo: "ADM/2018/0455",
-    className: "VIII-C",
-    type: "Transfer",
-    requestedBy: "Santosh Pawar (Father)",
-    requestedOn: "2026-07-09",
-    issueDate: null,
-    verificationCode: null,
-    status: "rejected",
-  },
-  {
-    id: "CR-9007",
-    student: "Saanvi Bhatt",
-    admissionNo: "ADM/2020/0533",
-    className: "V-A",
-    type: "Bonafide",
-    requestedBy: "Neha Bhatt (Mother)",
-    requestedOn: "2026-07-19",
-    issueDate: null,
-    verificationCode: null,
-    status: "pending",
-  },
-  {
-    id: "CR-9008",
-    student: "Aditya Chaudhary",
-    admissionNo: "ADM/2013/0044",
-    className: "XII-A",
-    type: "Migration",
-    requestedBy: "Vikas Chaudhary (Father)",
-    requestedOn: "2026-07-05",
-    issueDate: "2026-07-08",
-    verificationCode: "VC-9WT4-62KH",
-    status: "issued",
-  },
-  {
-    id: "CR-9009",
-    student: "Zoya Ansari",
-    admissionNo: "ADM/2021/0617",
-    className: "IV-C",
-    type: "Character",
-    requestedBy: "Fatima Ansari (Mother)",
-    requestedOn: "2026-07-16",
-    issueDate: null,
-    verificationCode: null,
-    status: "in-review",
-  },
-  {
-    id: "CR-9010",
-    student: "Kabir Sethi",
-    admissionNo: "ADM/2016/0271",
-    className: "X-C",
-    type: "Bonafide",
-    requestedBy: "Anil Sethi (Father)",
-    requestedOn: "2026-07-12",
-    issueDate: "2026-07-14",
-    verificationCode: "VC-1MF8-77QD",
-    status: "issued",
-  },
-  {
-    id: "CR-9011",
-    student: "Diya Nair",
-    admissionNo: "ADM/2015/0163",
-    className: "XI-B",
-    type: "Character",
-    requestedBy: "Self (Student)",
-    requestedOn: "2026-07-18",
-    issueDate: null,
-    verificationCode: null,
-    status: "pending",
-  },
-  {
-    id: "CR-9012",
-    student: "Vihaan Gupta",
-    admissionNo: "ADM/2019/0498",
-    className: "VII-A",
-    type: "Transfer",
-    requestedBy: "Rekha Gupta (Mother)",
-    requestedOn: "2026-07-07",
-    issueDate: "2026-07-11",
-    verificationCode: "VC-5NC3-20YR",
-    status: "issued",
-  },
-  {
-    id: "CR-9013",
-    student: "Tanvi Joshi",
-    admissionNo: "ADM/2017/0350",
-    className: "IX-B",
-    type: "Bonafide",
-    requestedBy: "Prakash Joshi (Father)",
-    requestedOn: "2026-07-20",
-    issueDate: null,
-    verificationCode: null,
-    status: "pending",
-  },
-  {
-    id: "CR-9014",
-    student: "Arnav Reddy",
-    admissionNo: "ADM/2014/0098",
-    className: "XII-C",
-    type: "Migration",
-    requestedBy: "Sridhar Reddy (Father)",
-    requestedOn: "2026-07-03",
-    issueDate: "2026-07-06",
-    verificationCode: "VC-7HG9-14BW",
-    status: "issued",
-  },
-  {
-    id: "CR-9015",
-    student: "Myra Shaikh",
-    admissionNo: "ADM/2020/0571",
-    className: "V-B",
-    type: "Character",
-    requestedBy: "Imran Shaikh (Father)",
-    requestedOn: "2026-07-11",
-    issueDate: null,
-    verificationCode: null,
-    status: "rejected",
-  },
-  {
-    id: "CR-9016",
-    student: "Yash Wagh",
-    admissionNo: "ADM/2018/0431",
-    className: "VIII-A",
-    type: "Bonafide",
-    requestedBy: "Deepak Wagh (Father)",
-    requestedOn: "2026-07-13",
-    issueDate: "2026-07-15",
-    verificationCode: "VC-4ZL6-89TP",
-    status: "issued",
-  },
-  {
-    id: "CR-9017",
-    student: "Riya Menon",
-    admissionNo: "ADM/2016/0244",
-    className: "X-B",
-    type: "Transfer",
-    requestedBy: "Shobha Menon (Mother)",
-    requestedOn: "2026-07-19",
-    issueDate: null,
-    verificationCode: null,
-    status: "in-review",
-  },
-  {
-    id: "CR-9018",
-    student: "Kabir Singh Bedi",
-    admissionNo: "ADM/2013/0022",
-    className: "XII-A",
-    type: "Character",
-    requestedBy: "Gurpreet Singh (Father)",
-    requestedOn: "2026-07-02",
-    issueDate: "2026-07-04",
-    verificationCode: "VC-2XV5-53JF",
-    status: "issued",
-  },
-];
 
 const TYPE_VARIANT: Record<CertificateType, "info" | "success" | "warning" | "default"> = {
   Transfer: "warning",
@@ -286,6 +71,19 @@ export default function CertificatesPage() {
   const [status, setStatus] = useState("");
   const [page, setPage] = useState(1);
 
+  const filters = useMemo(() => ({ search, type, status }), [search, type, status]);
+
+  const { items, loading, error, refetch, save, remove, saving, deleting } = useResource(
+    certificatesApi,
+    filters,
+    { label: "certificate request", describe: (c) => `${c.type} certificate for ${c.student}` }
+  );
+
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<Certificate | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Certificate | null>(null);
+  const [verifyOpen, setVerifyOpen] = useState(false);
+
   // A narrowed filter can strand you past the last page, so every filter
   // change resets to page 1.
   const applyFilter = (setter: (value: string) => void) => (value: string) => {
@@ -293,33 +91,73 @@ export default function CertificatesPage() {
     setPage(1);
   };
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return CERTIFICATES.filter((c) => {
-      const matchesSearch =
-        !q ||
-        c.student.toLowerCase().includes(q) ||
-        c.admissionNo.toLowerCase().includes(q) ||
-        c.requestedBy.toLowerCase().includes(q) ||
-        (c.verificationCode?.toLowerCase().includes(q) ?? false);
-      const matchesType = !type || c.type === type;
-      const matchesStatus = !status || c.status === status;
-      return matchesSearch && matchesType && matchesStatus;
-    });
-  }, [search, type, status]);
-
   const stats = useMemo(() => {
-    const issued = CERTIFICATES.filter((c) => c.status === "issued").length;
-    const pending = CERTIFICATES.filter((c) => c.status === "pending").length;
-    const inReview = CERTIFICATES.filter((c) => c.status === "in-review").length;
-    const rejected = CERTIFICATES.filter((c) => c.status === "rejected").length;
+    const issued = items.filter((c) => c.status === "issued").length;
+    const pending = items.filter((c) => c.status === "pending").length;
+    const inReview = items.filter((c) => c.status === "in-review").length;
+    const rejected = items.filter((c) => c.status === "rejected").length;
     return { issued, pending, inReview, rejected };
-  }, []);
+  }, [items]);
 
-  const paged = useMemo(
-    () => filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
-    [filtered, page]
-  );
+  // Clamp during render — resetting page state from an effect is not allowed.
+  const totalPages = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const paged = items.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+
+  const openCreate = () => {
+    setEditing(null);
+    setFormOpen(true);
+  };
+
+  const openEdit = (certificate: Certificate) => {
+    setEditing(certificate);
+    setFormOpen(true);
+  };
+
+  const handleSubmit = async (values: CertificateSchema) => {
+    // Issue date and verification code are stamped by the office, not typed in.
+    const isIssued = values.status === "issued";
+    const ok = await save(
+      {
+        ...values,
+        issueDate: isIssued ? editing?.issueDate ?? todayIso() : null,
+        verificationCode: isIssued
+          ? editing?.verificationCode ?? makeVerificationCode()
+          : null,
+      },
+      editing
+    );
+
+    if (ok) {
+      setFormOpen(false);
+      setEditing(null);
+    }
+  };
+
+  const issue = async (certificate: Certificate) => {
+    await save(
+      {
+        ...certificate,
+        status: "issued",
+        issueDate: todayIso(),
+        verificationCode: certificate.verificationCode ?? makeVerificationCode(),
+      },
+      certificate
+    );
+  };
+
+  const handleDelete = async () => {
+    if (!pendingDelete) return;
+    const ok = await remove(pendingDelete);
+    if (ok) setPendingDelete(null);
+  };
+
+  const clearFilters = () => {
+    setSearch("");
+    setType("");
+    setStatus("");
+    setPage(1);
+  };
 
   const columns: Column<Certificate>[] = [
     {
@@ -346,7 +184,7 @@ export default function CertificatesPage() {
       render: (c) => (
         <div className="min-w-0">
           <Badge variant={TYPE_VARIANT[c.type]}>{c.type}</Badge>
-          <p className="mt-1 truncate text-xs text-subtle">{c.id}</p>
+          <p className="mt-1 truncate text-xs text-subtle">{c.code}</p>
         </div>
       ),
     },
@@ -401,15 +239,35 @@ export default function CertificatesPage() {
       key: "actions",
       header: "",
       align: "right",
-      render: (c) =>
-        c.status === "issued" ? (
-          <Button variant="outline" size="sm">
-            <Download className="size-3.5" />
-            PDF
-          </Button>
-        ) : (
-          <span className="text-subtle">—</span>
-        ),
+      render: (c) => (
+        <div className="flex items-center justify-end gap-1">
+          {c.status === "issued" ? (
+            <Button variant="outline" size="sm">
+              <Download className="size-3.5" />
+              PDF
+            </Button>
+          ) : c.status === "pending" || c.status === "in-review" ? (
+            <Button variant="outline" size="sm" disabled={saving} onClick={() => issue(c)}>
+              <Stamp className="size-3.5" />
+              Issue
+            </Button>
+          ) : null}
+          <button
+            onClick={() => openEdit(c)}
+            aria-label={`Edit ${c.type} certificate request for ${c.student}`}
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+          >
+            <Pencil className="size-4" />
+          </button>
+          <button
+            onClick={() => setPendingDelete(c)}
+            aria-label={`Delete ${c.type} certificate request for ${c.student}`}
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-danger-soft hover:text-danger"
+          >
+            <Trash2 className="size-4" />
+          </button>
+        </div>
+      ),
     },
   ];
 
@@ -420,11 +278,11 @@ export default function CertificatesPage() {
         description="Issue transfer, bonafide, character and migration certificates with QR verification."
         actions={
           <>
-            <Button variant="outline">
+            <Button variant="outline" onClick={() => setVerifyOpen(true)}>
               <ShieldCheck className="size-4" />
               Verify a code
             </Button>
-            <Button>
+            <Button onClick={openCreate}>
               <Plus className="size-4" />
               New request
             </Button>
@@ -455,12 +313,7 @@ export default function CertificatesPage() {
             value={type}
             onChange={(e) => applyFilter(setType)(e.target.value)}
             placeholder="All types"
-            options={[
-              { label: "Transfer", value: "Transfer" },
-              { label: "Bonafide", value: "Bonafide" },
-              { label: "Character", value: "Character" },
-              { label: "Migration", value: "Migration" },
-            ]}
+            options={CERTIFICATE_TYPE_OPTIONS}
             aria-label="Filter by certificate type"
           />
         </div>
@@ -469,44 +322,81 @@ export default function CertificatesPage() {
             value={status}
             onChange={(e) => applyFilter(setStatus)(e.target.value)}
             placeholder="All statuses"
-            options={[
-              { label: "Pending", value: "pending" },
-              { label: "In review", value: "in-review" },
-              { label: "Issued", value: "issued" },
-              { label: "Rejected", value: "rejected" },
-            ]}
+            options={CERTIFICATE_STATUS_OPTIONS}
             aria-label="Filter by status"
           />
         </div>
       </div>
 
-      <Table
-        columns={columns}
-        rows={paged}
-        rowKey={(c) => c.id}
-        rowClassName={(c) => (c.status === "rejected" ? "opacity-60" : undefined)}
-        emptyTitle="No certificate requests found"
-        emptyDescription="Try clearing your filters to see more results."
-        emptyAction={
-          <Button
-            variant="outline"
-            onClick={() => {
-              setSearch("");
-              setType("");
-              setStatus("");
-              setPage(1);
-            }}
-          >
-            Clear filters
-          </Button>
-        }
+      {error ? (
+        <Card>
+          <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+            <p className="text-sm font-medium text-danger">{error}</p>
+            <Button variant="outline" onClick={refetch}>
+              Try again
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <>
+          <Table
+            columns={columns}
+            rows={paged}
+            rowKey={(c) => c.id}
+            loading={loading}
+            rowClassName={(c) => (c.status === "rejected" ? "opacity-60" : undefined)}
+            emptyTitle="No certificate requests found"
+            emptyDescription={
+              search || type || status
+                ? "Try clearing your filters to see more results."
+                : "Raise your first certificate request to get started."
+            }
+            emptyAction={
+              search || type || status ? (
+                <Button variant="outline" onClick={clearFilters}>
+                  Clear filters
+                </Button>
+              ) : (
+                <Button variant="outline" onClick={openCreate}>
+                  <Plus className="size-4" />
+                  New request
+                </Button>
+              )
+            }
+          />
+
+          <Pagination
+            page={safePage}
+            pageSize={PAGE_SIZE}
+            totalItems={items.length}
+            onPageChange={setPage}
+          />
+        </>
+      )}
+
+      <VerifyCodeModal open={verifyOpen} onOpenChange={setVerifyOpen} />
+
+      <CertificateFormModal
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        record={editing}
+        saving={saving}
+        onSubmit={handleSubmit}
       />
 
-      <Pagination
-        page={page}
-        pageSize={PAGE_SIZE}
-        totalItems={filtered.length}
-        onPageChange={setPage}
+      <ConfirmDialog
+        open={Boolean(pendingDelete)}
+        onOpenChange={(open) => !open && setPendingDelete(null)}
+        title="Delete certificate request?"
+        description={
+          pendingDelete
+            ? `The ${pendingDelete.type} certificate request for ${pendingDelete.student} (${pendingDelete.admissionNo}) will be permanently removed. This cannot be undone.`
+            : ""
+        }
+        confirmLabel="Delete"
+        destructive
+        loading={deleting}
+        onConfirm={handleDelete}
       />
     </div>
   );

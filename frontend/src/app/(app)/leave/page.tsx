@@ -1,13 +1,14 @@
 "use client";
 
-import React, { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Search,
   Plus,
   Download,
-  Eye,
   Check,
   X,
+  Pencil,
+  Trash2,
   CalendarDays,
   Clock,
   CheckCircle,
@@ -18,26 +19,27 @@ import {
   Avatar,
   Badge,
   Button,
+  Card,
+  CardContent,
+  ConfirmDialog,
   Input,
   PageHeader,
   Select,
   StatCard,
   Table,
+  useToast,
   type Column,
 } from "@/components/ui";
-
-const leaveRequests = [
-  { id: "LV001", name: "Mr. Suresh Kumar",   role: "History Teacher",    type: "Sick Leave",    from: "14 Jul 2025", to: "16 Jul 2025", days: 3, reason: "Fever and cold",          status: "Pending",  dept: "Teaching" },
-  { id: "LV002", name: "Ms. Kavita Joshi",   role: "Librarian",          type: "Casual Leave",  from: "18 Jul 2025", to: "18 Jul 2025", days: 1, reason: "Personal work",           status: "Approved", dept: "Library" },
-  { id: "LV003", name: "Mr. Anil Kumar",     role: "Accountant",         type: "Earned Leave",  from: "21 Jul 2025", to: "25 Jul 2025", days: 5, reason: "Family function",         status: "Approved", dept: "Finance" },
-  { id: "LV004", name: "Ms. Rekha Iyer",     role: "Counselor",          type: "Sick Leave",    from: "10 Jul 2025", to: "11 Jul 2025", days: 2, reason: "Medical checkup",         status: "Rejected", dept: "HR" },
-  { id: "LV005", name: "Mr. Deepak Singh",   role: "Security Head",      type: "Casual Leave",  from: "20 Jul 2025", to: "20 Jul 2025", days: 1, reason: "Personal",               status: "Pending",  dept: "Security" },
-  { id: "LV006", name: "Dr. Priya Sharma",   role: "Math Teacher",       type: "Maternity Leave",from:"01 Aug 2025", to: "30 Oct 2025", days: 90, reason: "Maternity",             status: "Approved", dept: "Teaching" },
-  { id: "LV007", name: "Mr. Rahul Verma",    role: "Physics Teacher",    type: "Earned Leave",  from: "28 Jul 2025", to: "30 Jul 2025", days: 3, reason: "Vacation",               status: "Pending",  dept: "Teaching" },
-  { id: "LV008", name: "Ms. Anita Gupta",    role: "Receptionist",       type: "Sick Leave",    from: "15 Jul 2025", to: "15 Jul 2025", days: 1, reason: "Not feeling well",        status: "Approved", dept: "Administration" },
-  { id: "LV009", name: "Mr. Vinod Tiwari",   role: "Canteen Manager",    type: "Casual Leave",  from: "22 Jul 2025", to: "22 Jul 2025", days: 1, reason: "Personal work",           status: "Pending",  dept: "Canteen" },
-  { id: "LV010", name: "Ms. Pooja Mehta",    role: "HR Manager",         type: "Earned Leave",  from: "04 Aug 2025", to: "08 Aug 2025", days: 5, reason: "Annual vacation",         status: "Approved", dept: "HR" },
-];
+import { exportToCsv } from "@/lib/exportCsv";
+import { useResource } from "@/hooks/useResource";
+import {
+  leaveRequestsApi,
+  LEAVE_STATUS_OPTIONS,
+  LEAVE_TYPE_OPTIONS,
+  type LeaveRequest,
+} from "@/lib/api/leaveRequests";
+import type { LeaveRequestSchema } from "@/lib/schemas/leaveRequest";
+import { LeaveFormModal } from "./LeaveFormModal";
 
 const leaveBalance = [
   { name: "Dr. Priya Sharma",  dept: "Teaching",      sick: 12, casual: 12, earned: 15, used: 90, remaining: 0 },
@@ -48,7 +50,6 @@ const leaveBalance = [
   { name: "Ms. Kavita Joshi",  dept: "Library",       sick: 12, casual: 11, earned: 15, used: 1,  remaining: 37 },
 ];
 
-type LeaveRequest = (typeof leaveRequests)[number];
 type LeaveBalance = (typeof leaveBalance)[number];
 
 type BadgeVariant = "default" | "success" | "warning" | "danger" | "info";
@@ -81,22 +82,91 @@ export default function LeavePage() {
   const [statusFilter, setStatusFilter] = useState("All");
   const [typeFilter, setTypeFilter] = useState("All");
 
-  const filtered = leaveRequests.filter((l) => {
-    const matchSearch =
-      l.name.toLowerCase().includes(search.toLowerCase()) ||
-      l.id.toLowerCase().includes(search.toLowerCase()) ||
-      l.dept.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = statusFilter === "All" || l.status === statusFilter;
-    const matchType = typeFilter === "All" || l.type === typeFilter;
-    return matchSearch && matchStatus && matchType;
-  });
+  // `statusFilter` is deliberately left out of the server filters: the stat
+  // cards and the status legend need per-status counts across the whole
+  // (otherwise filtered) set, so status narrowing is applied during render.
+  const filters = useMemo(() => ({ search, type: typeFilter }), [search, typeFilter]);
 
-  const pending = leaveRequests.filter((l) => l.status === "Pending").length;
-  const approved = leaveRequests.filter((l) => l.status === "Approved").length;
-  const rejected = leaveRequests.filter((l) => l.status === "Rejected").length;
-  const onLeave = leaveRequests
-    .filter((l) => l.status === "Approved")
-    .reduce((s, l) => s + (l.days <= 5 ? 1 : 0), 0);
+  const { items, loading, error, refetch, save, remove, saving, deleting } = useResource(
+    leaveRequestsApi,
+    filters,
+    { label: "leave request", describe: (l) => `${l.code} — ${l.name}` }
+  );
+
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<LeaveRequest | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<LeaveRequest | null>(null);
+  const { toast } = useToast();
+
+  // Rows for the table only — stat cards keep counting the full `items`.
+  const visible = useMemo(
+    () => (statusFilter === "All" ? items : items.filter((l) => l.status === statusFilter)),
+    [items, statusFilter]
+  );
+
+  const handleExport = () => {
+    if (visible.length === 0) {
+      toast({
+        title: "Nothing to export",
+        description: "No leave requests match the current filters.",
+        variant: "warning",
+      });
+      return;
+    }
+    exportToCsv<LeaveRequest>(
+      "leave-requests",
+      [
+        { header: "Code", value: (l) => l.code },
+        { header: "Name", value: (l) => l.name },
+        { header: "Role", value: (l) => l.role },
+        { header: "Department", value: (l) => l.dept },
+        { header: "Leave Type", value: (l) => l.type },
+        { header: "From", value: (l) => l.from },
+        { header: "To", value: (l) => l.to },
+        { header: "Days", value: (l) => l.days },
+        { header: "Reason", value: (l) => l.reason },
+        { header: "Status", value: (l) => l.status },
+      ],
+      visible
+    );
+    toast({
+      title: "Export ready",
+      description: `${visible.length} leave request${visible.length === 1 ? "" : "s"} exported to CSV.`,
+    });
+  };
+
+  const stats = useMemo(
+    () => ({
+      pending: items.filter((l) => l.status === "Pending").length,
+      approved: items.filter((l) => l.status === "Approved").length,
+      rejected: items.filter((l) => l.status === "Rejected").length,
+      onLeave: items.filter((l) => l.status === "Approved" && l.days <= 5).length,
+    }),
+    [items]
+  );
+
+  const openCreate = () => {
+    setEditing(null);
+    setFormOpen(true);
+  };
+
+  const handleSubmit = async (values: LeaveRequestSchema) => {
+    const ok = await save(values, editing);
+    if (ok) {
+      setFormOpen(false);
+      setEditing(null);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!pendingDelete) return;
+    const ok = await remove(pendingDelete);
+    if (ok) setPendingDelete(null);
+  };
+
+  /** Approve / reject in place — save() refetches and toasts for us. */
+  const decide = (row: LeaveRequest, status: "Approved" | "Rejected") =>
+    save({ ...row, status }, row);
 
   const requestColumns: Column<LeaveRequest>[] = [
     {
@@ -161,7 +231,9 @@ export default function LeavePage() {
       key: "status",
       header: "Status",
       sortable: true,
-      render: (l) => <Badge variant={STATUS_META[l.status].variant}>{l.status}</Badge>,
+      render: (l) => (
+        <Badge variant={STATUS_META[l.status]?.variant ?? "default"}>{l.status}</Badge>
+      ),
     },
     {
       key: "actions",
@@ -169,12 +241,14 @@ export default function LeavePage() {
       align: "right",
       render: (l) => (
         <div className="flex items-center justify-end gap-1">
-          {l.status === "Pending" ? (
+          {l.status === "Pending" && (
             <>
               <Button
                 variant="ghost"
                 size="sm"
                 className="px-2 hover:bg-success-soft hover:text-success"
+                disabled={saving}
+                onClick={() => decide(l, "Approved")}
                 aria-label={`Approve leave for ${l.name}`}
               >
                 <Check className="size-4" />
@@ -183,21 +257,31 @@ export default function LeavePage() {
                 variant="ghost"
                 size="sm"
                 className="px-2 hover:bg-danger-soft hover:text-danger"
+                disabled={saving}
+                onClick={() => decide(l, "Rejected")}
                 aria-label={`Reject leave for ${l.name}`}
               >
                 <X className="size-4" />
               </Button>
             </>
-          ) : (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="px-2"
-              aria-label={`View leave request for ${l.name}`}
-            >
-              <Eye className="size-4" />
-            </Button>
           )}
+          <button
+            onClick={() => {
+              setEditing(l);
+              setFormOpen(true);
+            }}
+            aria-label={`Edit leave request for ${l.name}`}
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+          >
+            <Pencil className="size-4" />
+          </button>
+          <button
+            onClick={() => setPendingDelete(l)}
+            aria-label={`Delete leave request for ${l.name}`}
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-danger-soft hover:text-danger"
+          >
+            <Trash2 className="size-4" />
+          </button>
         </div>
       ),
     },
@@ -284,11 +368,11 @@ export default function LeavePage() {
         description="Track and manage staff leave requests"
         actions={
           <>
-            <Button variant="outline">
+            <Button variant="outline" onClick={handleExport}>
               <Download className="size-4" />
               Export
             </Button>
-            <Button>
+            <Button onClick={openCreate}>
               <Plus className="size-4" />
               Apply Leave
             </Button>
@@ -297,10 +381,10 @@ export default function LeavePage() {
       />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Pending" value={pending} icon={Clock} tone="amber" />
-        <StatCard label="Approved" value={approved} icon={CheckCircle} tone="emerald" />
-        <StatCard label="Rejected" value={rejected} icon={XCircle} tone="rose" />
-        <StatCard label="On Leave Today" value={onLeave} icon={Users} tone="indigo" />
+        <StatCard label="Pending" value={stats.pending} icon={Clock} tone="amber" />
+        <StatCard label="Approved" value={stats.approved} icon={CheckCircle} tone="emerald" />
+        <StatCard label="Rejected" value={stats.rejected} icon={XCircle} tone="rose" />
+        <StatCard label="On Leave Today" value={stats.onLeave} icon={Users} tone="indigo" />
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -347,10 +431,7 @@ export default function LeavePage() {
                 onChange={(e) => setTypeFilter(e.target.value)}
                 options={[
                   { label: "All Types", value: "All" },
-                  ...["Sick Leave", "Casual Leave", "Earned Leave", "Maternity Leave"].map((t) => ({
-                    label: t,
-                    value: t,
-                  })),
+                  ...LEAVE_TYPE_OPTIONS.map((t) => ({ label: t, value: t })),
                 ]}
                 aria-label="Filter by leave type"
               />
@@ -361,24 +442,42 @@ export default function LeavePage() {
                 onChange={(e) => setStatusFilter(e.target.value)}
                 options={[
                   { label: "All Status", value: "All" },
-                  ...["Pending", "Approved", "Rejected"].map((s) => ({ label: s, value: s })),
+                  ...LEAVE_STATUS_OPTIONS.map((s) => ({ label: s, value: s })),
                 ]}
                 aria-label="Filter by status"
               />
             </div>
-            <p className="ml-auto text-xs text-subtle">{filtered.length} requests</p>
+            <p className="ml-auto text-xs text-subtle">{visible.length} requests</p>
           </>
         )}
       </div>
 
       {isRequests ? (
-        <Table
-          columns={requestColumns}
-          rows={filtered}
-          rowKey={(l) => l.id}
-          emptyTitle="No leave requests found"
-          emptyDescription="Try adjusting your filters"
-        />
+        error ? (
+          <Card>
+            <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+              <p className="text-sm font-medium text-danger">{error}</p>
+              <Button variant="outline" onClick={refetch}>
+                Try again
+              </Button>
+            </CardContent>
+          </Card>
+        ) : (
+          <Table
+            columns={requestColumns}
+            rows={visible}
+            rowKey={(l) => l.id}
+            loading={loading}
+            emptyTitle="No leave requests found"
+            emptyDescription="Try adjusting your filters"
+            emptyAction={
+              <Button variant="outline" onClick={openCreate}>
+                <Plus className="size-4" />
+                Apply Leave
+              </Button>
+            }
+          />
+        )
       ) : (
         <Table
           columns={balanceColumns}
@@ -392,8 +491,7 @@ export default function LeavePage() {
         <p>
           {isRequests ? (
             <>
-              <strong className="font-semibold text-text">{filtered.length}</strong> of{" "}
-              <strong className="font-semibold text-text">{leaveRequests.length}</strong> requests
+              Showing <strong className="font-semibold text-text">{visible.length}</strong> requests
             </>
           ) : (
             <>
@@ -404,8 +502,8 @@ export default function LeavePage() {
         </p>
         {isRequests && (
           <div className="flex flex-wrap items-center gap-4">
-            {["Pending", "Approved", "Rejected"].map((st) => {
-              const count = filtered.filter((l) => l.status === st).length;
+            {LEAVE_STATUS_OPTIONS.map((st) => {
+              const count = items.filter((l) => l.status === st).length;
               return (
                 <span key={st} className="flex items-center gap-1.5">
                   <span className={`size-2 rounded-full ${STATUS_META[st].dot}`} />
@@ -416,6 +514,29 @@ export default function LeavePage() {
           </div>
         )}
       </div>
+
+      <LeaveFormModal
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        record={editing}
+        saving={saving}
+        onSubmit={handleSubmit}
+      />
+
+      <ConfirmDialog
+        open={Boolean(pendingDelete)}
+        onOpenChange={(open) => !open && setPendingDelete(null)}
+        title="Delete leave request?"
+        description={
+          pendingDelete
+            ? `${pendingDelete.code} for ${pendingDelete.name} will be permanently removed. This cannot be undone.`
+            : ""
+        }
+        confirmLabel="Delete"
+        destructive
+        loading={deleting}
+        onConfirm={handleDelete}
+      />
     </div>
   );
 }

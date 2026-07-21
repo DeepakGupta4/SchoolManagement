@@ -17,8 +17,8 @@ interface UseResourceOptions<T> {
  * up. Pages supply filters and a form; everything else is handled here so each
  * module doesn't re-implement the same six handlers.
  */
-export function useResource<T extends ResourceRecord, F>(
-  resource: Resource<T, F>,
+export function useResource<T extends ResourceRecord, F, G extends keyof T = never>(
+  resource: Resource<T, F, G>,
   filters: F,
   { label, describe }: UseResourceOptions<T>
 ) {
@@ -48,11 +48,13 @@ export function useResource<T extends ResourceRecord, F>(
     });
 
   /** Returns true on success so callers can close their modal. */
-  const save = async (values: Omit<T, "id">, editing?: T | null) => {
+  const save = async (values: Omit<T, "id" | G>, editing?: T | null) => {
     setSaving(true);
     try {
       if (editing) {
-        const updated = await resource.update(editing.id, values);
+        // `Omit<T, "id" | G>` is a strict subset of `Partial<Omit<T, "id">>`,
+        // but TypeScript can't prove that while T and G are still generic.
+        const updated = await resource.update(editing.id, values as Partial<Omit<T, "id">>);
         toast({ title: `${Label} updated`, description: `${name(updated)} was saved.` });
       } else {
         const created = await resource.create(values);

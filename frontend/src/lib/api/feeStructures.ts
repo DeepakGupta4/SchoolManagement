@@ -43,7 +43,10 @@ const seed: FeeStructure[] = [
 export const feeStructuresApi = createResource<FeeStructure, FeeStructureFilters>({
   idPrefix: "fst",
   seed,
-  uniqueBy: { field: "class", label: "Class" },
+  uniqueBy: [
+    { field: "class", label: "Class" },
+    { field: "code", label: "Structure code" },
+  ],
   defaults: { tuition: 0, transport: 0, lab: 0, library: 0, sports: 0, misc: 0 },
   matches: (row, { search }) => textMatch(search, row.class, row.code),
 });

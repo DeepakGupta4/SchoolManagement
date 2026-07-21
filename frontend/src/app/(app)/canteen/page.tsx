@@ -36,8 +36,10 @@ import {
   Select,
   StatCard,
   Table,
+  useToast,
   type Column,
 } from "@/components/ui";
+import { exportToCsv } from "@/lib/exportCsv";
 import { useChartTheme, toneClass, type ChartTone } from "@/hooks/useChartTheme";
 import { useResource } from "@/hooks/useResource";
 import {
@@ -131,6 +133,7 @@ function Segmented({
 
 export default function CanteenPage() {
   const t = useChartTheme();
+  const { toast } = useToast();
 
   const [section, setSection] = useState("Menu");
   const [search, setSearch] = useState("");
@@ -206,6 +209,53 @@ export default function CanteenPage() {
   const delivered = orders.filter((o) => o.status === "delivered").length;
   const activeItems = items.filter((m) => m.available).length;
 
+  /** Exports whichever section is on screen, matching what the user can see. */
+  const handleExport = () => {
+    const onMenu = section === "Menu";
+    const count = onMenu ? items.length : filteredOrders.length;
+    if (count === 0) {
+      toast({
+        title: "Nothing to export",
+        description: `No ${onMenu ? "menu items" : "orders"} match the current filters.`,
+        variant: "warning",
+      });
+      return;
+    }
+    if (onMenu) {
+      exportToCsv<MenuItem>(
+        "canteen-menu",
+        [
+          { header: "Code", value: (m) => m.code },
+          { header: "Item", value: (m) => m.name },
+          { header: "Category", value: (m) => m.category },
+          { header: "Price (INR)", value: (m) => m.price },
+          { header: "Available", value: (m) => (m.available ? "Yes" : "No") },
+          { header: "Units Sold", value: (m) => m.sold },
+        ],
+        items
+      );
+    } else {
+      exportToCsv<Order>(
+        "canteen-orders",
+        [
+          { header: "Order ID", value: (o) => o.id },
+          { header: "Customer", value: (o) => o.customer },
+          { header: "Class", value: (o) => o.class },
+          { header: "Items", value: (o) => o.items },
+          { header: "Total (INR)", value: (o) => o.total },
+          { header: "Time", value: (o) => o.time },
+          // Badge labels carry a decorative glyph; the CSV wants the plain word.
+          { header: "Status", value: (o) => o.status.charAt(0).toUpperCase() + o.status.slice(1) },
+        ],
+        filteredOrders
+      );
+    }
+    toast({
+      title: "Export ready",
+      description: `${count} ${onMenu ? "menu item" : "order"}${count === 1 ? "" : "s"} exported to CSV.`,
+    });
+  };
+
   const menuColumns: Column<MenuItem>[] = [
     {
       key: "name",
@@ -218,7 +268,7 @@ export default function CanteenPage() {
           </div>
           <div className="min-w-0">
             <p className="truncate font-medium text-text">{m.name}</p>
-            <p className="truncate text-xs text-subtle">{m.id}</p>
+            <p className="truncate text-xs text-subtle">{m.code}</p>
           </div>
         </div>
       ),
@@ -334,7 +384,7 @@ export default function CanteenPage() {
         description="Manage menu, orders and daily sales."
         actions={
           <>
-            <Button variant="outline">
+            <Button variant="outline" onClick={handleExport}>
               <Download className="size-4" />
               Export
             </Button>

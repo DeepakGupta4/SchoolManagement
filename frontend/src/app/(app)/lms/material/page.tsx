@@ -7,7 +7,9 @@ import {
   HardDrive,
   Library,
   NotebookPen,
+  Pencil,
   Search,
+  Trash2,
   Upload,
   Video,
 } from "lucide-react";
@@ -15,6 +17,9 @@ import {
   Avatar,
   Badge,
   Button,
+  Card,
+  CardContent,
+  ConfirmDialog,
   Input,
   PageHeader,
   Pagination,
@@ -22,33 +27,22 @@ import {
   StatCard,
   Table,
   Tooltip,
+  useToast,
   type Column,
 } from "@/components/ui";
+import { exportToCsv } from "@/lib/exportCsv";
+import { useResource } from "@/hooks/useResource";
+import {
+  CLASS_OPTIONS,
+  studyMaterialApi,
+  SUBJECT_OPTIONS,
+  TYPE_OPTIONS,
+  type Material,
+} from "@/lib/api/studyMaterial";
+import type { MaterialSchema } from "@/lib/schemas/material";
+import { MaterialFormModal } from "./MaterialFormModal";
 
 const PAGE_SIZE = 10;
-
-const materials = [
-  { id: "M01", title: "Quadratic Equations — Worksheet 4",  type: "pdf",   subject: "Mathematics",      klass: "X",    uploader: "Dr. Priya Sharma",  uploaded: "21 Jul 2026", sizeMb: 2.4,  downloads: 486, visibility: "published" },
-  { id: "M02", title: "Wave Optics — Video Lecture 6",      type: "video", subject: "Physics",          klass: "XII",  uploader: "Mr. Rahul Verma",   uploaded: "20 Jul 2026", sizeMb: 184,  downloads: 312, visibility: "published" },
-  { id: "M03", title: "The Monsoon — Model Essays",         type: "notes", subject: "English",          klass: "IX",   uploader: "Ms. Anita Patel",   uploaded: "20 Jul 2026", sizeMb: 1.1,  downloads: 528, visibility: "published" },
-  { id: "M04", title: "Organic Chemistry — Alkanes Notes",  type: "notes", subject: "Chemistry",        klass: "XI",   uploader: "Ms. Kavita Singh",  uploaded: "19 Jul 2026", sizeMb: 3.8,  downloads: 274, visibility: "published" },
-  { id: "M05", title: "Python Loops — Practice Set",        type: "pdf",   subject: "Computer Science", klass: "X",    uploader: "Mr. Amit Joshi",    uploaded: "19 Jul 2026", sizeMb: 1.7,  downloads: 391, visibility: "published" },
-  { id: "M06", title: "Genetics — Mendel's Laws Recording", type: "video", subject: "Biology",          klass: "XII",  uploader: "Ms. Deepa Nair",    uploaded: "18 Jul 2026", sizeMb: 226,  downloads: 198, visibility: "published" },
-  { id: "M07", title: "Mughal Empire — Chapter Summary",    type: "notes", subject: "History",          klass: "IX",   uploader: "Mr. Suresh Kumar",  uploaded: "18 Jul 2026", sizeMb: 0.9,  downloads: 415, visibility: "published" },
-  { id: "M08", title: "Hindi Sandhi — Abhyas Patra",        type: "pdf",   subject: "Hindi",            klass: "VII",  uploader: "Ms. Meenakshi Rao", uploaded: "17 Jul 2026", sizeMb: 1.3,  downloads: 462, visibility: "published" },
-  { id: "M09", title: "Ledger Posting — Solved Examples",   type: "pdf",   subject: "Accountancy",      klass: "XII",  uploader: "Ms. Ritu Bansal",   uploaded: "17 Jul 2026", sizeMb: 2.9,  downloads: 176, visibility: "published" },
-  { id: "M10", title: "Trigonometry — Formula Sheet",       type: "notes", subject: "Mathematics",      klass: "X",    uploader: "Mr. Rakesh Yadav",  uploaded: "16 Jul 2026", sizeMb: 0.6,  downloads: 604, visibility: "published" },
-  { id: "M11", title: "Thermodynamics — Numericals",        type: "pdf",   subject: "Physics",          klass: "XI",   uploader: "Mr. Rahul Verma",   uploaded: "16 Jul 2026", sizeMb: 2.2,  downloads: 243, visibility: "published" },
-  { id: "M12", title: "French Greetings — Audio Notes",     type: "video", subject: "French",           klass: "XI",   uploader: "Ms. Elena D'Souza", uploaded: "15 Jul 2026", sizeMb: 96,   downloads: 68,  visibility: "published" },
-  { id: "M13", title: "Cell Structure — Labelled Diagrams", type: "pdf",   subject: "Biology",          klass: "XI",   uploader: "Ms. Deepa Nair",    uploaded: "15 Jul 2026", sizeMb: 5.4,  downloads: 289, visibility: "published" },
-  { id: "M14", title: "Sanskrit Shloka — Recitation Guide", type: "notes", subject: "Sanskrit",         klass: "VIII", uploader: "Ms. Lata Trivedi",  uploaded: "14 Jul 2026", sizeMb: 0.8,  downloads: 121, visibility: "draft"     },
-  { id: "M15", title: "Robotics — Sensor Basics Slides",    type: "pdf",   subject: "Electronics",      klass: "IX",   uploader: "Mr. Naveen Chawla", uploaded: "14 Jul 2026", sizeMb: 8.6,  downloads: 54,  visibility: "draft"     },
-  { id: "M16", title: "Business Studies — Case Studies",    type: "notes", subject: "Accountancy",      klass: "XII",  uploader: "Ms. Ritu Bansal",   uploaded: "13 Jul 2026", sizeMb: 2.1,  downloads: 137, visibility: "published" },
-  { id: "M17", title: "Algebra Revision — Whiteboard Clip", type: "video", subject: "Mathematics",      klass: "IX",   uploader: "Mr. Rakesh Yadav",  uploaded: "12 Jul 2026", sizeMb: 143,  downloads: 205, visibility: "published" },
-  { id: "M18", title: "Civics — Constitution Handout",      type: "pdf",   subject: "History",          klass: "IX",   uploader: "Mr. Suresh Kumar",  uploaded: "12 Jul 2026", sizeMb: 1.9,  downloads: 348, visibility: "published" },
-];
-
-type Material = (typeof materials)[number];
 
 const TYPE_META: Record<
   string,
@@ -59,14 +53,12 @@ const TYPE_META: Record<
   notes: { label: "Notes", icon: NotebookPen, variant: "warning", tile: "gradient-amber" },
 };
 
-const SUBJECT_OPTIONS = [...new Set(materials.map((m) => m.subject))]
-  .sort()
-  .map((s) => ({ label: s, value: s }));
-
-const CLASS_OPTIONS = [...new Set(materials.map((m) => m.klass))].map((c) => ({
-  label: `Class ${c}`,
-  value: c,
-}));
+const FALLBACK_TYPE = {
+  label: "File",
+  icon: FileText,
+  variant: "info" as const,
+  tile: "gradient-indigo",
+};
 
 const formatSize = (mb: number) => (mb >= 1024 ? `${(mb / 1024).toFixed(1)} GB` : `${mb} MB`);
 
@@ -77,6 +69,22 @@ export default function StudyMaterialPage() {
   const [klass, setKlass] = useState("");
   const [page, setPage] = useState(1);
 
+  const filters = useMemo(
+    () => ({ search, type, subject, klass }),
+    [search, type, subject, klass]
+  );
+
+  const { items, loading, error, refetch, save, remove, saving, deleting } = useResource(
+    studyMaterialApi,
+    filters,
+    { label: "material", describe: (m) => m.title }
+  );
+
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<Material | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Material | null>(null);
+  const { toast } = useToast();
+
   // A narrowed filter can strand you past the last page, so every filter
   // change resets to page 1.
   const applyFilter = (setter: (value: string) => void) => (value: string) => {
@@ -84,39 +92,76 @@ export default function StudyMaterialPage() {
     setPage(1);
   };
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return materials.filter((m) => {
-      const matchesSearch =
-        !q ||
-        m.title.toLowerCase().includes(q) ||
-        m.subject.toLowerCase().includes(q) ||
-        m.uploader.toLowerCase().includes(q);
-      return (
-        matchesSearch &&
-        (!type || m.type === type) &&
-        (!subject || m.subject === subject) &&
-        (!klass || m.klass === klass)
-      );
-    });
-  }, [search, type, subject, klass]);
-
-  const paged = useMemo(
-    () => filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
-    [filtered, page]
-  );
-
   const stats = useMemo(() => {
-    const downloads = materials.reduce((sum, m) => sum + m.downloads, 0);
-    const storage = materials.reduce((sum, m) => sum + m.sizeMb, 0);
-    const videos = materials.filter((m) => m.type === "video").length;
+    const storage = items.reduce((sum, m) => sum + m.sizeMb, 0);
     return {
-      files: materials.length,
-      downloads,
+      files: items.length,
+      downloads: items.reduce((sum, m) => sum + m.downloads, 0),
+      videos: items.filter((m) => m.type === "video").length,
       storage: (storage / 1024).toFixed(2),
-      videos,
     };
-  }, []);
+  }, [items]);
+
+  // Clamp during render — resetting page state from an effect is not allowed.
+  const totalPages = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const paged = items.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+
+  /**
+   * Exports the material index across every page of results. The button used to
+   * read "Bulk download" but there are no file blobs to bundle, so it exports
+   * the catalogue instead and is labelled to match.
+   */
+  const handleExport = () => {
+    if (items.length === 0) {
+      toast({
+        title: "Nothing to export",
+        description: "No study material matches the current filters.",
+        variant: "warning",
+      });
+      return;
+    }
+    exportToCsv<Material>(
+      "study-material",
+      [
+        { header: "Title", value: (m) => m.title },
+        { header: "Type", value: (m) => m.type },
+        { header: "Subject", value: (m) => m.subject },
+        { header: "Class", value: (m) => m.klass },
+        { header: "Uploaded By", value: (m) => m.uploader },
+        { header: "Uploaded", value: (m) => m.uploaded },
+        { header: "Size (MB)", value: (m) => m.sizeMb },
+        { header: "Downloads", value: (m) => m.downloads },
+        { header: "Visibility", value: (m) => m.visibility },
+        { header: "Tags", value: (m) => m.tags.join(" / ") },
+        { header: "Description", value: (m) => m.description },
+      ],
+      items
+    );
+    toast({
+      title: "Export ready",
+      description: `${items.length} material record${items.length === 1 ? "" : "s"} exported to CSV.`,
+    });
+  };
+
+  const openCreate = () => {
+    setEditing(null);
+    setFormOpen(true);
+  };
+
+  const handleSubmit = async (values: MaterialSchema) => {
+    const ok = await save(values, editing);
+    if (ok) {
+      setFormOpen(false);
+      setEditing(null);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!pendingDelete) return;
+    const ok = await remove(pendingDelete);
+    if (ok) setPendingDelete(null);
+  };
 
   const columns: Column<Material>[] = [
     {
@@ -124,7 +169,7 @@ export default function StudyMaterialPage() {
       header: "Material",
       sortable: true,
       render: (m) => {
-        const meta = TYPE_META[m.type];
+        const meta = TYPE_META[m.type] ?? FALLBACK_TYPE;
         const Icon = meta.icon;
         return (
           <div className="flex items-center gap-3">
@@ -145,7 +190,10 @@ export default function StudyMaterialPage() {
       key: "type",
       header: "Type",
       sortable: true,
-      render: (m) => <Badge variant={TYPE_META[m.type].variant}>{TYPE_META[m.type].label}</Badge>,
+      render: (m) => {
+        const meta = TYPE_META[m.type] ?? FALLBACK_TYPE;
+        return <Badge variant={meta.variant}>{meta.label}</Badge>;
+      },
     },
     {
       key: "subject",
@@ -199,14 +247,33 @@ export default function StudyMaterialPage() {
       header: "",
       align: "right",
       render: (m) => (
-        <Tooltip content={`Download ${m.title}`} side="left">
+        <div className="flex items-center justify-end gap-1">
+          <Tooltip content={`Download ${m.title}`} side="left">
+            <button
+              aria-label={`Download ${m.title}`}
+              className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+            >
+              <Download className="size-4" />
+            </button>
+          </Tooltip>
           <button
-            aria-label={`Download ${m.title}`}
+            onClick={() => {
+              setEditing(m);
+              setFormOpen(true);
+            }}
+            aria-label={`Edit ${m.title}`}
             className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
           >
-            <Download className="size-4" />
+            <Pencil className="size-4" />
           </button>
-        </Tooltip>
+          <button
+            onClick={() => setPendingDelete(m)}
+            aria-label={`Delete ${m.title}`}
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-danger-soft hover:text-danger"
+          >
+            <Trash2 className="size-4" />
+          </button>
+        </div>
       ),
     },
   ];
@@ -218,11 +285,11 @@ export default function StudyMaterialPage() {
         description="Shared library of PDFs, recorded lectures and class notes."
         actions={
           <>
-            <Button variant="outline">
+            <Button variant="outline" onClick={handleExport}>
               <Download className="size-4" />
-              Bulk download
+              Export CSV
             </Button>
-            <Button>
+            <Button onClick={openCreate}>
               <Upload className="size-4" />
               Upload material
             </Button>
@@ -232,9 +299,21 @@ export default function StudyMaterialPage() {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Files in library" value={stats.files} icon={Library} tone="indigo" />
-        <StatCard label="Total downloads" value={stats.downloads} icon={Download} tone="emerald" trend={14} />
+        <StatCard
+          label="Total downloads"
+          value={stats.downloads}
+          icon={Download}
+          tone="emerald"
+          trend={14}
+        />
         <StatCard label="Video lectures" value={stats.videos} icon={Video} tone="cyan" />
-        <StatCard label="Storage used" value={stats.storage} suffix=" GB" icon={HardDrive} tone="violet" />
+        <StatCard
+          label="Storage used"
+          value={stats.storage}
+          suffix=" GB"
+          icon={HardDrive}
+          tone="violet"
+        />
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -253,11 +332,7 @@ export default function StudyMaterialPage() {
             value={type}
             onChange={(e) => applyFilter(setType)(e.target.value)}
             placeholder="All types"
-            options={[
-              { label: "PDF", value: "pdf" },
-              { label: "Video", value: "video" },
-              { label: "Notes", value: "notes" },
-            ]}
+            options={TYPE_OPTIONS}
             aria-label="Filter by type"
           />
         </div>
@@ -266,7 +341,7 @@ export default function StudyMaterialPage() {
             value={subject}
             onChange={(e) => applyFilter(setSubject)(e.target.value)}
             placeholder="All subjects"
-            options={SUBJECT_OPTIONS}
+            options={SUBJECT_OPTIONS.map((s) => ({ label: s, value: s }))}
             aria-label="Filter by subject"
           />
         </div>
@@ -275,26 +350,73 @@ export default function StudyMaterialPage() {
             value={klass}
             onChange={(e) => applyFilter(setKlass)(e.target.value)}
             placeholder="All classes"
-            options={CLASS_OPTIONS}
+            options={CLASS_OPTIONS.map((c) => ({ label: `Class ${c}`, value: c }))}
             aria-label="Filter by class"
           />
         </div>
       </div>
 
-      <Table
-        columns={columns}
-        rows={paged}
-        rowKey={(m) => m.id}
-        rowClassName={(m) => (m.visibility === "draft" ? "opacity-70" : undefined)}
-        emptyTitle="No material found"
-        emptyDescription="Try clearing your filters to see more results."
+      {error ? (
+        <Card>
+          <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+            <p className="text-sm font-medium text-danger">{error}</p>
+            <Button variant="outline" onClick={refetch}>
+              Try again
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <>
+          <Table
+            columns={columns}
+            rows={paged}
+            rowKey={(m) => m.id}
+            loading={loading}
+            rowClassName={(m) => (m.visibility === "draft" ? "opacity-70" : undefined)}
+            emptyTitle="No material found"
+            emptyDescription={
+              search || type || subject || klass
+                ? "Try clearing your filters to see more results."
+                : "Upload your first resource to get started."
+            }
+            emptyAction={
+              <Button variant="outline" onClick={openCreate}>
+                <Upload className="size-4" />
+                Upload material
+              </Button>
+            }
+          />
+
+          <Pagination
+            page={safePage}
+            pageSize={PAGE_SIZE}
+            totalItems={items.length}
+            onPageChange={setPage}
+          />
+        </>
+      )}
+
+      <MaterialFormModal
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        record={editing}
+        saving={saving}
+        onSubmit={handleSubmit}
       />
 
-      <Pagination
-        page={page}
-        pageSize={PAGE_SIZE}
-        totalItems={filtered.length}
-        onPageChange={setPage}
+      <ConfirmDialog
+        open={Boolean(pendingDelete)}
+        onOpenChange={(open) => !open && setPendingDelete(null)}
+        title="Delete material?"
+        description={
+          pendingDelete
+            ? `${pendingDelete.title} will be permanently removed from the library. This cannot be undone.`
+            : ""
+        }
+        confirmLabel="Delete"
+        destructive
+        loading={deleting}
+        onConfirm={handleDelete}
       />
     </div>
   );

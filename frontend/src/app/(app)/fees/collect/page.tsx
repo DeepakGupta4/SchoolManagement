@@ -7,6 +7,7 @@ import {
   Card,
   CardContent,
   CardHeader,
+  EmptyState,
   Input,
   PageHeader,
   Select,
@@ -37,6 +38,7 @@ export default function CollectFeePage() {
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState("Cash");
   const [feeType, setFeeType] = useState("Tuition Fee");
+  const [remarks, setRemarks] = useState("");
   const [success, setSuccess] = useState(false);
 
   const filtered = students.filter(
@@ -53,6 +55,7 @@ export default function CollectFeePage() {
       setSuccess(false);
       setSelected(null);
       setAmount("");
+      setRemarks("");
     }, 3000);
   };
 
@@ -88,6 +91,13 @@ export default function CollectFeePage() {
           </CardHeader>
 
           <div>
+            {filtered.length === 0 && (
+              <EmptyState
+                icon={<User className="size-5" />}
+                title="No students found"
+                description={`Nothing matches “${search}”. Try a name, student ID or class.`}
+              />
+            )}
             {filtered.map((s, i) => {
               const isSelected = selected?.id === s.id;
               return (
@@ -205,7 +215,12 @@ export default function CollectFeePage() {
               </div>
             </div>
 
-            <Input label="Remarks (optional)" placeholder="Add a note…" />
+            <Input
+              label="Remarks (optional)"
+              placeholder="Add a note…"
+              value={remarks}
+              onChange={(e) => setRemarks(e.target.value)}
+            />
 
             {selected && amount && (
               <div className="rounded-md bg-surface-sunken p-3.5">

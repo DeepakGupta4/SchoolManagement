@@ -50,7 +50,12 @@ export const hostelStudentsApi = createResource<HostelStudent, HostelStudentFilt
   idPrefix: "hs",
   seed,
   // One bed per room in this hostel model, so the room doubles as the allocation key.
-  uniqueBy: { field: "room", label: "Room no." },
+  // Both keys matter: one room holds one resident, and one student can only be
+  // allocated once. Guarding room alone let the same student be admitted twice.
+  uniqueBy: [
+    { field: "room", label: "Room no." },
+    { field: "studentId", label: "Student ID" },
+  ],
   defaults: { fees: "Pending", joinDate: "Apr 2025" },
   matches: (row, { search, type, hostel, fees }) => {
     if (type && type !== "All" && row.type !== type) return false;

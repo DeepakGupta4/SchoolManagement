@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { Bell, ChevronDown, LogOut, Menu, Search, Settings, User } from "lucide-react";
+import { Bell, ChevronDown, LogOut, Menu, Search, Settings } from "lucide-react";
 import { useAuthStore, useSidebarStore } from "@/store";
 import { Avatar } from "@/components/ui";
 import { breadcrumbFor } from "@/lib/navigation";
@@ -14,20 +14,47 @@ import { cn } from "@/lib/utils";
 const menuItemClasses =
   "flex cursor-pointer items-center gap-2.5 rounded-md px-3 py-2 text-[13px] outline-none transition-colors";
 
-const NOTIFICATIONS = [
-  { id: 1, title: "14 students marked absent", detail: "Attendance · today", unread: true },
-  { id: 2, title: "₹1,24,000 fees pending", detail: "Finance · 9 defaulters", unread: true },
-  { id: 3, title: "Exam schedule published", detail: "Examinations · 2 days ago", unread: false },
+interface Notification {
+  id: number;
+  title: string;
+  detail: string;
+  unread: boolean;
+  /** Where clicking the notification takes you. */
+  href: string;
+}
+
+const INITIAL_NOTIFICATIONS: Notification[] = [
+  { id: 1, title: "14 students marked absent", detail: "Attendance · today", unread: true, href: "/attendance" },
+  { id: 2, title: "₹1,24,000 fees pending", detail: "Finance · 9 defaulters", unread: true, href: "/fees/defaulters" },
+  { id: 3, title: "Exam schedule published", detail: "Examinations · 2 days ago", unread: false, href: "/exams/schedule" },
 ];
 
 export function Topbar() {
-  const { user } = useAuthStore();
+  const { user, logout } = useAuthStore();
   const { isCollapsed, openMobile } = useSidebarStore();
   const pathname = usePathname();
+  const router = useRouter();
 
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [notifications, setNotifications] = useState(INITIAL_NOTIFICATIONS);
+
+  const handleLogout = () => {
+    logout();
+    router.push("/login");
+  };
+
+  const openNotification = (n: Notification) => {
+    setNotifications((prev) =>
+      prev.map((item) => (item.id === n.id ? { ...item, unread: false } : item))
+    );
+    router.push(n.href);
+  };
+
+  const markAllRead = () =>
+    setNotifications((prev) => prev.map((item) => ({ ...item, unread: false })));
   const trail = breadcrumbFor(pathname);
-  const unreadCount = NOTIFICATIONS.filter((n) => n.unread).length;
+  // Derived from state, not the seed const — otherwise the badge never clears.
+  const unreadCount = notifications.filter((n) => n.unread).length;
 
   // ⌘K / Ctrl+K opens the palette from anywhere.
   useEffect(() => {
@@ -117,16 +144,23 @@ export function Topbar() {
                 <div className="flex items-center justify-between border-b border-border px-3.5 py-2.5">
                   <p className="text-[13px] font-semibold text-text">Notifications</p>
                   {unreadCount > 0 && (
-                    <span className="rounded-full bg-danger-soft px-1.5 py-0.5 text-[10px] font-bold text-danger-text">
-                      {unreadCount} new
-                    </span>
+                    <button
+                      onClick={markAllRead}
+                      className="focus-ring rounded-sm text-[11px] font-medium text-primary transition-colors hover:text-primary-hover"
+                    >
+                      Mark all read
+                    </button>
                   )}
                 </div>
 
                 <div className="max-h-72 overflow-y-auto p-1.5">
-                  {NOTIFICATIONS.map((n) => (
+                  {notifications.length === 0 && (
+                    <p className="px-3 py-8 text-center text-sm text-muted">You&apos;re all caught up.</p>
+                  )}
+                  {notifications.map((n) => (
                     <DropdownMenu.Item
                       key={n.id}
+                      onSelect={() => openNotification(n)}
                       className="flex cursor-pointer items-start gap-2.5 rounded-md px-3 py-2.5 outline-none transition-colors data-[highlighted]:bg-surface-hover"
                     >
                       <span
@@ -151,7 +185,12 @@ export function Topbar() {
           {/* User menu */}
           <DropdownMenu.Root>
             <DropdownMenu.Trigger asChild>
-              <button className="focus-ring flex items-center gap-2.5 rounded-md p-1.5 transition-colors hover:bg-surface-hover sm:pr-2.5">
+              <button
+                // Below `lg` the name and role are hidden, so without this the
+                // trigger announces as an unlabelled image + chevron.
+                aria-label={`Account menu for ${user?.name ?? "current user"}`}
+                className="focus-ring flex items-center gap-2.5 rounded-md p-1.5 transition-colors hover:bg-surface-hover sm:pr-2.5"
+              >
                 <Avatar name={user?.name ?? "Admin"} size="sm" className="rounded-md" />
                 <div className="text-left max-lg:hidden">
                   <p className="text-[13px] font-semibold leading-tight text-text">{user?.name}</p>
@@ -174,22 +213,18 @@ export function Topbar() {
                   <p className="mt-0.5 text-[11px] text-subtle">{user?.email}</p>
                 </div>
 
-                {[
-                  { icon: User, label: "My Profile" },
-                  { icon: Settings, label: "Settings" },
-                ].map(({ icon: Icon, label }) => (
-                  <DropdownMenu.Item
-                    key={label}
-                    className={`${menuItemClasses} text-text data-[highlighted]:bg-surface-hover`}
-                  >
-                    <Icon size={15} className="text-subtle" />
-                    {label}
-                  </DropdownMenu.Item>
-                ))}
+                <DropdownMenu.Item
+                  onSelect={() => router.push("/settings")}
+                  className={`${menuItemClasses} text-text data-[highlighted]:bg-surface-hover`}
+                >
+                  <Settings size={15} className="text-subtle" />
+                  Settings
+                </DropdownMenu.Item>
 
                 <div className="my-1 h-px bg-border" />
 
                 <DropdownMenu.Item
+                  onSelect={handleLogout}
                   className={`${menuItemClasses} text-danger data-[highlighted]:bg-danger-soft`}
                 >
                   <LogOut size={15} />

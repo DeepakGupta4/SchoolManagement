@@ -107,9 +107,15 @@ export default function TeachersPage() {
     return { total: teachers.length, active, onLeave, fullTime };
   }, [teachers]);
 
+  // Clamp during render — deleting the last row on the last page would
+  // otherwise strand the user on an empty page. Correcting it from an effect
+  // is not allowed (react-hooks/set-state-in-effect).
+  const totalPages = Math.max(1, Math.ceil(teachers.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+
   const pagedTeachers = useMemo(
-    () => teachers.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
-    [teachers, page]
+    () => teachers.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
+    [teachers, safePage]
   );
 
   const openCreate = () => {
@@ -370,7 +376,7 @@ export default function TeachersPage() {
           />
           {!loading && (
             <Pagination
-              page={page}
+              page={safePage}
               pageSize={PAGE_SIZE}
               totalItems={teachers.length}
               onPageChange={setPage}

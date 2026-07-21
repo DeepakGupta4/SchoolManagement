@@ -5,8 +5,10 @@ import {
   Building2,
   Download,
   IndianRupee,
+  Pencil,
   Plus,
   Search,
+  Trash2,
   Users,
   Wallet,
 } from "lucide-react";
@@ -14,36 +16,30 @@ import {
   Avatar,
   Badge,
   Button,
+  Card,
+  CardContent,
+  ConfirmDialog,
   Input,
   PageHeader,
   Pagination,
   Select,
   StatCard,
   Table,
+  useToast,
   type Column,
 } from "@/components/ui";
+import { exportToCsv } from "@/lib/exportCsv";
+import { useResource } from "@/hooks/useResource";
+import {
+  departmentsApi,
+  DEPARTMENT_BLOCK_OPTIONS,
+  DEPARTMENT_STATUS_OPTIONS,
+  type Department,
+} from "@/lib/api/departments";
+import type { DepartmentSchema } from "@/lib/schemas/department";
+import { DepartmentFormModal } from "./DepartmentFormModal";
 
 const PAGE_SIZE = 8;
-
-const departments = [
-  { id: "DP01", name: "Mathematics",       code: "MATH", hod: "Dr. Priya Sharma",    block: "Science Block",   teachers: 9,  subjects: ["Algebra", "Geometry", "Calculus"],        budget: 480000,  spent: 402000, status: "active"  },
-  { id: "DP02", name: "Science",           code: "SCI",  hod: "Mr. Rahul Verma",     block: "Science Block",   teachers: 12, subjects: ["Physics", "Chemistry", "Biology"],        budget: 725000,  spent: 690000, status: "active"  },
-  { id: "DP03", name: "English",           code: "ENG",  hod: "Ms. Anita Patel",     block: "Main Block",      teachers: 8,  subjects: ["Literature", "Grammar", "Composition"],   budget: 310000,  spent: 218000, status: "active"  },
-  { id: "DP04", name: "Social Science",    code: "SST",  hod: "Mr. Suresh Kumar",    block: "Main Block",      teachers: 7,  subjects: ["History", "Civics", "Geography"],         budget: 285000,  spent: 190000, status: "active"  },
-  { id: "DP05", name: "Hindi",             code: "HIN",  hod: "Ms. Meenakshi Rao",   block: "Main Block",      teachers: 6,  subjects: ["Vyakaran", "Gadya", "Padya"],             budget: 240000,  spent: 176000, status: "active"  },
-  { id: "DP06", name: "Computer Science",  code: "CS",   hod: "Mr. Amit Joshi",      block: "IT Wing",         teachers: 5,  subjects: ["Python", "Java", "Web Design"],           budget: 620000,  spent: 585000, status: "active"  },
-  { id: "DP07", name: "Commerce",          code: "COM",  hod: "Ms. Ritu Bansal",     block: "Senior Wing",     teachers: 6,  subjects: ["Accountancy", "Business Studies"],        budget: 295000,  spent: 121000, status: "active"  },
-  { id: "DP08", name: "Physical Education",code: "PE",   hod: "Mr. Vikram Gupta",    block: "Sports Complex",  teachers: 4,  subjects: ["Athletics", "Yoga", "Team Sports"],       budget: 415000,  spent: 388000, status: "active"  },
-  { id: "DP09", name: "Fine Arts",         code: "ART",  hod: "Ms. Shalini Desai",   block: "Activity Block",  teachers: 3,  subjects: ["Drawing", "Craft", "Sculpture"],          budget: 165000,  spent: 92000,  status: "active"  },
-  { id: "DP10", name: "Music & Dance",     code: "MUS",  hod: "Mr. Kartik Iyer",     block: "Activity Block",  teachers: 3,  subjects: ["Vocal", "Tabla", "Bharatanatyam"],        budget: 148000,  spent: 137000, status: "active"  },
-  { id: "DP11", name: "Sanskrit",          code: "SAN",  hod: "Ms. Lata Trivedi",    block: "Main Block",      teachers: 2,  subjects: ["Shloka", "Vyakaran"],                     budget: 96000,   spent: 41000,  status: "review"  },
-  { id: "DP12", name: "Library Sciences",  code: "LIB",  hod: "Ms. Kavita Joshi",    block: "Library Block",   teachers: 2,  subjects: ["Reading Skills", "Reference"],            budget: 210000,  spent: 158000, status: "active"  },
-  { id: "DP13", name: "Special Education", code: "SPED", hod: "Ms. Farida Sheikh",   block: "Counselling Wing",teachers: 3,  subjects: ["Remedial", "Life Skills"],                budget: 182000,  spent: 74000,  status: "active"  },
-  { id: "DP14", name: "Vocational Studies",code: "VOC",  hod: "Mr. Naveen Chawla",   block: "Activity Block",  teachers: 2,  subjects: ["Electronics", "Retail"],                  budget: 134000,  spent: 22000,  status: "review"  },
-  { id: "DP15", name: "Foreign Languages", code: "FLN",  hod: "Ms. Elena D'Souza",   block: "Senior Wing",     teachers: 2,  subjects: ["French", "German"],                       budget: 118000,  spent: 39000,  status: "planned" },
-];
-
-type Department = (typeof departments)[number];
 
 const STATUS_VARIANT: Record<string, "success" | "warning" | "info"> = {
   active: "success",
@@ -51,16 +47,13 @@ const STATUS_VARIANT: Record<string, "success" | "warning" | "info"> = {
   planned: "info",
 };
 
-const BLOCK_OPTIONS = [...new Set(departments.map((d) => d.block))].map((b) => ({
-  label: b,
-  value: b,
-}));
+const BLOCK_OPTIONS = DEPARTMENT_BLOCK_OPTIONS.map((b) => ({ label: b, value: b }));
 
 const inr = (value: number) => `₹${value.toLocaleString("en-IN")}`;
 
 /** Spent-vs-budget meter. Turns amber past 75% and red once overspent. */
 function BudgetBar({ spent, budget }: { spent: number; budget: number }) {
-  const pct = Math.min(100, Math.round((spent / budget) * 100));
+  const pct = budget > 0 ? Math.min(100, Math.round((spent / budget) * 100)) : 0;
   const fill = pct >= 95 ? "bg-danger" : pct >= 75 ? "bg-warning" : "bg-success";
 
   return (
@@ -82,6 +75,19 @@ export default function DepartmentsPage() {
   const [status, setStatus] = useState("");
   const [page, setPage] = useState(1);
 
+  const filters = useMemo(() => ({ search, block, status }), [search, block, status]);
+
+  const { items, loading, error, refetch, save, remove, saving, deleting } = useResource(
+    departmentsApi,
+    filters,
+    { label: "department", describe: (d) => d.name }
+  );
+
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<Department | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Department | null>(null);
+  const { toast } = useToast();
+
   // A narrowed filter can strand you past the last page, so every filter
   // change resets to page 1.
   const applyFilter = (setter: (value: string) => void) => (value: string) => {
@@ -89,35 +95,79 @@ export default function DepartmentsPage() {
     setPage(1);
   };
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return departments.filter((d) => {
-      const matchesSearch =
-        !q ||
-        d.name.toLowerCase().includes(q) ||
-        d.code.toLowerCase().includes(q) ||
-        d.hod.toLowerCase().includes(q) ||
-        d.subjects.some((s) => s.toLowerCase().includes(q));
-      return matchesSearch && (!block || d.block === block) && (!status || d.status === status);
-    });
-  }, [search, block, status]);
-
-  const paged = useMemo(
-    () => filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
-    [filtered, page]
-  );
+  // Clamp during render — resetting page state from an effect is not allowed.
+  const totalPages = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const paged = items.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   const stats = useMemo(() => {
-    const totalTeachers = departments.reduce((sum, d) => sum + d.teachers, 0);
-    const totalBudget = departments.reduce((sum, d) => sum + d.budget, 0);
-    const totalSpent = departments.reduce((sum, d) => sum + d.spent, 0);
+    const totalTeachers = items.reduce((sum, d) => sum + d.teachers, 0);
+    const totalBudget = items.reduce((sum, d) => sum + d.budget, 0);
+    const totalSpent = items.reduce((sum, d) => sum + d.spent, 0);
     return {
-      count: departments.length,
+      count: items.length,
       totalTeachers,
       totalBudget,
-      utilisation: Math.round((totalSpent / totalBudget) * 100),
+      utilisation: totalBudget > 0 ? Math.round((totalSpent / totalBudget) * 100) : 0,
     };
-  }, []);
+  }, [items]);
+
+  /** Every filter here is applied server-side, so `items` is what the table shows. */
+  const handleExport = () => {
+    if (items.length === 0) {
+      toast({
+        title: "Nothing to export",
+        description: "No departments match the current filters.",
+        variant: "warning",
+      });
+      return;
+    }
+    exportToCsv<Department>(
+      "departments",
+      [
+        { header: "Code", value: (d) => d.code },
+        { header: "Department", value: (d) => d.name },
+        { header: "Block", value: (d) => d.block },
+        { header: "Head of Dept.", value: (d) => d.hod },
+        { header: "Teachers", value: (d) => d.teachers },
+        { header: "Subjects", value: (d) => d.subjects.join("; ") },
+        { header: "Annual Budget", value: (d) => d.budget },
+        { header: "Spent", value: (d) => d.spent },
+        {
+          header: "Utilisation (%)",
+          value: (d) => (d.budget > 0 ? Math.round((d.spent / d.budget) * 100) : 0),
+        },
+        {
+          header: "Status",
+          value: (d) => d.status.charAt(0).toUpperCase() + d.status.slice(1),
+        },
+      ],
+      items
+    );
+    toast({
+      title: "Export ready",
+      description: `${items.length} department${items.length === 1 ? "" : "s"} exported to CSV.`,
+    });
+  };
+
+  const openCreate = () => {
+    setEditing(null);
+    setFormOpen(true);
+  };
+
+  const handleSubmit = async (values: DepartmentSchema) => {
+    const ok = await save(values, editing);
+    if (ok) {
+      setFormOpen(false);
+      setEditing(null);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!pendingDelete) return;
+    const ok = await remove(pendingDelete);
+    if (ok) setPendingDelete(null);
+  };
 
   const columns: Column<Department>[] = [
     {
@@ -190,9 +240,35 @@ export default function DepartmentsPage() {
       header: "Status",
       sortable: true,
       render: (d) => (
-        <Badge variant={STATUS_VARIANT[d.status]} className="capitalize">
+        <Badge variant={STATUS_VARIANT[d.status] ?? "info"} className="capitalize">
           {d.status}
         </Badge>
+      ),
+    },
+    {
+      key: "actions",
+      header: "",
+      align: "right",
+      render: (d) => (
+        <div className="flex items-center justify-end gap-1">
+          <button
+            onClick={() => {
+              setEditing(d);
+              setFormOpen(true);
+            }}
+            aria-label={`Edit ${d.name}`}
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+          >
+            <Pencil className="size-4" />
+          </button>
+          <button
+            onClick={() => setPendingDelete(d)}
+            aria-label={`Delete ${d.name}`}
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-danger-soft hover:text-danger"
+          >
+            <Trash2 className="size-4" />
+          </button>
+        </div>
       ),
     },
   ];
@@ -204,11 +280,11 @@ export default function DepartmentsPage() {
         description="Academic departments, their heads, staffing and annual budgets."
         actions={
           <>
-            <Button variant="outline">
+            <Button variant="outline" onClick={handleExport}>
               <Download className="size-4" />
               Export
             </Button>
-            <Button>
+            <Button onClick={openCreate}>
               <Plus className="size-4" />
               New department
             </Button>
@@ -254,30 +330,73 @@ export default function DepartmentsPage() {
             value={status}
             onChange={(e) => applyFilter(setStatus)(e.target.value)}
             placeholder="All statuses"
-            options={[
-              { label: "Active", value: "active" },
-              { label: "Under review", value: "review" },
-              { label: "Planned", value: "planned" },
-            ]}
+            options={DEPARTMENT_STATUS_OPTIONS}
             aria-label="Filter by status"
           />
         </div>
       </div>
 
-      <Table
-        columns={columns}
-        rows={paged}
-        rowKey={(d) => d.id}
-        rowClassName={(d) => (d.status === "planned" ? "opacity-70" : undefined)}
-        emptyTitle="No departments found"
-        emptyDescription="Try clearing your filters to see more results."
+      {error ? (
+        <Card>
+          <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+            <p className="text-sm font-medium text-danger">{error}</p>
+            <Button variant="outline" onClick={refetch}>
+              Try again
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <>
+          <Table
+            columns={columns}
+            rows={paged}
+            rowKey={(d) => d.id}
+            loading={loading}
+            rowClassName={(d) => (d.status === "planned" ? "opacity-70" : undefined)}
+            emptyTitle="No departments found"
+            emptyDescription={
+              search || block || status
+                ? "Try clearing your filters to see more results."
+                : "Add your first department to get started."
+            }
+            emptyAction={
+              <Button variant="outline" onClick={openCreate}>
+                <Plus className="size-4" />
+                New department
+              </Button>
+            }
+          />
+
+          <Pagination
+            page={safePage}
+            pageSize={PAGE_SIZE}
+            totalItems={items.length}
+            onPageChange={setPage}
+          />
+        </>
+      )}
+
+      <DepartmentFormModal
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        record={editing}
+        saving={saving}
+        onSubmit={handleSubmit}
       />
 
-      <Pagination
-        page={page}
-        pageSize={PAGE_SIZE}
-        totalItems={filtered.length}
-        onPageChange={setPage}
+      <ConfirmDialog
+        open={Boolean(pendingDelete)}
+        onOpenChange={(open) => !open && setPendingDelete(null)}
+        title="Delete department?"
+        description={
+          pendingDelete
+            ? `${pendingDelete.name} (${pendingDelete.code}) and its ${pendingDelete.subjects.length} subject(s) will be permanently removed. This cannot be undone.`
+            : ""
+        }
+        confirmLabel="Delete"
+        destructive
+        loading={deleting}
+        onConfirm={handleDelete}
       />
     </div>
   );

@@ -26,11 +26,18 @@ import {
   Select,
   StatCard,
   Table,
+  useToast,
   type Column,
 } from "@/components/ui";
 import { cn } from "@/lib/utils";
+import { exportToCsv } from "@/lib/exportCsv";
 import { useResource } from "@/hooks/useResource";
-import { inventoryApi, CATEGORY_OPTIONS, type InventoryItem } from "@/lib/api/inventory";
+import {
+  inventoryApi,
+  CATEGORY_OPTIONS,
+  TAB_TO_STATUS,
+  type InventoryItem,
+} from "@/lib/api/inventory";
 import type { InventoryItemSchema } from "@/lib/schemas/inventoryItem";
 import { InventoryFormModal } from "./InventoryFormModal";
 
@@ -108,10 +115,10 @@ export default function InventoryPage() {
   const [catFilter, setCatFilter] = useState("All");
   const [search, setSearch] = useState("");
 
-  const filters = useMemo(
-    () => ({ search, category: catFilter, tab: activeTab }),
-    [search, catFilter, activeTab]
-  );
+  // The stock-status tab is deliberately left out of the server filters: the
+  // stat cards need per-status counts across the whole (otherwise filtered)
+  // set, so the tab narrowing is applied during render instead.
+  const filters = useMemo(() => ({ search, category: catFilter }), [search, catFilter]);
 
   const { items, loading, error, refetch, save, remove, saving, deleting } = useResource(
     inventoryApi,
@@ -122,6 +129,48 @@ export default function InventoryPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<InventoryItem | null>(null);
   const [pendingDelete, setPendingDelete] = useState<InventoryItem | null>(null);
+  const { toast } = useToast();
+
+  // Rows for the table only — stat cards keep counting the full `items`.
+  const visible = useMemo(
+    () =>
+      activeTab === "All"
+        ? items
+        : items.filter((i) => i.status === TAB_TO_STATUS[activeTab]),
+    [items, activeTab]
+  );
+
+  const handleExport = () => {
+    if (visible.length === 0) {
+      toast({
+        title: "Nothing to export",
+        description: "No inventory items match the current filters.",
+        variant: "warning",
+      });
+      return;
+    }
+    exportToCsv<InventoryItem>(
+      "inventory",
+      [
+        { header: "Code", value: (i) => i.code },
+        { header: "Item", value: (i) => i.name },
+        { header: "Category", value: (i) => i.category },
+        { header: "Quantity", value: (i) => i.qty },
+        { header: "Min Quantity", value: (i) => i.minQty },
+        { header: "Unit", value: (i) => i.unit },
+        { header: "Unit Price (INR)", value: (i) => i.unitPrice },
+        { header: "Stock Value (INR)", value: (i) => i.qty * i.unitPrice },
+        { header: "Supplier", value: (i) => i.supplier },
+        { header: "Last Updated", value: (i) => i.lastUpdated },
+        { header: "Status", value: (i) => i.status },
+      ],
+      visible
+    );
+    toast({
+      title: "Export ready",
+      description: `${visible.length} item${visible.length === 1 ? "" : "s"} exported to CSV.`,
+    });
+  };
 
   const stats = useMemo(
     () => ({
@@ -164,7 +213,7 @@ export default function InventoryPage() {
           </div>
           <div className="min-w-0">
             <p className="truncate font-medium text-text">{item.name}</p>
-            <p className="truncate text-xs text-subtle">{item.id}</p>
+            <p className="truncate text-xs text-subtle">{item.code}</p>
           </div>
         </div>
       ),
@@ -361,7 +410,7 @@ export default function InventoryPage() {
         description="Track school assets, stock levels and purchase orders."
         actions={
           <>
-            <Button variant="outline">
+            <Button variant="outline" onClick={handleExport}>
               <Download className="size-4" />
               Export
             </Button>
@@ -434,7 +483,7 @@ export default function InventoryPage() {
                 aria-label="Search inventory"
               />
             </div>
-            <p className="text-xs text-muted">{items.length} items</p>
+            <p className="text-xs text-muted">{visible.length} items</p>
           </div>
 
           {error ? (
@@ -449,7 +498,7 @@ export default function InventoryPage() {
           ) : (
             <Table
               columns={itemColumns}
-              rows={items}
+              rows={visible}
               rowKey={(i) => i.id}
               loading={loading}
               emptyTitle="No items found"

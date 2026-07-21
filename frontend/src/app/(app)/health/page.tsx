@@ -7,7 +7,6 @@ import {
   Download,
   Pencil,
   Trash2,
-  Eye,
   Activity,
   Heart,
   Pill,
@@ -26,29 +25,26 @@ import {
   StatCard,
   Table,
   type Column,
+  useToast,
 } from "@/components/ui";
 import { cn } from "@/lib/utils";
+import { exportToCsv } from "@/lib/exportCsv";
 import { useResource } from "@/hooks/useResource";
 import {
   medicinesApi,
   MEDICINE_STOCK_STATUS_OPTIONS,
   type Medicine,
 } from "@/lib/api/medicines";
+import {
+  patientsApi,
+  PATIENT_STATUS_OPTIONS,
+  PATIENT_TYPE_OPTIONS,
+  type Patient,
+} from "@/lib/api/patients";
 import type { MedicineSchema } from "@/lib/schemas/medicine";
+import type { PatientSchema } from "@/lib/schemas/patient";
 import { MedicineFormModal } from "./MedicineFormModal";
-
-const patients = [
-  { id: "P001", name: "Aarav Sharma",  class: "10-A", issue: "Fever",        status: "Recovered", date: "12 Jul 2025", doctor: "Dr. Mehta",  type: "Student" },
-  { id: "P002", name: "Priya Patel",   class: "9-B",  issue: "Sprained Ankle",status: "Under Treatment", date: "14 Jul 2025", doctor: "Dr. Mehta",  type: "Student" },
-  { id: "P003", name: "Rohan Verma",   class: "11-A", issue: "Headache",     status: "Recovered", date: "10 Jul 2025", doctor: "Dr. Singh",  type: "Student" },
-  { id: "P004", name: "Sneha Gupta",   class: "8-C",  issue: "Stomach Ache", status: "Referred",  date: "15 Jul 2025", doctor: "Dr. Mehta",  type: "Student" },
-  { id: "P005", name: "Karan Singh",   class: "12-B", issue: "Eye Infection", status: "Under Treatment", date: "13 Jul 2025", doctor: "Dr. Singh",  type: "Student" },
-  { id: "P006", name: "Mr. Ramesh",    class: "—",    issue: "BP Check",     status: "Recovered", date: "11 Jul 2025", doctor: "Dr. Mehta",  type: "Staff" },
-  { id: "P007", name: "Ananya Joshi",  class: "7-A",  issue: "Allergy",      status: "Under Treatment", date: "15 Jul 2025", doctor: "Dr. Singh",  type: "Student" },
-  { id: "P008", name: "Vikram Nair",   class: "6-B",  issue: "Cold & Cough", status: "Recovered", date: "09 Jul 2025", doctor: "Dr. Mehta",  type: "Student" },
-];
-
-type Patient = (typeof patients)[number];
+import { PatientFormModal } from "./PatientFormModal";
 
 type BadgeVariant = "default" | "success" | "warning" | "danger" | "info";
 
@@ -73,18 +69,45 @@ const stockVariant: Record<string, BadgeVariant> = {
 export default function HealthPage() {
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState<"patients" | "medicines">("patients");
-  const [statusFilter, setStatusFilter] = useState("All");
-  const [typeFilter, setTypeFilter] = useState("All");
+  // The two tabs have disjoint status vocabularies, so they each keep their own
+  // filter — sharing one would blank the other tab's table on switch.
+  const [patientStatus, setPatientStatus] = useState("All");
+  const [patientType, setPatientType] = useState("All");
+  const [medicineStatus, setMedicineStatus] = useState("All");
 
   const isMedicines = tab === "medicines";
 
-  const filters = useMemo(
+  // The search box is shared, so only feed it to the query that is on screen.
+  const patientFilters = useMemo(
+    () => ({
+      search: isMedicines ? "" : search,
+      status: patientStatus,
+      type: patientType,
+    }),
+    [isMedicines, search, patientStatus, patientType]
+  );
+
+  const medicineFilters = useMemo(
     () => ({
       search: isMedicines ? search : "",
-      status: isMedicines ? statusFilter : "All",
+      status: medicineStatus,
     }),
-    [isMedicines, search, statusFilter]
+    [isMedicines, search, medicineStatus]
   );
+
+  const {
+    items: patients,
+    loading: patientsLoading,
+    error: patientsError,
+    refetch: refetchPatients,
+    save: savePatient,
+    remove: removePatient,
+    saving: savingPatient,
+    deleting: deletingPatient,
+  } = useResource(patientsApi, patientFilters, {
+    label: "record",
+    describe: (p) => p.name,
+  });
 
   const {
     items: medicines,
@@ -95,7 +118,7 @@ export default function HealthPage() {
     remove,
     saving,
     deleting,
-  } = useResource(medicinesApi, filters, {
+  } = useResource(medicinesApi, medicineFilters, {
     label: "medicine",
     describe: (m) => m.name,
   });
@@ -104,23 +127,70 @@ export default function HealthPage() {
   const [editing, setEditing] = useState<Medicine | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Medicine | null>(null);
 
-  const filteredPatients = patients.filter((p) => {
-    const matchStatus = statusFilter === "All" || p.status === statusFilter;
-    const matchType = typeFilter === "All" || p.type === typeFilter;
-    const matchSearch =
-      p.name.toLowerCase().includes(search.toLowerCase()) ||
-      p.issue.toLowerCase().includes(search.toLowerCase()) ||
-      p.id.toLowerCase().includes(search.toLowerCase());
-    return matchStatus && matchType && matchSearch;
-  });
+  const [patientFormOpen, setPatientFormOpen] = useState(false);
+  const [editingPatient, setEditingPatient] = useState<Patient | null>(null);
+  const [pendingDeletePatient, setPendingDeletePatient] = useState<Patient | null>(null);
 
   const recovered = patients.filter((p) => p.status === "Recovered").length;
   const underTreatment = patients.filter((p) => p.status === "Under Treatment").length;
   const lowStock = medicines.filter((m) => m.status !== "In Stock").length;
+  const { toast } = useToast();
+
+  /** Follows the active tab so the file matches the table on screen. */
+  const handleExport = () => {
+    const count = isMedicines ? medicines.length : patients.length;
+    if (count === 0) {
+      toast({
+        title: "Nothing to export",
+        description: `No ${isMedicines ? "medicines" : "patient records"} match the current filters.`,
+        variant: "warning",
+      });
+      return;
+    }
+    if (isMedicines) {
+      exportToCsv<Medicine>(
+        "medicine-stock",
+        [
+          { header: "Code", value: (m) => m.code },
+          { header: "Medicine", value: (m) => m.name },
+          { header: "Category", value: (m) => m.category },
+          { header: "Stock", value: (m) => m.stock },
+          { header: "Unit", value: (m) => m.unit },
+          { header: "Expiry", value: (m) => m.expiry },
+          { header: "Status", value: (m) => m.status },
+        ],
+        medicines
+      );
+    } else {
+      exportToCsv<Patient>(
+        "health-records",
+        [
+          { header: "Code", value: (p) => p.code },
+          { header: "Name", value: (p) => p.name },
+          { header: "Class", value: (p) => p.class },
+          { header: "Type", value: (p) => p.type },
+          { header: "Issue", value: (p) => p.issue },
+          { header: "Doctor", value: (p) => p.doctor },
+          { header: "Date", value: (p) => p.date },
+          { header: "Status", value: (p) => p.status },
+        ],
+        patients
+      );
+    }
+    toast({
+      title: "Export ready",
+      description: `${count} ${isMedicines ? "medicine" : "patient record"}${count === 1 ? "" : "s"} exported to CSV.`,
+    });
+  };
 
   const openCreate = () => {
     setEditing(null);
     setFormOpen(true);
+  };
+
+  const openCreatePatient = () => {
+    setEditingPatient(null);
+    setPatientFormOpen(true);
   };
 
   const handleSubmit = async (values: MedicineSchema) => {
@@ -137,6 +207,20 @@ export default function HealthPage() {
     if (ok) setPendingDelete(null);
   };
 
+  const handlePatientSubmit = async (values: PatientSchema) => {
+    const ok = await savePatient(values, editingPatient);
+    if (ok) {
+      setPatientFormOpen(false);
+      setEditingPatient(null);
+    }
+  };
+
+  const handlePatientDelete = async () => {
+    if (!pendingDeletePatient) return;
+    const ok = await removePatient(pendingDeletePatient);
+    if (ok) setPendingDeletePatient(null);
+  };
+
   const patientColumns: Column<Patient>[] = [
     {
       key: "name",
@@ -147,7 +231,7 @@ export default function HealthPage() {
           <Avatar name={p.name} size="sm" />
           <div className="min-w-0">
             <p className="truncate font-medium text-text">{p.name}</p>
-            <p className="truncate text-xs text-subtle">{p.id}</p>
+            <p className="truncate text-xs text-subtle">{p.code}</p>
           </div>
         </div>
       ),
@@ -185,7 +269,7 @@ export default function HealthPage() {
       key: "status",
       header: "Status",
       sortable: true,
-      render: (p) => <Badge variant={statusVariant[p.status]}>{p.status}</Badge>,
+      render: (p) => <Badge variant={statusVariant[p.status] ?? "default"}>{p.status}</Badge>,
     },
     {
       key: "actions",
@@ -193,10 +277,16 @@ export default function HealthPage() {
       align: "right",
       render: (p) => (
         <div className="flex items-center justify-end gap-1">
-          <Button variant="ghost" size="sm" className="px-2" aria-label={`View ${p.name}`}>
-            <Eye className="size-4" />
-          </Button>
-          <Button variant="ghost" size="sm" className="px-2" aria-label={`Edit ${p.name}`}>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="px-2"
+            aria-label={`Edit ${p.name}`}
+            onClick={() => {
+              setEditingPatient(p);
+              setPatientFormOpen(true);
+            }}
+          >
             <Pencil className="size-4" />
           </Button>
           <Button
@@ -204,6 +294,7 @@ export default function HealthPage() {
             size="sm"
             className="px-2 hover:bg-danger-soft hover:text-danger"
             aria-label={`Delete ${p.name}`}
+            onClick={() => setPendingDeletePatient(p)}
           >
             <Trash2 className="size-4" />
           </Button>
@@ -224,7 +315,7 @@ export default function HealthPage() {
           </div>
           <div className="min-w-0">
             <p className="truncate font-medium text-text">{m.name}</p>
-            <p className="truncate text-xs text-subtle">{m.id}</p>
+            <p className="truncate text-xs text-subtle">{m.code}</p>
           </div>
         </div>
       ),
@@ -265,7 +356,7 @@ export default function HealthPage() {
       key: "status",
       header: "Status",
       sortable: true,
-      render: (m) => <Badge variant={stockVariant[m.status]}>{m.status}</Badge>,
+      render: (m) => <Badge variant={stockVariant[m.status] ?? "default"}>{m.status}</Badge>,
     },
     {
       key: "actions",
@@ -306,11 +397,11 @@ export default function HealthPage() {
         description="Manage patient records, medicines and health reports."
         actions={
           <>
-            <Button variant="outline">
+            <Button variant="outline" onClick={handleExport}>
               <Download className="size-4" />
               Export
             </Button>
-            <Button onClick={isMedicines ? openCreate : undefined}>
+            <Button onClick={isMedicines ? openCreate : openCreatePatient}>
               <Plus className="size-4" />
               {isMedicines ? "Add medicine" : "Add record"}
             </Button>
@@ -333,8 +424,6 @@ export default function HealthPage() {
               onClick={() => {
                 setTab(t);
                 setSearch("");
-                setStatusFilter("All");
-                setTypeFilter("All");
               }}
               className={cn(
                 "focus-ring rounded-sm px-4 py-1.5 text-xs font-semibold capitalize transition-colors",
@@ -350,26 +439,23 @@ export default function HealthPage() {
           <>
             <div className="w-44">
               <Select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
+                value={patientStatus}
+                onChange={(e) => setPatientStatus(e.target.value)}
                 aria-label="Filter by status"
                 options={[
                   { label: "All status", value: "All" },
-                  { label: "Recovered", value: "Recovered" },
-                  { label: "Under Treatment", value: "Under Treatment" },
-                  { label: "Referred", value: "Referred" },
+                  ...PATIENT_STATUS_OPTIONS.map((s) => ({ label: s, value: s })),
                 ]}
               />
             </div>
             <div className="w-36">
               <Select
-                value={typeFilter}
-                onChange={(e) => setTypeFilter(e.target.value)}
+                value={patientType}
+                onChange={(e) => setPatientType(e.target.value)}
                 aria-label="Filter by type"
                 options={[
                   { label: "All types", value: "All" },
-                  { label: "Student", value: "Student" },
-                  { label: "Staff", value: "Staff" },
+                  ...PATIENT_TYPE_OPTIONS.map((t) => ({ label: t, value: t })),
                 ]}
               />
             </div>
@@ -377,8 +463,8 @@ export default function HealthPage() {
         ) : (
           <div className="w-44">
             <Select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
+              value={medicineStatus}
+              onChange={(e) => setMedicineStatus(e.target.value)}
               aria-label="Filter by stock status"
               options={[
                 { label: "All stock", value: "All" },
@@ -400,18 +486,40 @@ export default function HealthPage() {
         </div>
 
         <p className="text-xs text-muted">
-          {tab === "patients" ? `${filteredPatients.length} records` : `${medicines.length} items`}
+          {tab === "patients" ? `${patients.length} records` : `${medicines.length} items`}
         </p>
       </div>
 
       {tab === "patients" ? (
-        <Table
-          columns={patientColumns}
-          rows={filteredPatients}
-          rowKey={(p) => p.id}
-          emptyTitle="No records found"
-          emptyDescription="Try adjusting your filters or search."
-        />
+        patientsError ? (
+          <Card>
+            <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+              <p className="text-sm font-medium text-danger">{patientsError}</p>
+              <Button variant="outline" onClick={refetchPatients}>
+                Try again
+              </Button>
+            </CardContent>
+          </Card>
+        ) : (
+          <Table
+            columns={patientColumns}
+            rows={patients}
+            rowKey={(p) => p.id}
+            loading={patientsLoading}
+            emptyTitle="No records found"
+            emptyDescription={
+              search || patientStatus !== "All" || patientType !== "All"
+                ? "Try clearing your filters to see more results."
+                : "Add your first health record to get started."
+            }
+            emptyAction={
+              <Button variant="outline" onClick={openCreatePatient}>
+                <Plus className="size-4" />
+                Add record
+              </Button>
+            }
+          />
+        )
       ) : error ? (
         <Card>
           <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
@@ -429,7 +537,7 @@ export default function HealthPage() {
           loading={loading}
           emptyTitle="No medicines found"
           emptyDescription={
-            search || statusFilter !== "All"
+            search || medicineStatus !== "All"
               ? "Try clearing your filters to see more results."
               : "Add your first medicine to get started."
           }
@@ -446,24 +554,18 @@ export default function HealthPage() {
         <p className="text-xs text-muted">
           Showing{" "}
           <span className="font-medium text-text">
-            {tab === "patients" ? filteredPatients.length : medicines.length}
+            {tab === "patients" ? patients.length : medicines.length}
           </span>{" "}
-          {tab === "patients" ? (
-            <>
-              of <span className="font-medium text-text">{patients.length}</span> records
-            </>
-          ) : (
-            "items"
-          )}
+          {tab === "patients" ? "records" : "items"}
         </p>
         {tab === "patients" && (
           <div className="flex flex-wrap items-center gap-4">
-            {["Recovered", "Under Treatment", "Referred"].map((s) => (
+            {PATIENT_STATUS_OPTIONS.map((s) => (
               <span key={s} className="flex items-center gap-1.5 text-xs text-muted">
                 <span className={cn("size-2 rounded-full", statusDot[s])} />
                 {s}:{" "}
                 <span className="font-semibold text-text">
-                  {filteredPatients.filter((p) => p.status === s).length}
+                  {patients.filter((p) => p.status === s).length}
                 </span>
               </span>
             ))}
@@ -479,6 +581,14 @@ export default function HealthPage() {
         onSubmit={handleSubmit}
       />
 
+      <PatientFormModal
+        open={patientFormOpen}
+        onOpenChange={setPatientFormOpen}
+        record={editingPatient}
+        saving={savingPatient}
+        onSubmit={handlePatientSubmit}
+      />
+
       <ConfirmDialog
         open={Boolean(pendingDelete)}
         onOpenChange={(open) => !open && setPendingDelete(null)}
@@ -492,6 +602,21 @@ export default function HealthPage() {
         destructive
         loading={deleting}
         onConfirm={handleDelete}
+      />
+
+      <ConfirmDialog
+        open={Boolean(pendingDeletePatient)}
+        onOpenChange={(open) => !open && setPendingDeletePatient(null)}
+        title="Delete health record?"
+        description={
+          pendingDeletePatient
+            ? `The record for ${pendingDeletePatient.name} (${pendingDeletePatient.code}) will be permanently removed. This cannot be undone.`
+            : ""
+        }
+        confirmLabel="Delete"
+        destructive
+        loading={deletingPatient}
+        onConfirm={handlePatientDelete}
       />
     </div>
   );

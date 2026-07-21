@@ -21,20 +21,33 @@ const subjects = ["Mathematics", "Physics", "Chemistry", "English", "Biology", "
 const classes  = ["6-A", "7-A", "8-A", "9-A", "9-B", "10-A", "10-B", "11-A", "12-A"];
 const exams    = ["Unit Test 1", "Mid-Term Exam", "Final Exam"];
 
-const studentsData = [
-  { id: "S001", name: "Aarav Sharma",  roll: 1  },
-  { id: "S002", name: "Priya Patel",   roll: 2  },
-  { id: "S003", name: "Rohan Verma",   roll: 3  },
-  { id: "S004", name: "Sneha Gupta",   roll: 4  },
-  { id: "S005", name: "Karan Singh",   roll: 5  },
-  { id: "S006", name: "Ananya Joshi",  roll: 6  },
-  { id: "S007", name: "Vikram Nair",   roll: 7  },
-  { id: "S008", name: "Meera Iyer",    roll: 8  },
-  { id: "S009", name: "Arjun Reddy",   roll: 9  },
-  { id: "S010", name: "Pooja Mishra",  roll: 10 },
+const NAME_POOL = [
+  "Aarav Sharma", "Priya Patel", "Rohan Verma", "Sneha Gupta", "Karan Singh",
+  "Ananya Joshi", "Vikram Nair", "Meera Iyer", "Arjun Reddy", "Pooja Mishra",
+  "Rahul Das", "Divya Menon", "Ishaan Kapoor", "Nisha Rao", "Aditya Bose",
+  "Tara Sethi", "Yash Chauhan", "Riya Malhotra", "Kabir Anand", "Sara Qureshi",
+  "Manav Trivedi", "Lakshmi Pillai", "Dev Bhatia", "Anjali Saxena", "Nikhil Rane",
+  "Farah Khan", "Sameer Dutta", "Kavya Hegde", "Om Prakash", "Neha Kulkarni",
 ];
 
-type Student = (typeof studentsData)[number];
+type Student = { id: string; name: string; roll: number; className: string };
+
+/** Each class has its own roster — marks are always entered against one class. */
+function rosterFor(className: string, classIndex: number): Student[] {
+  const size = 9 + (classIndex % 3);
+  const nameOffset = (classIndex * 5) % NAME_POOL.length;
+
+  return Array.from({ length: size }, (_, i) => ({
+    id: `${className}-${String(i + 1).padStart(2, "0")}`,
+    name: NAME_POOL[(nameOffset + i) % NAME_POOL.length],
+    roll: i + 1,
+    className,
+  }));
+}
+
+const studentsByClass: Record<string, Student[]> = Object.fromEntries(
+  classes.map((c, i) => [c, rosterFor(c, i)])
+);
 
 /** Grade chip tones, expressed only in semantic tokens. */
 const gradeClass: Record<string, string> = {
@@ -63,23 +76,31 @@ export default function MarkEntryPage() {
   const [selectedSubject, setSelectedSubject] = useState("Mathematics");
   const [selectedExam,    setSelectedExam]    = useState("Mid-Term Exam");
   const [totalMarks,      setTotalMarks]      = useState(100);
+  // Marks are keyed by (exam, subject, student). Switching exam or subject
+  // therefore reveals a different sheet instead of carrying figures across.
   const [marks, setMarks] = useState<Record<string, string>>({});
-  const [saved, setSaved] = useState(false);
+  const [savedSheet, setSavedSheet] = useState<string | null>(null);
   const [search, setSearch] = useState("");
 
-  const filtered = studentsData.filter((s) =>
+  const sheetKey = `${selectedClass}|${selectedSubject}|${selectedExam}`;
+  const markKey = (studentId: string) => `${sheetKey}|${studentId}`;
+  const markOf = (studentId: string) => marks[markKey(studentId)] ?? "";
+  const saved = savedSheet === sheetKey;
+
+  const roster = studentsByClass[selectedClass] ?? [];
+  const filtered = roster.filter((s) =>
     s.name.toLowerCase().includes(search.toLowerCase())
   );
 
   const handleMark = (id: string, val: string) => {
     const num = parseInt(val);
     if (val === "" || (!isNaN(num) && num >= 0 && num <= totalMarks)) {
-      setMarks((prev) => ({ ...prev, [id]: val }));
-      setSaved(false);
+      setMarks((prev) => ({ ...prev, [markKey(id)]: val }));
+      setSavedSheet(null);
     }
   };
 
-  const enteredValues = Object.values(marks).filter((v) => v !== "");
+  const enteredValues = roster.map((s) => markOf(s.id)).filter((v) => v !== "");
   const entered = enteredValues.length;
   const avgMarks =
     entered > 0
@@ -116,7 +137,7 @@ export default function MarkEntryPage() {
       key: "marks",
       header: `Marks (out of ${totalMarks})`,
       render: (s) => {
-        const markVal = marks[s.id] ?? "";
+        const markVal = markOf(s.id);
         const num = parseInt(markVal);
         const pct =
           markVal !== "" && !isNaN(num) ? Math.round((num / totalMarks) * 100) : null;
@@ -142,7 +163,7 @@ export default function MarkEntryPage() {
       key: "percentage",
       header: "Percentage",
       render: (s) => {
-        const markVal = marks[s.id] ?? "";
+        const markVal = markOf(s.id);
         const num = parseInt(markVal);
         const pct =
           markVal !== "" && !isNaN(num) ? Math.round((num / totalMarks) * 100) : null;
@@ -164,7 +185,7 @@ export default function MarkEntryPage() {
       key: "grade",
       header: "Grade",
       render: (s) => {
-        const markVal = marks[s.id] ?? "";
+        const markVal = markOf(s.id);
         const num = parseInt(markVal);
         if (markVal === "" || isNaN(num)) return <span className="text-subtle">—</span>;
         const grade = getGrade(num, totalMarks);
@@ -177,7 +198,7 @@ export default function MarkEntryPage() {
       key: "remarks",
       header: "Remarks",
       render: (s) => {
-        const markVal = marks[s.id] ?? "";
+        const markVal = markOf(s.id);
         const num = parseInt(markVal);
         if (markVal === "" || isNaN(num)) return null;
         const pct = Math.round((num / totalMarks) * 100);
@@ -198,7 +219,7 @@ export default function MarkEntryPage() {
         title="Mark Entry"
         description="Enter and manage student marks"
         actions={
-          <Button onClick={() => setSaved(true)}>
+          <Button onClick={() => setSavedSheet(sheetKey)}>
             <Save className="size-4" />
             Save Marks
           </Button>
@@ -235,10 +256,10 @@ export default function MarkEntryPage() {
       </Card>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Total Students" value={studentsData.length} icon={Users} tone="indigo" />
+        <StatCard label="Total Students" value={roster.length} icon={Users} tone="indigo" />
         <StatCard
           label="Marks Entered"
-          value={`${entered}/${studentsData.length}`}
+          value={`${entered}/${roster.length}`}
           icon={ClipboardList}
           tone="cyan"
         />

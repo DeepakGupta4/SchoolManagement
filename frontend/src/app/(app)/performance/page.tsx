@@ -21,8 +21,10 @@ import {
   Select,
   StatCard,
   Table,
+  useToast,
   type Column,
 } from "@/components/ui";
+import { exportToCsv } from "@/lib/exportCsv";
 
 const staffPerformance = [
   { id: "ST001", name: "Mr. Rajesh Sharma",  role: "Principal",         dept: "Administration", q1: 92, q2: 94, q3: 96, rating: 4.8, trend: "up",   grade: "A+" },
@@ -119,6 +121,7 @@ export default function PerformancePage() {
   const [tab, setTab] = useState<(typeof tabs)[number]>("Staff");
   const [search, setSearch] = useState("");
   const [gradeFilter, setGradeFilter] = useState("All");
+  const { toast } = useToast();
 
   const data: PerfRow[] = tab === "Staff" ? staffPerformance : teacherPerformance;
 
@@ -134,6 +137,58 @@ export default function PerformancePage() {
   const topPerf = data.filter((p) => p.grade === "A+" || p.grade === "A").length;
   const improving = data.filter((p) => p.trend === "up").length;
   const avgRating = (data.reduce((s, p) => s + p.rating, 0) / data.length).toFixed(1);
+
+  /**
+   * The two tabs carry different identity columns (role/dept vs subject/classes),
+   * so the column set is chosen to match whichever table is on screen.
+   */
+  const handleExport = () => {
+    if (filtered.length === 0) {
+      toast({
+        title: "Nothing to export",
+        description: `No ${tab.toLowerCase()} match the current filters.`,
+        variant: "warning",
+      });
+      return;
+    }
+    const shared: { header: string; value: (p: PerfRow) => string | number }[] = [
+      { header: "Q1 Score", value: (p) => p.q1 },
+      { header: "Q2 Score", value: (p) => p.q2 },
+      { header: "Q3 Score", value: (p) => p.q3 },
+      { header: "Rating", value: (p) => p.rating },
+      { header: "Trend", value: (p) => p.trend },
+      { header: "Grade", value: (p) => p.grade },
+    ];
+    if (tab === "Staff") {
+      exportToCsv<StaffPerf>(
+        "staff-performance",
+        [
+          { header: "ID", value: (p) => p.id },
+          { header: "Name", value: (p) => p.name },
+          { header: "Role", value: (p) => p.role },
+          { header: "Department", value: (p) => p.dept },
+          ...shared,
+        ],
+        filtered as StaffPerf[]
+      );
+    } else {
+      exportToCsv<TeacherPerf>(
+        "teacher-performance",
+        [
+          { header: "ID", value: (p) => p.id },
+          { header: "Name", value: (p) => p.name },
+          { header: "Subject", value: (p) => p.subject },
+          { header: "Classes", value: (p) => p.classes },
+          ...shared,
+        ],
+        filtered as TeacherPerf[]
+      );
+    }
+    toast({
+      title: "Export ready",
+      description: `${filtered.length} ${tab.toLowerCase()} performance record${filtered.length === 1 ? "" : "s"} exported to CSV.`,
+    });
+  };
 
   const columns: Column<PerfRow>[] = [
     {
@@ -206,7 +261,7 @@ export default function PerformancePage() {
         title="Performance"
         description="Track and evaluate staff & teacher performance"
         actions={
-          <Button variant="outline">
+          <Button variant="outline" onClick={handleExport}>
             <Download className="size-4" />
             Export Report
           </Button>

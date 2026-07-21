@@ -27,8 +27,10 @@ import {
   Select,
   Skeleton,
   StatCard,
+  useToast,
 } from "@/components/ui";
 import { cn } from "@/lib/utils";
+import { exportToCsv } from "@/lib/exportCsv";
 import { useResource } from "@/hooks/useResource";
 import {
   ANNOUNCEMENT_CATEGORIES,
@@ -85,6 +87,7 @@ export default function AnnouncementsPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Announcement | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Announcement | null>(null);
+  const { toast } = useToast();
 
   const stats = useMemo(
     () => ({
@@ -119,6 +122,36 @@ export default function AnnouncementsPage() {
 
   const hasFilters = Boolean(search || categoryFilter || audienceFilter) || tab === "Pinned";
 
+  const handleExport = () => {
+    if (items.length === 0) {
+      toast({
+        title: "Nothing to export",
+        description: "No announcements match the current filters.",
+        variant: "warning",
+      });
+      return;
+    }
+    exportToCsv<Announcement>(
+      "announcements",
+      [
+        { header: "ID", value: (a) => a.id },
+        { header: "Title", value: (a) => a.title },
+        { header: "Category", value: (a) => a.category },
+        { header: "Audience", value: (a) => a.audience.join(" / ") },
+        { header: "Author", value: (a) => a.author },
+        { header: "Date", value: (a) => a.date },
+        { header: "Pinned", value: (a) => (a.pinned ? "Yes" : "No") },
+        { header: "Views", value: (a) => a.views },
+        { header: "Body", value: (a) => a.body },
+      ],
+      items
+    );
+    toast({
+      title: "Export ready",
+      description: `${items.length} announcement${items.length === 1 ? "" : "s"} exported to CSV.`,
+    });
+  };
+
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
@@ -126,7 +159,7 @@ export default function AnnouncementsPage() {
         description="Broadcast notices to students, parents and staff."
         actions={
           <>
-            <Button variant="outline">
+            <Button variant="outline" onClick={handleExport}>
               <Download className="size-4" />
               Export
             </Button>

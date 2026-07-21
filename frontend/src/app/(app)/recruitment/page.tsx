@@ -26,8 +26,10 @@ import {
   Select,
   StatCard,
   Table,
+  useToast,
   type Column,
 } from "@/components/ui";
+import { exportToCsv } from "@/lib/exportCsv";
 import { useResource } from "@/hooks/useResource";
 import {
   jobPostingsApi,
@@ -97,13 +99,16 @@ export default function RecruitmentPage() {
 
   // The applicants tab reuses the same controls, so the job list keeps its own
   // filters unfiltered while that tab is active.
+  // `statusFilter` is deliberately left out of the server filters: the "Open
+  // Positions" card needs the open count across the whole (otherwise filtered)
+  // set, so status narrowing is applied during render instead.
   const filters = useMemo(
     () => ({
       search: isJobs ? search : "",
       dept: isJobs ? deptFilter : "All",
-      status: isJobs ? statusFilter : "All",
+      status: "All",
     }),
-    [isJobs, search, deptFilter, statusFilter]
+    [isJobs, search, deptFilter]
   );
 
   const { items, loading, error, refetch, save, remove, saving, deleting } = useResource(
@@ -115,6 +120,7 @@ export default function RecruitmentPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<JobPosting | null>(null);
   const [pendingDelete, setPendingDelete] = useState<JobPosting | null>(null);
+  const { toast } = useToast();
 
   const filteredApplicants = applicants.filter((a) => {
     const matchSearch =
@@ -125,6 +131,55 @@ export default function RecruitmentPage() {
     const matchDept = deptFilter === "All" || a.dept === deptFilter;
     return matchSearch && matchStatus && matchDept;
   });
+
+  /** Exports the postings or the applicant pipeline, matching the active tab. */
+  const handleExport = () => {
+    const count = isJobs ? items.length : filteredApplicants.length;
+    if (count === 0) {
+      toast({
+        title: "Nothing to export",
+        description: `No ${isJobs ? "job postings" : "applicants"} match the current filters.`,
+        variant: "warning",
+      });
+      return;
+    }
+    if (isJobs) {
+      exportToCsv<JobPosting>(
+        "job-postings",
+        [
+          { header: "Code", value: (j) => j.code },
+          { header: "Title", value: (j) => j.title },
+          { header: "Department", value: (j) => j.dept },
+          { header: "Type", value: (j) => j.type },
+          { header: "Posted", value: (j) => j.posted },
+          { header: "Deadline", value: (j) => j.deadline },
+          { header: "Applicants", value: (j) => j.applicants },
+          { header: "Status", value: (j) => j.status },
+        ],
+        items
+      );
+    } else {
+      exportToCsv<Applicant>(
+        "applicants",
+        [
+          { header: "Applicant ID", value: (a) => a.id },
+          { header: "Name", value: (a) => a.name },
+          { header: "Applied For", value: (a) => a.job },
+          { header: "Department", value: (a) => a.dept },
+          { header: "Experience", value: (a) => a.exp },
+          { header: "Applied On", value: (a) => a.applied },
+          { header: "Phone", value: (a) => a.phone },
+          { header: "Email", value: (a) => a.email },
+          { header: "Status", value: (a) => a.status },
+        ],
+        filteredApplicants
+      );
+    }
+    toast({
+      title: "Export ready",
+      description: `${count} ${isJobs ? "job posting" : "applicant"}${count === 1 ? "" : "s"} exported to CSV.`,
+    });
+  };
 
   const openJobs = items.filter((j) => j.status === "Open").length;
   const totalApps = applicants.length;
@@ -319,7 +374,7 @@ export default function RecruitmentPage() {
         description="Manage job postings and track applicants"
         actions={
           <>
-            <Button variant="outline">
+            <Button variant="outline" onClick={handleExport}>
               <Download className="size-4" />
               Export
             </Button>

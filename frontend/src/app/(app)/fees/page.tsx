@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useMemo } from "react";
 import Link from "next/link";
 import {
   AlertTriangle,
@@ -13,34 +13,30 @@ import {
   DollarSign,
   GraduationCap,
   Receipt,
-  TrendingDown,
-  TrendingUp,
   Wallet,
   type LucideIcon,
 } from "lucide-react";
 import { Badge, Card, CardContent, CardHeader, PageHeader } from "@/components/ui";
+import { useResource } from "@/hooks/useResource";
+import { scholarshipsApi } from "@/lib/api/scholarships";
+import { FEE_DEFAULTERS, FEE_RECEIPTS } from "@/lib/api/feeRecords";
 
-const stats: {
+interface OverviewStat {
   label: string;
   value: string;
   sub: string;
   icon: LucideIcon;
   gradient: string;
-  trend: "up" | "down";
-}[] = [
-  { label: "Total Collected", value: "₹24,85,000", sub: "+12% this month", icon: Wallet, gradient: "gradient-emerald", trend: "up" },
-  { label: "Pending Fees", value: "₹3,42,500", sub: "148 students", icon: Clock, gradient: "gradient-amber", trend: "down" },
-  { label: "Defaulters", value: "42", sub: "Need follow-up", icon: AlertTriangle, gradient: "gradient-rose", trend: "down" },
-  { label: "Scholarships", value: "38", sub: "Active awards", icon: GraduationCap, gradient: "gradient-violet", trend: "up" },
-];
+}
 
-const recentPayments = [
-  { id: "RCP001", student: "Arjun Sharma", class: "10-A", amount: "₹12,500", date: "Jul 18, 2025", method: "Online", status: "paid" },
-  { id: "RCP002", student: "Priya Patel", class: "9-B", amount: "₹11,000", date: "Jul 17, 2025", method: "Cash", status: "paid" },
-  { id: "RCP003", student: "Rahul Verma", class: "11-A", amount: "₹13,500", date: "Jul 16, 2025", method: "Cheque", status: "pending" },
-  { id: "RCP004", student: "Sneha Gupta", class: "8-B", amount: "₹9,500", date: "Jul 15, 2025", method: "Online", status: "paid" },
-  { id: "RCP005", student: "Karan Mehta", class: "12-A", amount: "₹15,000", date: "Jul 14, 2025", method: "Online", status: "paid" },
-];
+const inr = new Intl.NumberFormat("en-IN", {
+  style: "currency",
+  currency: "INR",
+  maximumFractionDigits: 0,
+});
+
+/** The five most recent receipts, straight from the receipts register. */
+const recentPayments = FEE_RECEIPTS.slice(0, 5);
 
 const quickLinks: {
   title: string;
@@ -67,6 +63,56 @@ const monthlyData = [
 const maxVal = 30;
 
 export default function FeesPage() {
+  // Scholarships are a live CRUD resource, so the count follows the awards on
+  // /fees/scholarships. Receipts and defaulters are shared registers.
+  const { items: scholarships } = useResource(
+    scholarshipsApi,
+    useMemo(() => ({}), []),
+    { label: "scholarship", describe: (s) => s.student }
+  );
+
+  const stats: OverviewStat[] = useMemo(() => {
+    const collected = FEE_RECEIPTS.filter((r) => r.status === "paid").reduce(
+      (sum, r) => sum + r.amount,
+      0
+    );
+    const pendingReceipts = FEE_RECEIPTS.filter((r) => r.status === "pending");
+    const pendingAmount = pendingReceipts.reduce((sum, r) => sum + r.amount, 0);
+    const outstanding = FEE_DEFAULTERS.reduce((sum, d) => sum + d.due, 0);
+    const activeAwards = scholarships.filter((s) => s.status === "active").length;
+
+    return [
+      {
+        label: "Total Collected",
+        value: inr.format(collected),
+        sub: `${FEE_RECEIPTS.filter((r) => r.status === "paid").length} settled receipts`,
+        icon: Wallet,
+        gradient: "gradient-emerald",
+      },
+      {
+        label: "Pending Fees",
+        value: inr.format(pendingAmount),
+        sub: `${new Set(pendingReceipts.map((r) => r.student)).size} students`,
+        icon: Clock,
+        gradient: "gradient-amber",
+      },
+      {
+        label: "Defaulters",
+        value: String(FEE_DEFAULTERS.length),
+        sub: `${inr.format(outstanding)} outstanding`,
+        icon: AlertTriangle,
+        gradient: "gradient-rose",
+      },
+      {
+        label: "Scholarships",
+        value: String(activeAwards),
+        sub: "Active awards",
+        icon: GraduationCap,
+        gradient: "gradient-violet",
+      },
+    ];
+  }, [scholarships]);
+
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
@@ -94,14 +140,7 @@ export default function FeesPage() {
               <div className="min-w-0 flex-1">
                 <p className="text-xs text-muted">{s.label}</p>
                 <p className="mt-0.5 truncate text-xl font-semibold text-text">{s.value}</p>
-                <p className="mt-1 flex items-center gap-1 text-[11px] text-subtle">
-                  {s.trend === "up" ? (
-                    <TrendingUp className="size-3 text-success" />
-                  ) : (
-                    <TrendingDown className="size-3 text-danger" />
-                  )}
-                  {s.sub}
-                </p>
+                <p className="mt-1 truncate text-[11px] text-subtle">{s.sub}</p>
               </div>
             </CardContent>
           </Card>
@@ -206,9 +245,18 @@ export default function FeesPage() {
                   </p>
                 </div>
                 <div className="shrink-0 text-right">
-                  <p className="text-sm font-semibold text-text">{p.amount}</p>
-                  <Badge variant={p.status === "paid" ? "success" : "warning"} className="mt-1">
-                    {p.status === "paid" ? "Paid" : "Pending"}
+                  <p className="text-sm font-semibold text-text">{inr.format(p.amount)}</p>
+                  <Badge
+                    variant={
+                      p.status === "paid"
+                        ? "success"
+                        : p.status === "cancelled"
+                          ? "danger"
+                          : "warning"
+                    }
+                    className="mt-1 capitalize"
+                  >
+                    {p.status}
                   </Badge>
                 </div>
               </div>

@@ -1,72 +1,47 @@
 "use client";
 
-import React, { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   CheckCircle2,
   Clock,
   Download,
-  FileText,
   LogOut,
+  Pencil,
   Plus,
   Printer,
   Search,
+  Trash2,
   XCircle,
 } from "lucide-react";
 import {
   Avatar,
   Badge,
   Button,
+  Card,
+  CardContent,
+  ConfirmDialog,
   Input,
   PageHeader,
   Pagination,
   Select,
   StatCard,
   Table,
+  useToast,
   type Column,
 } from "@/components/ui";
+import { exportToCsv } from "@/lib/exportCsv";
+import { useResource } from "@/hooks/useResource";
+import {
+  STATUS_META,
+  STATUS_OPTIONS,
+  transfersApi,
+  TYPE_OPTIONS,
+  type TransferRequest,
+} from "@/lib/api/transfers";
+import type { TransferSchema } from "@/lib/schemas/transfer";
+import { TransferFormModal } from "./TransferFormModal";
 
 const PAGE_SIZE = 10;
-
-const requests = [
-  { id: "TC-2026-001", tcNo: "TC/2026/0041", name: "Aarav Sharma",     studentId: "STU-0901", className: "9-A",  type: "transfer",   reason: "Parent relocation to Pune",        requestedOn: "2026-01-08", issuedOn: "2026-01-15", status: "issued",   dues: 0 },
-  { id: "TC-2026-002", tcNo: "—",            name: "Diya Nair",        studentId: "STU-0902", className: "6-B",  type: "withdrawal", reason: "Shifting to state board school",   requestedOn: "2026-01-11", issuedOn: "—",          status: "pending",  dues: 4200 },
-  { id: "TC-2026-003", tcNo: "TC/2026/0042", name: "Kabir Malhotra",   studentId: "STU-0903", className: "11-A", type: "transfer",   reason: "Father's job transfer to Chennai", requestedOn: "2026-01-12", issuedOn: "2026-01-19", status: "issued",   dues: 0 },
-  { id: "TC-2026-004", tcNo: "—",            name: "Ananya Iyer",      studentId: "STU-0904", className: "4-A",  type: "withdrawal", reason: "Medical — long term treatment",    requestedOn: "2026-01-14", issuedOn: "—",          status: "approved", dues: 0 },
-  { id: "TC-2026-005", tcNo: "—",            name: "Vivaan Reddy",     studentId: "STU-0905", className: "8-C",  type: "transfer",   reason: "Seeking residential school",       requestedOn: "2026-01-16", issuedOn: "—",          status: "rejected", dues: 9800 },
-  { id: "TC-2026-006", tcNo: "TC/2026/0043", name: "Ishita Banerjee",  studentId: "STU-0906", className: "10-A", type: "transfer",   reason: "Family moving to Kolkata",         requestedOn: "2026-01-17", issuedOn: "2026-01-24", status: "issued",   dues: 0 },
-  { id: "TC-2026-007", tcNo: "—",            name: "Reyansh Gupta",    studentId: "STU-0907", className: "2-B",  type: "withdrawal", reason: "Financial constraints",            requestedOn: "2026-01-19", issuedOn: "—",          status: "pending",  dues: 6500 },
-  { id: "TC-2026-008", tcNo: "TC/2026/0044", name: "Saanvi Patil",     studentId: "STU-0908", className: "12-A", type: "transfer",   reason: "Admission in Navodaya Vidyalaya",  requestedOn: "2026-01-20", issuedOn: "2026-01-27", status: "issued",   dues: 0 },
-  { id: "TC-2026-009", tcNo: "—",            name: "Arjun Chauhan",    studentId: "STU-0909", className: "7-A",  type: "transfer",   reason: "Relocation to Hyderabad",          requestedOn: "2026-01-22", issuedOn: "—",          status: "approved", dues: 0 },
-  { id: "TC-2026-010", tcNo: "—",            name: "Myra Joshi",       studentId: "STU-0910", className: "5-B",  type: "withdrawal", reason: "Home schooling",                   requestedOn: "2026-01-23", issuedOn: "—",          status: "pending",  dues: 1500 },
-  { id: "TC-2026-011", tcNo: "TC/2026/0045", name: "Advik Deshmukh",   studentId: "STU-0911", className: "9-B",  type: "transfer",   reason: "Parent posting to Nagpur",         requestedOn: "2026-01-25", issuedOn: "2026-02-01", status: "issued",   dues: 0 },
-  { id: "TC-2026-012", tcNo: "—",            name: "Kiara Menon",      studentId: "STU-0912", className: "3-A",  type: "withdrawal", reason: "Moving abroad — Dubai",            requestedOn: "2026-01-27", issuedOn: "—",          status: "approved", dues: 0 },
-  { id: "TC-2026-013", tcNo: "—",            name: "Atharv Rathore",   studentId: "STU-0913", className: "11-B", type: "transfer",   reason: "Change of stream to Commerce",     requestedOn: "2026-01-29", issuedOn: "—",          status: "rejected", dues: 0 },
-  { id: "TC-2026-014", tcNo: "TC/2026/0046", name: "Aadhya Kulkarni",  studentId: "STU-0914", className: "6-A",  type: "transfer",   reason: "Family moving to Bengaluru",       requestedOn: "2026-02-02", issuedOn: "2026-02-09", status: "issued",   dues: 0 },
-  { id: "TC-2026-015", tcNo: "—",            name: "Vihaan Saxena",    studentId: "STU-0915", className: "8-A",  type: "withdrawal", reason: "Personal / family reasons",        requestedOn: "2026-02-04", issuedOn: "—",          status: "pending",  dues: 3300 },
-  { id: "TC-2026-016", tcNo: "—",            name: "Anika Bhatt",      studentId: "STU-0916", className: "10-B", type: "transfer",   reason: "Relocation to Jaipur",             requestedOn: "2026-02-06", issuedOn: "—",          status: "approved", dues: 0 },
-];
-
-type TransferRequest = (typeof requests)[number];
-
-const STATUS_META: Record<
-  string,
-  { label: string; variant: "warning" | "info" | "success" | "danger" }
-> = {
-  pending: { label: "Pending", variant: "warning" },
-  approved: { label: "Approved", variant: "info" },
-  issued: { label: "TC Issued", variant: "success" },
-  rejected: { label: "Rejected", variant: "danger" },
-};
-
-const STATUS_OPTIONS = Object.entries(STATUS_META).map(([value, m]) => ({
-  label: m.label,
-  value,
-}));
-
-const TYPE_OPTIONS = [
-  { label: "Transfer", value: "transfer" },
-  { label: "Withdrawal", value: "withdrawal" },
-];
 
 const inr = new Intl.NumberFormat("en-IN", {
   style: "currency",
@@ -80,26 +55,90 @@ export default function TransfersPage() {
   const [type, setType] = useState("");
   const [page, setPage] = useState(1);
 
+  const filters = useMemo(() => ({ search, status, type }), [search, status, type]);
+
+  const { items, loading, error, refetch, save, remove, saving, deleting } = useResource(
+    transfersApi,
+    filters,
+    { label: "request", describe: (r) => r.name }
+  );
+
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<TransferRequest | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<TransferRequest | null>(null);
+  const { toast } = useToast();
+
+  // Narrowing a filter can strand you past the last page, so reset on change.
   const applyFilter = (setter: (value: string) => void) => (value: string) => {
     setter(value);
     setPage(1);
   };
 
-  const query = search.trim().toLowerCase();
-  const filtered = requests.filter((r) => {
-    const matchSearch =
-      !query ||
-      r.name.toLowerCase().includes(query) ||
-      r.studentId.toLowerCase().includes(query) ||
-      r.tcNo.toLowerCase().includes(query) ||
-      r.reason.toLowerCase().includes(query);
-    return matchSearch && (!status || r.status === status) && (!type || r.type === type);
-  });
+  const stats = useMemo(() => {
+    const countOf = (s: string) => items.filter((r) => r.status === s).length;
+    return {
+      total: items.length,
+      pending: countOf("pending"),
+      issued: countOf("issued"),
+      dues: items.reduce((sum, r) => sum + r.dues, 0),
+    };
+  }, [items]);
 
-  const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  // Clamp during render — resetting page state from an effect is not allowed.
+  const totalPages = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const paged = items.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
-  const countOf = (s: string) => requests.filter((r) => r.status === s).length;
-  const pendingDues = requests.reduce((sum, r) => sum + r.dues, 0);
+  /** Every filter here is applied server-side, so `items` is what the table shows. */
+  const handleExport = () => {
+    if (items.length === 0) {
+      toast({
+        title: "Nothing to export",
+        description: "No requests match the current filters.",
+        variant: "warning",
+      });
+      return;
+    }
+    exportToCsv<TransferRequest>(
+      "transfer-requests",
+      [
+        { header: "Student ID", value: (r) => r.studentId },
+        { header: "Student", value: (r) => r.name },
+        { header: "Class", value: (r) => r.className },
+        { header: "Type", value: (r) => r.type.charAt(0).toUpperCase() + r.type.slice(1) },
+        { header: "Reason", value: (r) => r.reason },
+        { header: "Requested On", value: (r) => r.requestedOn },
+        { header: "TC Number", value: (r) => (r.tcNo === "—" ? "" : r.tcNo) },
+        { header: "Issued On", value: (r) => (r.issuedOn === "—" ? "" : r.issuedOn) },
+        { header: "Pending Dues", value: (r) => r.dues },
+        { header: "Status", value: (r) => STATUS_META[r.status]?.label ?? r.status },
+      ],
+      items
+    );
+    toast({
+      title: "Export ready",
+      description: `${items.length} request${items.length === 1 ? "" : "s"} exported to CSV.`,
+    });
+  };
+
+  const openCreate = () => {
+    setEditing(null);
+    setFormOpen(true);
+  };
+
+  const handleSubmit = async (values: TransferSchema) => {
+    const ok = await save(values, editing);
+    if (ok) {
+      setFormOpen(false);
+      setEditing(null);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!pendingDelete) return;
+    const ok = await remove(pendingDelete);
+    if (ok) setPendingDelete(null);
+  };
 
   const columns: Column<TransferRequest>[] = [
     {
@@ -177,7 +216,7 @@ export default function TransfersPage() {
       sortable: true,
       render: (r) => {
         const meta = STATUS_META[r.status];
-        return <Badge variant={meta.variant}>{meta.label}</Badge>;
+        return meta ? <Badge variant={meta.variant}>{meta.label}</Badge> : null;
       },
     },
     {
@@ -187,19 +226,29 @@ export default function TransfersPage() {
       render: (r) => (
         <div className="flex items-center justify-end gap-1">
           <button
-            title="View request"
-            aria-label={`View request ${r.id}`}
-            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
-          >
-            <FileText className="size-4" />
-          </button>
-          <button
             title="Print transfer certificate"
             aria-label={`Print certificate for ${r.name}`}
             disabled={r.status !== "issued"}
             className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text disabled:pointer-events-none disabled:opacity-40"
           >
             <Printer className="size-4" />
+          </button>
+          <button
+            onClick={() => {
+              setEditing(r);
+              setFormOpen(true);
+            }}
+            aria-label={`Edit request for ${r.name}`}
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+          >
+            <Pencil className="size-4" />
+          </button>
+          <button
+            onClick={() => setPendingDelete(r)}
+            aria-label={`Delete request for ${r.name}`}
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-danger-soft hover:text-danger"
+          >
+            <Trash2 className="size-4" />
           </button>
         </div>
       ),
@@ -213,11 +262,11 @@ export default function TransfersPage() {
         description="Manage transfer certificate requests, approvals and issuance."
         actions={
           <>
-            <Button variant="outline">
+            <Button variant="outline" onClick={handleExport}>
               <Download className="size-4" />
               Export
             </Button>
-            <Button>
+            <Button onClick={openCreate}>
               <Plus className="size-4" />
               New Request
             </Button>
@@ -226,10 +275,15 @@ export default function TransfersPage() {
       />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Total Requests" value={requests.length} icon={LogOut} tone="indigo" />
-        <StatCard label="Pending Approval" value={countOf("pending")} icon={Clock} tone="amber" />
-        <StatCard label="TCs Issued" value={countOf("issued")} icon={CheckCircle2} tone="emerald" />
-        <StatCard label="Outstanding Dues" value={inr.format(pendingDues)} icon={XCircle} tone="rose" />
+        <StatCard label="Total Requests" value={stats.total} icon={LogOut} tone="indigo" />
+        <StatCard label="Pending Approval" value={stats.pending} icon={Clock} tone="amber" />
+        <StatCard label="TCs Issued" value={stats.issued} icon={CheckCircle2} tone="emerald" />
+        <StatCard
+          label="Outstanding Dues"
+          value={inr.format(stats.dues)}
+          icon={XCircle}
+          tone="rose"
+        />
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -261,23 +315,70 @@ export default function TransfersPage() {
             aria-label="Filter by request type"
           />
         </div>
-        <p className="text-xs text-muted">{filtered.length} requests</p>
+        <p className="text-xs text-muted">{items.length} requests</p>
       </div>
 
-      <Table
-        columns={columns}
-        rows={paged}
-        rowKey={(r) => r.id}
-        rowClassName={(r) => (r.status === "rejected" ? "opacity-60" : undefined)}
-        emptyTitle="No requests found"
-        emptyDescription="Try clearing your filters to see more results."
+      {error ? (
+        <Card>
+          <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+            <p className="text-sm font-medium text-danger">{error}</p>
+            <Button variant="outline" onClick={refetch}>
+              Try again
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <>
+          <Table
+            columns={columns}
+            rows={paged}
+            rowKey={(r) => r.id}
+            loading={loading}
+            rowClassName={(r) => (r.status === "rejected" ? "opacity-60" : undefined)}
+            emptyTitle="No requests found"
+            emptyDescription={
+              search || status || type
+                ? "Try clearing your filters to see more results."
+                : "Raise your first transfer request to get started."
+            }
+            emptyAction={
+              <Button variant="outline" onClick={openCreate}>
+                <Plus className="size-4" />
+                New Request
+              </Button>
+            }
+          />
+
+          <Pagination
+            page={safePage}
+            pageSize={PAGE_SIZE}
+            totalItems={items.length}
+            onPageChange={setPage}
+          />
+        </>
+      )}
+
+      <TransferFormModal
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        record={editing}
+        saving={saving}
+        onSubmit={handleSubmit}
       />
 
-      <Pagination
-        page={page}
-        pageSize={PAGE_SIZE}
-        totalItems={filtered.length}
-        onPageChange={setPage}
+      <ConfirmDialog
+        open={Boolean(pendingDelete)}
+        onOpenChange={(open) => !open && setPendingDelete(null)}
+        title="Delete request?"
+        description={
+          pendingDelete
+            ? `The ${pendingDelete.type} request for ${pendingDelete.name} (${pendingDelete.studentId}) will be permanently removed. This cannot be undone.`
+            : ""
+        }
+        confirmLabel="Delete"
+        destructive
+        loading={deleting}
+        onConfirm={handleDelete}
       />
     </div>
   );

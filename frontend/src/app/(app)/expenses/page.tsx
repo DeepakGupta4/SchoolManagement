@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   CheckCircle,
   Clock,
@@ -31,60 +31,29 @@ import {
   Card,
   CardContent,
   CardHeader,
+  ConfirmDialog,
   Input,
   PageHeader,
   Select,
   StatCard,
   Table,
+  useToast,
   type Column,
 } from "@/components/ui";
+import { exportToCsv } from "@/lib/exportCsv";
+import { useResource } from "@/hooks/useResource";
+import {
+  categoryStyles,
+  expensesApi,
+  fallbackCategory,
+  MONTH_ORDER,
+  MONTHLY_BASELINE,
+  type Expense,
+} from "@/lib/api/expenses";
+import type { ExpenseSchema } from "@/lib/schemas/expense";
 import { useChartTheme, toneClass, type ChartTone } from "@/hooks/useChartTheme";
 import { cn } from "@/lib/utils";
-
-const expenses = [
-  { id: "EXP001", title: "Electricity Bill",        category: "Utilities",   amount: 18500,  date: "Jul 15, 2025", paidTo: "BSES Rajdhani",       method: "Online",  status: "paid",    recurring: true  },
-  { id: "EXP002", title: "Lab Equipment Purchase",  category: "Equipment",   amount: 45000,  date: "Jul 12, 2025", paidTo: "Science Supplies Co.", method: "Cheque",  status: "paid",    recurring: false },
-  { id: "EXP003", title: "Water Bill",              category: "Utilities",   amount: 4200,   date: "Jul 10, 2025", paidTo: "Delhi Jal Board",      method: "Online",  status: "paid",    recurring: true  },
-  { id: "EXP004", title: "Stationery & Supplies",   category: "Supplies",    amount: 12800,  date: "Jul 08, 2025", paidTo: "Office Mart",          method: "Cash",    status: "paid",    recurring: false },
-  { id: "EXP005", title: "Internet & Broadband",    category: "Utilities",   amount: 6500,   date: "Jul 05, 2025", paidTo: "Airtel Business",      method: "Online",  status: "paid",    recurring: true  },
-  { id: "EXP006", title: "Building Maintenance",    category: "Maintenance", amount: 32000,  date: "Jul 03, 2025", paidTo: "FixIt Services",       method: "Cheque",  status: "paid",    recurring: false },
-  { id: "EXP007", title: "Sports Equipment",        category: "Equipment",   amount: 28000,  date: "Jun 28, 2025", paidTo: "Sports World",         method: "Online",  status: "paid",    recurring: false },
-  { id: "EXP008", title: "Canteen Raw Materials",   category: "Canteen",     amount: 22000,  date: "Jun 25, 2025", paidTo: "Fresh Mart",           method: "Cash",    status: "paid",    recurring: true  },
-  { id: "EXP009", title: "Security Services",       category: "Services",    amount: 15000,  date: "Jul 18, 2025", paidTo: "SecureGuard Pvt Ltd",  method: "Online",  status: "pending", recurring: true  },
-  { id: "EXP010", title: "Annual Software License", category: "Technology",  amount: 85000,  date: "Jul 20, 2025", paidTo: "EduSoft Solutions",    method: "Online",  status: "pending", recurring: true  },
-];
-
-type Expense = (typeof expenses)[number];
-
-type BadgeVariant = "default" | "success" | "warning" | "danger" | "info";
-
-const categoryStyles: Record<string, { variant: BadgeVariant; tile: string; emoji: string }> = {
-  Utilities:   { variant: "info",    tile: "bg-info-soft text-info-text",       emoji: "⚡" },
-  Equipment:   { variant: "default", tile: "bg-primary-soft text-primary-text", emoji: "🔧" },
-  Supplies:    { variant: "success", tile: "bg-success-soft text-success-text", emoji: "📦" },
-  Maintenance: { variant: "warning", tile: "bg-warning-soft text-warning-text", emoji: "🏗️" },
-  Canteen:     { variant: "danger",  tile: "bg-danger-soft text-danger-text",   emoji: "🍽️" },
-  Services:    { variant: "info",    tile: "bg-info-soft text-info-text",       emoji: "🛡️" },
-  Technology:  { variant: "default", tile: "bg-primary-soft text-primary-text", emoji: "💻" },
-};
-
-const fallbackCategory = { variant: "default" as BadgeVariant, tile: "bg-surface-hover text-muted", emoji: "📌" };
-
-const monthlyData = [
-  { month: "Feb", amount: 180000 },
-  { month: "Mar", amount: 210000 },
-  { month: "Apr", amount: 195000 },
-  { month: "May", amount: 225000 },
-  { month: "Jun", amount: 198000 },
-  { month: "Jul", amount: 269000 },
-];
-
-const categoryBreakdown = Object.entries(
-  expenses.reduce((acc, e) => {
-    acc[e.category] = (acc[e.category] || 0) + e.amount;
-    return acc;
-  }, {} as Record<string, number>)
-).map(([name, value]) => ({ name, value }));
+import { ExpenseFormModal } from "./ExpenseFormModal";
 
 /** Cycled across the category breakdown — keeps the pie and its legend matched. */
 const tonePalette: ChartTone[] = ["primary", "info", "success", "warning", "danger", "violet"];
@@ -103,26 +72,112 @@ export default function ExpensesPage() {
   const [activeTab, setActiveTab] = useState("All");
   const [catFilter, setCatFilter] = useState("All");
 
+  const filters = useMemo(
+    () => ({
+      search,
+      status: activeTab === "All" ? "" : activeTab.toLowerCase(),
+      category: catFilter === "All" ? "" : catFilter,
+    }),
+    [search, activeTab, catFilter]
+  );
+
+  const { items, loading, error, refetch, save, remove, saving, deleting } = useResource(
+    expensesApi,
+    filters,
+    { label: "expense", describe: (e) => e.title }
+  );
+
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<Expense | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Expense | null>(null);
+  const { toast } = useToast();
+
+  const handleExport = () => {
+    if (items.length === 0) {
+      toast({
+        title: "Nothing to export",
+        description: "No expenses match the current filters.",
+        variant: "warning",
+      });
+      return;
+    }
+    exportToCsv<Expense>(
+      "expenses",
+      [
+        { header: "Voucher No", value: (e) => e.voucherNo },
+        { header: "Title", value: (e) => e.title },
+        { header: "Category", value: (e) => e.category },
+        { header: "Amount (INR)", value: (e) => e.amount },
+        { header: "Date", value: (e) => e.date },
+        { header: "Paid To", value: (e) => e.paidTo },
+        { header: "Method", value: (e) => e.method },
+        { header: "Status", value: (e) => e.status },
+        { header: "Recurring", value: (e) => (e.recurring ? "Yes" : "No") },
+        { header: "Notes", value: (e) => e.notes },
+      ],
+      items
+    );
+    toast({
+      title: "Export ready",
+      description: `${items.length} expense${items.length === 1 ? "" : "s"} exported to CSV.`,
+    });
+  };
+
+  const stats = useMemo(() => {
+    const sum = (rows: Expense[]) => rows.reduce((s, e) => s + e.amount, 0);
+    return {
+      total: sum(items),
+      paid: sum(items.filter((e) => e.status === "paid")),
+      pending: sum(items.filter((e) => e.status === "pending")),
+      count: items.length,
+    };
+  }, [items]);
+
+  // Live months come from the rows themselves; closed months fall back to the
+  // carried-over baseline, so the trend reacts to every new voucher.
+  const monthlyData = useMemo(() => {
+    const live = new Map<string, number>();
+    for (const e of items) {
+      const month = e.date.slice(0, 3);
+      live.set(month, (live.get(month) ?? 0) + e.amount);
+    }
+    for (const { month, amount } of MONTHLY_BASELINE) {
+      if (!live.has(month)) live.set(month, amount);
+    }
+    return [...live.entries()]
+      .map(([month, amount]) => ({ month, amount }))
+      .sort((a, b) => MONTH_ORDER.indexOf(a.month) - MONTH_ORDER.indexOf(b.month));
+  }, [items]);
+
   // `color` feeds recharts only; `tone` is what the DOM legend swatch classes off.
-  const pieData = categoryBreakdown.map((c, i) => {
-    const tone = tonePalette[i % tonePalette.length];
-    return { ...c, tone, color: t.series[tone] };
-  });
+  const pieData = useMemo(() => {
+    const totals = new Map<string, number>();
+    for (const e of items) totals.set(e.category, (totals.get(e.category) ?? 0) + e.amount);
+    return [...totals.entries()].map(([name, value], i) => {
+      const tone = tonePalette[i % tonePalette.length];
+      return { name, value, tone, color: t.series[tone] };
+    });
+  }, [items, t.series]);
 
-  const filtered = expenses.filter((e) => {
-    const matchTab = activeTab === "All" || e.status === activeTab.toLowerCase();
-    const matchCat = catFilter === "All" || e.category === catFilter;
-    const matchSearch =
-      e.title.toLowerCase().includes(search.toLowerCase()) ||
-      e.paidTo.toLowerCase().includes(search.toLowerCase());
-    return matchTab && matchCat && matchSearch;
-  });
+  const openCreate = () => {
+    setEditing(null);
+    setFormOpen(true);
+  };
 
-  const totalPaid = expenses.filter((e) => e.status === "paid").reduce((s, e) => s + e.amount, 0);
-  const totalPending = expenses
-    .filter((e) => e.status === "pending")
-    .reduce((s, e) => s + e.amount, 0);
-  const thisMonth = expenses.reduce((s, e) => s + e.amount, 0);
+  // The form models recurrence as a yes/no select; the record stores a boolean.
+  const handleSubmit = async (values: ExpenseSchema) => {
+    const ok = await save({ ...values, recurring: values.recurring === "yes" }, editing);
+    if (ok) {
+      setFormOpen(false);
+      setEditing(null);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!pendingDelete) return;
+    const ok = await remove(pendingDelete);
+    if (ok) setPendingDelete(null);
+  };
 
   const columns: Column<Expense>[] = [
     {
@@ -133,12 +188,17 @@ export default function ExpensesPage() {
         const cc = categoryStyles[e.category] ?? fallbackCategory;
         return (
           <div className="flex items-center gap-3">
-            <div className={cn("flex size-9 shrink-0 items-center justify-center rounded-md text-base", cc.tile)}>
+            <div
+              className={cn(
+                "flex size-9 shrink-0 items-center justify-center rounded-md text-base",
+                cc.tile
+              )}
+            >
               <span aria-hidden>{cc.emoji}</span>
             </div>
             <div className="min-w-0">
               <p className="truncate font-medium text-text">{e.title}</p>
-              <p className="truncate text-xs text-subtle">{e.id}</p>
+              <p className="truncate text-xs text-subtle">{e.voucherNo}</p>
             </div>
           </div>
         );
@@ -149,7 +209,9 @@ export default function ExpensesPage() {
       header: "Category",
       sortable: true,
       render: (e) => (
-        <Badge variant={(categoryStyles[e.category] ?? fallbackCategory).variant}>{e.category}</Badge>
+        <Badge variant={(categoryStyles[e.category] ?? fallbackCategory).variant}>
+          {e.category}
+        </Badge>
       ),
     },
     {
@@ -217,14 +279,17 @@ export default function ExpensesPage() {
       render: (e) => (
         <div className="flex items-center justify-end gap-1">
           <button
-            title="Edit"
+            onClick={() => {
+              setEditing(e);
+              setFormOpen(true);
+            }}
             aria-label={`Edit ${e.title}`}
             className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
           >
             <Pencil className="size-4" />
           </button>
           <button
-            title="Delete"
+            onClick={() => setPendingDelete(e)}
             aria-label={`Delete ${e.title}`}
             className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-danger-soft hover:text-danger"
           >
@@ -242,11 +307,11 @@ export default function ExpensesPage() {
         description="Track and manage all school expenditures"
         actions={
           <>
-            <Button variant="outline">
+            <Button variant="outline" onClick={handleExport}>
               <Download className="size-4" />
               Export
             </Button>
-            <Button>
+            <Button onClick={openCreate}>
               <Plus className="size-4" />
               Add Expense
             </Button>
@@ -255,10 +320,10 @@ export default function ExpensesPage() {
       />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Total This Month" value={inr.format(thisMonth)} icon={Wallet} tone="indigo" />
-        <StatCard label="Paid" value={inr.format(totalPaid)} icon={CheckCircle} tone="emerald" />
-        <StatCard label="Pending" value={inr.format(totalPending)} icon={Clock} tone="amber" />
-        <StatCard label="Transactions" value={expenses.length} icon={ListChecks} tone="violet" />
+        <StatCard label="Total This Month" value={inr.format(stats.total)} icon={Wallet} tone="indigo" />
+        <StatCard label="Paid" value={inr.format(stats.paid)} icon={CheckCircle} tone="emerald" />
+        <StatCard label="Pending" value={inr.format(stats.pending)} icon={Clock} tone="amber" />
+        <StatCard label="Transactions" value={stats.count} icon={ListChecks} tone="violet" />
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
@@ -384,29 +449,73 @@ export default function ExpensesPage() {
             aria-label="Search expenses"
           />
         </div>
-        <p className="text-xs text-muted">{filtered.length} records</p>
+        <p className="text-xs text-muted">{items.length} records</p>
       </div>
 
-      <Table
-        columns={columns}
-        rows={filtered}
-        rowKey={(e) => e.id}
-        emptyTitle="No expenses found"
-        emptyDescription="Try adjusting your filters."
+      {error ? (
+        <Card>
+          <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+            <p className="text-sm font-medium text-danger">{error}</p>
+            <Button variant="outline" onClick={refetch}>
+              Try again
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <>
+          <Table
+            columns={columns}
+            rows={items}
+            rowKey={(e) => e.id}
+            loading={loading}
+            emptyTitle="No expenses found"
+            emptyDescription={
+              search || activeTab !== "All" || catFilter !== "All"
+                ? "Try adjusting your filters."
+                : "Record your first expense to get started."
+            }
+            emptyAction={
+              <Button variant="outline" onClick={openCreate}>
+                <Plus className="size-4" />
+                Add Expense
+              </Button>
+            }
+          />
+
+          <div className="flex flex-wrap items-center justify-between gap-3 px-1">
+            <p className="text-xs text-muted">
+              Showing <span className="font-medium text-text">{items.length}</span>{" "}
+              {items.length === 1 ? "expense" : "expenses"}
+            </p>
+            <p className="text-sm font-semibold text-text">
+              Total: <span className="text-primary">{inr.format(stats.total)}</span>
+            </p>
+          </div>
+        </>
+      )}
+
+      <ExpenseFormModal
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        record={editing}
+        saving={saving}
+        onSubmit={handleSubmit}
       />
 
-      <div className="flex flex-wrap items-center justify-between gap-3 px-1">
-        <p className="text-xs text-muted">
-          Showing <span className="font-medium text-text">{filtered.length}</span> of{" "}
-          <span className="font-medium text-text">{expenses.length}</span> expenses
-        </p>
-        <p className="text-sm font-semibold text-text">
-          Total:{" "}
-          <span className="text-primary">
-            {inr.format(filtered.reduce((s, e) => s + e.amount, 0))}
-          </span>
-        </p>
-      </div>
+      <ConfirmDialog
+        open={Boolean(pendingDelete)}
+        onOpenChange={(open) => !open && setPendingDelete(null)}
+        title="Delete expense?"
+        description={
+          pendingDelete
+            ? `${pendingDelete.title} (${pendingDelete.voucherNo}) worth ${inr.format(pendingDelete.amount)} will be permanently removed. This cannot be undone.`
+            : ""
+        }
+        confirmLabel="Delete"
+        destructive
+        loading={deleting}
+        onConfirm={handleDelete}
+      />
     </div>
   );
 }

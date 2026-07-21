@@ -2,7 +2,8 @@
 
 import React, { useState } from "react";
 import { ChevronLeft, ChevronRight, Plus, Download, Clock } from "lucide-react";
-import { Button, Card, CardContent, PageHeader } from "@/components/ui";
+import { Button, Card, CardContent, PageHeader, useToast } from "@/components/ui";
+import { exportToCsv } from "@/lib/exportCsv";
 import { cn } from "@/lib/utils";
 
 const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -40,21 +41,170 @@ const subjectTone: Record<string, string> = {
 
 type TimetableEntry = { subject: string; teacher: string } | null;
 
-const timetableData: Record<string, Record<number, TimetableEntry>> = {
-  Monday:    { 1: { subject: "Mathematics", teacher: "Dr. Priya" }, 2: { subject: "Physics", teacher: "Mr. Rahul" }, 3: { subject: "English", teacher: "Ms. Anita" }, 5: { subject: "Chemistry", teacher: "Ms. Kavita" }, 6: { subject: "History", teacher: "Mr. Suresh" }, 8: { subject: "Computer Science", teacher: "Mr. Amit" }, 9: { subject: "Physical Education", teacher: "Mr. Vikram" }, 10: { subject: "Free Period", teacher: "" } },
-  Tuesday:   { 1: { subject: "English", teacher: "Ms. Anita" }, 2: { subject: "Mathematics", teacher: "Dr. Priya" }, 3: { subject: "Biology", teacher: "Ms. Deepa" }, 5: { subject: "Hindi", teacher: "Mr. Suresh" }, 6: { subject: "Physics", teacher: "Mr. Rahul" }, 8: { subject: "Geography", teacher: "Mr. Suresh" }, 9: { subject: "Chemistry", teacher: "Ms. Kavita" }, 10: { subject: "Mathematics", teacher: "Dr. Priya" } },
-  Wednesday: { 1: { subject: "Physics", teacher: "Mr. Rahul" }, 2: { subject: "Chemistry", teacher: "Ms. Kavita" }, 3: { subject: "Mathematics", teacher: "Dr. Priya" }, 5: { subject: "English", teacher: "Ms. Anita" }, 6: { subject: "Computer Science", teacher: "Mr. Amit" }, 8: { subject: "Biology", teacher: "Ms. Deepa" }, 9: { subject: "Hindi", teacher: "Mr. Suresh" }, 10: { subject: "Physical Education", teacher: "Mr. Vikram" } },
-  Thursday:  { 1: { subject: "Hindi", teacher: "Mr. Suresh" }, 2: { subject: "Biology", teacher: "Ms. Deepa" }, 3: { subject: "Physics", teacher: "Mr. Rahul" }, 5: { subject: "Mathematics", teacher: "Dr. Priya" }, 6: { subject: "Geography", teacher: "Mr. Suresh" }, 8: { subject: "English", teacher: "Ms. Anita" }, 9: { subject: "Chemistry", teacher: "Ms. Kavita" }, 10: { subject: "Free Period", teacher: "" } },
-  Friday:    { 1: { subject: "Chemistry", teacher: "Ms. Kavita" }, 2: { subject: "English", teacher: "Ms. Anita" }, 3: { subject: "Hindi", teacher: "Mr. Suresh" }, 5: { subject: "Physics", teacher: "Mr. Rahul" }, 6: { subject: "Mathematics", teacher: "Dr. Priya" }, 8: { subject: "Computer Science", teacher: "Mr. Amit" }, 9: { subject: "Biology", teacher: "Ms. Deepa" }, 10: { subject: "Geography", teacher: "Mr. Suresh" } },
-  Saturday:  { 1: { subject: "Physical Education", teacher: "Mr. Vikram" }, 2: { subject: "Computer Science", teacher: "Mr. Amit" }, 3: { subject: "Free Period", teacher: "" }, 5: null, 6: null, 8: null, 9: null, 10: null },
+/** The weekly grid flattened to one row per scheduled slot, for CSV export. */
+type SlotRow = {
+  day: string;
+  period: string;
+  time: string;
+  subject: string;
+  teacher: string;
 };
 
-const classes = ["6-A", "6-B", "7-A", "8-A", "9-A", "9-B", "10-A", "10-B", "11-A", "12-A"];
+/** Whoever owns a subject across the school — keeps a subject's teacher stable. */
+const subjectTeacher: Record<string, string> = {
+  Mathematics: "Dr. Priya",
+  Physics: "Mr. Rahul",
+  Chemistry: "Ms. Kavita",
+  Biology: "Ms. Deepa",
+  English: "Ms. Anita",
+  History: "Mr. Suresh",
+  Geography: "Mr. Suresh",
+  "Computer Science": "Mr. Amit",
+  "Physical Education": "Mr. Vikram",
+  Hindi: "Mrs. Latha",
+  "Free Period": "",
+};
+
+/** Teaching slots — the break rows (4 and 7) carry no subject. */
+const teachingPeriods = periods.filter((p) => !p.isBreak).map((p) => p.id);
+
+/** The label shown in the Time column: breaks don't consume a period number. */
+const periodLabel = (id: number) => `P${id > 4 ? id - 1 : id}`;
+
+/**
+ * Each class has its own weekly subject load. Slot order is the Monday
+ * running order; later days rotate it so no two days repeat, which is how a
+ * real rotating school timetable is built.
+ */
+const classPlans: Record<string, string[]> = {
+  "6-A": ["Mathematics", "English", "Hindi", "Biology", "Geography", "History", "Physical Education", "Computer Science"],
+  "6-B": ["English", "Mathematics", "Biology", "Hindi", "History", "Physical Education", "Geography", "Free Period"],
+  "7-A": ["Mathematics", "Biology", "English", "History", "Hindi", "Geography", "Computer Science", "Physical Education"],
+  "8-A": ["Biology", "Mathematics", "English", "Physics", "Hindi", "Geography", "Computer Science", "History"],
+  "9-A": ["Mathematics", "Physics", "Chemistry", "English", "Biology", "Hindi", "Computer Science", "Physical Education"],
+  "9-B": ["Physics", "Mathematics", "English", "Chemistry", "Hindi", "Biology", "History", "Computer Science"],
+  "10-A": ["Mathematics", "Physics", "English", "Chemistry", "History", "Computer Science", "Physical Education", "Free Period"],
+  "10-B": ["English", "Chemistry", "Mathematics", "Physics", "Biology", "Hindi", "Geography", "Computer Science"],
+  "11-A": ["Physics", "Chemistry", "Mathematics", "Biology", "English", "Computer Science", "Free Period", "Physical Education"],
+  "12-A": ["Mathematics", "Chemistry", "Physics", "Computer Science", "Biology", "English", "Free Period", "Free Period"],
+};
+
+const classes = Object.keys(classPlans);
+
+/** Saturday is a half day — only the first four teaching slots run. */
+const SATURDAY_SLOTS = 4;
+
+function buildWeek(plan: string[]): Record<string, Record<number, TimetableEntry>> {
+  const week: Record<string, Record<number, TimetableEntry>> = {};
+
+  days.forEach((day, dayIndex) => {
+    const isSaturday = dayIndex === days.length - 1;
+    const row: Record<number, TimetableEntry> = {};
+
+    teachingPeriods.forEach((periodId, slot) => {
+      if (isSaturday && slot >= SATURDAY_SLOTS) {
+        row[periodId] = null;
+        return;
+      }
+      // Offset of 3 is coprime with an 8-slot plan, so every weekday is a
+      // different running order rather than the same list shifted by one.
+      const subject = plan[(slot + dayIndex * 3) % plan.length];
+      row[periodId] = { subject, teacher: subjectTeacher[subject] ?? "" };
+    });
+
+    week[day] = row;
+  });
+
+  return week;
+}
+
+const timetableByClass: Record<string, Record<string, Record<number, TimetableEntry>>> =
+  Object.fromEntries(Object.entries(classPlans).map(([cls, plan]) => [cls, buildWeek(plan)]));
+
 const todayIndex = Math.min(new Date().getDay() - 1, 5);
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** Monday of the week containing `from`, shifted by `weekOffset` whole weeks. */
+function mondayOf(from: Date, weekOffset: number) {
+  const d = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+  // getDay(): Sunday is 0, and Sunday belongs to the week that just ended.
+  const backToMonday = (d.getDay() + 6) % 7;
+  d.setDate(d.getDate() - backToMonday + weekOffset * 7);
+  return d;
+}
+
+const addDays = (d: Date, n: number) =>
+  new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+
+/** Explicit formatting — locale-dependent output would risk a hydration mismatch. */
+const shortDate = (d: Date) => `${MONTHS[d.getMonth()]} ${d.getDate()}`;
 
 export default function TimetablePage() {
   const [selectedClass, setSelectedClass] = useState("10-A");
   const [highlightDay, setHighlightDay] = useState<string | null>(days[todayIndex] ?? "Monday");
+  const [weekOffset, setWeekOffset] = useState(0);
+
+  const timetableData = timetableByClass[selectedClass] ?? {};
+
+  const weekStart = mondayOf(new Date(), weekOffset);
+  const weekEnd = addDays(weekStart, days.length - 1);
+  const weekLabel = `Week of ${shortDate(weekStart)} – ${shortDate(weekEnd)}, ${weekEnd.getFullYear()}`;
+
+  // "Today" only means anything while the current week is on screen.
+  const todayName = weekOffset === 0 ? days[todayIndex] ?? "" : "";
+
+  const { toast } = useToast();
+
+  /**
+   * Flattens the grid for the selected class into one row per scheduled slot,
+   * in reading order (day by day, period by period). Break rows and the empty
+   * Saturday-afternoon slots carry no lesson, so they are left out.
+   */
+  const handleExport = () => {
+    const rows: SlotRow[] = days.flatMap((day) =>
+      periods
+        .filter((p) => !p.isBreak)
+        .flatMap((period) => {
+          const entry = timetableData[day]?.[period.id];
+          if (!entry) return [];
+          return [
+            {
+              day,
+              period: periodLabel(period.id),
+              time: period.time,
+              subject: entry.subject,
+              teacher: entry.teacher,
+            },
+          ];
+        })
+    );
+
+    if (rows.length === 0) {
+      toast({
+        title: "Nothing to export",
+        description: `Class ${selectedClass} has no scheduled periods.`,
+        variant: "warning",
+      });
+      return;
+    }
+
+    exportToCsv<SlotRow>(
+      `timetable-class-${selectedClass}`,
+      [
+        { header: "Day", value: (r) => r.day },
+        { header: "Period", value: (r) => r.period },
+        { header: "Time", value: (r) => r.time },
+        { header: "Subject", value: (r) => r.subject },
+        { header: "Teacher", value: (r) => r.teacher },
+      ],
+      rows
+    );
+    toast({
+      title: "Export ready",
+      description: `${rows.length} period${rows.length === 1 ? "" : "s"} for class ${selectedClass} exported to CSV.`,
+    });
+  };
 
   return (
     <div className="flex flex-col gap-5">
@@ -63,9 +213,9 @@ export default function TimetablePage() {
         description="Weekly class schedule & period management"
         actions={
           <>
-            <Button variant="outline">
+            <Button variant="outline" onClick={handleExport}>
               <Download className="size-4" />
-              Export PDF
+              Export CSV
             </Button>
             <Button>
               <Plus className="size-4" />
@@ -94,15 +244,30 @@ export default function TimetablePage() {
           </div>
 
           <div className="ml-auto flex items-center gap-2">
-            <Button variant="outline" size="sm" aria-label="Previous week" className="px-2">
+            <Button
+              variant="outline"
+              size="sm"
+              aria-label="Previous week"
+              className="px-2"
+              onClick={() => setWeekOffset((w) => w - 1)}
+            >
               <ChevronLeft className="size-4" />
             </Button>
-            <span className="whitespace-nowrap text-sm font-medium text-text">
-              Week of Jul 14 – Jul 19, 2025
-            </span>
-            <Button variant="outline" size="sm" aria-label="Next week" className="px-2">
+            <span className="whitespace-nowrap text-sm font-medium text-text">{weekLabel}</span>
+            <Button
+              variant="outline"
+              size="sm"
+              aria-label="Next week"
+              className="px-2"
+              onClick={() => setWeekOffset((w) => w + 1)}
+            >
               <ChevronRight className="size-4" />
             </Button>
+            {weekOffset !== 0 && (
+              <Button variant="ghost" size="sm" onClick={() => setWeekOffset(0)}>
+                This week
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -121,8 +286,8 @@ export default function TimetablePage() {
                     Time
                   </span>
                 </th>
-                {days.map((day) => {
-                  const isToday = day === (days[todayIndex] ?? "");
+                {days.map((day, dayIndex) => {
+                  const isToday = day === todayName;
                   const isHighlighted = highlightDay === day;
                   return (
                     <th
@@ -136,6 +301,9 @@ export default function TimetablePage() {
                       )}
                     >
                       <div>{day}</div>
+                      <div className="mt-0.5 text-[10px] font-normal text-subtle">
+                        {shortDate(addDays(weekStart, dayIndex))}
+                      </div>
                       {isToday && (
                         <div className="mt-0.5 text-[10px] font-semibold text-primary">Today</div>
                       )}
@@ -165,14 +333,14 @@ export default function TimetablePage() {
                   <tr key={period.id} className="border-b border-border last:border-0">
                     <td className="border-r border-border px-5 py-2.5 align-middle">
                       <div className="text-[11px] font-semibold text-muted">
-                        P{period.id > 4 ? period.id - 1 : period.id}
+                        {periodLabel(period.id)}
                       </div>
                       <div className="mt-0.5 text-[10px] text-subtle">{period.time}</div>
                     </td>
 
                     {days.map((day) => {
                       const entry = timetableData[day]?.[period.id];
-                      const isToday = day === (days[todayIndex] ?? "");
+                      const isToday = day === todayName;
                       const isHighlighted = highlightDay === day;
                       const tone = entry
                         ? subjectTone[entry.subject] ?? subjectTone["Free Period"]

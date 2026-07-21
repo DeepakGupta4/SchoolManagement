@@ -4,9 +4,11 @@ import { useMemo, useState } from "react";
 import {
   CalendarClock,
   Clock,
+  Pencil,
   Plus,
   Radio,
   Search,
+  Trash2,
   Users,
   Video,
   VideoOff,
@@ -17,6 +19,7 @@ import {
   Button,
   Card,
   CardContent,
+  ConfirmDialog,
   Input,
   PageHeader,
   Pagination,
@@ -25,46 +28,19 @@ import {
   Table,
   type Column,
 } from "@/components/ui";
+import { useResource } from "@/hooks/useResource";
+import {
+  onlineClassesApi,
+  STATE_META,
+  STATE_OPTIONS,
+  SUBJECT_OPTIONS,
+  TEACHER_OPTIONS,
+  type OnlineClass,
+} from "@/lib/api/onlineClasses";
+import type { OnlineClassSchema } from "@/lib/schemas/onlineClass";
+import { OnlineClassFormModal } from "./OnlineClassFormModal";
 
 const PAGE_SIZE = 10;
-
-const onlineClasses = [
-  { id: "OC01", topic: "Quadratic Equations — Drill",  subject: "Mathematics",      teacher: "Dr. Priya Sharma",  klass: "X-A",   platform: "Google Meet", state: "live",      when: "Now · started 10:05", duration: 45, attendees: 118, link: "meet.google.com/xkq-mnvz-abc" },
-  { id: "OC02", topic: "Python Loops & Functions",     subject: "Computer Science", teacher: "Mr. Amit Joshi",    klass: "X-B",   platform: "Zoom",        state: "live",      when: "Now · started 10:15", duration: 60, attendees: 74,  link: "zoom.us/j/8842103991" },
-  { id: "OC03", topic: "Organic Chemistry — Alkanes",  subject: "Chemistry",        teacher: "Ms. Kavita Singh",  klass: "XI-B",  platform: "Google Meet", state: "live",      when: "Now · started 10:20", duration: 50, attendees: 88,  link: "meet.google.com/pqr-stuv-wxy" },
-  { id: "OC04", topic: "Wave Optics — Interference",   subject: "Physics",          teacher: "Mr. Rahul Verma",   klass: "XII-A", platform: "Zoom",        state: "scheduled", when: "Today · 11:30",       duration: 45, attendees: 86,  link: "zoom.us/j/7712449021" },
-  { id: "OC05", topic: "The Monsoon — Essay Workshop", subject: "English",          teacher: "Ms. Anita Patel",   klass: "IX-A",  platform: "Google Meet", state: "scheduled", when: "Today · 12:15",       duration: 40, attendees: 112, link: "meet.google.com/lmn-opqr-stu" },
-  { id: "OC06", topic: "Genetics — Mendel's Laws",     subject: "Biology",          teacher: "Ms. Deepa Nair",    klass: "XII-B", platform: "Teams",       state: "scheduled", when: "Today · 14:00",       duration: 50, attendees: 68,  link: "teams.microsoft.com/l/bio-xii" },
-  { id: "OC07", topic: "Mughal Empire — Overview",     subject: "History",          teacher: "Mr. Suresh Kumar",  klass: "IX-B",  platform: "Google Meet", state: "scheduled", when: "Tomorrow · 09:30",    duration: 40, attendees: 105, link: "meet.google.com/hij-klmn-opq" },
-  { id: "OC08", topic: "Ledger Posting — Practice",    subject: "Accountancy",      teacher: "Ms. Ritu Bansal",   klass: "XII-C", platform: "Zoom",        state: "scheduled", when: "Tomorrow · 11:00",    duration: 45, attendees: 52,  link: "zoom.us/j/6620037745" },
-  { id: "OC09", topic: "Hindi Vyakaran — Sandhi",      subject: "Hindi",            teacher: "Ms. Meenakshi Rao", klass: "VII-A", platform: "Google Meet", state: "recorded",  when: "18 Jul · 10:00",      duration: 38, attendees: 128, link: "drive.google.com/hin-sandhi-07" },
-  { id: "OC10", topic: "Trigonometry — Identities",    subject: "Mathematics",      teacher: "Dr. Priya Sharma",  klass: "X-B",   platform: "Zoom",        state: "recorded",  when: "17 Jul · 09:15",      duration: 47, attendees: 121, link: "drive.google.com/math-trig-11" },
-  { id: "OC11", topic: "Thermodynamics — Part 2",      subject: "Physics",          teacher: "Mr. Rahul Verma",   klass: "XI-A",  platform: "Zoom",        state: "recorded",  when: "17 Jul · 12:30",      duration: 52, attendees: 79,  link: "drive.google.com/phy-thermo-02" },
-  { id: "OC12", topic: "French Greetings & Numbers",   subject: "French",           teacher: "Ms. Elena D'Souza", klass: "XI-A",  platform: "Teams",       state: "recorded",  when: "16 Jul · 15:00",      duration: 35, attendees: 32,  link: "teams.microsoft.com/l/fr-xi" },
-  { id: "OC13", topic: "Cell Structure — Revision",    subject: "Biology",          teacher: "Ms. Deepa Nair",    klass: "XI-B",  platform: "Google Meet", state: "recorded",  when: "16 Jul · 11:45",      duration: 42, attendees: 71,  link: "drive.google.com/bio-cell-05" },
-  { id: "OC14", topic: "Sanskrit Shloka Recitation",   subject: "Sanskrit",         teacher: "Ms. Lata Trivedi",  klass: "VIII-A",platform: "Google Meet", state: "cancelled", when: "16 Jul · 09:00",      duration: 30, attendees: 0,   link: "—" },
-  { id: "OC15", topic: "Robotics — Sensor Basics",     subject: "Electronics",      teacher: "Mr. Naveen Chawla", klass: "IX-B",  platform: "Teams",       state: "scheduled", when: "Tomorrow · 15:30",    duration: 60, attendees: 26,  link: "teams.microsoft.com/l/rob-ix" },
-  { id: "OC16", topic: "Algebra Doubt Clearing",       subject: "Mathematics",      teacher: "Mr. Rakesh Yadav",  klass: "IX-A",  platform: "Zoom",        state: "scheduled", when: "Tomorrow · 16:00",    duration: 30, attendees: 94,  link: "zoom.us/j/5590118824" },
-];
-
-type OnlineClass = (typeof onlineClasses)[number];
-
-const STATE_META: Record<string, { label: string; variant: "success" | "info" | "default" | "danger" }> = {
-  live: { label: "Live now", variant: "success" },
-  scheduled: { label: "Scheduled", variant: "info" },
-  recorded: { label: "Recorded", variant: "default" },
-  cancelled: { label: "Cancelled", variant: "danger" },
-};
-
-const SUBJECT_OPTIONS = [...new Set(onlineClasses.map((c) => c.subject))]
-  .sort()
-  .map((s) => ({ label: s, value: s }));
-
-const TEACHER_OPTIONS = [...new Set(onlineClasses.map((c) => c.teacher))]
-  .sort()
-  .map((t) => ({ label: t, value: t }));
-
-const liveClasses = onlineClasses.filter((c) => c.state === "live");
 
 /** Pulsing dot marking a session that is running right now. */
 function LiveDot() {
@@ -83,6 +59,21 @@ export default function OnlineClassesPage() {
   const [state, setState] = useState("");
   const [page, setPage] = useState(1);
 
+  const filters = useMemo(
+    () => ({ search, subject, teacher, state }),
+    [search, subject, teacher, state]
+  );
+
+  const { items, loading, error, refetch, save, remove, saving, deleting } = useResource(
+    onlineClassesApi,
+    filters,
+    { label: "class", describe: (c) => c.topic }
+  );
+
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<OnlineClass | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<OnlineClass | null>(null);
+
   // A narrowed filter can strand you past the last page, so every filter
   // change resets to page 1.
   const applyFilter = (setter: (value: string) => void) => (value: string) => {
@@ -90,35 +81,41 @@ export default function OnlineClassesPage() {
     setPage(1);
   };
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return onlineClasses.filter((c) => {
-      const matchesSearch =
-        !q ||
-        c.topic.toLowerCase().includes(q) ||
-        c.subject.toLowerCase().includes(q) ||
-        c.teacher.toLowerCase().includes(q) ||
-        c.klass.toLowerCase().includes(q);
-      return (
-        matchesSearch &&
-        (!subject || c.subject === subject) &&
-        (!teacher || c.teacher === teacher) &&
-        (!state || c.state === state)
-      );
-    });
-  }, [search, subject, teacher, state]);
+  const liveClasses = useMemo(() => items.filter((c) => c.state === "live"), [items]);
 
-  const paged = useMemo(
-    () => filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
-    [filtered, page]
+  const stats = useMemo(
+    () => ({
+      live: liveClasses.length,
+      attendees: liveClasses.reduce((sum, c) => sum + c.attendees, 0),
+      scheduled: items.filter((c) => c.state === "scheduled").length,
+      recorded: items.filter((c) => c.state === "recorded").length,
+    }),
+    [items, liveClasses]
   );
 
-  const stats = useMemo(() => {
-    const scheduled = onlineClasses.filter((c) => c.state === "scheduled").length;
-    const recorded = onlineClasses.filter((c) => c.state === "recorded").length;
-    const attendees = liveClasses.reduce((sum, c) => sum + c.attendees, 0);
-    return { live: liveClasses.length, scheduled, recorded, attendees };
-  }, []);
+  // Clamp during render — resetting page state from an effect is not allowed.
+  const totalPages = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const paged = items.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+
+  const openCreate = () => {
+    setEditing(null);
+    setFormOpen(true);
+  };
+
+  const handleSubmit = async (values: OnlineClassSchema) => {
+    const ok = await save(values, editing);
+    if (ok) {
+      setFormOpen(false);
+      setEditing(null);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!pendingDelete) return;
+    const ok = await remove(pendingDelete);
+    if (ok) setPendingDelete(null);
+  };
 
   const columns: Column<OnlineClass>[] = [
     {
@@ -188,24 +185,62 @@ export default function OnlineClassesPage() {
       key: "state",
       header: "Status",
       sortable: true,
-      render: (c) => <Badge variant={STATE_META[c.state].variant}>{STATE_META[c.state].label}</Badge>,
+      render: (c) => {
+        const meta = STATE_META[c.state];
+        return meta ? <Badge variant={meta.variant}>{meta.label}</Badge> : null;
+      },
     },
     {
-      key: "link",
+      key: "actions",
       header: "",
       align: "right",
-      render: (c) =>
-        c.state === "cancelled" ? (
-          <span className="inline-flex items-center gap-1.5 text-xs text-subtle">
-            <VideoOff className="size-3.5" />
-            Cancelled
-          </span>
-        ) : (
-          <Button size="sm" variant={c.state === "live" ? "primary" : "outline"}>
-            <Video className="size-3.5" />
-            {c.state === "live" ? "Join" : c.state === "recorded" ? "Watch" : "Details"}
-          </Button>
-        ),
+      render: (c) => (
+        <div className="flex items-center justify-end gap-1">
+          {c.state === "cancelled" ? (
+            <span className="inline-flex items-center gap-1.5 text-xs text-subtle">
+              <VideoOff className="size-3.5" />
+              Cancelled
+            </span>
+          ) : (
+            // Scheduled sessions have a link but nothing to join yet, so only
+            // live and recorded ones open it.
+            <a
+              href={c.state === "scheduled" ? undefined : c.link}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-disabled={c.state === "scheduled"}
+              onClick={(e) => c.state === "scheduled" && e.preventDefault()}
+              title={c.state === "scheduled" ? `Starts ${c.when}` : c.link}
+            >
+              <Button
+                size="sm"
+                variant={c.state === "live" ? "primary" : "outline"}
+                disabled={c.state === "scheduled"}
+              >
+                <Video className="size-3.5" />
+                {c.state === "live" ? "Join" : c.state === "recorded" ? "Watch" : "Details"}
+              </Button>
+            </a>
+          )}
+          <button
+            onClick={() => {
+              setEditing(c);
+              setFormOpen(true);
+            }}
+            aria-label={`Edit ${c.topic}`}
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+          >
+            <Pencil className="size-4" />
+          </button>
+          <button
+            onClick={() => setPendingDelete(c)}
+            aria-label={`Delete ${c.topic}`}
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-danger-soft hover:text-danger"
+          >
+            <Trash2 className="size-4" />
+          </button>
+        </div>
+      ),
     },
   ];
 
@@ -220,7 +255,7 @@ export default function OnlineClassesPage() {
               <CalendarClock className="size-4" />
               Timetable
             </Button>
-            <Button>
+            <Button onClick={openCreate}>
               <Plus className="size-4" />
               Schedule class
             </Button>
@@ -282,10 +317,17 @@ export default function OnlineClassesPage() {
 
                   <div className="flex items-center justify-between gap-3 border-t border-border pt-3">
                     <span className="truncate text-xs text-subtle">{c.link}</span>
-                    <Button size="sm">
-                      <Video className="size-3.5" />
-                      Join
-                    </Button>
+                    <a
+                      href={c.link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label={`Join ${c.subject} with ${c.teacher}`}
+                    >
+                      <Button size="sm">
+                        <Video className="size-3.5" />
+                        Join
+                      </Button>
+                    </a>
                   </div>
                 </CardContent>
               </Card>
@@ -310,7 +352,7 @@ export default function OnlineClassesPage() {
             value={subject}
             onChange={(e) => applyFilter(setSubject)(e.target.value)}
             placeholder="All subjects"
-            options={SUBJECT_OPTIONS}
+            options={SUBJECT_OPTIONS.map((s) => ({ label: s, value: s }))}
             aria-label="Filter by subject"
           />
         </div>
@@ -319,7 +361,7 @@ export default function OnlineClassesPage() {
             value={teacher}
             onChange={(e) => applyFilter(setTeacher)(e.target.value)}
             placeholder="All teachers"
-            options={TEACHER_OPTIONS}
+            options={TEACHER_OPTIONS.map((t) => ({ label: t, value: t }))}
             aria-label="Filter by teacher"
           />
         </div>
@@ -328,31 +370,73 @@ export default function OnlineClassesPage() {
             value={state}
             onChange={(e) => applyFilter(setState)(e.target.value)}
             placeholder="All statuses"
-            options={[
-              { label: "Live now", value: "live" },
-              { label: "Scheduled", value: "scheduled" },
-              { label: "Recorded", value: "recorded" },
-              { label: "Cancelled", value: "cancelled" },
-            ]}
+            options={STATE_OPTIONS}
             aria-label="Filter by status"
           />
         </div>
       </div>
 
-      <Table
-        columns={columns}
-        rows={paged}
-        rowKey={(c) => c.id}
-        rowClassName={(c) => (c.state === "cancelled" ? "opacity-60" : undefined)}
-        emptyTitle="No classes found"
-        emptyDescription="Try clearing your filters to see more results."
+      {error ? (
+        <Card>
+          <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+            <p className="text-sm font-medium text-danger">{error}</p>
+            <Button variant="outline" onClick={refetch}>
+              Try again
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <>
+          <Table
+            columns={columns}
+            rows={paged}
+            rowKey={(c) => c.id}
+            loading={loading}
+            rowClassName={(c) => (c.state === "cancelled" ? "opacity-60" : undefined)}
+            emptyTitle="No classes found"
+            emptyDescription={
+              search || subject || teacher || state
+                ? "Try clearing your filters to see more results."
+                : "Schedule your first class to get started."
+            }
+            emptyAction={
+              <Button variant="outline" onClick={openCreate}>
+                <Plus className="size-4" />
+                Schedule class
+              </Button>
+            }
+          />
+
+          <Pagination
+            page={safePage}
+            pageSize={PAGE_SIZE}
+            totalItems={items.length}
+            onPageChange={setPage}
+          />
+        </>
+      )}
+
+      <OnlineClassFormModal
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        record={editing}
+        saving={saving}
+        onSubmit={handleSubmit}
       />
 
-      <Pagination
-        page={page}
-        pageSize={PAGE_SIZE}
-        totalItems={filtered.length}
-        onPageChange={setPage}
+      <ConfirmDialog
+        open={Boolean(pendingDelete)}
+        onOpenChange={(open) => !open && setPendingDelete(null)}
+        title="Delete class?"
+        description={
+          pendingDelete
+            ? `${pendingDelete.topic} (${pendingDelete.subject} · Class ${pendingDelete.klass}) will be permanently removed. This cannot be undone.`
+            : ""
+        }
+        confirmLabel="Delete"
+        destructive
+        loading={deleting}
+        onConfirm={handleDelete}
       />
     </div>
   );

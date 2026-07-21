@@ -27,9 +27,11 @@ import {
   Select,
   StatCard,
   Table,
+  useToast,
   type Column,
 } from "@/components/ui";
 import { cn } from "@/lib/utils";
+import { exportToCsv } from "@/lib/exportCsv";
 import { useResource } from "@/hooks/useResource";
 import { booksApi, CATEGORY_OPTIONS, type Book } from "@/lib/api/books";
 import type { BookSchema } from "@/lib/schemas/book";
@@ -111,10 +113,11 @@ export default function LibraryPage() {
   const [search, setSearch] = useState("");
   const [catFilter, setCatFilter] = useState("All");
 
-  const filters = useMemo(
-    () => ({ search, category: catFilter, availability: catalogTab }),
-    [search, catFilter, catalogTab]
-  );
+  // The availability tab is deliberately left out of the server filters: the
+  // stat cards need copy totals across the whole (otherwise filtered) catalogue
+  // — an "Available" tab would drop every fully-issued title from the
+  // "Issued out" sum — so the tab narrowing is applied during render instead.
+  const filters = useMemo(() => ({ search, category: catFilter }), [search, catFilter]);
 
   const { items, loading, error, refetch, save, remove, saving, deleting } = useResource(
     booksApi,
@@ -125,12 +128,23 @@ export default function LibraryPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Book | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Book | null>(null);
+  const { toast } = useToast();
+
+  // Rows for the catalogue table only — stat cards keep counting all `items`.
+  const visibleBooks = useMemo(() => {
+    if (catalogTab === "Available") return items.filter((b) => b.available > 0);
+    if (catalogTab === "Issued Out") return items.filter((b) => b.available === 0);
+    return items;
+  }, [items, catalogTab]);
 
   const stats = useMemo(
     () => ({
       total: items.reduce((s, b) => s + b.total, 0),
       available: items.reduce((s, b) => s + b.available, 0),
       issued: items.reduce((s, b) => s + (b.total - b.available), 0),
+      // Issue records are a static fixture, not a resource, so this figure
+      // cannot be derived from live data — it stays as-is until issuing is
+      // backed by its own API.
       overdue: issuedBooks.filter((i) => i.status === "overdue").length,
     }),
     [items]
@@ -143,6 +157,55 @@ export default function LibraryPage() {
       i.student.toLowerCase().includes(search.toLowerCase());
     return matchTab && matchSearch;
   });
+
+  /** Exports the catalogue or the issue register, whichever section is open. */
+  const handleExport = () => {
+    const onCatalog = activeSection === "catalog";
+    const count = onCatalog ? visibleBooks.length : filteredIssued.length;
+    if (count === 0) {
+      toast({
+        title: "Nothing to export",
+        description: `No ${onCatalog ? "books" : "issue records"} match the current filters.`,
+        variant: "warning",
+      });
+      return;
+    }
+    if (onCatalog) {
+      exportToCsv<Book>(
+        "library-catalogue",
+        [
+          { header: "Title", value: (b) => b.title },
+          { header: "Author", value: (b) => b.author },
+          { header: "Category", value: (b) => b.category },
+          { header: "ISBN", value: (b) => b.isbn },
+          { header: "Publisher", value: (b) => b.publisher },
+          { header: "Year", value: (b) => b.year },
+          { header: "Total Copies", value: (b) => b.total },
+          { header: "Available", value: (b) => b.available },
+          { header: "Issued Out", value: (b) => b.total - b.available },
+        ],
+        visibleBooks
+      );
+    } else {
+      exportToCsv<IssueRecord>(
+        "library-issues",
+        [
+          { header: "Issue ID", value: (i) => i.id },
+          { header: "Book", value: (i) => i.book },
+          { header: "Student", value: (i) => i.student },
+          { header: "Class", value: (i) => i.class },
+          { header: "Issue Date", value: (i) => i.issueDate },
+          { header: "Due Date", value: (i) => i.dueDate },
+          { header: "Status", value: (i) => i.status },
+        ],
+        filteredIssued
+      );
+    }
+    toast({
+      title: "Export ready",
+      description: `${count} ${onCatalog ? "book" : "issue record"}${count === 1 ? "" : "s"} exported to CSV.`,
+    });
+  };
 
   const openCreate = () => {
     setEditing(null);
@@ -352,7 +415,7 @@ export default function LibraryPage() {
         description="Manage books, issue records and members."
         actions={
           <>
-            <Button variant="outline">
+            <Button variant="outline" onClick={handleExport}>
               <Download className="size-4" />
               Export
             </Button>
@@ -406,7 +469,7 @@ export default function LibraryPage() {
                 aria-label="Search books"
               />
             </div>
-            <p className="text-xs text-muted">{items.length} books</p>
+            <p className="text-xs text-muted">{visibleBooks.length} books</p>
           </div>
 
           {error ? (
@@ -421,7 +484,7 @@ export default function LibraryPage() {
           ) : (
             <Table
               columns={bookColumns}
-              rows={items}
+              rows={visibleBooks}
               rowKey={(b) => b.id}
               loading={loading}
               emptyTitle="No books found"

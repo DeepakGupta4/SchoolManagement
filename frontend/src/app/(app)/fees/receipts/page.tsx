@@ -20,24 +20,15 @@ import {
   Pagination,
   StatCard,
   Table,
+  useToast,
   type Column,
 } from "@/components/ui";
 import { cn } from "@/lib/utils";
+import { exportToCsv } from "@/lib/exportCsv";
+import { FEE_RECEIPTS as receipts, type FeeReceipt } from "@/lib/api/feeRecords";
 
-const receipts = [
-  { id: "RCP001", student: "Arjun Sharma",   class: "10-A", feeType: "Tuition Fee",   amount: 5450,  method: "Online",  date: "Jul 18, 2025", status: "paid",    txnId: "TXN8821" },
-  { id: "RCP002", student: "Priya Patel",    class: "9-B",  feeType: "Full Fee",       amount: 10900, method: "Cash",    date: "Jul 17, 2025", status: "paid",    txnId: "TXN8820" },
-  { id: "RCP003", student: "Rahul Verma",    class: "11-A", feeType: "Tuition Fee",   amount: 6900,  method: "Cheque",  date: "Jul 16, 2025", status: "pending", txnId: "TXN8819" },
-  { id: "RCP004", student: "Sneha Gupta",    class: "8-B",  feeType: "Full Fee",       amount: 8800,  method: "Online",  date: "Jul 15, 2025", status: "paid",    txnId: "TXN8818" },
-  { id: "RCP005", student: "Karan Mehta",    class: "12-A", feeType: "Transport Fee", amount: 1500,  method: "UPI",     date: "Jul 14, 2025", status: "paid",    txnId: "TXN8817" },
-  { id: "RCP006", student: "Ananya Singh",   class: "7-A",  feeType: "Tuition Fee",   amount: 4400,  method: "Cash",    date: "Jul 13, 2025", status: "paid",    txnId: "TXN8816" },
-  { id: "RCP007", student: "Vikram Joshi",   class: "6-B",  feeType: "Lab Fee",        amount: 500,   method: "Online",  date: "Jul 12, 2025", status: "cancelled", txnId: "TXN8815" },
-  { id: "RCP008", student: "Meera Nair",     class: "11-B", feeType: "Full Fee",       amount: 13800, method: "DD",      date: "Jul 11, 2025", status: "paid",    txnId: "TXN8814" },
-  { id: "RCP009", student: "Rohan Das",      class: "9-A",  feeType: "Sports Fee",    amount: 700,   method: "Cash",    date: "Jul 10, 2025", status: "paid",    txnId: "TXN8813" },
-  { id: "RCP010", student: "Kavya Reddy",    class: "12-B", feeType: "Tuition Fee",   amount: 9000,  method: "Online",  date: "Jul 09, 2025", status: "pending", txnId: "TXN8812" },
-];
 
-type ReceiptRow = (typeof receipts)[number];
+type ReceiptRow = FeeReceipt;
 
 const statusConfig: Record<
   string,
@@ -62,6 +53,7 @@ export default function ReceiptsPage() {
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState("All");
   const [page, setPage] = useState(1);
+  const { toast } = useToast();
 
   const filtered = receipts.filter((r) => {
     const matchTab = activeTab === "All" || r.status === activeTab.toLowerCase();
@@ -79,6 +71,37 @@ export default function ReceiptsPage() {
   const totalCollected = receipts
     .filter((r) => r.status === "paid")
     .reduce((s, r) => s + r.amount, 0);
+
+  /** "Export All" covers every filtered receipt, not just the visible page. */
+  const handleExport = () => {
+    if (filtered.length === 0) {
+      toast({
+        title: "Nothing to export",
+        description: "No receipts match the current filters.",
+        variant: "warning",
+      });
+      return;
+    }
+    exportToCsv<ReceiptRow>(
+      "fee-receipts",
+      [
+        { header: "Receipt No", value: (r) => r.id },
+        { header: "Student", value: (r) => r.student },
+        { header: "Class", value: (r) => r.class },
+        { header: "Fee Type", value: (r) => r.feeType },
+        { header: "Amount (INR)", value: (r) => r.amount },
+        { header: "Method", value: (r) => r.method },
+        { header: "Date", value: (r) => r.date },
+        { header: "Status", value: (r) => statusConfig[r.status]?.label ?? r.status },
+        { header: "Transaction ID", value: (r) => r.txnId },
+      ],
+      filtered
+    );
+    toast({
+      title: "Export ready",
+      description: `${filtered.length} receipt${filtered.length === 1 ? "" : "s"} exported to CSV.`,
+    });
+  };
 
   const columns: Column<ReceiptRow>[] = [
     {
@@ -175,7 +198,7 @@ export default function ReceiptsPage() {
         title="Fee Receipts"
         description="View, print and download fee receipts"
         actions={
-          <Button variant="outline">
+          <Button variant="outline" onClick={handleExport}>
             <Download className="size-4" />
             Export All
           </Button>

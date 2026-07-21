@@ -1,8 +1,18 @@
 "use client";
 
 import React, { useState } from "react";
-import { Search, Send, Plus, MoreVertical, Phone, Video, Paperclip, Smile } from "lucide-react";
-import { Avatar, Button, Input } from "@/components/ui";
+import {
+  Search,
+  Send,
+  Plus,
+  MoreVertical,
+  Phone,
+  Video,
+  Paperclip,
+  Smile,
+  MessagesSquare,
+} from "lucide-react";
+import { Avatar, Button, EmptyState, Input } from "@/components/ui";
 import { cn } from "@/lib/utils";
 
 const conversations = [
@@ -45,8 +55,10 @@ export default function MessagesPage() {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState(chatMessages);
 
-  const active = conversations.find((c) => c.id === activeId)!;
-  const chat = messages[activeId] ?? [];
+  // May be undefined: the list can be filtered down to nothing, and nothing
+  // guarantees `activeId` still points at a conversation that exists.
+  const active = conversations.find((c) => c.id === activeId) ?? null;
+  const chat = active ? messages[active.id] ?? [] : [];
 
   const filtered = conversations.filter(
     (c) =>
@@ -55,7 +67,7 @@ export default function MessagesPage() {
   );
 
   function sendMessage() {
-    if (!input.trim()) return;
+    if (!active || !input.trim()) return;
     const newMsg = {
       id: Date.now(),
       from: "me" as const,
@@ -90,6 +102,24 @@ export default function MessagesPage() {
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto p-2">
+          {filtered.length === 0 && (
+            <EmptyState
+              icon={<Search className="size-5" />}
+              title="No conversations found"
+              description={
+                search
+                  ? `Nothing matches “${search}”. Try a different name or role.`
+                  : "You have no conversations yet."
+              }
+              action={
+                search ? (
+                  <Button variant="outline" size="sm" onClick={() => setSearch("")}>
+                    Clear search
+                  </Button>
+                ) : undefined
+              }
+            />
+          )}
           {filtered.map((c) => {
             const isActive = c.id === activeId;
             return (
@@ -145,93 +175,105 @@ export default function MessagesPage() {
 
       {/* Chat area */}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <div className="flex items-center justify-between gap-3 border-b border-border px-6 py-4">
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="relative shrink-0">
-              <Avatar name={active.name} size="md" />
-              {active.online && (
-                <span className="absolute bottom-0 right-0 size-2.5 rounded-full border-2 border-surface-raised bg-success" />
-              )}
-            </div>
-            <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-text">{active.name}</p>
-              <p className={cn("mt-0.5 truncate text-xs", active.online ? "text-success" : "text-subtle")}>
-                {active.online ? "Online" : active.role}
-              </p>
-            </div>
+        {!active ? (
+          <div className="flex min-h-0 flex-1 items-center justify-center p-6">
+            <EmptyState
+              icon={<MessagesSquare className="size-5" />}
+              title="Select a conversation"
+              description="Choose someone from the list on the left to read and reply to their messages."
+            />
           </div>
-          <div className="flex shrink-0 items-center gap-1">
-            <button aria-label="Voice call" className={iconButtonClasses}>
-              <Phone className="size-4.5" />
-            </button>
-            <button aria-label="Video call" className={iconButtonClasses}>
-              <Video className="size-4.5" />
-            </button>
-            <button aria-label="More options" className={iconButtonClasses}>
-              <MoreVertical className="size-4.5" />
-            </button>
-          </div>
-        </div>
-
-        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-6">
-          {chat.length === 0 && (
-            <div className="flex flex-1 items-center justify-center">
-              <p className="text-sm text-subtle">No messages yet. Say hi! 👋</p>
-            </div>
-          )}
-          {chat.map((msg) => {
-            const mine = msg.from === "me";
-            return (
-              <div key={msg.id} className={cn("flex", mine ? "justify-end" : "justify-start")}>
-                <div className="max-w-[65%]">
-                  <div
-                    className={cn(
-                      "px-3.5 py-2.5 text-sm leading-relaxed",
-                      mine
-                        ? "rounded-lg rounded-br-sm bg-primary text-white shadow-sm"
-                        : "rounded-lg rounded-bl-sm bg-surface-hover text-text"
-                    )}
-                  >
-                    {msg.text}
-                  </div>
-                  <p
-                    className={cn("mt-1 text-xs text-subtle", mine ? "text-right" : "text-left")}
-                  >
-                    {msg.time}
+        ) : (
+          <>
+            <div className="flex items-center justify-between gap-3 border-b border-border px-6 py-4">
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="relative shrink-0">
+                  <Avatar name={active.name} size="md" />
+                  {active.online && (
+                    <span className="absolute bottom-0 right-0 size-2.5 rounded-full border-2 border-surface-raised bg-success" />
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-text">{active.name}</p>
+                  <p className={cn("mt-0.5 truncate text-xs", active.online ? "text-success" : "text-subtle")}>
+                    {active.online ? "Online" : active.role}
                   </p>
                 </div>
               </div>
-            );
-          })}
-        </div>
-
-        <div className="border-t border-border px-6 py-4">
-          <div className="flex items-center gap-2 rounded-md border border-border bg-surface px-2 py-2 pl-3">
-            <button aria-label="Attach file" className={cn(iconButtonClasses, "p-1.5")}>
-              <Paperclip className="size-4" />
-            </button>
-            <input
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  sendMessage();
-                }
-              }}
-              placeholder="Type a message…"
-              aria-label="Message"
-              className="min-w-0 flex-1 border-none bg-transparent text-sm text-text outline-none placeholder:text-subtle"
-            />
-            <button aria-label="Insert emoji" className={cn(iconButtonClasses, "p-1.5")}>
-              <Smile className="size-4" />
-            </button>
-            <Button onClick={sendMessage} disabled={!input.trim()} size="sm">
-              <Send className="size-4" />
-              Send
-            </Button>
-          </div>
-        </div>
+              <div className="flex shrink-0 items-center gap-1">
+                <button aria-label="Voice call" className={iconButtonClasses}>
+                  <Phone className="size-4.5" />
+                </button>
+                <button aria-label="Video call" className={iconButtonClasses}>
+                  <Video className="size-4.5" />
+                </button>
+                <button aria-label="More options" className={iconButtonClasses}>
+                  <MoreVertical className="size-4.5" />
+                </button>
+              </div>
+            </div>
+    
+            <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-6">
+              {chat.length === 0 && (
+                <div className="flex flex-1 items-center justify-center">
+                  <p className="text-sm text-subtle">No messages yet. Say hi! 👋</p>
+                </div>
+              )}
+              {chat.map((msg) => {
+                const mine = msg.from === "me";
+                return (
+                  <div key={msg.id} className={cn("flex", mine ? "justify-end" : "justify-start")}>
+                    <div className="max-w-[65%]">
+                      <div
+                        className={cn(
+                          "px-3.5 py-2.5 text-sm leading-relaxed",
+                          mine
+                            ? "rounded-lg rounded-br-sm bg-primary text-white shadow-sm"
+                            : "rounded-lg rounded-bl-sm bg-surface-hover text-text"
+                        )}
+                      >
+                        {msg.text}
+                      </div>
+                      <p
+                        className={cn("mt-1 text-xs text-subtle", mine ? "text-right" : "text-left")}
+                      >
+                        {msg.time}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+    
+            <div className="border-t border-border px-6 py-4">
+              <div className="flex items-center gap-2 rounded-md border border-border bg-surface px-2 py-2 pl-3">
+                <button aria-label="Attach file" className={cn(iconButtonClasses, "p-1.5")}>
+                  <Paperclip className="size-4" />
+                </button>
+                <input
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      sendMessage();
+                    }
+                  }}
+                  placeholder="Type a message…"
+                  aria-label="Message"
+                  className="min-w-0 flex-1 border-none bg-transparent text-sm text-text outline-none placeholder:text-subtle"
+                />
+                <button aria-label="Insert emoji" className={cn(iconButtonClasses, "p-1.5")}>
+                  <Smile className="size-4" />
+                </button>
+                <Button onClick={sendMessage} disabled={!input.trim()} size="sm">
+                  <Send className="size-4" />
+                  Send
+                </Button>
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

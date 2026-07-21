@@ -1,14 +1,16 @@
 "use client";
 
-import React, { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   CalendarDays,
   CheckCircle2,
+  ChevronRight,
   Download,
-  FileText,
+  Pencil,
   Phone,
   Plus,
   Search,
+  Trash2,
   UserPlus,
   Users,
 } from "lucide-react";
@@ -18,65 +20,34 @@ import {
   Button,
   Card,
   CardContent,
+  ConfirmDialog,
   Input,
   PageHeader,
   Pagination,
   Select,
   StatCard,
   Table,
+  Tooltip,
+  useToast,
   type Column,
 } from "@/components/ui";
+import { exportToCsv } from "@/lib/exportCsv";
+import { useResource } from "@/hooks/useResource";
+import {
+  admissionsApi,
+  CLASS_APPLIED_OPTIONS,
+  nextStage,
+  PIPELINE,
+  SOURCE_OPTIONS,
+  STAGE_META,
+  STAGE_OPTIONS,
+  type Application,
+} from "@/lib/api/admissions";
+import type { AdmissionSchema } from "@/lib/schemas/admission";
 import { cn } from "@/lib/utils";
+import { AdmissionFormModal } from "./AdmissionFormModal";
 
 const PAGE_SIZE = 10;
-
-const applications = [
-  { id: "ADM-2026-001", name: "Aarav Sharma",     classApplied: "Class 1",  parent: "Rohit Sharma",     phone: "98765-43210", source: "Walk-in",   appliedOn: "2026-01-12", stage: "approved",  score: 88 },
-  { id: "ADM-2026-002", name: "Diya Nair",        classApplied: "Class 6",  parent: "Suresh Nair",      phone: "98450-11223", source: "Website",   appliedOn: "2026-01-14", stage: "interview", score: 76 },
-  { id: "ADM-2026-003", name: "Kabir Malhotra",   classApplied: "Class 9",  parent: "Vikas Malhotra",   phone: "99887-65432", source: "Referral",  appliedOn: "2026-01-15", stage: "applied",   score: 0  },
-  { id: "ADM-2026-004", name: "Ananya Iyer",      classApplied: "Class 11", parent: "Ganesh Iyer",      phone: "90123-45678", source: "Website",   appliedOn: "2026-01-16", stage: "enquiry",   score: 0  },
-  { id: "ADM-2026-005", name: "Vivaan Reddy",     classApplied: "Class 1",  parent: "Prasad Reddy",     phone: "88990-11223", source: "Walk-in",   appliedOn: "2026-01-18", stage: "approved",  score: 92 },
-  { id: "ADM-2026-006", name: "Ishita Banerjee",  classApplied: "Class 4",  parent: "Arindam Banerjee", phone: "97654-32109", source: "Referral",  appliedOn: "2026-01-19", stage: "rejected",  score: 41 },
-  { id: "ADM-2026-007", name: "Reyansh Gupta",    classApplied: "Class 6",  parent: "Deepak Gupta",     phone: "96543-21098", source: "Website",   appliedOn: "2026-01-20", stage: "interview", score: 81 },
-  { id: "ADM-2026-008", name: "Saanvi Patil",     classApplied: "Class 9",  parent: "Mahesh Patil",     phone: "95432-10987", source: "Fair",      appliedOn: "2026-01-21", stage: "applied",   score: 0  },
-  { id: "ADM-2026-009", name: "Arjun Chauhan",    classApplied: "Class 11", parent: "Bhupendra Chauhan",phone: "94321-09876", source: "Walk-in",   appliedOn: "2026-01-22", stage: "interview", score: 69 },
-  { id: "ADM-2026-010", name: "Myra Joshi",       classApplied: "Class 1",  parent: "Nitin Joshi",      phone: "93210-98765", source: "Website",   appliedOn: "2026-01-23", stage: "enquiry",   score: 0  },
-  { id: "ADM-2026-011", name: "Advik Deshmukh",   classApplied: "Class 4",  parent: "Sameer Deshmukh",  phone: "92109-87654", source: "Referral",  appliedOn: "2026-01-24", stage: "approved",  score: 85 },
-  { id: "ADM-2026-012", name: "Kiara Menon",      classApplied: "Class 6",  parent: "Ravi Menon",       phone: "91098-76543", source: "Fair",      appliedOn: "2026-01-25", stage: "applied",   score: 0  },
-  { id: "ADM-2026-013", name: "Atharv Rathore",   classApplied: "Class 9",  parent: "Jitendra Rathore", phone: "90987-65432", source: "Website",   appliedOn: "2026-01-27", stage: "rejected",  score: 38 },
-  { id: "ADM-2026-014", name: "Aadhya Kulkarni",  classApplied: "Class 11", parent: "Shirish Kulkarni", phone: "89876-54321", source: "Walk-in",   appliedOn: "2026-01-28", stage: "interview", score: 74 },
-  { id: "ADM-2026-015", name: "Vihaan Saxena",    classApplied: "Class 1",  parent: "Alok Saxena",      phone: "88765-43210", source: "Referral",  appliedOn: "2026-01-29", stage: "enquiry",   score: 0  },
-  { id: "ADM-2026-016", name: "Anika Bhatt",      classApplied: "Class 4",  parent: "Manoj Bhatt",      phone: "87654-32109", source: "Website",   appliedOn: "2026-02-02", stage: "approved",  score: 90 },
-  { id: "ADM-2026-017", name: "Shaurya Pillai",   classApplied: "Class 6",  parent: "Anand Pillai",     phone: "86543-21098", source: "Fair",      appliedOn: "2026-02-03", stage: "applied",   score: 0  },
-  { id: "ADM-2026-018", name: "Navya Choudhary",  classApplied: "Class 9",  parent: "Rakesh Choudhary", phone: "85432-10987", source: "Walk-in",   appliedOn: "2026-02-05", stage: "interview", score: 79 },
-];
-
-type Application = (typeof applications)[number];
-
-const STAGE_META: Record<
-  string,
-  { label: string; variant: "default" | "info" | "warning" | "success" | "danger" }
-> = {
-  enquiry: { label: "Enquiry", variant: "default" },
-  applied: { label: "Applied", variant: "info" },
-  interview: { label: "Interview", variant: "warning" },
-  approved: { label: "Approved", variant: "success" },
-  rejected: { label: "Rejected", variant: "danger" },
-};
-
-const PIPELINE = ["enquiry", "applied", "interview", "approved", "rejected"] as const;
-
-const STAGE_OPTIONS = PIPELINE.map((s) => ({ label: STAGE_META[s].label, value: s }));
-
-const CLASS_OPTIONS = ["Class 1", "Class 4", "Class 6", "Class 9", "Class 11"].map((c) => ({
-  label: c,
-  value: c,
-}));
-
-const SOURCE_OPTIONS = ["Walk-in", "Website", "Referral", "Fair"].map((s) => ({
-  label: s,
-  value: s,
-}));
 
 export default function AdmissionsPage() {
   const [search, setSearch] = useState("");
@@ -85,33 +56,110 @@ export default function AdmissionsPage() {
   const [source, setSource] = useState("");
   const [page, setPage] = useState(1);
 
+  // `stage` is deliberately left out of the server filters: the funnel needs
+  // per-stage counts across the whole (otherwise filtered) set, so the stage
+  // narrowing is applied during render instead.
+  const filters = useMemo(
+    () => ({ search, classApplied, source }),
+    [search, classApplied, source]
+  );
+
+  const { items, loading, error, refetch, save, remove, saving, deleting } = useResource(
+    admissionsApi,
+    filters,
+    { label: "application", describe: (a) => a.name }
+  );
+
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<Application | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Application | null>(null);
+  const { toast } = useToast();
+
   // Narrowing a filter can strand you past the last page, so reset on change.
   const applyFilter = (setter: (value: string) => void) => (value: string) => {
     setter(value);
     setPage(1);
   };
 
-  const query = search.trim().toLowerCase();
-  const filtered = applications.filter((a) => {
-    const matchSearch =
-      !query ||
-      a.name.toLowerCase().includes(query) ||
-      a.id.toLowerCase().includes(query) ||
-      a.parent.toLowerCase().includes(query);
-    return (
-      matchSearch &&
-      (!stage || a.stage === stage) &&
-      (!classApplied || a.classApplied === classApplied) &&
-      (!source || a.source === source)
+  const staged = useMemo(
+    () => (stage ? items.filter((a) => a.stage === stage) : items),
+    [items, stage]
+  );
+
+  const stats = useMemo(() => {
+    const countOf = (s: string) => items.filter((a) => a.stage === s).length;
+    const approved = countOf("approved");
+    return {
+      total: items.length,
+      approved,
+      inProcess: countOf("applied") + countOf("interview"),
+      conversion: items.length ? Math.round((approved / items.length) * 100) : 0,
+      byStage: Object.fromEntries(PIPELINE.map((s) => [s, countOf(s)])) as Record<string, number>,
+    };
+  }, [items]);
+
+  // Clamp during render — resetting page state from an effect is not allowed.
+  const totalPages = Math.max(1, Math.ceil(staged.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const paged = staged.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+
+  /** Exports the whole filtered funnel, not just the visible page. */
+  const handleExport = () => {
+    if (staged.length === 0) {
+      toast({
+        title: "Nothing to export",
+        description: "No applications match the current filters.",
+        variant: "warning",
+      });
+      return;
+    }
+    exportToCsv<Application>(
+      "admissions",
+      [
+        { header: "Application No", value: (a) => a.applicationNo },
+        { header: "Applicant", value: (a) => a.name },
+        { header: "Class Applied", value: (a) => a.classApplied },
+        { header: "Parent / Guardian", value: (a) => a.parent },
+        { header: "Phone", value: (a) => a.phone },
+        { header: "Source", value: (a) => a.source },
+        { header: "Applied On", value: (a) => a.appliedOn },
+        { header: "Entrance Score", value: (a) => (a.score > 0 ? a.score : "") },
+        { header: "Stage", value: (a) => STAGE_META[a.stage]?.label ?? a.stage },
+        { header: "Notes", value: (a) => a.notes },
+      ],
+      staged
     );
-  });
+    toast({
+      title: "Export ready",
+      description: `${staged.length} application${staged.length === 1 ? "" : "s"} exported to CSV.`,
+    });
+  };
 
-  const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const openCreate = () => {
+    setEditing(null);
+    setFormOpen(true);
+  };
 
-  const countOf = (s: string) => applications.filter((a) => a.stage === s).length;
-  const approved = countOf("approved");
-  const inProcess = countOf("applied") + countOf("interview");
-  const conversion = Math.round((approved / applications.length) * 100);
+  const handleSubmit = async (values: AdmissionSchema) => {
+    const ok = await save(values, editing);
+    if (ok) {
+      setFormOpen(false);
+      setEditing(null);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!pendingDelete) return;
+    const ok = await remove(pendingDelete);
+    if (ok) setPendingDelete(null);
+  };
+
+  /** Moves an application one step down the funnel. */
+  const advance = async (a: Application) => {
+    const next = nextStage(a.stage);
+    if (!next) return;
+    await save({ ...a, stage: next }, a);
+  };
 
   const columns: Column<Application>[] = [
     {
@@ -123,7 +171,7 @@ export default function AdmissionsPage() {
           <Avatar name={a.name} size="sm" />
           <div className="min-w-0">
             <p className="truncate font-medium text-text">{a.name}</p>
-            <p className="truncate text-xs text-subtle">{a.id}</p>
+            <p className="truncate text-xs text-subtle">{a.applicationNo}</p>
           </div>
         </div>
       ),
@@ -192,15 +240,42 @@ export default function AdmissionsPage() {
       key: "actions",
       header: "",
       align: "right",
-      render: (a) => (
-        <button
-          title={`Open file for ${a.name}`}
-          aria-label={`Open application ${a.id}`}
-          className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
-        >
-          <FileText className="size-4" />
-        </button>
-      ),
+      render: (a) => {
+        const next = nextStage(a.stage);
+        return (
+          <div className="flex items-center justify-end gap-1">
+            {next && (
+              <Tooltip content={`Advance to ${STAGE_META[next].label}`} side="left">
+                <button
+                  onClick={() => advance(a)}
+                  disabled={saving}
+                  aria-label={`Advance ${a.name} to ${STAGE_META[next].label}`}
+                  className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-success-soft hover:text-success disabled:pointer-events-none disabled:opacity-40"
+                >
+                  <ChevronRight className="size-4" />
+                </button>
+              </Tooltip>
+            )}
+            <button
+              onClick={() => {
+                setEditing(a);
+                setFormOpen(true);
+              }}
+              aria-label={`Edit ${a.name}`}
+              className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+            >
+              <Pencil className="size-4" />
+            </button>
+            <button
+              onClick={() => setPendingDelete(a)}
+              aria-label={`Delete ${a.name}`}
+              className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-danger-soft hover:text-danger"
+            >
+              <Trash2 className="size-4" />
+            </button>
+          </div>
+        );
+      },
     },
   ];
 
@@ -211,11 +286,11 @@ export default function AdmissionsPage() {
         description="Track every applicant from first enquiry through to approval."
         actions={
           <>
-            <Button variant="outline">
+            <Button variant="outline" onClick={handleExport}>
               <Download className="size-4" />
               Export
             </Button>
-            <Button>
+            <Button onClick={openCreate}>
               <Plus className="size-4" />
               New Application
             </Button>
@@ -224,12 +299,12 @@ export default function AdmissionsPage() {
       />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Total Applications" value={applications.length} icon={Users} tone="indigo" />
-        <StatCard label="In Process" value={inProcess} icon={UserPlus} tone="amber" />
-        <StatCard label="Approved" value={approved} icon={CheckCircle2} tone="emerald" />
+        <StatCard label="Total Applications" value={stats.total} icon={Users} tone="indigo" />
+        <StatCard label="In Process" value={stats.inProcess} icon={UserPlus} tone="amber" />
+        <StatCard label="Approved" value={stats.approved} icon={CheckCircle2} tone="emerald" />
         <StatCard
           label="Conversion Rate"
-          value={conversion}
+          value={stats.conversion}
           suffix="%"
           icon={CalendarDays}
           tone="violet"
@@ -239,8 +314,8 @@ export default function AdmissionsPage() {
       <Card>
         <CardContent className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           {PIPELINE.map((s) => {
-            const count = countOf(s);
-            const pct = Math.round((count / applications.length) * 100);
+            const count = stats.byStage[s] ?? 0;
+            const pct = stats.total ? Math.round((count / stats.total) * 100) : 0;
             return (
               <button
                 key={s}
@@ -289,7 +364,7 @@ export default function AdmissionsPage() {
             value={classApplied}
             onChange={(e) => applyFilter(setClassApplied)(e.target.value)}
             placeholder="All classes"
-            options={CLASS_OPTIONS}
+            options={CLASS_APPLIED_OPTIONS.map((c) => ({ label: c, value: c }))}
             aria-label="Filter by class applied"
           />
         </div>
@@ -298,26 +373,73 @@ export default function AdmissionsPage() {
             value={source}
             onChange={(e) => applyFilter(setSource)(e.target.value)}
             placeholder="All sources"
-            options={SOURCE_OPTIONS}
+            options={SOURCE_OPTIONS.map((s) => ({ label: s, value: s }))}
             aria-label="Filter by source"
           />
         </div>
       </div>
 
-      <Table
-        columns={columns}
-        rows={paged}
-        rowKey={(a) => a.id}
-        rowClassName={(a) => (a.stage === "rejected" ? "opacity-60" : undefined)}
-        emptyTitle="No applications found"
-        emptyDescription="Try clearing your filters to see more results."
+      {error ? (
+        <Card>
+          <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+            <p className="text-sm font-medium text-danger">{error}</p>
+            <Button variant="outline" onClick={refetch}>
+              Try again
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <>
+          <Table
+            columns={columns}
+            rows={paged}
+            rowKey={(a) => a.id}
+            loading={loading}
+            rowClassName={(a) => (a.stage === "rejected" ? "opacity-60" : undefined)}
+            emptyTitle="No applications found"
+            emptyDescription={
+              search || stage || classApplied || source
+                ? "Try clearing your filters to see more results."
+                : "Register your first application to get started."
+            }
+            emptyAction={
+              <Button variant="outline" onClick={openCreate}>
+                <Plus className="size-4" />
+                New Application
+              </Button>
+            }
+          />
+
+          <Pagination
+            page={safePage}
+            pageSize={PAGE_SIZE}
+            totalItems={staged.length}
+            onPageChange={setPage}
+          />
+        </>
+      )}
+
+      <AdmissionFormModal
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        record={editing}
+        saving={saving}
+        onSubmit={handleSubmit}
       />
 
-      <Pagination
-        page={page}
-        pageSize={PAGE_SIZE}
-        totalItems={filtered.length}
-        onPageChange={setPage}
+      <ConfirmDialog
+        open={Boolean(pendingDelete)}
+        onOpenChange={(open) => !open && setPendingDelete(null)}
+        title="Delete application?"
+        description={
+          pendingDelete
+            ? `${pendingDelete.name} (${pendingDelete.applicationNo}) will be permanently removed. This cannot be undone.`
+            : ""
+        }
+        confirmLabel="Delete"
+        destructive
+        loading={deleting}
+        onConfirm={handleDelete}
       />
     </div>
   );

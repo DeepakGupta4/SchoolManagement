@@ -5,9 +5,11 @@ import {
   BadgeCheck,
   DoorOpen,
   LogIn,
+  Pencil,
   QrCode,
   Search,
   ShieldCheck,
+  Trash2,
   UserPlus,
   Users,
 } from "lucide-react";
@@ -15,236 +17,33 @@ import {
   Avatar,
   Badge,
   Button,
+  Card,
+  CardContent,
+  ConfirmDialog,
   Input,
-  Modal,
   PageHeader,
   Pagination,
   Select,
   StatCard,
   Table,
-  Textarea,
   Tooltip,
-  useToast,
   type Column,
 } from "@/components/ui";
+import { useResource } from "@/hooks/useResource";
+import {
+  VISITOR_PURPOSE_OPTIONS,
+  VISITOR_STATUS_OPTIONS,
+  currentTime,
+  makePassCode,
+  visitorsApi,
+  type Visitor,
+  type VisitorPurpose,
+  type VisitorStatus,
+} from "@/lib/api/visitors";
+import type { VisitorSchema } from "@/lib/schemas/visitor";
+import { VisitorFormModal } from "./VisitorFormModal";
 
 const PAGE_SIZE = 8;
-
-type VisitorPurpose =
-  | "Parent meeting"
-  | "Admission enquiry"
-  | "Vendor / delivery"
-  | "Maintenance"
-  | "Student pickup"
-  | "Official inspection";
-
-type VisitorStatus = "inside" | "checked-out" | "expected";
-
-interface Visitor {
-  id: string;
-  name: string;
-  phone: string;
-  purpose: VisitorPurpose;
-  whomToMeet: string;
-  inTime: string;
-  outTime: string | null;
-  passCode: string;
-  status: VisitorStatus;
-  /** Set when the visitor is authorised to collect a student at the gate. */
-  pickupFor: string | null;
-}
-
-const PURPOSE_OPTIONS: VisitorPurpose[] = [
-  "Parent meeting",
-  "Admission enquiry",
-  "Vendor / delivery",
-  "Maintenance",
-  "Student pickup",
-  "Official inspection",
-];
-
-const VISITORS: Visitor[] = [
-  {
-    id: "VS-5001",
-    name: "Ramesh Kulkarni",
-    phone: "+91 98220 41277",
-    purpose: "Parent meeting",
-    whomToMeet: "Meenakshi Iyer (Class Teacher, VIII-A)",
-    inTime: "09:12",
-    outTime: "10:05",
-    passCode: "GP-4A19KD",
-    status: "checked-out",
-    pickupFor: null,
-  },
-  {
-    id: "VS-5002",
-    name: "Sunita Deshpande",
-    phone: "+91 99700 33812",
-    purpose: "Student pickup",
-    whomToMeet: "Gate Security Desk",
-    inTime: "13:40",
-    outTime: "13:58",
-    passCode: "GP-7X02LM",
-    status: "checked-out",
-    pickupFor: "Aarav Deshpande (VI-B)",
-  },
-  {
-    id: "VS-5003",
-    name: "Imran Shaikh",
-    phone: "+91 90280 55491",
-    purpose: "Vendor / delivery",
-    whomToMeet: "Stores Department",
-    inTime: "10:22",
-    outTime: null,
-    passCode: "GP-2M84QP",
-    status: "inside",
-    pickupFor: null,
-  },
-  {
-    id: "VS-5004",
-    name: "Dr. Anita Rao",
-    phone: "+91 98450 71203",
-    purpose: "Official inspection",
-    whomToMeet: "Principal's Office",
-    inTime: "11:05",
-    outTime: null,
-    passCode: "GP-9F51TR",
-    status: "inside",
-    pickupFor: null,
-  },
-  {
-    id: "VS-5005",
-    name: "Vikas Chaudhary",
-    phone: "+91 87930 22106",
-    purpose: "Admission enquiry",
-    whomToMeet: "Admissions Counter",
-    inTime: "09:48",
-    outTime: "10:36",
-    passCode: "GP-6C37VN",
-    status: "checked-out",
-    pickupFor: null,
-  },
-  {
-    id: "VS-5006",
-    name: "Lakshmi Narayanan",
-    phone: "+91 96320 88014",
-    purpose: "Parent meeting",
-    whomToMeet: "Priya Ramanathan (HOD Mathematics)",
-    inTime: "12:15",
-    outTime: null,
-    passCode: "GP-1B60WS",
-    status: "inside",
-    pickupFor: null,
-  },
-  {
-    id: "VS-5007",
-    name: "Prakash Jadhav",
-    phone: "+91 91580 46722",
-    purpose: "Maintenance",
-    whomToMeet: "Facilities Manager",
-    inTime: "08:30",
-    outTime: "14:10",
-    passCode: "GP-3H29YU",
-    status: "checked-out",
-    pickupFor: null,
-  },
-  {
-    id: "VS-5008",
-    name: "Fatima Ansari",
-    phone: "+91 99870 13455",
-    purpose: "Student pickup",
-    whomToMeet: "Gate Security Desk",
-    inTime: "14:02",
-    outTime: null,
-    passCode: "GP-8K73ZA",
-    status: "inside",
-    pickupFor: "Zoya Ansari (IV-C)",
-  },
-  {
-    id: "VS-5009",
-    name: "Gurpreet Singh",
-    phone: "+91 98110 60934",
-    purpose: "Vendor / delivery",
-    whomToMeet: "Canteen Supervisor",
-    inTime: "07:55",
-    outTime: "08:40",
-    passCode: "GP-5N18EQ",
-    status: "checked-out",
-    pickupFor: null,
-  },
-  {
-    id: "VS-5010",
-    name: "Neha Bhatt",
-    phone: "+91 97640 29587",
-    purpose: "Admission enquiry",
-    whomToMeet: "Admissions Counter",
-    inTime: "15:20",
-    outTime: null,
-    passCode: "GP-0J45RB",
-    status: "expected",
-    pickupFor: null,
-  },
-  {
-    id: "VS-5011",
-    name: "Santosh Pawar",
-    phone: "+91 94220 77340",
-    purpose: "Parent meeting",
-    whomToMeet: "Rajesh Nair (Sports Head)",
-    inTime: "11:48",
-    outTime: "12:22",
-    passCode: "GP-4T91CX",
-    status: "checked-out",
-    pickupFor: null,
-  },
-  {
-    id: "VS-5012",
-    name: "Meera Krishnan",
-    phone: "+91 98404 51166",
-    purpose: "Student pickup",
-    whomToMeet: "Gate Security Desk",
-    inTime: "15:05",
-    outTime: null,
-    passCode: "GP-7Q26DF",
-    status: "inside",
-    pickupFor: "Nikhil Krishnan (IX-A)",
-  },
-  {
-    id: "VS-5013",
-    name: "Abdul Rehman",
-    phone: "+91 90040 38729",
-    purpose: "Maintenance",
-    whomToMeet: "IT Support (Computer Lab)",
-    inTime: "10:50",
-    outTime: null,
-    passCode: "GP-2W83GH",
-    status: "inside",
-    pickupFor: null,
-  },
-  {
-    id: "VS-5014",
-    name: "Jyoti Sharma",
-    phone: "+91 99530 64218",
-    purpose: "Official inspection",
-    whomToMeet: "Vice Principal",
-    inTime: "16:00",
-    outTime: null,
-    passCode: "GP-6L07JK",
-    status: "expected",
-    pickupFor: null,
-  },
-  {
-    id: "VS-5015",
-    name: "Deepak Wagh",
-    phone: "+91 88880 92451",
-    purpose: "Vendor / delivery",
-    whomToMeet: "Library Desk",
-    inTime: "09:05",
-    outTime: "09:31",
-    passCode: "GP-3Z54MN",
-    status: "checked-out",
-    pickupFor: null,
-  },
-];
 
 const STATUS_VARIANT: Record<VisitorStatus, "success" | "default" | "warning"> = {
   inside: "success",
@@ -261,30 +60,23 @@ const PURPOSE_VARIANT: Record<VisitorPurpose, "info" | "warning" | "danger" | "d
   "Official inspection": "danger",
 };
 
-const currentTime = () =>
-  new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: false });
-
-const makePassCode = () => {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ0123456789";
-  let code = "";
-  for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
-  return `GP-${code}`;
-};
-
-const EMPTY_FORM = { name: "", phone: "", purpose: "", whomToMeet: "", notes: "" };
-
 export default function VisitorsPage() {
-  const { toast } = useToast();
-
-  const [visitors, setVisitors] = useState<Visitor[]>(VISITORS);
   const [search, setSearch] = useState("");
   const [purpose, setPurpose] = useState("");
   const [status, setStatus] = useState("");
   const [page, setPage] = useState(1);
 
-  const [checkInOpen, setCheckInOpen] = useState(false);
-  const [form, setForm] = useState(EMPTY_FORM);
-  const [showErrors, setShowErrors] = useState(false);
+  const filters = useMemo(() => ({ search, purpose, status }), [search, purpose, status]);
+
+  const { items, loading, error, refetch, save, remove, saving, deleting } = useResource(
+    visitorsApi,
+    filters,
+    { label: "visitor", describe: (v) => `${v.name} (${v.passCode})` }
+  );
+
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<Visitor | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Visitor | null>(null);
 
   // A narrowed filter can strand you past the last page, so every filter
   // change resets to page 1.
@@ -293,78 +85,67 @@ export default function VisitorsPage() {
     setPage(1);
   };
 
-  const setField = (key: keyof typeof EMPTY_FORM) => (value: string) =>
-    setForm((prev) => ({ ...prev, [key]: value }));
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return visitors.filter((v) => {
-      const matchesSearch =
-        !q ||
-        v.name.toLowerCase().includes(q) ||
-        v.phone.toLowerCase().includes(q) ||
-        v.whomToMeet.toLowerCase().includes(q) ||
-        v.passCode.toLowerCase().includes(q);
-      const matchesPurpose = !purpose || v.purpose === purpose;
-      const matchesStatus = !status || v.status === status;
-      return matchesSearch && matchesPurpose && matchesStatus;
-    });
-  }, [visitors, search, purpose, status]);
-
   const stats = useMemo(() => {
-    const inside = visitors.filter((v) => v.status === "inside").length;
-    const expected = visitors.filter((v) => v.status === "expected").length;
-    const pickups = visitors.filter((v) => v.pickupFor).length;
-    return { total: visitors.length, inside, expected, pickups };
-  }, [visitors]);
+    const inside = items.filter((v) => v.status === "inside").length;
+    const expected = items.filter((v) => v.status === "expected").length;
+    const pickups = items.filter((v) => v.pickupFor).length;
+    return { total: items.length, inside, expected, pickups };
+  }, [items]);
 
-  const paged = useMemo(
-    () => filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
-    [filtered, page]
-  );
+  // Clamp during render — resetting page state from an effect is not allowed.
+  const totalPages = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const paged = items.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   const openCheckIn = () => {
-    setForm(EMPTY_FORM);
-    setShowErrors(false);
-    setCheckInOpen(true);
+    setEditing(null);
+    setFormOpen(true);
   };
 
-  const handleCheckIn = (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!form.name.trim() || !form.phone.trim() || !form.purpose || !form.whomToMeet.trim()) {
-      setShowErrors(true);
-      return;
-    }
-
-    const entry: Visitor = {
-      id: `VS-${5016 + visitors.length}`,
-      name: form.name.trim(),
-      phone: form.phone.trim(),
-      purpose: form.purpose as VisitorPurpose,
-      whomToMeet: form.whomToMeet.trim(),
-      inTime: currentTime(),
-      outTime: null,
-      passCode: makePassCode(),
-      status: "inside",
-      pickupFor: form.purpose === "Student pickup" ? form.notes.trim() || "Pending verification" : null,
-    };
-
-    setVisitors((prev) => [entry, ...prev]);
-    setCheckInOpen(false);
-    setPage(1);
-    toast({
-      title: "Visitor checked in",
-      description: `${entry.name} was issued gate pass ${entry.passCode}.`,
-    });
+  const openEdit = (visitor: Visitor) => {
+    setEditing(visitor);
+    setFormOpen(true);
   };
 
-  const checkOut = (visitor: Visitor) => {
-    setVisitors((prev) =>
-      prev.map((v) =>
-        v.id === visitor.id ? { ...v, status: "checked-out", outTime: currentTime() } : v
-      )
+  const handleSubmit = async (values: VisitorSchema) => {
+    const { notes, ...rest } = values;
+    const pickupFor =
+      rest.purpose === "Student pickup" ? notes.trim() || "Pending verification" : null;
+
+    const ok = await save(
+      {
+        ...rest,
+        pickupFor,
+        passCode: editing?.passCode ?? makePassCode(),
+        inTime: editing?.inTime ?? currentTime(),
+        outTime:
+          rest.status === "checked-out" ? editing?.outTime ?? currentTime() : null,
+      },
+      editing
     );
-    toast({ title: "Visitor checked out", description: `${visitor.name} has left the premises.` });
+
+    if (ok) {
+      setFormOpen(false);
+      setEditing(null);
+      if (!editing) setPage(1);
+    }
+  };
+
+  const checkOut = async (visitor: Visitor) => {
+    await save({ ...visitor, status: "checked-out", outTime: currentTime() }, visitor);
+  };
+
+  const handleDelete = async () => {
+    if (!pendingDelete) return;
+    const ok = await remove(pendingDelete);
+    if (ok) setPendingDelete(null);
+  };
+
+  const clearFilters = () => {
+    setSearch("");
+    setPurpose("");
+    setStatus("");
+    setPage(1);
   };
 
   const columns: Column<Visitor>[] = [
@@ -440,15 +221,30 @@ export default function VisitorsPage() {
       key: "actions",
       header: "",
       align: "right",
-      render: (v) =>
-        v.status === "inside" ? (
-          <Button variant="outline" size="sm" onClick={() => checkOut(v)}>
-            <DoorOpen className="size-3.5" />
-            Check out
-          </Button>
-        ) : (
-          <span className="text-subtle">—</span>
-        ),
+      render: (v) => (
+        <div className="flex items-center justify-end gap-1">
+          {v.status === "inside" && (
+            <Button variant="outline" size="sm" disabled={saving} onClick={() => checkOut(v)}>
+              <DoorOpen className="size-3.5" />
+              Check out
+            </Button>
+          )}
+          <button
+            onClick={() => openEdit(v)}
+            aria-label={`Edit ${v.name}`}
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+          >
+            <Pencil className="size-4" />
+          </button>
+          <button
+            onClick={() => setPendingDelete(v)}
+            aria-label={`Delete ${v.name}`}
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-danger-soft hover:text-danger"
+          >
+            <Trash2 className="size-4" />
+          </button>
+        </div>
+      ),
     },
   ];
 
@@ -494,7 +290,7 @@ export default function VisitorsPage() {
             value={purpose}
             onChange={(e) => applyFilter(setPurpose)(e.target.value)}
             placeholder="All purposes"
-            options={PURPOSE_OPTIONS.map((p) => ({ label: p, value: p }))}
+            options={VISITOR_PURPOSE_OPTIONS}
             aria-label="Filter by purpose"
           />
         </div>
@@ -503,99 +299,76 @@ export default function VisitorsPage() {
             value={status}
             onChange={(e) => applyFilter(setStatus)(e.target.value)}
             placeholder="All statuses"
-            options={[
-              { label: "Inside", value: "inside" },
-              { label: "Checked out", value: "checked-out" },
-              { label: "Expected", value: "expected" },
-            ]}
+            options={VISITOR_STATUS_OPTIONS}
             aria-label="Filter by status"
           />
         </div>
       </div>
 
-      <Table
-        columns={columns}
-        rows={paged}
-        rowKey={(v) => v.id}
-        rowClassName={(v) => (v.status === "checked-out" ? "opacity-70" : undefined)}
-        emptyTitle="No visitors found"
-        emptyDescription="Try clearing your filters, or check in a new visitor at the gate."
-        emptyAction={
-          <Button variant="outline" onClick={openCheckIn}>
-            <UserPlus className="size-4" />
-            Check in visitor
-          </Button>
-        }
+      {error ? (
+        <Card>
+          <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+            <p className="text-sm font-medium text-danger">{error}</p>
+            <Button variant="outline" onClick={refetch}>
+              Try again
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <>
+          <Table
+            columns={columns}
+            rows={paged}
+            rowKey={(v) => v.id}
+            loading={loading}
+            rowClassName={(v) => (v.status === "checked-out" ? "opacity-70" : undefined)}
+            emptyTitle="No visitors found"
+            emptyDescription="Try clearing your filters, or check in a new visitor at the gate."
+            emptyAction={
+              search || purpose || status ? (
+                <Button variant="outline" onClick={clearFilters}>
+                  Clear filters
+                </Button>
+              ) : (
+                <Button variant="outline" onClick={openCheckIn}>
+                  <UserPlus className="size-4" />
+                  Check in visitor
+                </Button>
+              )
+            }
+          />
+
+          <Pagination
+            page={safePage}
+            pageSize={PAGE_SIZE}
+            totalItems={items.length}
+            onPageChange={setPage}
+          />
+        </>
+      )}
+
+      <VisitorFormModal
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        record={editing}
+        saving={saving}
+        onSubmit={handleSubmit}
       />
 
-      <Pagination
-        page={page}
-        pageSize={PAGE_SIZE}
-        totalItems={filtered.length}
-        onPageChange={setPage}
-      />
-
-      <Modal
-        open={checkInOpen}
-        onOpenChange={setCheckInOpen}
-        title="Check in visitor"
-        description="A QR gate pass is generated automatically once the entry is saved."
-        footer={
-          <>
-            <Button variant="outline" type="button" onClick={() => setCheckInOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" form="visitor-check-in-form">
-              <UserPlus className="size-4" />
-              Issue gate pass
-            </Button>
-          </>
+      <ConfirmDialog
+        open={Boolean(pendingDelete)}
+        onOpenChange={(open) => !open && setPendingDelete(null)}
+        title="Delete gate log entry?"
+        description={
+          pendingDelete
+            ? `${pendingDelete.name}'s entry and gate pass ${pendingDelete.passCode} will be removed from the log. This cannot be undone.`
+            : ""
         }
-      >
-        <form id="visitor-check-in-form" onSubmit={handleCheckIn} className="flex flex-col gap-4">
-          <Input
-            label="Full name"
-            required
-            placeholder="e.g. Ramesh Kulkarni"
-            value={form.name}
-            onChange={(e) => setField("name")(e.target.value)}
-            error={showErrors && !form.name.trim() ? "Visitor name is required." : undefined}
-          />
-          <Input
-            label="Phone number"
-            required
-            type="tel"
-            placeholder="+91 98220 41277"
-            value={form.phone}
-            onChange={(e) => setField("phone")(e.target.value)}
-            error={showErrors && !form.phone.trim() ? "Phone number is required." : undefined}
-          />
-          <Select
-            label="Purpose of visit"
-            required
-            placeholder="Select a purpose"
-            value={form.purpose}
-            onChange={(e) => setField("purpose")(e.target.value)}
-            options={PURPOSE_OPTIONS.map((p) => ({ label: p, value: p }))}
-            error={showErrors && !form.purpose ? "Select the purpose of the visit." : undefined}
-          />
-          <Input
-            label="Whom to meet"
-            required
-            placeholder="e.g. Meenakshi Iyer (Class Teacher, VIII-A)"
-            value={form.whomToMeet}
-            onChange={(e) => setField("whomToMeet")(e.target.value)}
-            error={showErrors && !form.whomToMeet.trim() ? "Enter the host or department." : undefined}
-          />
-          <Textarea
-            label="Notes"
-            placeholder="For student pickup, enter the student name and class."
-            hint="Optional — recorded against the gate pass."
-            value={form.notes}
-            onChange={(e) => setField("notes")(e.target.value)}
-          />
-        </form>
-      </Modal>
+        confirmLabel="Delete"
+        destructive
+        loading={deleting}
+        onConfirm={handleDelete}
+      />
     </div>
   );
 }

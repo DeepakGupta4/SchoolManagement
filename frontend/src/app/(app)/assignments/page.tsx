@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   Plus, Search, Download, Eye, Edit, Trash2, Calendar, Clock, Users,
   Paperclip, CheckCircle, AlertCircle, XCircle, BookOpen, X,
@@ -10,26 +10,21 @@ import {
   Button,
   Card,
   CardContent,
+  ConfirmDialog,
   Input,
   PageHeader,
   StatCard,
   Table,
+  useToast,
   type Column,
 } from "@/components/ui";
 import { cn } from "@/lib/utils";
+import { exportToCsv } from "@/lib/exportCsv";
+import { useResource } from "@/hooks/useResource";
+import { assignmentsApi, type Assignment } from "@/lib/api/assignments";
+import type { AssignmentSchema } from "@/lib/schemas/assignment";
+import { AssignmentFormModal } from "./AssignmentFormModal";
 
-const assignments = [
-  { id: "A001", title: "Quadratic Equations Practice",    subject: "Mathematics", class: "10-A", teacher: "Dr. Priya Sharma",  given: "Jul 10", due: "Jul 17", totalMarks: 20, submitted: 38, total: 42, status: "active",   type: "Worksheet"  },
-  { id: "A002", title: "Newton's Laws Problems",          subject: "Physics",     class: "11-A", teacher: "Mr. Rahul Verma",   given: "Jul 12", due: "Jul 19", totalMarks: 15, submitted: 30, total: 40, status: "active",   type: "Problem Set"},
-  { id: "A003", title: "Essay — My Favourite Season",     subject: "English",     class: "8-B",  teacher: "Ms. Anita Patel",   given: "Jul 8",  due: "Jul 15", totalMarks: 10, submitted: 44, total: 44, status: "completed",type: "Essay"      },
-  { id: "A004", title: "Periodic Table Elements",         subject: "Chemistry",   class: "9-A",  teacher: "Ms. Kavita Singh",  given: "Jul 14", due: "Jul 21", totalMarks: 25, submitted: 12, total: 38, status: "active",   type: "Research"   },
-  { id: "A005", title: "World War II Summary",            subject: "History",     class: "10-B", teacher: "Mr. Suresh Kumar",  given: "Jul 5",  due: "Jul 12", totalMarks: 15, submitted: 40, total: 40, status: "completed",type: "Essay"      },
-  { id: "A006", title: "Cell Division Diagrams",          subject: "Biology",     class: "12-A", teacher: "Ms. Deepa Nair",    given: "Jul 15", due: "Jul 22", totalMarks: 20, submitted: 5,  total: 35, status: "active",   type: "Diagram"    },
-  { id: "A007", title: "Python Basics Program",           subject: "Comp. Sci",   class: "9-B",  teacher: "Mr. Amit Joshi",    given: "Jul 16", due: "Jul 23", totalMarks: 30, submitted: 0,  total: 36, status: "upcoming", type: "Practical"  },
-  { id: "A008", title: "Trigonometry Identities",         subject: "Mathematics", class: "11-A", teacher: "Dr. Priya Sharma",  given: "Jul 18", due: "Jul 25", totalMarks: 20, submitted: 0,  total: 40, status: "upcoming", type: "Worksheet"  },
-];
-
-type Assignment = (typeof assignments)[number];
 type BadgeVariant = "default" | "success" | "warning" | "danger" | "info";
 
 const statusConfig: Record<
@@ -40,6 +35,12 @@ const statusConfig: Record<
   completed: { variant: "success", icon: CheckCircle, label: "Completed" },
   upcoming:  { variant: "warning", icon: AlertCircle, label: "Upcoming"  },
   overdue:   { variant: "danger",  icon: XCircle,     label: "Overdue"   },
+};
+
+const fallbackStatus = {
+  variant: "default" as BadgeVariant,
+  icon: AlertCircle as React.ElementType,
+  label: "Unknown",
 };
 
 /** Assignment types share the semantic palette rather than bespoke hex. */
@@ -67,15 +68,89 @@ const tabs = ["All", "Active", "Upcoming", "Completed"];
 export default function AssignmentsPage() {
   const [activeTab, setActiveTab] = useState("All");
   const [search, setSearch]       = useState("");
-  const [selected, setSelected]   = useState<Assignment | null>(null);
+  // Held by id, not by value, so the detail panel always reflects the freshest
+  // row and closes by itself when that row is deleted.
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const { toast } = useToast();
 
-  const filtered = assignments.filter(a => {
-    const matchTab    = activeTab === "All" || a.status === activeTab.toLowerCase();
-    const matchSearch = a.title.toLowerCase().includes(search.toLowerCase()) ||
-                        a.subject.toLowerCase().includes(search.toLowerCase()) ||
-                        a.class.toLowerCase().includes(search.toLowerCase());
-    return matchTab && matchSearch;
-  });
+  const filters = useMemo(
+    () => ({ search, status: activeTab === "All" ? "All" : activeTab.toLowerCase() }),
+    [search, activeTab]
+  );
+
+  const { items, loading, error, refetch, save, remove, saving, deleting } = useResource(
+    assignmentsApi,
+    filters,
+    { label: "assignment", describe: (a) => a.title }
+  );
+
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<Assignment | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Assignment | null>(null);
+
+  const selected = items.find((a) => a.id === selectedId) ?? null;
+
+  const stats = useMemo(
+    () => ({
+      total: items.length,
+      active: items.filter((a) => a.status === "active").length,
+      completed: items.filter((a) => a.status === "completed").length,
+      upcoming: items.filter((a) => a.status === "upcoming").length,
+    }),
+    [items]
+  );
+
+  const openCreate = () => {
+    setEditing(null);
+    setFormOpen(true);
+  };
+
+  const handleSubmit = async (values: AssignmentSchema) => {
+    const ok = await save(values, editing);
+    if (ok) {
+      setFormOpen(false);
+      setEditing(null);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!pendingDelete) return;
+    const ok = await remove(pendingDelete);
+    if (ok) setPendingDelete(null);
+  };
+
+  const handleExport = () => {
+    if (items.length === 0) {
+      toast({
+        title: "Nothing to export",
+        description: "No assignments match the current filters.",
+        variant: "warning",
+      });
+      return;
+    }
+    exportToCsv<Assignment>(
+      "assignments",
+      [
+        { header: "Code", value: (a) => a.code },
+        { header: "Title", value: (a) => a.title },
+        { header: "Type", value: (a) => a.type },
+        { header: "Subject", value: (a) => a.subject },
+        { header: "Class", value: (a) => a.class },
+        { header: "Teacher", value: (a) => a.teacher },
+        { header: "Given", value: (a) => a.given },
+        { header: "Due", value: (a) => a.due },
+        { header: "Total Marks", value: (a) => a.totalMarks },
+        { header: "Submitted", value: (a) => a.submitted },
+        { header: "Class Size", value: (a) => a.total },
+        { header: "Status", value: (a) => statusConfig[a.status]?.label ?? a.status },
+      ],
+      items
+    );
+    toast({
+      title: "Export ready",
+      description: `${items.length} assignment${items.length === 1 ? "" : "s"} exported to CSV.`,
+    });
+  };
 
   const columns: Column<Assignment>[] = [
     {
@@ -96,7 +171,7 @@ export default function AssignmentsPage() {
             <p
               className={cn(
                 "truncate font-medium",
-                selected?.id === a.id ? "text-primary" : "text-text"
+                selectedId === a.id ? "text-primary" : "text-text"
               )}
             >
               {a.title}
@@ -148,9 +223,9 @@ export default function AssignmentsPage() {
       key: "submitted",
       header: "Submission",
       sortable: true,
-      sortValue: (a) => a.submitted / a.total,
+      sortValue: (a) => (a.total ? a.submitted / a.total : 0),
       render: (a) => {
-        const subPct = Math.round((a.submitted / a.total) * 100);
+        const subPct = a.total ? Math.round((a.submitted / a.total) * 100) : 0;
         return (
           <div className="flex items-center gap-2">
             <div className="h-1.5 w-14 overflow-hidden rounded-full bg-surface-hover">
@@ -186,7 +261,7 @@ export default function AssignmentsPage() {
       header: "Status",
       sortable: true,
       render: (a) => {
-        const sc = statusConfig[a.status];
+        const sc = statusConfig[a.status] ?? fallbackStatus;
         const StatusIcon = sc.icon;
         return (
           <Badge variant={sc.variant} className="gap-1.5 px-2.5 py-1">
@@ -200,21 +275,29 @@ export default function AssignmentsPage() {
       key: "actions",
       header: "Actions",
       align: "right",
+      // The row itself toggles the detail panel, so the action cluster stops the
+      // click from bubbling — each button owns its own behaviour.
       render: (a) => (
         <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
           <button
+            onClick={() => setSelectedId(selectedId === a.id ? null : a.id)}
             aria-label={`View ${a.title}`}
             className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-info-soft hover:text-info-text"
           >
             <Eye className="size-4" />
           </button>
           <button
+            onClick={() => {
+              setEditing(a);
+              setFormOpen(true);
+            }}
             aria-label={`Edit ${a.title}`}
             className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-success-soft hover:text-success-text"
           >
             <Edit className="size-4" />
           </button>
           <button
+            onClick={() => setPendingDelete(a)}
             aria-label={`Delete ${a.title}`}
             className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-danger-soft hover:text-danger-text"
           >
@@ -242,11 +325,11 @@ export default function AssignmentsPage() {
         description="Manage and track all class assignments"
         actions={
           <>
-            <Button variant="outline">
+            <Button variant="outline" onClick={handleExport}>
               <Download className="size-4" />
               Export
             </Button>
-            <Button>
+            <Button onClick={openCreate}>
               <Plus className="size-4" />
               New Assignment
             </Button>
@@ -255,25 +338,10 @@ export default function AssignmentsPage() {
       />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Total" value={assignments.length} icon={BookOpen} tone="indigo" />
-        <StatCard
-          label="Active"
-          value={assignments.filter((a) => a.status === "active").length}
-          icon={Clock}
-          tone="cyan"
-        />
-        <StatCard
-          label="Completed"
-          value={assignments.filter((a) => a.status === "completed").length}
-          icon={CheckCircle}
-          tone="emerald"
-        />
-        <StatCard
-          label="Upcoming"
-          value={assignments.filter((a) => a.status === "upcoming").length}
-          icon={AlertCircle}
-          tone="amber"
-        />
+        <StatCard label="Total" value={stats.total} icon={BookOpen} tone="indigo" />
+        <StatCard label="Active" value={stats.active} icon={Clock} tone="cyan" />
+        <StatCard label="Completed" value={stats.completed} icon={CheckCircle} tone="emerald" />
+        <StatCard label="Upcoming" value={stats.upcoming} icon={AlertCircle} tone="amber" />
       </div>
 
       <div className={cn("grid grid-cols-1 gap-5", selected && "xl:grid-cols-[1fr_380px]")}>
@@ -301,23 +369,52 @@ export default function AssignmentsPage() {
                 aria-label="Search assignments"
               />
             </div>
-            <p className="ml-auto text-xs text-muted">{filtered.length} assignments</p>
+            <p className="ml-auto text-xs text-muted">{items.length} assignments</p>
           </div>
 
-          <Table
-            columns={columns}
-            rows={filtered}
-            rowKey={(a) => a.id}
-            onRowClick={(a) => setSelected(selected?.id === a.id ? null : a)}
-            rowClassName={(a) => (selected?.id === a.id ? "bg-primary-soft" : undefined)}
-            emptyTitle="No assignments found"
-            emptyDescription="Try a different tab or clear your search."
-            emptyAction={
-              <Button variant="outline" onClick={() => { setSearch(""); setActiveTab("All"); }}>
-                Clear filters
-              </Button>
-            }
-          />
+          {error ? (
+            <Card>
+              <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+                <p className="text-sm font-medium text-danger">{error}</p>
+                <Button variant="outline" onClick={refetch}>
+                  Try again
+                </Button>
+              </CardContent>
+            </Card>
+          ) : (
+            <Table
+              columns={columns}
+              rows={items}
+              rowKey={(a) => a.id}
+              loading={loading}
+              onRowClick={(a) => setSelectedId(selectedId === a.id ? null : a.id)}
+              rowClassName={(a) => (selectedId === a.id ? "bg-primary-soft" : undefined)}
+              emptyTitle="No assignments found"
+              emptyDescription={
+                search || activeTab !== "All"
+                  ? "Try a different tab or clear your search."
+                  : "Create your first assignment to get started."
+              }
+              emptyAction={
+                search || activeTab !== "All" ? (
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setSearch("");
+                      setActiveTab("All");
+                    }}
+                  >
+                    Clear filters
+                  </Button>
+                ) : (
+                  <Button variant="outline" onClick={openCreate}>
+                    <Plus className="size-4" />
+                    New assignment
+                  </Button>
+                )
+              }
+            />
+          )}
         </div>
 
         {selected && (
@@ -328,7 +425,7 @@ export default function AssignmentsPage() {
                   <BookOpen className="size-5" />
                 </div>
                 <button
-                  onClick={() => setSelected(null)}
+                  onClick={() => setSelectedId(null)}
                   aria-label="Close details"
                   className="focus-ring rounded-sm bg-white/10 p-1.5 text-white transition-colors hover:bg-white/20"
                 >
@@ -369,7 +466,11 @@ export default function AssignmentsPage() {
                   <div
                     className="h-full rounded-full bg-primary"
                     style={{
-                      width: `${Math.round((selected.submitted / selected.total) * 100)}%`,
+                      width: `${
+                        selected.total
+                          ? Math.round((selected.submitted / selected.total) * 100)
+                          : 0
+                      }%`,
                     }}
                   />
                 </div>
@@ -383,6 +484,29 @@ export default function AssignmentsPage() {
           </Card>
         )}
       </div>
+
+      <AssignmentFormModal
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        record={editing}
+        saving={saving}
+        onSubmit={handleSubmit}
+      />
+
+      <ConfirmDialog
+        open={Boolean(pendingDelete)}
+        onOpenChange={(open) => !open && setPendingDelete(null)}
+        title="Delete assignment?"
+        description={
+          pendingDelete
+            ? `${pendingDelete.title} and its ${pendingDelete.submitted} submission(s) will be permanently removed. This cannot be undone.`
+            : ""
+        }
+        confirmLabel="Delete"
+        destructive
+        loading={deleting}
+        onConfirm={handleDelete}
+      />
     </div>
   );
 }

@@ -8,8 +8,7 @@ import {
   CheckCircle,
   Clock,
   Download,
-  Edit,
-  Eye,
+  Pencil,
   PencilLine,
   Plus,
   Search,
@@ -18,25 +17,23 @@ import {
 import {
   Badge,
   Button,
+  Card,
+  CardContent,
+  ConfirmDialog,
   Input,
   PageHeader,
   StatCard,
   Table,
+  useToast,
   type Column,
 } from "@/components/ui";
 import { cn } from "@/lib/utils";
+import { exportToCsv } from "@/lib/exportCsv";
+import { useResource } from "@/hooks/useResource";
+import { examScheduleApi, type ScheduledExam } from "@/lib/api/examSchedule";
+import type { ScheduledExamSchema } from "@/lib/schemas/examSchedule";
+import { ScheduledExamFormModal } from "./ScheduledExamFormModal";
 
-const scheduleData = [
-  { id: "EX001", exam: "Mid-Term Exam",   subject: "Mathematics",   class: "10-A", date: "Jul 28, 2025", time: "8:30 AM", duration: "3 hrs",  room: "Hall A", invigilator: "Dr. Priya Sharma",  totalMarks: 100, status: "upcoming" },
-  { id: "EX002", exam: "Mid-Term Exam",   subject: "Physics",       class: "10-A", date: "Jul 29, 2025", time: "8:30 AM", duration: "3 hrs",  room: "Hall B", invigilator: "Mr. Rahul Verma",   totalMarks: 100, status: "upcoming" },
-  { id: "EX003", exam: "Mid-Term Exam",   subject: "Chemistry",     class: "10-A", date: "Jul 30, 2025", time: "8:30 AM", duration: "3 hrs",  room: "Hall A", invigilator: "Ms. Kavita Singh",  totalMarks: 100, status: "upcoming" },
-  { id: "EX004", exam: "Unit Test 1",     subject: "English",       class: "9-B",  date: "Jul 20, 2025", time: "10:00 AM",duration: "1 hr",   room: "Room 201", invigilator: "Ms. Anita Patel", totalMarks: 25,  status: "upcoming" },
-  { id: "EX005", exam: "Class Test",      subject: "Biology",       class: "11-A", date: "Jul 18, 2025", time: "11:00 AM",duration: "45 min", room: "Room 301", invigilator: "Ms. Deepa Nair",  totalMarks: 20,  status: "ongoing"  },
-  { id: "EX006", exam: "Unit Test 1",     subject: "History",       class: "8-A",  date: "Jul 10, 2025", time: "9:00 AM", duration: "1 hr",   room: "Room 106", invigilator: "Mr. Suresh Kumar",totalMarks: 25,  status: "completed"},
-  { id: "EX007", exam: "Practical",       subject: "Chemistry",     class: "12-A", date: "Jul 08, 2025", time: "9:00 AM", duration: "2 hrs",  room: "Chem Lab", invigilator: "Ms. Kavita Singh", totalMarks: 30,  status: "completed"},
-];
-
-type ScheduledExam = (typeof scheduleData)[number];
 type BadgeVariant = React.ComponentProps<typeof Badge>["variant"];
 
 const statusVariant: Record<string, BadgeVariant> = {
@@ -51,26 +48,100 @@ export default function ExamSchedulePage() {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("All");
 
-  const filtered = useMemo(
-    () =>
-      scheduleData.filter((e) => {
-        const matchFilter = filter === "All" || e.status === filter.toLowerCase();
-        const q = search.toLowerCase();
-        const matchSearch =
-          e.subject.toLowerCase().includes(q) ||
-          e.class.toLowerCase().includes(q) ||
-          e.exam.toLowerCase().includes(q);
-        return matchFilter && matchSearch;
-      }),
-    [filter, search]
+  // The status tab is deliberately left out of the server filters: the stat
+  // cards need per-status counts across the whole (otherwise filtered) set, so
+  // the status narrowing is applied during render instead.
+  const filters = useMemo(() => ({ search, status: "All" }), [search]);
+
+  const { items, loading, error, refetch, save, remove, saving, deleting } = useResource(
+    examScheduleApi,
+    filters,
+    { label: "scheduled exam", describe: (e) => `${e.exam} — ${e.subject}` }
   );
+
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<ScheduledExam | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<ScheduledExam | null>(null);
+  const { toast } = useToast();
+
+  // Rows for the table only — stat cards keep counting the full `items`.
+  const visible = useMemo(
+    () => (filter === "All" ? items : items.filter((e) => e.status === filter.toLowerCase())),
+    [items, filter]
+  );
+
+  const counts = useMemo(
+    () => ({
+      total: items.length,
+      upcoming: items.filter((e) => e.status === "upcoming").length,
+      ongoing: items.filter((e) => e.status === "ongoing").length,
+      completed: items.filter((e) => e.status === "completed").length,
+    }),
+    [items]
+  );
+
+  const handleExport = () => {
+    if (visible.length === 0) {
+      toast({
+        title: "Nothing to export",
+        description: "No scheduled exams match the current filters.",
+        variant: "warning",
+      });
+      return;
+    }
+    exportToCsv<ScheduledExam>(
+      "exam-schedule",
+      [
+        { header: "Code", value: (e) => e.code },
+        { header: "Exam", value: (e) => e.exam },
+        { header: "Subject", value: (e) => e.subject },
+        { header: "Class", value: (e) => e.class },
+        { header: "Date", value: (e) => e.date },
+        { header: "Time", value: (e) => e.time },
+        { header: "Duration", value: (e) => e.duration },
+        { header: "Room", value: (e) => e.room },
+        { header: "Invigilator", value: (e) => e.invigilator },
+        { header: "Total Marks", value: (e) => e.totalMarks },
+        { header: "Status", value: (e) => e.status },
+      ],
+      visible
+    );
+    toast({
+      title: "Export ready",
+      description: `${visible.length} scheduled exam${visible.length === 1 ? "" : "s"} exported to CSV.`,
+    });
+  };
+
+  const openCreate = () => {
+    setEditing(null);
+    setFormOpen(true);
+  };
+
+  const handleSubmit = async (values: ScheduledExamSchema) => {
+    const ok = await save(values, editing);
+    if (ok) {
+      setFormOpen(false);
+      setEditing(null);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!pendingDelete) return;
+    const ok = await remove(pendingDelete);
+    if (ok) setPendingDelete(null);
+  };
 
   const columns: Column<ScheduledExam>[] = [
     {
       key: "exam",
       header: "Exam",
       sortable: true,
-      render: (e) => <span className="whitespace-nowrap font-medium text-text">{e.exam}</span>,
+      render: (e) => (
+        <div className="min-w-0">
+          <p className="truncate font-medium text-text">{e.exam}</p>
+          <p className="truncate text-xs text-subtle">{e.code}</p>
+        </div>
+      ),
     },
     {
       key: "subject",
@@ -150,18 +221,17 @@ export default function ExamSchedulePage() {
       render: (e) => (
         <div className="flex items-center justify-end gap-1">
           <button
-            aria-label={`View ${e.exam} — ${e.subject}`}
-            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
-          >
-            <Eye className="size-4" />
-          </button>
-          <button
+            onClick={() => {
+              setEditing(e);
+              setFormOpen(true);
+            }}
             aria-label={`Edit ${e.exam} — ${e.subject}`}
             className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
           >
-            <Edit className="size-4" />
+            <Pencil className="size-4" />
           </button>
           <button
+            onClick={() => setPendingDelete(e)}
             aria-label={`Delete ${e.exam} — ${e.subject}`}
             className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-danger-soft hover:text-danger"
           >
@@ -179,11 +249,11 @@ export default function ExamSchedulePage() {
         description="View and manage all scheduled examinations"
         actions={
           <>
-            <Button variant="outline">
+            <Button variant="outline" onClick={handleExport}>
               <Download className="size-4" />
               Export
             </Button>
-            <Button>
+            <Button onClick={openCreate}>
               <Plus className="size-4" />
               Add Exam
             </Button>
@@ -192,30 +262,10 @@ export default function ExamSchedulePage() {
       />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          label="Total Scheduled"
-          value={scheduleData.length}
-          icon={CalendarCheck}
-          tone="indigo"
-        />
-        <StatCard
-          label="Upcoming"
-          value={scheduleData.filter((e) => e.status === "upcoming").length}
-          icon={CalendarClock}
-          tone="cyan"
-        />
-        <StatCard
-          label="Ongoing"
-          value={scheduleData.filter((e) => e.status === "ongoing").length}
-          icon={PencilLine}
-          tone="amber"
-        />
-        <StatCard
-          label="Completed"
-          value={scheduleData.filter((e) => e.status === "completed").length}
-          icon={CheckCircle}
-          tone="emerald"
-        />
+        <StatCard label="Total Scheduled" value={counts.total} icon={CalendarCheck} tone="indigo" />
+        <StatCard label="Upcoming" value={counts.upcoming} icon={CalendarClock} tone="cyan" />
+        <StatCard label="Ongoing" value={counts.ongoing} icon={PencilLine} tone="amber" />
+        <StatCard label="Completed" value={counts.completed} icon={CheckCircle} tone="emerald" />
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -249,12 +299,57 @@ export default function ExamSchedulePage() {
         </div>
       </div>
 
-      <Table
-        columns={columns}
-        rows={filtered}
-        rowKey={(e) => e.id}
-        emptyTitle="No scheduled exams found"
-        emptyDescription="Try adjusting your filters"
+      {error ? (
+        <Card>
+          <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+            <p className="text-sm font-medium text-danger">{error}</p>
+            <Button variant="outline" onClick={refetch}>
+              Try again
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <Table
+          columns={columns}
+          rows={visible}
+          rowKey={(e) => e.id}
+          loading={loading}
+          emptyTitle="No scheduled exams found"
+          emptyDescription={
+            search || filter !== "All"
+              ? "Try adjusting your filters"
+              : "Add your first schedule entry to get started."
+          }
+          emptyAction={
+            <Button variant="outline" onClick={openCreate}>
+              <Plus className="size-4" />
+              Add Exam
+            </Button>
+          }
+        />
+      )}
+
+      <ScheduledExamFormModal
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        record={editing}
+        saving={saving}
+        onSubmit={handleSubmit}
+      />
+
+      <ConfirmDialog
+        open={Boolean(pendingDelete)}
+        onOpenChange={(open) => !open && setPendingDelete(null)}
+        title="Delete scheduled exam?"
+        description={
+          pendingDelete
+            ? `${pendingDelete.exam} — ${pendingDelete.subject} (${pendingDelete.class}) will be permanently removed. This cannot be undone.`
+            : ""
+        }
+        confirmLabel="Delete"
+        destructive
+        loading={deleting}
+        onConfirm={handleDelete}
       />
     </div>
   );

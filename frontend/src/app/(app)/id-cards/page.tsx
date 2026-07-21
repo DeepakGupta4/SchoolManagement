@@ -1,38 +1,17 @@
 "use client";
 
 import Link from "next/link";
+import { useCallback, useMemo } from "react";
 import {
-  ArrowRight, FileText, GraduationCap, IdCard as IdCardIcon, Printer, Users,
+  ArrowRight, FileText, GraduationCap, IdCard as IdCardIcon, Users,
 } from "lucide-react";
 import { Badge, Card, CardContent, CardHeader, PageHeader, StatCard } from "@/components/ui";
 import { IdCard } from "@/components/cards/IdCard";
-
-const destinations = [
-  {
-    title: "Student ID Cards",
-    description: "Generate and print PVC identity cards for enrolled students.",
-    href: "/students/id-cards",
-    icon: GraduationCap,
-    gradient: "gradient-indigo",
-    count: "1,240 students",
-  },
-  {
-    title: "Teacher ID Cards",
-    description: "Staff identity cards with designation and department.",
-    href: "/teachers/id-cards",
-    icon: Users,
-    gradient: "gradient-emerald",
-    count: "86 staff",
-  },
-  {
-    title: "Admit Cards",
-    description: "Examination admit cards with seating and centre details.",
-    href: "/exams/admit-cards",
-    icon: FileText,
-    gradient: "gradient-amber",
-    count: "Mid-Term 2025-26",
-  },
-];
+import { useAsyncList } from "@/hooks/useAsyncList";
+import { listStudents } from "@/lib/api/students";
+import { listTeachers } from "@/lib/api/teachers";
+import type { Student } from "@/types/student";
+import type { Teacher } from "@/types/teacher";
 
 const sampleHolder = {
   id: "sample",
@@ -49,6 +28,42 @@ const sampleHolder = {
 };
 
 export default function IdCardsOverviewPage() {
+  const fetchStudents = useCallback(() => listStudents({ status: "active" }), []);
+  const fetchTeachers = useCallback(() => listTeachers({ status: "active" }), []);
+
+  const { items: students } = useAsyncList<Student>(fetchStudents);
+  const { items: teachers } = useAsyncList<Teacher>(fetchTeachers);
+
+  const destinations = useMemo(
+    () => [
+      {
+        title: "Student ID Cards",
+        description: "Generate and print PVC identity cards for enrolled students.",
+        href: "/students/id-cards",
+        icon: GraduationCap,
+        gradient: "gradient-indigo",
+        count: `${students.length} students`,
+      },
+      {
+        title: "Teacher ID Cards",
+        description: "Staff identity cards with designation and department.",
+        href: "/teachers/id-cards",
+        icon: Users,
+        gradient: "gradient-emerald",
+        count: `${teachers.length} staff`,
+      },
+      {
+        title: "Admit Cards",
+        description: "Examination admit cards with seating and centre details.",
+        href: "/exams/admit-cards",
+        icon: FileText,
+        gradient: "gradient-amber",
+        count: "Mid-Term 2025-26",
+      },
+    ],
+    [students.length, teachers.length]
+  );
+
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
@@ -56,11 +71,34 @@ export default function IdCardsOverviewPage() {
         description="Identity cards, admit cards and printable school documents."
       />
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Cards issued" value="1,118" icon={IdCardIcon} tone="indigo" sub="This session" />
-        <StatCard label="Pending print" value="208" icon={Printer} tone="amber" sub="Awaiting batch" />
-        <StatCard label="Admit cards" value="412" icon={FileText} tone="violet" sub="Mid-Term 2025-26" />
-        <StatCard label="Reprints" value="37" icon={IdCardIcon} tone="rose" sub="Lost or damaged" />
+      {/*
+        Card issuance, print queues and reprints have no resource behind them
+        yet, so those figures cannot be derived — rather than print invented
+        precision, this row reports only what the student and teacher
+        directories actually know: how many people need a card.
+      */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <StatCard
+          label="Students on roll"
+          value={students.length}
+          icon={GraduationCap}
+          tone="indigo"
+          sub="Eligible for a student card"
+        />
+        <StatCard
+          label="Teaching staff"
+          value={teachers.length}
+          icon={Users}
+          tone="emerald"
+          sub="Eligible for a staff card"
+        />
+        <StatCard
+          label="Card holders"
+          value={students.length + teachers.length}
+          icon={IdCardIcon}
+          tone="violet"
+          sub="Students and staff combined"
+        />
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">

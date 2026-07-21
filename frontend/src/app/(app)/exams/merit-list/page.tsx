@@ -27,22 +27,69 @@ import {
 } from "@/components/ui";
 import { cn } from "@/lib/utils";
 
-const meritData = [
-  { id: "S002", name: "Priya Patel",   class: "10-A", roll: 2,  total: 565, pct: 94.2, grade: "A+", attendance: 98 },
-  { id: "S006", name: "Ananya Joshi",  class: "10-A", roll: 6,  total: 545, pct: 90.8, grade: "A+", attendance: 96 },
-  { id: "S001", name: "Aarav Sharma",  class: "10-A", roll: 1,  total: 524, pct: 87.3, grade: "A",  attendance: 94 },
-  { id: "S004", name: "Sneha Gupta",   class: "10-A", roll: 4,  total: 477, pct: 79.5, grade: "B+", attendance: 88 },
-  { id: "S007", name: "Vikram Nair",   class: "10-A", roll: 7,  total: 460, pct: 76.7, grade: "B+", attendance: 80 },
-  { id: "S008", name: "Meera Iyer",    class: "10-A", roll: 8,  total: 448, pct: 74.7, grade: "B",  attendance: 91 },
-  { id: "S009", name: "Arjun Reddy",   class: "10-A", roll: 9,  total: 430, pct: 71.7, grade: "B",  attendance: 87 },
-  { id: "S003", name: "Rohan Verma",   class: "10-A", roll: 3,  total: 383, pct: 63.8, grade: "B",  attendance: 72 },
-  { id: "S010", name: "Pooja Mishra",  class: "10-A", roll: 10, total: 340, pct: 56.7, grade: "C",  attendance: 60 },
-  { id: "S005", name: "Karan Singh",   class: "10-A", roll: 5,  total: 292, pct: 48.7, grade: "F",  attendance: 65 },
+const MAX_TOTAL = 600;
+
+const classes = ["All", "6-A", "7-A", "8-A", "9-A", "10-A", "11-A", "12-A"];
+const exams   = ["Mid-Term Exam", "Unit Test 1", "Final Exam"];
+
+const NAME_POOL = [
+  "Aarav Sharma", "Priya Patel", "Rohan Verma", "Sneha Gupta", "Karan Singh",
+  "Ananya Joshi", "Vikram Nair", "Meera Iyer", "Arjun Reddy", "Pooja Mishra",
+  "Rahul Das", "Divya Menon", "Ishaan Kapoor", "Nisha Rao", "Aditya Bose",
+  "Tara Sethi", "Yash Chauhan", "Riya Malhotra", "Kabir Anand", "Sara Qureshi",
+  "Manav Trivedi", "Lakshmi Pillai", "Dev Bhatia", "Anjali Saxena", "Nikhil Rane",
+  "Farah Khan", "Sameer Dutta", "Kavya Hegde", "Om Prakash", "Neha Kulkarni",
 ];
 
-type MeritStudent = (typeof meritData)[number];
+type MeritStudent = {
+  id: string;
+  name: string;
+  class: string;
+  exam: string;
+  roll: number;
+  total: number;
+  pct: number;
+  grade: string;
+  attendance: number;
+};
 
-const MAX_TOTAL = 600;
+function gradeFor(pct: number) {
+  if (pct >= 90) return "A+";
+  if (pct >= 80) return "A";
+  if (pct >= 70) return "B+";
+  if (pct >= 60) return "B";
+  if (pct >= 50) return "C";
+  return "F";
+}
+
+/**
+ * Results exist per (class, exam) pair — the same student scores differently in
+ * the Unit Test and the Finals, which is exactly what the two filters select.
+ */
+function resultsFor(className: string, classIndex: number, exam: string, examIndex: number) {
+  const nameOffset = (classIndex * 6) % NAME_POOL.length;
+
+  return Array.from({ length: 10 }, (_, i) => {
+    const seed = classIndex * 131 + examIndex * 53 + i * 29;
+    const total = 285 + ((seed * 37) % 286); // 285 – 570 of 600
+    const pct = Math.round((total / MAX_TOTAL) * 1000) / 10;
+    return {
+      id: `${className}-${String(i + 1).padStart(2, "0")}`,
+      name: NAME_POOL[(nameOffset + i) % NAME_POOL.length],
+      class: className,
+      exam,
+      roll: i + 1,
+      total,
+      pct,
+      grade: gradeFor(pct),
+      attendance: 58 + ((seed * 17) % 42), // 58 – 99
+    } satisfies MeritStudent;
+  });
+}
+
+const meritData: MeritStudent[] = classes
+  .filter((c) => c !== "All")
+  .flatMap((c, ci) => exams.flatMap((e, ei) => resultsFor(c, ci, e, ei)));
 
 /** Grade chip tones, expressed only in semantic tokens. */
 const gradeClass: Record<string, string> = {
@@ -62,9 +109,6 @@ const podiumPedestal = [
   "h-12 bg-danger-soft text-danger-text",
 ];
 
-const classes = ["All", "6-A", "7-A", "8-A", "9-A", "10-A", "11-A", "12-A"];
-const exams   = ["Mid-Term Exam", "Unit Test 1", "Final Exam"];
-
 const toOptions = (values: string[]) => values.map((v) => ({ label: v, value: v }));
 
 export default function MeritListPage() {
@@ -72,21 +116,29 @@ export default function MeritListPage() {
   const [selClass, setSelClass] = useState("10-A");
   const [selExam,  setSelExam]  = useState("Mid-Term Exam");
 
-  const filtered = meritData.filter((s) =>
-    s.name.toLowerCase().includes(search.toLowerCase())
-  );
+  const query = search.trim().toLowerCase();
+  // Class + exam scope the cohort; search narrows within it. Ranking is by
+  // total, so rank always reflects the cohort actually on screen.
+  const cohort = meritData
+    .filter((s) => (selClass === "All" || s.class === selClass) && s.exam === selExam)
+    .sort((a, b) => b.total - a.total);
 
-  const top3 = meritData.slice(0, 3);
-  const classAverage = (
-    meritData.reduce((a, b) => a + b.pct, 0) / meritData.length
-  ).toFixed(1);
+  const filtered = cohort.filter((s) => !query || s.name.toLowerCase().includes(query));
+
+  const top3 = cohort.slice(0, 3);
+  const classAverage =
+    cohort.length > 0
+      ? (cohort.reduce((a, b) => a + b.pct, 0) / cohort.length).toFixed(1)
+      : "0.0";
 
   const columns: Column<MeritStudent>[] = [
     {
       key: "rank",
       header: "Rank",
       render: (s) => {
-        const i = filtered.indexOf(s);
+        // Rank against the whole cohort, not the search result, so searching
+        // for one student still shows their real position.
+        const i = cohort.indexOf(s);
         return (
           <div
             className={cn(
@@ -203,29 +255,31 @@ export default function MeritListPage() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           label="Total Students"
-          value={meritData.length}
+          value={cohort.length}
           icon={GraduationCap}
           tone="indigo"
         />
         <StatCard
           label="Pass"
-          value={meritData.filter((s) => s.grade !== "F").length}
+          value={cohort.filter((s) => s.grade !== "F").length}
           icon={Award}
           tone="emerald"
         />
         <StatCard
           label="Fail"
-          value={meritData.filter((s) => s.grade === "F").length}
+          value={cohort.filter((s) => s.grade === "F").length}
           icon={XCircle}
           tone="rose"
         />
         <StatCard label="Class Average" value={`${classAverage}%`} icon={Percent} tone="amber" />
       </div>
 
+      {top3.length === 3 && (
       <Card>
         <CardContent className="py-8">
           <p className="mb-7 text-center text-[10px] font-semibold uppercase tracking-widest text-subtle">
-            Top Performers
+            Top Performers — {selClass === "All" ? "All Classes" : `Class ${selClass}`} ·{" "}
+            {selExam}
           </p>
           <div className="flex items-end justify-center gap-5">
             {/* 2nd place */}
@@ -288,6 +342,7 @@ export default function MeritListPage() {
           </div>
         </CardContent>
       </Card>
+      )}
 
       <div className="flex flex-wrap items-center gap-3">
         <div className="w-36">
@@ -326,7 +381,7 @@ export default function MeritListPage() {
         // Top three carry a podium tint so placement reads at a glance.
         // Rank is list position, matching how the Rank column derives it.
         rowClassName={(s) =>
-          ["bg-warning-soft", "bg-surface-hover", "bg-danger-soft"][filtered.indexOf(s)]
+          ["bg-warning-soft", "bg-surface-hover", "bg-danger-soft"][cohort.indexOf(s)]
         }
         emptyTitle="No students found"
         emptyDescription="Try a different search term."

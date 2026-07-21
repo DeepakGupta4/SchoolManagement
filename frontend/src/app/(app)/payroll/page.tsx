@@ -33,10 +33,12 @@ import {
   Select,
   StatCard,
   Table,
+  useToast,
   type Column,
 } from "@/components/ui";
 import { useChartTheme } from "@/hooks/useChartTheme";
 import { cn } from "@/lib/utils";
+import { exportToCsv } from "@/lib/exportCsv";
 
 const payrollData = [
   { id: "EMP001", name: "Dr. Priya Sharma",    role: "Teacher",       dept: "Mathematics",       basic: 55000, hra: 22000, ta: 5000, deductions: 8250,  net: 73750, status: "paid",    bank: "SBI ****4521"   },
@@ -103,6 +105,7 @@ export default function PayrollPage() {
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState("All");
   const [roleFilter, setRoleFilter] = useState("All");
+  const { toast } = useToast();
 
   const filtered = payrollData.filter((e) => {
     const tabVal = activeTab === "On Hold" ? "on-hold" : activeTab.toLowerCase();
@@ -121,6 +124,38 @@ export default function PayrollPage() {
     .filter((e) => e.status === "pending")
     .reduce((s, e) => s + e.net, 0);
   const roles = ["All", ...Array.from(new Set(payrollData.map((e) => e.role)))];
+
+  const handleExport = () => {
+    if (filtered.length === 0) {
+      toast({
+        title: "Nothing to export",
+        description: "No payroll records match the current filters.",
+        variant: "warning",
+      });
+      return;
+    }
+    exportToCsv<Employee>(
+      "payroll",
+      [
+        { header: "Employee ID", value: (e) => e.id },
+        { header: "Name", value: (e) => e.name },
+        { header: "Role", value: (e) => e.role },
+        { header: "Department", value: (e) => e.dept },
+        { header: "Basic (INR)", value: (e) => e.basic },
+        { header: "HRA (INR)", value: (e) => e.hra },
+        { header: "TA (INR)", value: (e) => e.ta },
+        { header: "Deductions (INR)", value: (e) => e.deductions },
+        { header: "Net Pay (INR)", value: (e) => e.net },
+        { header: "Bank", value: (e) => e.bank },
+        { header: "Status", value: (e) => e.status },
+      ],
+      filtered
+    );
+    toast({
+      title: "Export ready",
+      description: `${filtered.length} payroll record${filtered.length === 1 ? "" : "s"} exported to CSV.`,
+    });
+  };
 
   const columns: Column<Employee>[] = [
     {
@@ -241,11 +276,13 @@ export default function PayrollPage() {
         description="Manage staff salaries and monthly disbursements"
         actions={
           <>
-            <Button variant="outline">
+            <Button variant="outline" onClick={handleExport}>
               <Download className="size-4" />
               Export
             </Button>
-            <Button>
+            {/* Disabled until a disbursement backend exists. A live-looking
+                "Run Payroll" that silently does nothing is worse than none. */}
+            <Button disabled title="Salary disbursement is not connected yet">
               <Send className="size-4" />
               Run Payroll
             </Button>

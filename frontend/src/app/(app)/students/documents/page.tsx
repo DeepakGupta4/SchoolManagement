@@ -22,8 +22,10 @@ import {
   Select,
   StatCard,
   Table,
+  useToast,
   type Column,
 } from "@/components/ui";
+import { exportToCsv } from "@/lib/exportCsv";
 import { cn } from "@/lib/utils";
 
 const PAGE_SIZE = 10;
@@ -94,6 +96,7 @@ export default function StudentDocumentsPage() {
   const [docType, setDocType] = useState("");
   const [docState, setDocState] = useState("");
   const [page, setPage] = useState(1);
+  const { toast } = useToast();
 
   const applyFilter = (setter: (value: string) => void) => (value: string) => {
     setter(value);
@@ -131,6 +134,37 @@ export default function StudentDocumentsPage() {
   );
   const missingCount = totalSlots - verifiedCount - pendingCount;
   const fullyComplete = records.filter((r) => completion(r) === 100).length;
+
+  /** One row per student in the filtered set, one column per document type. */
+  const handleExport = () => {
+    if (filtered.length === 0) {
+      toast({
+        title: "Nothing to export",
+        description: "No student files match the current filters.",
+        variant: "warning",
+      });
+      return;
+    }
+    exportToCsv<DocRecord>(
+      "student-documents",
+      [
+        { header: "Student ID", value: (r) => r.id },
+        { header: "Student", value: (r) => r.name },
+        { header: "Class", value: (r) => r.className },
+        { header: "Guardian", value: (r) => r.guardian },
+        ...DOC_TYPES.map((d) => ({
+          header: d.label,
+          value: (r: DocRecord) => DOC_STATE[r[d.key]]?.label ?? r[d.key],
+        })),
+        { header: "Vault Completion (%)", value: (r) => completion(r) },
+      ],
+      filtered
+    );
+    toast({
+      title: "Export ready",
+      description: `${filtered.length} student file${filtered.length === 1 ? "" : "s"} exported to CSV.`,
+    });
+  };
 
   const docColumns: Column<DocRecord>[] = DOC_TYPES.map((d) => ({
     key: d.key,
@@ -238,7 +272,7 @@ export default function StudentDocumentsPage() {
         description="Track birth certificates, Aadhaar, TCs and marksheets for every student."
         actions={
           <>
-            <Button variant="outline">
+            <Button variant="outline" onClick={handleExport}>
               <Download className="size-4" />
               Export Report
             </Button>
