@@ -1,28 +1,40 @@
 "use client";
+
 import React from "react";
-import { StatsCard } from "@/components/dashboard/StatsCard";
+import {
+  GraduationCap, Users, BookOpen, Bus, AlertCircle, CheckCircle,
+  DollarSign, UserCheck, type LucideIcon,
+} from "lucide-react";
+import { Card, CardContent, StatCard, type StatTone } from "@/components/ui";
 import { AttendanceChart, FeeCollectionChart } from "@/components/dashboard/Charts";
 import { RecentActivity } from "@/components/dashboard/RecentActivity";
 import { UpcomingEvents } from "@/components/dashboard/UpcomingEvents";
 import { useAuthStore } from "@/store";
-import { GraduationCap, Users, BookOpen, Bus, AlertCircle, CheckCircle } from "lucide-react";
+import { cn } from "@/lib/utils";
 
-const stats = [
-  { title: "Total Students",   value: "1,240", change: 4.2,   iconName: "GraduationCap", color: "indigo"  as const },
-  { title: "Total Teachers",   value: "86",    change: 2.1,   iconName: "Users",         color: "emerald" as const },
-  { title: "Fee Collected",    value: "₹5.3L", change: 8.5,   iconName: "DollarSign",    color: "amber"   as const },
-  { title: "Attendance Today", value: "94.2",  change: -1.3,  iconName: "UserCheck",     color: "violet"  as const, suffix: "%" },
-  { title: "Pending Fees",     value: "₹1.1L", change: -12.4, iconName: "AlertCircle",   color: "rose"    as const },
-  { title: "Active Buses",     value: "12",    change: 0,     iconName: "Bus",           color: "cyan"    as const },
+const stats: {
+  label: string;
+  value: string;
+  trend: number;
+  icon: LucideIcon;
+  tone: StatTone;
+  suffix?: string;
+}[] = [
+  { label: "Total Students", value: "1,240", trend: 4.2, icon: GraduationCap, tone: "indigo" },
+  { label: "Total Teachers", value: "86", trend: 2.1, icon: Users, tone: "emerald" },
+  { label: "Fee Collected", value: "₹5.3L", trend: 8.5, icon: DollarSign, tone: "amber" },
+  { label: "Attendance Today", value: "94.2", trend: -1.3, icon: UserCheck, tone: "violet", suffix: "%" },
+  { label: "Pending Fees", value: "₹1.1L", trend: -12.4, icon: AlertCircle, tone: "rose" },
+  { label: "Active Buses", value: "12", trend: 0, icon: Bus, tone: "cyan" },
 ];
 
-const quickStats = [
-  { label: "New Admissions",       value: 24, icon: GraduationCap, bg: "#eff6ff", color: "#2563eb" },
-  { label: "Leave Requests",       value: 7,  icon: Users,         bg: "#fffbeb", color: "#d97706" },
-  { label: "Books Issued",         value: 38, icon: BookOpen,      bg: "#f0fdf4", color: "#16a34a" },
-  { label: "Bus Routes Active",    value: 12, icon: Bus,           bg: "#ecfeff", color: "#0891b2" },
-  { label: "Fee Defaulters",       value: 42, icon: AlertCircle,   bg: "#fff1f2", color: "#e11d48" },
-  { label: "Tasks Completed",      value: 18, icon: CheckCircle,   bg: "#f5f3ff", color: "#7c3aed" },
+const quickStats: { label: string; value: number; icon: LucideIcon; tone: string }[] = [
+  { label: "New Admissions", value: 24, icon: GraduationCap, tone: "bg-info-soft text-info-text" },
+  { label: "Leave Requests", value: 7, icon: Users, tone: "bg-warning-soft text-warning-text" },
+  { label: "Books Issued", value: 38, icon: BookOpen, tone: "bg-success-soft text-success-text" },
+  { label: "Bus Routes Active", value: 12, icon: Bus, tone: "bg-info-soft text-info-text" },
+  { label: "Fee Defaulters", value: 42, icon: AlertCircle, tone: "bg-danger-soft text-danger-text" },
+  { label: "Tasks Completed", value: 18, icon: CheckCircle, tone: "bg-primary-soft text-primary-text" },
 ];
 
 function getGreeting() {
@@ -34,74 +46,69 @@ function getGreeting() {
 
 export default function DashboardPage() {
   const { user } = useAuthStore();
-  const today = new Date().toLocaleDateString("en-IN", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+  const today = new Date().toLocaleDateString("en-IN", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
 
   return (
-    <div style={{ maxWidth: "1600px", display: "flex", flexDirection: "column", gap: "24px" }}>
-
-      {/* ── Header ── */}
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
-        <div>
-          <h1 style={{ fontSize: "22px", fontWeight: 800, color: "#0f172a", letterSpacing: "-0.3px" }}>
+    <div className="flex flex-col gap-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-xl font-semibold text-text">
             {getGreeting()}, {user?.name?.split(" ")[0]} 👋
           </h1>
-          <p style={{ fontSize: "13px", color: "#94a3b8", marginTop: "4px" }}>{today} &nbsp;·&nbsp; Springdale School</p>
+          <p className="mt-0.5 text-sm text-muted">{today} · Springdale School</p>
         </div>
-        <div style={{
-          display: "flex", alignItems: "center", gap: "8px",
-          background: "#f0fdf4", border: "1px solid #bbf7d0",
-          color: "#16a34a", fontSize: "12px", fontWeight: 600,
-          padding: "7px 14px", borderRadius: "20px",
-        }}>
-          <span style={{ width: "7px", height: "7px", background: "#22c55e", borderRadius: "50%", animation: "pulse 2s infinite" }} />
+        <span className="inline-flex shrink-0 items-center gap-2 rounded-full bg-success-soft px-3.5 py-1.5 text-xs font-semibold text-success-text">
+          <span className="size-1.5 rounded-full bg-success" />
           School is Open
-        </div>
+        </span>
       </div>
 
-      {/* ── Stats Grid ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: "16px" }}>
-        {stats.map((s) => <StatsCard key={s.title} {...s} />)}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+        {stats.map((s) => (
+          <StatCard key={s.label} variant="stacked" {...s} />
+        ))}
       </div>
 
-      {/* ── Quick Snapshot Bar ── */}
-      <div style={{
-        background: "#fff", borderRadius: "16px",
-        border: "1px solid #f1f5f9", boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
-        padding: "18px 24px",
-      }}>
-        <p style={{ fontSize: "10px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "14px" }}>
-          Today&apos;s Snapshot
-        </p>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: "16px" }}>
-          {quickStats.map((q) => (
-            <div key={q.label} style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-              <div style={{
-                width: "38px", height: "38px", borderRadius: "10px",
-                background: q.bg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-              }}>
-                <q.icon size={16} color={q.color} />
+      <Card>
+        <CardContent>
+          <p className="mb-3.5 text-[10px] font-semibold uppercase tracking-widest text-subtle">
+            Today&apos;s Snapshot
+          </p>
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-6">
+            {quickStats.map((q) => (
+              <div key={q.label} className="flex items-center gap-2.5">
+                <div
+                  className={cn(
+                    "flex size-9 shrink-0 items-center justify-center rounded-md",
+                    q.tone
+                  )}
+                >
+                  <q.icon className="size-4" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-lg font-semibold leading-none text-text">{q.value}</p>
+                  <p className="mt-1 truncate text-[11px] text-muted">{q.label}</p>
+                </div>
               </div>
-              <div>
-                <p style={{ fontSize: "18px", fontWeight: 800, color: "#0f172a", lineHeight: 1 }}>{q.value}</p>
-                <p style={{ fontSize: "11px", color: "#94a3b8", marginTop: "3px", lineHeight: 1.2 }}>{q.label}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
-      {/* ── Charts ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <AttendanceChart />
         <FeeCollectionChart />
       </div>
 
-      {/* ── Activity + Events ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <RecentActivity />
         <UpcomingEvents />
       </div>
-
     </div>
   );
 }

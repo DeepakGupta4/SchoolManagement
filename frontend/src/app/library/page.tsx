@@ -1,6 +1,33 @@
 "use client";
+
 import React, { useState } from "react";
-import { Search, Plus, Download, Edit, Trash2, Eye, BookOpen, CheckCircle, Clock, AlertCircle, RotateCcw } from "lucide-react";
+import {
+  Search,
+  Plus,
+  Download,
+  Pencil,
+  Trash2,
+  Eye,
+  BookOpen,
+  BookCheck,
+  BookMarked,
+  CheckCircle,
+  Clock,
+  AlertCircle,
+  RotateCcw,
+  type LucideIcon,
+} from "lucide-react";
+import {
+  Badge,
+  Button,
+  Input,
+  PageHeader,
+  Select,
+  StatCard,
+  Table,
+  type Column,
+} from "@/components/ui";
+import { cn } from "@/lib/utils";
 
 const books = [
   { id: "BK001", title: "Mathematics NCERT Class 10",    author: "NCERT",              category: "Textbook",  total: 45, available: 12, isbn: "978-81-7450-001-1", publisher: "NCERT",        year: 2023 },
@@ -26,283 +53,383 @@ const issuedBooks = [
   { id: "ISS008", book: "Mathematics NCERT Class 10",student: "Meera Iyer",   class: "10-A", issueDate: "Jun 28, 2025", dueDate: "Jul 12, 2025", status: "returned"},
 ];
 
-const categoryColors: Record<string, { bg: string; color: string }> = {
-  Textbook:  { bg: "#eff6ff", color: "#2563eb" },
-  Biography: { bg: "#f0fdf4", color: "#16a34a" },
-  Fiction:   { bg: "#fdf4ff", color: "#9333ea" },
-  Finance:   { bg: "#fffbeb", color: "#d97706" },
-  History:   { bg: "#fff7ed", color: "#c2410c" },
-  Reference: { bg: "#ecfeff", color: "#0891b2" },
-  "Self-Help":{ bg: "#f5f3ff", color: "#7c3aed" },
+type Book = (typeof books)[number];
+type IssueRecord = (typeof issuedBooks)[number];
+
+/** Category colour coding: a badge tone plus a tile gradient, both tokenised. */
+const categoryStyles: Record<
+  string,
+  { variant: "default" | "success" | "warning" | "danger" | "info"; gradient: string }
+> = {
+  Textbook:    { variant: "info",    gradient: "gradient-indigo" },
+  Biography:   { variant: "success", gradient: "gradient-emerald" },
+  Fiction:     { variant: "default", gradient: "gradient-violet" },
+  Finance:     { variant: "warning", gradient: "gradient-amber" },
+  History:     { variant: "danger",  gradient: "gradient-rose" },
+  Reference:   { variant: "info",    gradient: "gradient-cyan" },
+  "Self-Help": { variant: "default", gradient: "gradient-violet" },
 };
 
-const statusConfig: Record<string, { bg: string; color: string; icon: React.ElementType; label: string }> = {
-  issued:   { bg: "#eff6ff", color: "#2563eb", icon: Clock,         label: "Issued"   },
-  overdue:  { bg: "#fff1f2", color: "#e11d48", icon: AlertCircle,   label: "Overdue"  },
-  returned: { bg: "#f0fdf4", color: "#16a34a", icon: CheckCircle,   label: "Returned" },
+const statusConfig: Record<
+  string,
+  { variant: "info" | "danger" | "success"; icon: LucideIcon; label: string }
+> = {
+  issued:   { variant: "info",    icon: Clock,       label: "Issued"   },
+  overdue:  { variant: "danger",  icon: AlertCircle, label: "Overdue"  },
+  returned: { variant: "success", icon: CheckCircle, label: "Returned" },
 };
 
 const tabs = ["All", "Issued", "Overdue", "Returned"];
 const catalogTabs = ["All Books", "Available", "Issued Out"];
 
+function Segmented({
+  options,
+  value,
+  onChange,
+  size = "sm",
+}: {
+  options: string[];
+  value: string;
+  onChange: (v: string) => void;
+  size?: "sm" | "md";
+}) {
+  return (
+    <div className="inline-flex gap-1 rounded-md bg-surface-sunken p-1">
+      {options.map((o) => (
+        <button
+          key={o}
+          onClick={() => onChange(o)}
+          className={cn(
+            "focus-ring whitespace-nowrap rounded-sm font-semibold transition-colors",
+            size === "md" ? "px-5 py-2 text-sm" : "px-3.5 py-1.5 text-xs",
+            value === o ? "bg-surface-raised text-text shadow-sm" : "text-muted hover:text-text"
+          )}
+        >
+          {o}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function RowActions({ label }: { label: string }) {
+  return (
+    <div className="flex items-center justify-end gap-1">
+      <Button variant="ghost" size="sm" className="px-2" aria-label={`View ${label}`}>
+        <Eye className="size-4" />
+      </Button>
+      <Button variant="ghost" size="sm" className="px-2" aria-label={`Edit ${label}`}>
+        <Pencil className="size-4" />
+      </Button>
+      <Button
+        variant="ghost"
+        size="sm"
+        className="px-2 hover:bg-danger-soft hover:text-danger"
+        aria-label={`Delete ${label}`}
+      >
+        <Trash2 className="size-4" />
+      </Button>
+    </div>
+  );
+}
+
 export default function LibraryPage() {
   const [activeSection, setActiveSection] = useState<"catalog" | "issued">("catalog");
-  const [catalogTab, setCatalogTab]       = useState("All Books");
-  const [issueTab, setIssueTab]           = useState("All");
-  const [search, setSearch]               = useState("");
-  const [catFilter, setCatFilter]         = useState("All");
+  const [catalogTab, setCatalogTab] = useState("All Books");
+  const [issueTab, setIssueTab] = useState("All");
+  const [search, setSearch] = useState("");
+  const [catFilter, setCatFilter] = useState("All");
 
-  const filteredBooks = books.filter(b => {
-    const matchCat    = catFilter === "All" || b.category === catFilter;
-    const matchSearch = b.title.toLowerCase().includes(search.toLowerCase()) ||
-                        b.author.toLowerCase().includes(search.toLowerCase()) ||
-                        b.id.toLowerCase().includes(search.toLowerCase());
-    const matchTab    = catalogTab === "All Books" || (catalogTab === "Available" ? b.available > 0 : b.available === 0);
+  const filteredBooks = books.filter((b) => {
+    const matchCat = catFilter === "All" || b.category === catFilter;
+    const matchSearch =
+      b.title.toLowerCase().includes(search.toLowerCase()) ||
+      b.author.toLowerCase().includes(search.toLowerCase()) ||
+      b.id.toLowerCase().includes(search.toLowerCase());
+    const matchTab =
+      catalogTab === "All Books" ||
+      (catalogTab === "Available" ? b.available > 0 : b.available === 0);
     return matchCat && matchSearch && matchTab;
   });
 
-  const filteredIssued = issuedBooks.filter(i => {
-    const matchTab    = issueTab === "All" || i.status === issueTab.toLowerCase();
-    const matchSearch = i.book.toLowerCase().includes(search.toLowerCase()) ||
-                        i.student.toLowerCase().includes(search.toLowerCase());
+  const filteredIssued = issuedBooks.filter((i) => {
+    const matchTab = issueTab === "All" || i.status === issueTab.toLowerCase();
+    const matchSearch =
+      i.book.toLowerCase().includes(search.toLowerCase()) ||
+      i.student.toLowerCase().includes(search.toLowerCase());
     return matchTab && matchSearch;
   });
 
-  const totalBooks    = books.reduce((s, b) => s + b.total, 0);
-  const totalIssued   = books.reduce((s, b) => s + (b.total - b.available), 0);
-  const overdueCount  = issuedBooks.filter(i => i.status === "overdue").length;
+  const totalBooks = books.reduce((s, b) => s + b.total, 0);
+  const totalIssued = books.reduce((s, b) => s + (b.total - b.available), 0);
+  const overdueCount = issuedBooks.filter((i) => i.status === "overdue").length;
+
+  const bookColumns: Column<Book>[] = [
+    {
+      key: "title",
+      header: "Book",
+      sortable: true,
+      render: (b) => {
+        const cc = categoryStyles[b.category];
+        return (
+          <div className="flex items-center gap-3">
+            <div
+              className={cn(
+                "flex size-9 shrink-0 items-center justify-center rounded-md text-white",
+                cc?.gradient ?? "gradient-indigo"
+              )}
+            >
+              <BookOpen className="size-4" />
+            </div>
+            <div className="min-w-0 max-w-52">
+              <p className="truncate font-medium text-text">{b.title}</p>
+              <p className="truncate text-xs text-subtle">{b.id}</p>
+            </div>
+          </div>
+        );
+      },
+    },
+    {
+      key: "author",
+      header: "Author",
+      sortable: true,
+      render: (b) => <span className="whitespace-nowrap text-muted">{b.author}</span>,
+    },
+    {
+      key: "category",
+      header: "Category",
+      sortable: true,
+      render: (b) => (
+        <Badge variant={categoryStyles[b.category]?.variant ?? "default"}>{b.category}</Badge>
+      ),
+    },
+    {
+      key: "isbn",
+      header: "ISBN",
+      render: (b) => <span className="whitespace-nowrap font-mono text-xs text-subtle">{b.isbn}</span>,
+    },
+    {
+      key: "publisher",
+      header: "Publisher",
+      render: (b) => <span className="whitespace-nowrap text-muted">{b.publisher}</span>,
+    },
+    {
+      key: "year",
+      header: "Year",
+      sortable: true,
+      align: "right",
+      render: (b) => <span className="text-muted">{b.year}</span>,
+    },
+    {
+      key: "total",
+      header: "Total",
+      sortable: true,
+      align: "right",
+      render: (b) => <span className="font-semibold text-text">{b.total}</span>,
+    },
+    {
+      key: "available",
+      header: "Available",
+      sortable: true,
+      render: (b) => (
+        <Badge variant={b.available === 0 ? "danger" : b.available <= 3 ? "warning" : "success"}>
+          {b.available === 0 ? "Out of stock" : b.available}
+        </Badge>
+      ),
+    },
+    {
+      key: "actions",
+      header: "",
+      align: "right",
+      render: (b) => <RowActions label={b.title} />,
+    },
+  ];
+
+  const issueColumns: Column<IssueRecord>[] = [
+    {
+      key: "id",
+      header: "Issue ID",
+      sortable: true,
+      render: (r) => <span className="text-xs font-semibold text-primary-text">{r.id}</span>,
+    },
+    {
+      key: "book",
+      header: "Book",
+      sortable: true,
+      render: (r) => (
+        <div className="flex items-center gap-2.5">
+          <div className="flex size-8 shrink-0 items-center justify-center rounded-sm bg-primary-soft text-primary-text">
+            <BookOpen className="size-3.5" />
+          </div>
+          <p className="min-w-0 max-w-44 truncate font-medium text-text">{r.book}</p>
+        </div>
+      ),
+    },
+    {
+      key: "student",
+      header: "Student",
+      sortable: true,
+      render: (r) => <span className="whitespace-nowrap font-medium text-text">{r.student}</span>,
+    },
+    {
+      key: "class",
+      header: "Class",
+      sortable: true,
+      render: (r) => <Badge variant="info">{r.class}</Badge>,
+    },
+    {
+      key: "issueDate",
+      header: "Issue date",
+      render: (r) => <span className="whitespace-nowrap text-muted">{r.issueDate}</span>,
+    },
+    {
+      key: "dueDate",
+      header: "Due date",
+      render: (r) => (
+        <span
+          className={cn(
+            "whitespace-nowrap font-medium",
+            r.status === "overdue" ? "text-danger" : "text-muted"
+          )}
+        >
+          {r.dueDate}
+        </span>
+      ),
+    },
+    {
+      key: "status",
+      header: "Status",
+      sortable: true,
+      render: (r) => {
+        const sc = statusConfig[r.status];
+        const StatusIcon = sc.icon;
+        return (
+          <Badge variant={sc.variant} className="gap-1">
+            <StatusIcon className="size-3" />
+            {sc.label}
+          </Badge>
+        );
+      },
+    },
+    {
+      key: "actions",
+      header: "",
+      align: "right",
+      render: (r) => (
+        <div className="flex justify-end">
+          <Button variant="outline" size="sm" title="Return book" aria-label={`Return ${r.book}`}>
+            <RotateCcw className="size-3.5" />
+            Return
+          </Button>
+        </div>
+      ),
+    },
+  ];
 
   return (
-    <div style={{ maxWidth: "1600px", display: "flex", flexDirection: "column", gap: "24px" }}>
+    <div className="flex flex-col gap-5">
+      <PageHeader
+        title="Library"
+        description="Manage books, issue records and members."
+        actions={
+          <>
+            <Button variant="outline">
+              <Download className="size-4" />
+              Export
+            </Button>
+            <Button>
+              <Plus className="size-4" />
+              Add book
+            </Button>
+          </>
+        }
+      />
 
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div>
-          <h1 style={{ fontSize: "22px", fontWeight: 800, color: "#0f172a", letterSpacing: "-0.3px" }}>Library</h1>
-          <p style={{ fontSize: "13px", color: "#94a3b8", marginTop: "4px" }}>Manage books, issue records and members</p>
-        </div>
-        <div style={{ display: "flex", gap: "10px" }}>
-          <button style={{ display: "flex", alignItems: "center", gap: "6px", padding: "9px 16px", borderRadius: "12px", border: "1px solid #e2e8f0", background: "#fff", fontSize: "13px", fontWeight: 600, color: "#334155", cursor: "pointer" }}>
-            <Download size={14} /> Export
-          </button>
-          <button style={{ display: "flex", alignItems: "center", gap: "6px", padding: "9px 18px", borderRadius: "12px", border: "none", background: "linear-gradient(135deg,#6366f1,#8b5cf6)", fontSize: "13px", fontWeight: 600, color: "#fff", cursor: "pointer", boxShadow: "0 4px 12px rgba(99,102,241,0.35)" }}>
-            <Plus size={14} /> Add Book
-          </button>
-        </div>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard label="Total books" value={totalBooks} icon={BookOpen} tone="indigo" />
+        <StatCard
+          label="Available"
+          value={books.reduce((s, b) => s + b.available, 0)}
+          icon={BookCheck}
+          tone="emerald"
+        />
+        <StatCard label="Issued out" value={totalIssued} icon={BookMarked} tone="amber" />
+        <StatCard label="Overdue" value={overdueCount} icon={AlertCircle} tone="rose" />
       </div>
 
-      {/* Stats */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "16px" }}>
-        {[
-          { label: "Total Books",    value: totalBooks,              icon: "📚", color: "#6366f1", bg: "#eff6ff" },
-          { label: "Available",      value: books.reduce((s,b) => s + b.available, 0), icon: "✅", color: "#16a34a", bg: "#f0fdf4" },
-          { label: "Issued Out",     value: totalIssued,             icon: "📖", color: "#d97706", bg: "#fffbeb" },
-          { label: "Overdue",        value: overdueCount,            icon: "⚠️", color: "#e11d48", bg: "#fff1f2" },
-        ].map(s => (
-          <div key={s.label} style={{ background: "#fff", borderRadius: "16px", border: "1px solid #f1f5f9", padding: "20px", boxShadow: "0 1px 4px rgba(0,0,0,0.04)", display: "flex", alignItems: "center", gap: "14px" }}>
-            <div style={{ width: "48px", height: "48px", borderRadius: "14px", background: s.bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "22px", flexShrink: 0 }}>{s.icon}</div>
-            <div>
-              <p style={{ fontSize: "12px", color: "#64748b", fontWeight: 500 }}>{s.label}</p>
-              <p style={{ fontSize: "28px", fontWeight: 800, color: s.color, lineHeight: 1.1, letterSpacing: "-0.5px" }}>{s.value}</p>
-            </div>
-          </div>
-        ))}
-      </div>
+      <Segmented
+        options={["Book Catalog", "Issue Records"]}
+        value={activeSection === "catalog" ? "Book Catalog" : "Issue Records"}
+        onChange={(v) => {
+          setActiveSection(v === "Book Catalog" ? "catalog" : "issued");
+          setSearch("");
+        }}
+        size="md"
+      />
 
-      {/* Section Toggle */}
-      <div style={{ display: "flex", background: "#f1f5f9", borderRadius: "14px", padding: "4px", gap: "4px", width: "fit-content" }}>
-        {(["catalog", "issued"] as const).map(sec => (
-          <button key={sec} onClick={() => { setActiveSection(sec); setSearch(""); }} style={{
-            padding: "9px 24px", borderRadius: "11px", border: "none", cursor: "pointer",
-            fontSize: "13px", fontWeight: 700, transition: "all 0.15s",
-            background: activeSection === sec ? "#fff" : "transparent",
-            color: activeSection === sec ? "#0f172a" : "#64748b",
-            boxShadow: activeSection === sec ? "0 2px 8px rgba(0,0,0,0.08)" : "none",
-          }}>
-            {sec === "catalog" ? "📚 Book Catalog" : "📋 Issue Records"}
-          </button>
-        ))}
-      </div>
-
-      {/* Book Catalog */}
       {activeSection === "catalog" && (
-        <div style={{ background: "#fff", borderRadius: "16px", border: "1px solid #f1f5f9", boxShadow: "0 1px 4px rgba(0,0,0,0.04)", overflow: "hidden" }}>
-          <div style={{ padding: "16px 20px", borderBottom: "1px solid #f8fafc", display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
-            <div style={{ display: "flex", background: "#f8fafc", borderRadius: "12px", padding: "4px", gap: "2px" }}>
-              {catalogTabs.map(tab => (
-                <button key={tab} onClick={() => setCatalogTab(tab)} style={{
-                  padding: "7px 14px", borderRadius: "9px", border: "none", cursor: "pointer",
-                  fontSize: "12px", fontWeight: 600, transition: "all 0.15s",
-                  background: catalogTab === tab ? "#fff" : "transparent",
-                  color: catalogTab === tab ? "#0f172a" : "#64748b",
-                  boxShadow: catalogTab === tab ? "0 1px 4px rgba(0,0,0,0.08)" : "none",
-                }}>{tab}</button>
-              ))}
-            </div>
-            <select value={catFilter} onChange={e => setCatFilter(e.target.value)}
-              style={{ padding: "9px 14px", fontSize: "13px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "12px", outline: "none", color: "#334155", cursor: "pointer" }}>
-              <option value="All">All Categories</option>
-              {Object.keys(categoryColors).map(c => <option key={c}>{c}</option>)}
-            </select>
-            <div style={{ position: "relative", flex: 1, maxWidth: "300px" }}>
-              <Search size={14} color="#94a3b8" style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)" }} />
-              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by title, author..."
-                style={{ width: "100%", paddingLeft: "36px", paddingRight: "16px", paddingTop: "9px", paddingBottom: "9px", fontSize: "13px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "12px", outline: "none", color: "#334155", fontFamily: "inherit" }}
-                onFocus={e => { e.target.style.borderColor = "#6366f1"; e.target.style.boxShadow = "0 0 0 3px rgba(99,102,241,0.1)"; }}
-                onBlur={e  => { e.target.style.borderColor = "#e2e8f0"; e.target.style.boxShadow = "none"; }}
+        <>
+          <div className="flex flex-wrap items-center gap-3">
+            <Segmented options={catalogTabs} value={catalogTab} onChange={setCatalogTab} />
+            <div className="w-48">
+              <Select
+                value={catFilter}
+                onChange={(e) => setCatFilter(e.target.value)}
+                aria-label="Filter by category"
+                options={[
+                  { label: "All categories", value: "All" },
+                  ...Object.keys(categoryStyles).map((c) => ({ label: c, value: c })),
+                ]}
               />
             </div>
-            <p style={{ marginLeft: "auto", fontSize: "12px", color: "#94a3b8" }}>{filteredBooks.length} books</p>
+            <div className="min-w-60 flex-1">
+              <Input
+                type="search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search by title, author…"
+                icon={<Search className="size-4" />}
+                aria-label="Search books"
+              />
+            </div>
+            <p className="text-xs text-muted">{filteredBooks.length} books</p>
           </div>
 
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr style={{ background: "#fafafa", borderBottom: "1px solid #f1f5f9" }}>
-                  {["Book", "Author", "Category", "ISBN", "Publisher", "Year", "Total", "Available", "Actions"].map(h => (
-                    <th key={h} style={{ padding: "12px 20px", textAlign: "left", fontSize: "11px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em", whiteSpace: "nowrap" }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {filteredBooks.map((b, i) => {
-                  const cc = categoryColors[b.category] ?? { bg: "#f8fafc", color: "#64748b" };
-                  const availColor = b.available === 0 ? "#e11d48" : b.available <= 3 ? "#d97706" : "#16a34a";
-                  return (
-                    <tr key={b.id}
-                      style={{ borderBottom: i < filteredBooks.length - 1 ? "1px solid #f8fafc" : "none", transition: "background 0.15s" }}
-                      onMouseEnter={ev => (ev.currentTarget as HTMLTableRowElement).style.background = "#fafafa"}
-                      onMouseLeave={ev => (ev.currentTarget as HTMLTableRowElement).style.background = "transparent"}
-                    >
-                      <td style={{ padding: "14px 20px" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                          <div style={{ width: "38px", height: "38px", borderRadius: "10px", background: cc.bg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                            <BookOpen size={16} color={cc.color} />
-                          </div>
-                          <div>
-                            <p style={{ fontSize: "13px", fontWeight: 600, color: "#0f172a", maxWidth: "200px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{b.title}</p>
-                            <p style={{ fontSize: "11px", color: "#94a3b8", marginTop: "1px" }}>{b.id}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td style={{ padding: "14px 20px", fontSize: "13px", color: "#334155", whiteSpace: "nowrap" }}>{b.author}</td>
-                      <td style={{ padding: "14px 20px" }}>
-                        <span style={{ fontSize: "11px", fontWeight: 700, padding: "4px 10px", borderRadius: "20px", background: cc.bg, color: cc.color }}>{b.category}</span>
-                      </td>
-                      <td style={{ padding: "14px 20px", fontSize: "11px", color: "#94a3b8", fontFamily: "monospace" }}>{b.isbn}</td>
-                      <td style={{ padding: "14px 20px", fontSize: "12px", color: "#64748b", whiteSpace: "nowrap" }}>{b.publisher}</td>
-                      <td style={{ padding: "14px 20px", fontSize: "13px", color: "#64748b" }}>{b.year}</td>
-                      <td style={{ padding: "14px 20px", fontSize: "14px", fontWeight: 700, color: "#0f172a" }}>{b.total}</td>
-                      <td style={{ padding: "14px 20px" }}>
-                        <span style={{ fontSize: "14px", fontWeight: 800, color: availColor, background: availColor === "#e11d48" ? "#fff1f2" : availColor === "#d97706" ? "#fffbeb" : "#f0fdf4", padding: "4px 10px", borderRadius: "20px" }}>
-                          {b.available === 0 ? "Out of Stock" : b.available}
-                        </span>
-                      </td>
-                      <td style={{ padding: "14px 20px" }}>
-                        <div style={{ display: "flex", gap: "4px" }}>
-                          {[{ Icon: Eye, hoverBg: "#eff6ff", color: "#2563eb" }, { Icon: Edit, hoverBg: "#f0fdf4", color: "#16a34a" }, { Icon: Trash2, hoverBg: "#fff1f2", color: "#e11d48" }].map(({ Icon, hoverBg, color }, idx) => (
-                            <button key={idx}
-                              style={{ padding: "7px", borderRadius: "9px", border: "none", background: "transparent", cursor: "pointer", color: "#94a3b8", display: "flex", transition: "all 0.15s" }}
-                              onMouseEnter={ev => { (ev.currentTarget as HTMLButtonElement).style.background = hoverBg; (ev.currentTarget as HTMLButtonElement).style.color = color; }}
-                              onMouseLeave={ev => { (ev.currentTarget as HTMLButtonElement).style.background = "transparent"; (ev.currentTarget as HTMLButtonElement).style.color = "#94a3b8"; }}
-                            ><Icon size={14} /></button>
-                          ))}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
+          <Table
+            columns={bookColumns}
+            rows={filteredBooks}
+            rowKey={(b) => b.id}
+            emptyTitle="No books found"
+            emptyDescription="Try adjusting your filters or search."
+          />
+        </>
       )}
 
-      {/* Issue Records */}
       {activeSection === "issued" && (
-        <div style={{ background: "#fff", borderRadius: "16px", border: "1px solid #f1f5f9", boxShadow: "0 1px 4px rgba(0,0,0,0.04)", overflow: "hidden" }}>
-          <div style={{ padding: "16px 20px", borderBottom: "1px solid #f8fafc", display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
-            <div style={{ display: "flex", background: "#f8fafc", borderRadius: "12px", padding: "4px", gap: "2px" }}>
-              {tabs.map(tab => (
-                <button key={tab} onClick={() => setIssueTab(tab)} style={{
-                  padding: "7px 14px", borderRadius: "9px", border: "none", cursor: "pointer",
-                  fontSize: "12px", fontWeight: 600, transition: "all 0.15s",
-                  background: issueTab === tab ? "#fff" : "transparent",
-                  color: issueTab === tab ? "#0f172a" : "#64748b",
-                  boxShadow: issueTab === tab ? "0 1px 4px rgba(0,0,0,0.08)" : "none",
-                }}>{tab}</button>
-              ))}
-            </div>
-            <div style={{ position: "relative", flex: 1, maxWidth: "300px" }}>
-              <Search size={14} color="#94a3b8" style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)" }} />
-              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by book or student..."
-                style={{ width: "100%", paddingLeft: "36px", paddingRight: "16px", paddingTop: "9px", paddingBottom: "9px", fontSize: "13px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "12px", outline: "none", color: "#334155", fontFamily: "inherit" }}
-                onFocus={e => { e.target.style.borderColor = "#6366f1"; e.target.style.boxShadow = "0 0 0 3px rgba(99,102,241,0.1)"; }}
-                onBlur={e  => { e.target.style.borderColor = "#e2e8f0"; e.target.style.boxShadow = "none"; }}
+        <>
+          <div className="flex flex-wrap items-center gap-3">
+            <Segmented options={tabs} value={issueTab} onChange={setIssueTab} />
+            <div className="min-w-60 flex-1">
+              <Input
+                type="search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search by book or student…"
+                icon={<Search className="size-4" />}
+                aria-label="Search issue records"
               />
             </div>
-            <p style={{ marginLeft: "auto", fontSize: "12px", color: "#94a3b8" }}>{filteredIssued.length} records</p>
+            <p className="text-xs text-muted">{filteredIssued.length} records</p>
           </div>
 
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr style={{ background: "#fafafa", borderBottom: "1px solid #f1f5f9" }}>
-                  {["Issue ID", "Book", "Student", "Class", "Issue Date", "Due Date", "Status", "Actions"].map(h => (
-                    <th key={h} style={{ padding: "12px 20px", textAlign: "left", fontSize: "11px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em", whiteSpace: "nowrap" }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {filteredIssued.map((rec, i) => {
-                  const sc = statusConfig[rec.status];
-                  const StatusIcon = sc.icon;
-                  return (
-                    <tr key={rec.id}
-                      style={{ borderBottom: i < filteredIssued.length - 1 ? "1px solid #f8fafc" : "none", transition: "background 0.15s" }}
-                      onMouseEnter={ev => (ev.currentTarget as HTMLTableRowElement).style.background = "#fafafa"}
-                      onMouseLeave={ev => (ev.currentTarget as HTMLTableRowElement).style.background = "transparent"}
-                    >
-                      <td style={{ padding: "14px 20px", fontSize: "12px", fontWeight: 700, color: "#6366f1" }}>{rec.id}</td>
-                      <td style={{ padding: "14px 20px" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                          <div style={{ width: "32px", height: "32px", borderRadius: "8px", background: "#eff6ff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                            <BookOpen size={14} color="#6366f1" />
-                          </div>
-                          <p style={{ fontSize: "13px", fontWeight: 600, color: "#0f172a", maxWidth: "180px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{rec.book}</p>
-                        </div>
-                      </td>
-                      <td style={{ padding: "14px 20px", fontSize: "13px", fontWeight: 600, color: "#0f172a", whiteSpace: "nowrap" }}>{rec.student}</td>
-                      <td style={{ padding: "14px 20px" }}>
-                        <span style={{ fontSize: "11px", fontWeight: 700, padding: "4px 10px", borderRadius: "20px", background: "#eff6ff", color: "#2563eb" }}>{rec.class}</span>
-                      </td>
-                      <td style={{ padding: "14px 20px", fontSize: "12px", color: "#64748b" }}>{rec.issueDate}</td>
-                      <td style={{ padding: "14px 20px", fontSize: "12px", fontWeight: 600, color: rec.status === "overdue" ? "#e11d48" : "#334155" }}>{rec.dueDate}</td>
-                      <td style={{ padding: "14px 20px" }}>
-                        <div style={{ display: "inline-flex", alignItems: "center", gap: "5px", padding: "5px 10px", borderRadius: "20px", background: sc.bg }}>
-                          <StatusIcon size={12} color={sc.color} />
-                          <span style={{ fontSize: "11px", fontWeight: 700, color: sc.color }}>{sc.label}</span>
-                        </div>
-                      </td>
-                      <td style={{ padding: "14px 20px" }}>
-                        <div style={{ display: "flex", gap: "4px" }}>
-                          <button
-                            title="Return Book"
-                            style={{ display: "flex", alignItems: "center", gap: "4px", padding: "6px 10px", borderRadius: "9px", border: "none", background: "#f0fdf4", cursor: "pointer", color: "#16a34a", fontSize: "11px", fontWeight: 600, transition: "all 0.15s" }}
-                            onMouseEnter={ev => (ev.currentTarget as HTMLButtonElement).style.background = "#dcfce7"}
-                            onMouseLeave={ev => (ev.currentTarget as HTMLButtonElement).style.background = "#f0fdf4"}
-                          >
-                            <RotateCcw size={12} /> Return
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
+          <Table
+            columns={issueColumns}
+            rows={filteredIssued}
+            rowKey={(r) => r.id}
+            emptyTitle="No issue records found"
+            emptyDescription="Try a different tab or search term."
+          />
+        </>
       )}
     </div>
   );

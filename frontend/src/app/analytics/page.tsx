@@ -1,10 +1,31 @@
 "use client";
+
 import React, { useState } from "react";
 import {
-  AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
+  AreaChart,
+  Area,
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
+  Cell,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
 } from "recharts";
-import { TrendingUp, TrendingDown, Users, DollarSign, GraduationCap, Bus } from "lucide-react";
+import { Users, DollarSign, GraduationCap, Bus } from "lucide-react";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  PageHeader,
+  StatCard,
+  type StatTone,
+} from "@/components/ui";
+import { useChartTheme } from "@/hooks/useChartTheme";
+import { cn } from "@/lib/utils";
 
 const monthlyAdmissions = [
   { month: "Apr", admissions: 45, withdrawals: 5 },
@@ -36,266 +57,350 @@ const classStrength = [
   { class: "12th", students: 140 },
 ];
 
+/** `tone` indexes useChartTheme().series — no chart colour is hardcoded here. */
 const genderData = [
-  { name: "Boys", value: 680, color: "#6366f1" },
-  { name: "Girls", value: 560, color: "#f43f5e" },
+  { name: "Boys", value: 680, tone: "primary" as const },
+  { name: "Girls", value: 560, tone: "danger" as const },
 ];
 
 const feeStatusData = [
-  { name: "Paid", value: 1050, color: "#10b981" },
-  { name: "Pending", value: 130, color: "#f59e0b" },
-  { name: "Overdue", value: 60, color: "#ef4444" },
+  { name: "Paid", value: 1050, tone: "success" as const },
+  { name: "Pending", value: 130, tone: "warning" as const },
+  { name: "Overdue", value: 60, tone: "danger" as const },
 ];
 
-const topMetrics = [
-  { label: "Total Revenue (YTD)", value: "₹62.4L", change: 12.5, positive: true, icon: DollarSign, color: "#6366f1", bg: "#eff6ff" },
-  { label: "New Admissions (YTD)", value: "445", change: 8.2, positive: true, icon: GraduationCap, color: "#10b981", bg: "#f0fdf4" },
-  { label: "Avg Attendance", value: "91.4%", change: -1.2, positive: false, icon: Users, color: "#f59e0b", bg: "#fffbeb" },
-  { label: "Transport Usage", value: "68%", change: 3.4, positive: true, icon: Bus, color: "#8b5cf6", bg: "#f5f3ff" },
+const topMetrics: {
+  label: string;
+  value: string;
+  trend: number;
+  icon: typeof DollarSign;
+  tone: StatTone;
+}[] = [
+  { label: "Total Revenue (YTD)", value: "₹62.4L", trend: 12.5, icon: DollarSign, tone: "indigo" },
+  { label: "New Admissions (YTD)", value: "445", trend: 8.2, icon: GraduationCap, tone: "emerald" },
+  { label: "Avg Attendance", value: "91.4%", trend: -1.2, icon: Users, tone: "amber" },
+  { label: "Transport Usage", value: "68%", trend: 3.4, icon: Bus, tone: "violet" },
 ];
 
-const tooltipStyle = {
-  borderRadius: "10px", border: "1px solid #f1f5f9",
-  boxShadow: "0 8px 24px rgba(0,0,0,0.08)", fontSize: "12px", background: "#fff",
-};
+const kpis = [
+  { label: "Total Enrolled Students", value: "1,240", target: "1,300", pct: 95 },
+  { label: "Fee Collection Rate", value: "84.7%", target: "95%", pct: 85 },
+  { label: "Average Attendance", value: "91.4%", target: "95%", pct: 91 },
+  { label: "Teacher-Student Ratio", value: "1:14", target: "1:12", pct: 78 },
+  { label: "Pass Percentage (Last Exam)", value: "96.2%", target: "98%", pct: 96 },
+];
 
-const card = (extra?: React.CSSProperties): React.CSSProperties => ({
-  background: "#fff", borderRadius: "16px",
-  border: "1px solid #f1f5f9", boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
-  overflow: "hidden", ...extra,
-});
+const periods = ["week", "month", "year"] as const;
 
-export default function AnalyticsPage() {
-  const [period, setPeriod] = useState<"week" | "month" | "year">("month");
-
+function ChartTitle({
+  title,
+  subtitle,
+  legend,
+}: {
+  title: string;
+  subtitle: string;
+  legend?: { color: string; label: string }[];
+}) {
   return (
-    <div style={{ maxWidth: "1600px", display: "flex", flexDirection: "column", gap: "24px" }}>
-
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div>
-          <h1 style={{ fontSize: "22px", fontWeight: 800, color: "#0f172a", letterSpacing: "-0.3px" }}>Analytics</h1>
-          <p style={{ fontSize: "13px", color: "#94a3b8", marginTop: "4px" }}>School performance overview & insights</p>
-        </div>
-        <div style={{ display: "flex", background: "#f1f5f9", borderRadius: "12px", padding: "4px", gap: "2px" }}>
-          {(["week", "month", "year"] as const).map(p => (
-            <button key={p} onClick={() => setPeriod(p)} style={{
-              padding: "6px 16px", borderRadius: "9px", border: "none", cursor: "pointer",
-              fontSize: "12px", fontWeight: 600, transition: "all 0.15s",
-              background: period === p ? "#fff" : "transparent",
-              color: period === p ? "#0f172a" : "#64748b",
-              boxShadow: period === p ? "0 1px 4px rgba(0,0,0,0.08)" : "none",
-            }}>
-              {p.charAt(0).toUpperCase() + p.slice(1)}
-            </button>
+    <CardHeader>
+      <div className="min-w-0">
+        <p className="text-sm font-semibold text-text">{title}</p>
+        <p className="mt-0.5 text-xs text-muted">{subtitle}</p>
+      </div>
+      {legend && (
+        <div className="flex shrink-0 items-center gap-3.5">
+          {legend.map((l) => (
+            <span key={l.label} className="flex items-center gap-1.5 text-xs text-muted">
+              <span className="size-2.5 rounded-sm" style={{ background: l.color }} />
+              {l.label}
+            </span>
           ))}
         </div>
-      </div>
+      )}
+    </CardHeader>
+  );
+}
 
-      {/* Top Metrics */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
-        {topMetrics.map(m => (
-          <div key={m.label} style={card({ padding: "20px" })}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px" }}>
-              <div style={{ width: "40px", height: "40px", borderRadius: "12px", background: m.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <m.icon size={18} color={m.color} />
-              </div>
-              <div style={{
-                display: "flex", alignItems: "center", gap: "3px",
-                fontSize: "11px", fontWeight: 600, padding: "3px 8px", borderRadius: "20px",
-                background: m.positive ? "#f0fdf4" : "#fff1f2",
-                color: m.positive ? "#16a34a" : "#e11d48",
-              }}>
-                {m.positive ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
-                {m.change}%
-              </div>
-            </div>
-            <p style={{ fontSize: "24px", fontWeight: 800, color: "#0f172a", letterSpacing: "-0.5px" }}>{m.value}</p>
-            <p style={{ fontSize: "12px", color: "#64748b", marginTop: "4px", fontWeight: 500 }}>{m.label}</p>
+export default function AnalyticsPage() {
+  const [period, setPeriod] = useState<(typeof periods)[number]>("month");
+  const t = useChartTheme();
+
+  const withdrawals = t.series.danger;
+  const genderColors = genderData.map((g) => t.series[g.tone]);
+  const feeStatusColors = feeStatusData.map((f) => t.series[f.tone]);
+
+  return (
+    <div className="flex flex-col gap-5">
+      <PageHeader
+        title="Analytics"
+        description="School performance overview & insights."
+        actions={
+          <div
+            role="tablist"
+            aria-label="Reporting period"
+            className="flex items-center gap-1 rounded-md border border-border bg-surface-raised p-1"
+          >
+            {periods.map((p) => (
+              <button
+                key={p}
+                role="tab"
+                aria-selected={period === p}
+                onClick={() => setPeriod(p)}
+                className={cn(
+                  "focus-ring rounded-sm px-4 py-1.5 text-xs font-semibold capitalize transition-colors",
+                  period === p
+                    ? "bg-primary-soft text-primary-text"
+                    : "text-muted hover:bg-surface-hover hover:text-text"
+                )}
+              >
+                {p}
+              </button>
+            ))}
           </div>
+        }
+      />
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {topMetrics.map((m) => (
+          <StatCard key={m.label} variant="stacked" {...m} />
         ))}
       </div>
 
-      {/* Charts Row 1 */}
-      <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "16px" }}>
-
-        {/* Admissions Trend */}
-        <div style={card()}>
-          <div style={{ padding: "18px 20px 14px", borderBottom: "1px solid #f8fafc", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div>
-              <p style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a" }}>Admissions Trend</p>
-              <p style={{ fontSize: "12px", color: "#94a3b8", marginTop: "2px" }}>Monthly admissions vs withdrawals</p>
-            </div>
-            <div style={{ display: "flex", gap: "12px" }}>
-              {[{ color: "#6366f1", label: "Admissions" }, { color: "#fca5a5", label: "Withdrawals" }].map(l => (
-                <div key={l.label} style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", color: "#64748b" }}>
-                  <span style={{ width: "10px", height: "10px", borderRadius: "3px", background: l.color, display: "inline-block" }} />
-                  {l.label}
-                </div>
-              ))}
-            </div>
-          </div>
-          <div style={{ padding: "16px 20px 20px" }}>
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+        <Card className="xl:col-span-2">
+          <ChartTitle
+            title="Admissions Trend"
+            subtitle="Monthly admissions vs withdrawals"
+            legend={[
+              { color: t.series.primary, label: "Admissions" },
+              { color: withdrawals, label: "Withdrawals" },
+            ]}
+          />
+          <CardContent>
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={monthlyAdmissions} barSize={18} barGap={4}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f8fafc" vertical={false} />
-                <XAxis dataKey="month" tick={{ fontSize: 12, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
-                <Tooltip contentStyle={tooltipStyle} cursor={{ fill: "#f8fafc" }} />
-                <Bar dataKey="admissions" fill="#6366f1" radius={[6, 6, 0, 0]} name="Admissions" />
-                <Bar dataKey="withdrawals" fill="#fca5a5" radius={[6, 6, 0, 0]} name="Withdrawals" />
+                <CartesianGrid strokeDasharray="3 3" stroke={t.grid} vertical={false} />
+                <XAxis
+                  dataKey="month"
+                  tick={{ fontSize: 12, fill: t.axis }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <YAxis tick={{ fontSize: 11, fill: t.axis }} axisLine={false} tickLine={false} />
+                <Tooltip contentStyle={t.tooltip} cursor={{ fill: t.cursor, radius: 6 }} />
+                <Bar
+                  dataKey="admissions"
+                  fill={t.series.primary}
+                  radius={[6, 6, 0, 0]}
+                  name="Admissions"
+                />
+                <Bar
+                  dataKey="withdrawals"
+                  fill={withdrawals}
+                  radius={[6, 6, 0, 0]}
+                  name="Withdrawals"
+                />
               </BarChart>
             </ResponsiveContainer>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
 
-        {/* Gender Distribution */}
-        <div style={card()}>
-          <div style={{ padding: "18px 20px 14px", borderBottom: "1px solid #f8fafc" }}>
-            <p style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a" }}>Gender Distribution</p>
-            <p style={{ fontSize: "12px", color: "#94a3b8", marginTop: "2px" }}>Total 1,240 students</p>
-          </div>
-          <div style={{ padding: "16px 20px 20px", display: "flex", flexDirection: "column", alignItems: "center" }}>
+        <Card>
+          <ChartTitle title="Gender Distribution" subtitle="Total 1,240 students" />
+          <CardContent className="flex flex-col items-center">
             <ResponsiveContainer width="100%" height={180}>
               <PieChart>
-                <Pie data={genderData} cx="50%" cy="50%" innerRadius={55} outerRadius={80} paddingAngle={4} dataKey="value">
-                  {genderData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                <Pie
+                  data={genderData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={55}
+                  outerRadius={80}
+                  paddingAngle={4}
+                  dataKey="value"
+                >
+                  {genderData.map((entry, i) => (
+                    <Cell key={entry.name} fill={genderColors[i]} />
+                  ))}
                 </Pie>
-                <Tooltip contentStyle={tooltipStyle} />
+                <Tooltip contentStyle={t.tooltip} />
               </PieChart>
             </ResponsiveContainer>
-            <div style={{ display: "flex", gap: "20px", marginTop: "4px" }}>
-              {genderData.map(g => (
-                <div key={g.name} style={{ textAlign: "center" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "6px", justifyContent: "center" }}>
-                    <span style={{ width: "10px", height: "10px", borderRadius: "50%", background: g.color, display: "inline-block" }} />
-                    <span style={{ fontSize: "12px", color: "#64748b" }}>{g.name}</span>
+            <div className="mt-1 flex items-center gap-6">
+              {genderData.map((g, i) => (
+                <div key={g.name} className="text-center">
+                  <div className="flex items-center justify-center gap-1.5">
+                    <span
+                      className="size-2.5 rounded-full"
+                      style={{ background: genderColors[i] }}
+                    />
+                    <span className="text-xs text-muted">{g.name}</span>
                   </div>
-                  <p style={{ fontSize: "18px", fontWeight: 800, color: "#0f172a", marginTop: "2px" }}>{g.value}</p>
+                  <p className="mt-0.5 text-lg font-semibold text-text">{g.value}</p>
                 </div>
               ))}
             </div>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Charts Row 2 */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
-
-        {/* Fee Collection vs Target */}
-        <div style={card()}>
-          <div style={{ padding: "18px 20px 14px", borderBottom: "1px solid #f8fafc", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div>
-              <p style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a" }}>Fee Collection vs Target</p>
-              <p style={{ fontSize: "12px", color: "#94a3b8", marginTop: "2px" }}>Monthly performance</p>
-            </div>
-          </div>
-          <div style={{ padding: "16px 20px 20px" }}>
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <Card>
+          <ChartTitle title="Fee Collection vs Target" subtitle="Monthly performance" />
+          <CardContent>
             <ResponsiveContainer width="100%" height={210}>
               <AreaChart data={feeMonthly}>
                 <defs>
-                  <linearGradient id="gcollected" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.15} />
-                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                  <linearGradient id="analyticsCollected" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor={t.series.primary} stopOpacity={0.15} />
+                    <stop offset="95%" stopColor={t.series.primary} stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f8fafc" vertical={false} />
-                <XAxis dataKey="month" tick={{ fontSize: 12, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} tickFormatter={v => `₹${(v / 1000).toFixed(0)}k`} />
-                <Tooltip formatter={v => [`₹${Number(v).toLocaleString("en-IN")}`, ""]} contentStyle={tooltipStyle} />
-                <Area type="monotone" dataKey="collected" stroke="#6366f1" strokeWidth={2.5} fill="url(#gcollected)" name="Collected" dot={false} />
-                <Area type="monotone" dataKey="target" stroke="#e2e8f0" strokeWidth={2} fill="none" name="Target" strokeDasharray="5 4" dot={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke={t.grid} vertical={false} />
+                <XAxis
+                  dataKey="month"
+                  tick={{ fontSize: 12, fill: t.axis }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <YAxis
+                  tick={{ fontSize: 11, fill: t.axis }}
+                  axisLine={false}
+                  tickLine={false}
+                  tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`}
+                />
+                <Tooltip
+                  formatter={(v) => [`₹${Number(v).toLocaleString("en-IN")}`, ""]}
+                  contentStyle={t.tooltip}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="collected"
+                  stroke={t.series.primary}
+                  strokeWidth={2.5}
+                  fill="url(#analyticsCollected)"
+                  name="Collected"
+                  dot={false}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="target"
+                  stroke={t.grid}
+                  strokeWidth={2}
+                  fill="none"
+                  name="Target"
+                  strokeDasharray="5 4"
+                  dot={false}
+                />
               </AreaChart>
             </ResponsiveContainer>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
 
-        {/* Class Strength */}
-        <div style={card()}>
-          <div style={{ padding: "18px 20px 14px", borderBottom: "1px solid #f8fafc" }}>
-            <p style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a" }}>Class-wise Strength</p>
-            <p style={{ fontSize: "12px", color: "#94a3b8", marginTop: "2px" }}>Students per class</p>
-          </div>
-          <div style={{ padding: "16px 20px 20px" }}>
+        <Card>
+          <ChartTitle title="Class-wise Strength" subtitle="Students per class" />
+          <CardContent>
             <ResponsiveContainer width="100%" height={210}>
               <BarChart data={classStrength} barSize={28} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" stroke="#f8fafc" horizontal={false} />
-                <XAxis type="number" tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
-                <YAxis dataKey="class" type="category" tick={{ fontSize: 12, fill: "#64748b" }} axisLine={false} tickLine={false} width={36} />
-                <Tooltip contentStyle={tooltipStyle} cursor={{ fill: "#f8fafc" }} />
-                <Bar dataKey="students" fill="#6366f1" radius={[0, 6, 6, 0]} name="Students" />
+                <CartesianGrid strokeDasharray="3 3" stroke={t.grid} horizontal={false} />
+                <XAxis
+                  type="number"
+                  tick={{ fontSize: 11, fill: t.axis }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <YAxis
+                  dataKey="class"
+                  type="category"
+                  tick={{ fontSize: 12, fill: t.axis }}
+                  axisLine={false}
+                  tickLine={false}
+                  width={36}
+                />
+                <Tooltip contentStyle={t.tooltip} cursor={{ fill: t.cursor, radius: 6 }} />
+                <Bar
+                  dataKey="students"
+                  fill={t.series.primary}
+                  radius={[0, 6, 6, 0]}
+                  name="Students"
+                />
               </BarChart>
             </ResponsiveContainer>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Fee Status Breakdown */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: "16px" }}>
-        <div style={card()}>
-          <div style={{ padding: "18px 20px 14px", borderBottom: "1px solid #f8fafc" }}>
-            <p style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a" }}>Fee Status</p>
-            <p style={{ fontSize: "12px", color: "#94a3b8", marginTop: "2px" }}>Current session</p>
-          </div>
-          <div style={{ padding: "20px", display: "flex", flexDirection: "column", alignItems: "center", gap: "16px" }}>
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+        <Card>
+          <ChartTitle title="Fee Status" subtitle="Current session" />
+          <CardContent className="flex flex-col items-center gap-4">
             <ResponsiveContainer width="100%" height={160}>
               <PieChart>
-                <Pie data={feeStatusData} cx="50%" cy="50%" innerRadius={45} outerRadius={70} paddingAngle={3} dataKey="value">
-                  {feeStatusData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                <Pie
+                  data={feeStatusData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={45}
+                  outerRadius={70}
+                  paddingAngle={3}
+                  dataKey="value"
+                >
+                  {feeStatusData.map((entry, i) => (
+                    <Cell key={entry.name} fill={feeStatusColors[i]} />
+                  ))}
                 </Pie>
-                <Tooltip contentStyle={tooltipStyle} />
+                <Tooltip contentStyle={t.tooltip} />
               </PieChart>
             </ResponsiveContainer>
-            <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: "8px" }}>
-              {feeStatusData.map(f => (
-                <div key={f.name} style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                    <span style={{ width: "10px", height: "10px", borderRadius: "3px", background: f.color, display: "inline-block" }} />
-                    <span style={{ fontSize: "13px", color: "#64748b" }}>{f.name}</span>
+            <div className="flex w-full flex-col gap-2">
+              {feeStatusData.map((f, i) => (
+                <div key={f.name} className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="size-2.5 rounded-sm"
+                      style={{ background: feeStatusColors[i] }}
+                    />
+                    <span className="text-sm text-muted">{f.name}</span>
                   </div>
-                  <span style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a" }}>{f.value}</span>
+                  <span className="text-sm font-semibold text-text">{f.value}</span>
                 </div>
               ))}
             </div>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
 
-        {/* Summary Table */}
-        <div style={card()}>
-          <div style={{ padding: "18px 20px 14px", borderBottom: "1px solid #f8fafc" }}>
-            <p style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a" }}>Key Performance Indicators</p>
-            <p style={{ fontSize: "12px", color: "#94a3b8", marginTop: "2px" }}>Current academic year summary</p>
-          </div>
-          <div style={{ padding: "8px 0" }}>
-            {[
-              { label: "Total Enrolled Students", value: "1,240", target: "1,300", pct: 95 },
-              { label: "Fee Collection Rate", value: "84.7%", target: "95%", pct: 85 },
-              { label: "Average Attendance", value: "91.4%", target: "95%", pct: 91 },
-              { label: "Teacher-Student Ratio", value: "1:14", target: "1:12", pct: 78 },
-              { label: "Pass Percentage (Last Exam)", value: "96.2%", target: "98%", pct: 96 },
-            ].map((row, i) => (
-              <div key={i} style={{ padding: "12px 20px", borderBottom: i < 4 ? "1px solid #f8fafc" : "none" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
-                  <span style={{ fontSize: "13px", color: "#334155", fontWeight: 500 }}>{row.label}</span>
-                  <div style={{ display: "flex", gap: "12px" }}>
-                    <span style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a" }}>{row.value}</span>
-                    <span style={{ fontSize: "12px", color: "#94a3b8" }}>Target: {row.target}</span>
+        <Card className="xl:col-span-2">
+          <ChartTitle
+            title="Key Performance Indicators"
+            subtitle="Current academic year summary"
+          />
+          <CardContent className="px-0 py-2">
+            {kpis.map((row) => (
+              <div
+                key={row.label}
+                className="border-b border-border px-5 py-3 last:border-0"
+              >
+                <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-sm font-medium text-text">{row.label}</span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm font-semibold text-text">{row.value}</span>
+                    <span className="text-xs text-subtle">Target: {row.target}</span>
                   </div>
                 </div>
-                <div style={{ height: "5px", background: "#f1f5f9", borderRadius: "99px", overflow: "hidden" }}>
-                  <div style={{
-                    height: "100%", borderRadius: "99px",
-                    width: `${row.pct}%`,
-                    background: row.pct >= 90 ? "#10b981" : row.pct >= 75 ? "#f59e0b" : "#ef4444",
-                    transition: "width 0.6s ease",
-                  }} />
+                <div className="h-1.5 overflow-hidden rounded-full bg-surface-hover">
+                  <div
+                    className={cn(
+                      "h-full rounded-full transition-[width] duration-500",
+                      row.pct >= 90 ? "bg-success" : row.pct >= 75 ? "bg-warning" : "bg-danger"
+                    )}
+                    style={{ width: `${row.pct}%` }}
+                  />
                 </div>
               </div>
             ))}
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       </div>
-
     </div>
   );
 }

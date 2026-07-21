@@ -1,6 +1,31 @@
 "use client";
+
 import React, { useState } from "react";
-import { Plus, Users, BookOpen, Eye, Edit, Trash2, ChevronDown, GraduationCap, UserCheck } from "lucide-react";
+import {
+  BookOpen,
+  ChevronDown,
+  Edit,
+  Eye,
+  GraduationCap,
+  LayoutGrid,
+  Plus,
+  Trash2,
+  UserCheck,
+  Users,
+} from "lucide-react";
+import {
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardHeader,
+  EmptyState,
+  PageHeader,
+  StatCard,
+  Table,
+  type Column,
+} from "@/components/ui";
+import { cn } from "@/lib/utils";
 
 const classesData = [
   { id: 1, name: "Class 6",  sections: ["A", "B", "C"], students: 165, teachers: 8,  classTeacher: "Ms. Anita Patel",    room: "101-103", stream: "General",  color: "#6366f1" },
@@ -22,216 +47,276 @@ const sectionStudents: Record<string, { id: string; name: string; roll: number; 
   ],
 };
 
-const feeStyle: Record<string, { bg: string; color: string }> = {
-  Paid:    { bg: "#f0fdf4", color: "#16a34a" },
-  Pending: { bg: "#fffbeb", color: "#d97706" },
-  Overdue: { bg: "#fff1f2", color: "#e11d48" },
+type SectionStudent = (typeof sectionStudents)[string][number];
+
+/** Per-class accent, taken from the gradient utility set rather than raw hex. */
+const CLASS_GRADIENTS = [
+  "gradient-indigo",
+  "gradient-violet",
+  "gradient-cyan",
+  "gradient-emerald",
+  "gradient-amber",
+  "gradient-rose",
+  "gradient-rose",
+];
+
+const FEE_VARIANT: Record<string, "success" | "warning" | "danger"> = {
+  Paid: "success",
+  Pending: "warning",
+  Overdue: "danger",
 };
+
+function attendanceBar(pct: number) {
+  if (pct >= 90) return "bg-success";
+  if (pct >= 75) return "bg-warning";
+  return "bg-danger";
+}
+
+function attendanceText(pct: number) {
+  if (pct >= 90) return "text-success-text";
+  if (pct >= 75) return "text-warning-text";
+  return "text-danger-text";
+}
 
 export default function ClassesPage() {
   const [selectedClass, setSelectedClass] = useState<number | null>(null);
   const [selectedSection, setSelectedSection] = useState<string | null>(null);
-  const [view, setView] = useState<"grid" | "list">("grid");
 
-  const cls = classesData.find(c => c.id === selectedClass);
+  const cls = classesData.find((c) => c.id === selectedClass);
+
+  const studentColumns: Column<SectionStudent>[] = [
+    {
+      key: "roll",
+      header: "Roll",
+      sortable: true,
+      render: (s) => (
+        <span className="font-medium text-muted">#{String(s.roll).padStart(2, "0")}</span>
+      ),
+    },
+    {
+      key: "name",
+      header: "Student",
+      sortable: true,
+      render: (s) => (
+        <div className="flex items-center gap-3">
+          <div
+            className={cn(
+              "flex size-9 shrink-0 items-center justify-center rounded-md text-sm font-semibold text-white",
+              cls ? CLASS_GRADIENTS[(cls.id - 1) % CLASS_GRADIENTS.length] : "gradient-indigo"
+            )}
+          >
+            {s.name.charAt(0)}
+          </div>
+          <div className="min-w-0">
+            <p className="truncate font-medium text-text">{s.name}</p>
+            <p className="truncate text-xs text-subtle">{s.id}</p>
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: "attendance",
+      header: "Attendance",
+      sortable: true,
+      render: (s) => (
+        <div className="flex items-center gap-2">
+          <div className="h-1.5 w-16 overflow-hidden rounded-full bg-surface-hover">
+            <div
+              className={cn("h-full rounded-full", attendanceBar(s.attendance))}
+              style={{ width: `${s.attendance}%` }}
+            />
+          </div>
+          <span className={cn("text-xs font-semibold", attendanceText(s.attendance))}>
+            {s.attendance}%
+          </span>
+        </div>
+      ),
+    },
+    {
+      key: "fees",
+      header: "Fee Status",
+      sortable: true,
+      render: (s) => <Badge variant={FEE_VARIANT[s.fees] ?? "default"}>{s.fees}</Badge>,
+    },
+    {
+      key: "actions",
+      header: "Actions",
+      align: "right",
+      render: (s) => (
+        <div className="flex items-center justify-end gap-1">
+          <button
+            aria-label={`View ${s.name}`}
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+          >
+            <Eye className="size-4" />
+          </button>
+          <button
+            aria-label={`Edit ${s.name}`}
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+          >
+            <Edit className="size-4" />
+          </button>
+          <button
+            aria-label={`Delete ${s.name}`}
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-danger-soft hover:text-danger"
+          >
+            <Trash2 className="size-4" />
+          </button>
+        </div>
+      ),
+    },
+  ];
 
   return (
-    <div style={{ maxWidth: "1600px", display: "flex", flexDirection: "column", gap: "24px" }}>
+    <div className="flex flex-col gap-5">
+      <PageHeader
+        title="Classes & Sections"
+        description="Manage classes, sections and student assignments"
+        actions={
+          <Button>
+            <Plus className="size-4" />
+            Add Class
+          </Button>
+        }
+      />
 
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div>
-          <h1 style={{ fontSize: "22px", fontWeight: 800, color: "#0f172a", letterSpacing: "-0.3px" }}>Classes & Sections</h1>
-          <p style={{ fontSize: "13px", color: "#94a3b8", marginTop: "4px" }}>Manage classes, sections and student assignments</p>
-        </div>
-        <button style={{ display: "flex", alignItems: "center", gap: "6px", padding: "9px 18px", borderRadius: "12px", border: "none", background: "linear-gradient(135deg,#6366f1,#8b5cf6)", fontSize: "13px", fontWeight: 600, color: "#fff", cursor: "pointer", boxShadow: "0 4px 12px rgba(99,102,241,0.35)" }}>
-          <Plus size={14} /> Add Class
-        </button>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard label="Total Classes" value="7" icon={GraduationCap} tone="indigo" />
+        <StatCard label="Total Sections" value="18" icon={LayoutGrid} tone="emerald" />
+        <StatCard label="Total Students" value="1,118" icon={Users} tone="amber" />
+        <StatCard label="Total Teachers" value="69" icon={UserCheck} tone="violet" />
       </div>
 
-      {/* Stats */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "16px" }}>
-        {[
-          { label: "Total Classes",   value: "7",    icon: "🏫", color: "#6366f1", bg: "#eff6ff" },
-          { label: "Total Sections",  value: "18",   icon: "📋", color: "#10b981", bg: "#f0fdf4" },
-          { label: "Total Students",  value: "1,118",icon: "👨‍🎓", color: "#f59e0b", bg: "#fffbeb" },
-          { label: "Total Teachers",  value: "69",   icon: "👨‍🏫", color: "#8b5cf6", bg: "#f5f3ff" },
-        ].map(s => (
-          <div key={s.label} style={{ background: "#fff", borderRadius: "16px", border: "1px solid #f1f5f9", padding: "20px", boxShadow: "0 1px 4px rgba(0,0,0,0.04)", display: "flex", alignItems: "center", gap: "14px" }}>
-            <div style={{ width: "48px", height: "48px", borderRadius: "14px", background: s.bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "22px", flexShrink: 0 }}>
-              {s.icon}
-            </div>
-            <div>
-              <p style={{ fontSize: "12px", color: "#64748b", fontWeight: 500 }}>{s.label}</p>
-              <p style={{ fontSize: "26px", fontWeight: 800, color: s.color, lineHeight: 1.1, letterSpacing: "-0.5px" }}>{s.value}</p>
-            </div>
-          </div>
-        ))}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        {classesData.map((c) => {
+          const isSelected = selectedClass === c.id;
+          return (
+            <Card
+              key={c.id}
+              onClick={() => {
+                setSelectedClass(c.id);
+                setSelectedSection(null);
+              }}
+              className={cn(isSelected && "border-primary shadow-md")}
+            >
+              <CardContent>
+                <div className="mb-4 flex items-center justify-between gap-2">
+                  <div
+                    className={cn(
+                      "flex size-11 shrink-0 items-center justify-center rounded-md text-white shadow-sm",
+                      CLASS_GRADIENTS[(c.id - 1) % CLASS_GRADIENTS.length]
+                    )}
+                  >
+                    <GraduationCap className="size-5" />
+                  </div>
+                  <div className="flex gap-1">
+                    {c.sections.map((s) => (
+                      <span
+                        key={s}
+                        className="flex size-6 items-center justify-center rounded-sm bg-primary-soft text-[11px] font-bold text-primary-text"
+                      >
+                        {s}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                <p className="text-base font-semibold text-text">{c.name}</p>
+                <p className="mt-0.5 text-xs text-muted">{c.stream}</p>
+
+                <div className="mt-3.5 flex gap-4 border-t border-border pt-3.5">
+                  <span className="flex items-center gap-1.5 text-xs font-medium text-muted">
+                    <Users className="size-3.5 text-subtle" />
+                    {c.students}
+                  </span>
+                  <span className="flex items-center gap-1.5 text-xs font-medium text-muted">
+                    <BookOpen className="size-3.5 text-subtle" />
+                    {c.teachers} teachers
+                  </span>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
 
-      {/* Class Cards Grid */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "16px" }}>
-        {classesData.map(cls => (
-          <div
-            key={cls.id}
-            onClick={() => { setSelectedClass(cls.id); setSelectedSection(null); }}
-            style={{
-              background: "#fff", borderRadius: "16px", border: `2px solid ${selectedClass === cls.id ? cls.color : "#f1f5f9"}`,
-              padding: "20px", cursor: "pointer", boxShadow: selectedClass === cls.id ? `0 4px 20px ${cls.color}25` : "0 1px 4px rgba(0,0,0,0.04)",
-              transition: "all 0.2s ease",
-            }}
-            onMouseEnter={e => { if (selectedClass !== cls.id) (e.currentTarget as HTMLDivElement).style.borderColor = "#e2e8f0"; (e.currentTarget as HTMLDivElement).style.transform = "translateY(-2px)"; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = selectedClass === cls.id ? cls.color : "#f1f5f9"; (e.currentTarget as HTMLDivElement).style.transform = "translateY(0)"; }}
-          >
-            {/* Top */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
-              <div style={{ width: "44px", height: "44px", borderRadius: "12px", background: cls.color, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 4px 12px ${cls.color}40` }}>
-                <GraduationCap size={20} color="#fff" />
-              </div>
-              <div style={{ display: "flex", gap: "4px" }}>
-                {cls.sections.map(s => (
-                  <span key={s} style={{ width: "24px", height: "24px", borderRadius: "6px", background: `${cls.color}15`, color: cls.color, fontSize: "11px", fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>{s}</span>
-                ))}
-              </div>
-            </div>
-
-            <p style={{ fontSize: "16px", fontWeight: 800, color: "#0f172a" }}>{cls.name}</p>
-            <p style={{ fontSize: "12px", color: "#94a3b8", marginTop: "2px" }}>{cls.stream}</p>
-
-            <div style={{ display: "flex", gap: "16px", marginTop: "14px", paddingTop: "14px", borderTop: "1px solid #f8fafc" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-                <Users size={13} color="#94a3b8" />
-                <span style={{ fontSize: "12px", color: "#64748b", fontWeight: 600 }}>{cls.students}</span>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-                <BookOpen size={13} color="#94a3b8" />
-                <span style={{ fontSize: "12px", color: "#64748b", fontWeight: 600 }}>{cls.teachers} teachers</span>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Selected Class Detail */}
       {cls && (
-        <div style={{ background: "#fff", borderRadius: "16px", border: "1px solid #f1f5f9", boxShadow: "0 1px 4px rgba(0,0,0,0.04)", overflow: "hidden" }}>
-
-          {/* Header */}
-          <div style={{ padding: "18px 24px", borderBottom: "1px solid #f8fafc", display: "flex", alignItems: "center", justifyContent: "space-between", background: `linear-gradient(135deg, ${cls.color}08, ${cls.color}03)` }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-              <div style={{ width: "40px", height: "40px", borderRadius: "12px", background: cls.color, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <GraduationCap size={18} color="#fff" />
+        <Card>
+          <CardHeader>
+            <div className="flex min-w-0 items-center gap-3">
+              <div
+                className={cn(
+                  "flex size-10 shrink-0 items-center justify-center rounded-md text-white",
+                  CLASS_GRADIENTS[(cls.id - 1) % CLASS_GRADIENTS.length]
+                )}
+              >
+                <GraduationCap className="size-4.5" />
               </div>
-              <div>
-                <p style={{ fontSize: "16px", fontWeight: 700, color: "#0f172a" }}>{cls.name} — Details</p>
-                <p style={{ fontSize: "12px", color: "#94a3b8", marginTop: "1px" }}>Class Teacher: {cls.classTeacher} &nbsp;·&nbsp; Room: {cls.room}</p>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-text">{cls.name} — Details</p>
+                <p className="mt-0.5 truncate text-xs text-muted">
+                  Class Teacher: {cls.classTeacher} · Room: {cls.room}
+                </p>
               </div>
             </div>
-            <button onClick={() => setSelectedClass(null)} style={{ padding: "6px 14px", borderRadius: "10px", border: "1px solid #e2e8f0", background: "#fff", fontSize: "12px", color: "#64748b", cursor: "pointer", fontWeight: 600 }}>
+            <Button variant="outline" size="sm" onClick={() => setSelectedClass(null)}>
               Close
-            </button>
-          </div>
+            </Button>
+          </CardHeader>
 
-          {/* Section Tabs */}
-          <div style={{ padding: "16px 24px", borderBottom: "1px solid #f8fafc", display: "flex", gap: "8px" }}>
-            {cls.sections.map(sec => {
+          <div className="flex flex-wrap gap-2 border-b border-border px-5 py-4">
+            {cls.sections.map((sec) => {
               const key = `${cls.name.replace("Class ", "")}-${sec}`;
               const isActive = selectedSection === key;
               return (
-                <button
+                <Button
                   key={sec}
+                  size="sm"
+                  variant={isActive ? "primary" : "secondary"}
                   onClick={() => setSelectedSection(isActive ? null : key)}
-                  style={{ padding: "8px 20px", borderRadius: "10px", border: "none", cursor: "pointer", fontSize: "13px", fontWeight: 700, transition: "all 0.15s", background: isActive ? cls.color : "#f8fafc", color: isActive ? "#fff" : "#64748b", boxShadow: isActive ? `0 4px 12px ${cls.color}40` : "none" }}
                 >
                   Section {sec}
-                </button>
+                </Button>
               );
             })}
           </div>
 
-          {/* Section Info */}
           {selectedSection ? (
             <div>
-              <div style={{ padding: "16px 24px", borderBottom: "1px solid #f8fafc", display: "flex", gap: "24px" }}>
+              <div className="flex flex-wrap gap-6 border-b border-border px-5 py-4">
                 {[
                   { label: "Students", value: "42", icon: Users },
                   { label: "Avg Attendance", value: "91%", icon: UserCheck },
                   { label: "Fee Collected", value: "85%", icon: BookOpen },
-                ].map(info => (
-                  <div key={info.label} style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                    <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: `${cls.color}15`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <info.icon size={16} color={cls.color} />
+                ].map((info) => (
+                  <div key={info.label} className="flex items-center gap-2.5">
+                    <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-primary-soft text-primary-text">
+                      <info.icon className="size-4" />
                     </div>
                     <div>
-                      <p style={{ fontSize: "18px", fontWeight: 800, color: "#0f172a", lineHeight: 1 }}>{info.value}</p>
-                      <p style={{ fontSize: "11px", color: "#94a3b8", marginTop: "2px" }}>{info.label}</p>
+                      <p className="text-lg font-semibold leading-none text-text">{info.value}</p>
+                      <p className="mt-1 text-[11px] text-muted">{info.label}</p>
                     </div>
                   </div>
                 ))}
               </div>
 
-              {/* Students table */}
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                <thead>
-                  <tr style={{ background: "#fafafa", borderBottom: "1px solid #f1f5f9" }}>
-                    {["Roll", "Student", "Attendance", "Fee Status", "Actions"].map(h => (
-                      <th key={h} style={{ padding: "12px 24px", textAlign: "left", fontSize: "11px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em" }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {(sectionStudents[selectedSection] ?? sectionStudents["6-A"]).map((s, i, arr) => {
-                    const fs = feeStyle[s.fees];
-                    const attColor = s.attendance >= 90 ? "#10b981" : s.attendance >= 75 ? "#f59e0b" : "#ef4444";
-                    return (
-                      <tr key={s.id} style={{ borderBottom: i < arr.length - 1 ? "1px solid #f8fafc" : "none" }}
-                        onMouseEnter={e => (e.currentTarget as HTMLTableRowElement).style.background = "#fafafa"}
-                        onMouseLeave={e => (e.currentTarget as HTMLTableRowElement).style.background = "transparent"}>
-                        <td style={{ padding: "12px 24px", fontSize: "13px", color: "#64748b", fontWeight: 600 }}>#{String(s.roll).padStart(2, "0")}</td>
-                        <td style={{ padding: "12px 24px" }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                            <div style={{ width: "34px", height: "34px", borderRadius: "10px", background: cls.color, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: "13px", fontWeight: 700 }}>{s.name.charAt(0)}</div>
-                            <div>
-                              <p style={{ fontSize: "13px", fontWeight: 600, color: "#0f172a" }}>{s.name}</p>
-                              <p style={{ fontSize: "11px", color: "#94a3b8" }}>{s.id}</p>
-                            </div>
-                          </div>
-                        </td>
-                        <td style={{ padding: "12px 24px" }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                            <div style={{ width: "60px", height: "5px", background: "#f1f5f9", borderRadius: "99px", overflow: "hidden" }}>
-                              <div style={{ height: "100%", width: `${s.attendance}%`, background: attColor, borderRadius: "99px" }} />
-                            </div>
-                            <span style={{ fontSize: "12px", fontWeight: 700, color: attColor }}>{s.attendance}%</span>
-                          </div>
-                        </td>
-                        <td style={{ padding: "12px 24px" }}>
-                          <span style={{ fontSize: "12px", fontWeight: 700, padding: "4px 10px", borderRadius: "20px", background: fs.bg, color: fs.color }}>{s.fees}</span>
-                        </td>
-                        <td style={{ padding: "12px 24px" }}>
-                          <div style={{ display: "flex", gap: "4px" }}>
-                            {[Eye, Edit, Trash2].map((Icon, idx) => (
-                              <button key={idx} style={{ padding: "6px", borderRadius: "8px", border: "none", background: "transparent", cursor: "pointer", color: "#94a3b8" }}
-                                onMouseEnter={e => (e.currentTarget as HTMLButtonElement).style.background = "#f8fafc"}
-                                onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.background = "transparent"}>
-                                <Icon size={13} />
-                              </button>
-                            ))}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+              <Table
+                columns={studentColumns}
+                rows={sectionStudents[selectedSection] ?? sectionStudents["6-A"]}
+                rowKey={(s) => s.id}
+                className="rounded-none border-0 shadow-none"
+                emptyTitle="No students in this section"
+              />
             </div>
           ) : (
-            <div style={{ padding: "32px", textAlign: "center", color: "#94a3b8" }}>
-              <ChevronDown size={32} color="#e2e8f0" style={{ margin: "0 auto 8px" }} />
-              <p style={{ fontSize: "14px", fontWeight: 600 }}>Select a section to view students</p>
-            </div>
+            <EmptyState
+              icon={<ChevronDown className="size-5" />}
+              title="Select a section to view students"
+              description="Pick one of the section tabs above."
+            />
           )}
-        </div>
+        </Card>
       )}
     </div>
   );

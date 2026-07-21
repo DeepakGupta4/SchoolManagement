@@ -1,7 +1,19 @@
 "use client";
+
 import React, { useState } from "react";
 import { Check, X, Clock, Download, ChevronLeft, ChevronRight, Users } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import {
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardHeader,
+  PageHeader,
+  Select,
+} from "@/components/ui";
+import { useChartTheme } from "@/hooks/useChartTheme";
+import { cn } from "@/lib/utils";
 
 const classes = ["6-A", "6-B", "7-A", "7-B", "8-A", "9-A", "9-B", "10-A", "10-B", "11-A", "12-A", "12-B"];
 
@@ -31,13 +43,21 @@ const weeklyData = [
 
 type AttendanceStatus = "present" | "absent" | "late";
 
-const statusConfig: Record<AttendanceStatus, { bg: string; color: string; label: string }> = {
-  present: { bg: "#f0fdf4", color: "#16a34a", label: "Present" },
-  absent:  { bg: "#fff1f2", color: "#e11d48", label: "Absent"  },
-  late:    { bg: "#fffbeb", color: "#d97706", label: "Late"    },
+const statusConfig: Record<AttendanceStatus, { tone: string; bar: string; label: string }> = {
+  present: { tone: "bg-success-soft text-success-text", bar: "bg-success", label: "Present" },
+  absent:  { tone: "bg-danger-soft text-danger-text",   bar: "bg-danger",  label: "Absent"  },
+  late:    { tone: "bg-warning-soft text-warning-text", bar: "bg-warning", label: "Late"    },
+};
+
+const statusIcon: Record<AttendanceStatus, typeof Check> = {
+  present: Check,
+  absent: X,
+  late: Clock,
 };
 
 export default function AttendancePage() {
+  const chart = useChartTheme();
+
   const [selectedClass, setSelectedClass] = useState("10-A");
   const [attendance, setAttendance] = useState<Record<string, AttendanceStatus>>(
     Object.fromEntries(students.map(s => [s.id, s.status as AttendanceStatus]))
@@ -59,148 +79,177 @@ export default function AttendancePage() {
     setSaved(false);
   };
 
+  const pctVariant = pct >= 90 ? "success" : pct >= 75 ? "warning" : "danger";
+
+  const summary: { key: AttendanceStatus; label: string; value: number }[] = [
+    { key: "present", label: "Present", value: present },
+    { key: "absent", label: "Absent", value: absent },
+    { key: "late", label: "Late", value: late },
+  ];
+
   return (
-    <div style={{ maxWidth: "1600px", display: "flex", flexDirection: "column", gap: "24px" }}>
+    <div className="flex flex-col gap-5">
+      <PageHeader
+        title="Attendance"
+        description={new Date().toLocaleDateString("en-IN", {
+          weekday: "long",
+          day: "numeric",
+          month: "long",
+          year: "numeric",
+        })}
+        actions={
+          <Button variant="outline">
+            <Download className="size-4" />
+            Export
+          </Button>
+        }
+      />
 
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div>
-          <h1 style={{ fontSize: "22px", fontWeight: 800, color: "#0f172a", letterSpacing: "-0.3px" }}>Attendance</h1>
-          <p style={{ fontSize: "13px", color: "#94a3b8", marginTop: "4px" }}>
-            {new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
-          </p>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="flex flex-col gap-3">
+          {summary.map((s) => {
+            const sharePct = Math.round((s.value / students.length) * 100);
+            return (
+              <Card key={s.key}>
+                <CardContent className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={cn(
+                        "flex size-10 shrink-0 items-center justify-center rounded-md",
+                        statusConfig[s.key].tone
+                      )}
+                    >
+                      <Users className="size-4.5" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted">{s.label}</p>
+                      <p className="mt-0.5 text-xl font-semibold text-text">{s.value}</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-base font-semibold text-text">{sharePct}%</p>
+                    <div className="mt-1.5 h-1.5 w-16 overflow-hidden rounded-full bg-surface-hover">
+                      <div
+                        className={cn("h-full rounded-full", statusConfig[s.key].bar)}
+                        style={{ width: `${sharePct}%` }}
+                      />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
-        <div style={{ display: "flex", gap: "10px" }}>
-          <button style={{ display: "flex", alignItems: "center", gap: "6px", padding: "9px 16px", borderRadius: "12px", border: "1px solid #e2e8f0", background: "#fff", fontSize: "13px", fontWeight: 600, color: "#334155", cursor: "pointer" }}>
-            <Download size={14} /> Export
-          </button>
-        </div>
-      </div>
 
-      {/* Top Row */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: "16px" }}>
-
-        {/* Stats */}
-        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-          {[
-            { label: "Present", value: present, total: students.length, color: "#10b981", bg: "#f0fdf4" },
-            { label: "Absent",  value: absent,  total: students.length, color: "#ef4444", bg: "#fff1f2" },
-            { label: "Late",    value: late,    total: students.length, color: "#f59e0b", bg: "#fffbeb" },
-          ].map(s => (
-            <div key={s.label} style={{ background: "#fff", borderRadius: "14px", border: "1px solid #f1f5f9", padding: "16px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                <div style={{ width: "40px", height: "40px", borderRadius: "12px", background: s.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <Users size={18} color={s.color} />
-                </div>
-                <div>
-                  <p style={{ fontSize: "12px", color: "#64748b", fontWeight: 500 }}>{s.label}</p>
-                  <p style={{ fontSize: "22px", fontWeight: 800, color: s.color, lineHeight: 1.1 }}>{s.value}</p>
-                </div>
-              </div>
-              <div style={{ textAlign: "right" }}>
-                <p style={{ fontSize: "18px", fontWeight: 700, color: "#0f172a" }}>{Math.round((s.value / s.total) * 100)}%</p>
-                <div style={{ width: "60px", height: "5px", background: "#f1f5f9", borderRadius: "99px", marginTop: "6px", overflow: "hidden" }}>
-                  <div style={{ height: "100%", width: `${(s.value / s.total) * 100}%`, background: s.color, borderRadius: "99px" }} />
-                </div>
-              </div>
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-text">Weekly Overview</p>
+              <p className="mt-0.5 text-xs text-muted">School-wide attendance this week</p>
             </div>
-          ))}
-        </div>
-
-        {/* Weekly Chart */}
-        <div style={{ background: "#fff", borderRadius: "16px", border: "1px solid #f1f5f9", boxShadow: "0 1px 4px rgba(0,0,0,0.04)", overflow: "hidden" }}>
-          <div style={{ padding: "18px 20px 14px", borderBottom: "1px solid #f8fafc", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div>
-              <p style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a" }}>Weekly Overview</p>
-              <p style={{ fontSize: "12px", color: "#94a3b8", marginTop: "2px" }}>School-wide attendance this week</p>
+            <div className="flex shrink-0 items-center gap-2">
+              <Button variant="outline" size="sm" aria-label="Previous week" className="px-2">
+                <ChevronLeft className="size-4" />
+              </Button>
+              <Button variant="outline" size="sm" aria-label="Next week" className="px-2">
+                <ChevronRight className="size-4" />
+              </Button>
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <button style={{ padding: "6px", borderRadius: "8px", border: "1px solid #e2e8f0", background: "#fff", cursor: "pointer" }}><ChevronLeft size={14} color="#64748b" /></button>
-              <button style={{ padding: "6px", borderRadius: "8px", border: "1px solid #e2e8f0", background: "#fff", cursor: "pointer" }}><ChevronRight size={14} color="#64748b" /></button>
-            </div>
-          </div>
-          <div style={{ padding: "16px 20px 20px" }}>
-            <ResponsiveContainer width="100%" height={180}>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={200}>
               <BarChart data={weeklyData} barSize={20} barGap={4}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f8fafc" vertical={false} />
-                <XAxis dataKey="day" tick={{ fontSize: 12, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
-                <Tooltip contentStyle={{ borderRadius: "10px", border: "1px solid #f1f5f9", boxShadow: "0 8px 24px rgba(0,0,0,0.08)", fontSize: "12px" }} cursor={{ fill: "#f8fafc" }} />
-                <Bar dataKey="present" fill="#6366f1" radius={[6, 6, 0, 0]} name="Present" />
-                <Bar dataKey="absent"  fill="#fca5a5" radius={[6, 6, 0, 0]} name="Absent" />
+                <CartesianGrid strokeDasharray="3 3" stroke={chart.grid} vertical={false} />
+                <XAxis dataKey="day" tick={{ fontSize: 12, fill: chart.axis }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 11, fill: chart.axis }} axisLine={false} tickLine={false} />
+                <Tooltip contentStyle={chart.tooltip} cursor={{ fill: chart.cursor, radius: 6 }} />
+                <Bar dataKey="present" fill={chart.series.primary} radius={[6, 6, 0, 0]} name="Present" />
+                <Bar dataKey="absent" fill={chart.series.danger} radius={[6, 6, 0, 0]} name="Absent" />
               </BarChart>
             </ResponsiveContainer>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Mark Attendance */}
-      <div style={{ background: "#fff", borderRadius: "16px", border: "1px solid #f1f5f9", boxShadow: "0 1px 4px rgba(0,0,0,0.04)", overflow: "hidden" }}>
-
-        {/* Toolbar */}
-        <div style={{ padding: "16px 20px", borderBottom: "1px solid #f8fafc", display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
-          <select value={selectedClass} onChange={e => setSelectedClass(e.target.value)}
-            style={{ padding: "9px 14px", fontSize: "13px", fontWeight: 600, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "12px", outline: "none", color: "#334155", cursor: "pointer" }}>
-            {classes.map(c => <option key={c}>Class {c}</option>)}
-          </select>
-
-          <div style={{ display: "flex", gap: "6px", marginLeft: "auto" }}>
-            <button onClick={() => markAll("present")} style={{ display: "flex", alignItems: "center", gap: "5px", padding: "8px 14px", borderRadius: "10px", border: "none", background: "#f0fdf4", color: "#16a34a", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}>
-              <Check size={13} /> Mark All Present
-            </button>
-            <button onClick={() => markAll("absent")} style={{ display: "flex", alignItems: "center", gap: "5px", padding: "8px 14px", borderRadius: "10px", border: "none", background: "#fff1f2", color: "#e11d48", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}>
-              <X size={13} /> Mark All Absent
-            </button>
+      <Card className="overflow-hidden">
+        <div className="flex flex-wrap items-center gap-3 border-b border-border px-5 py-4">
+          <div className="w-44">
+            <Select
+              value={selectedClass}
+              onChange={(e) => setSelectedClass(e.target.value)}
+              options={classes.map((c) => ({ label: `Class ${c}`, value: c }))}
+              aria-label="Select class"
+            />
           </div>
 
-          {/* Attendance % pill */}
-          <div style={{ padding: "8px 16px", borderRadius: "20px", background: pct >= 90 ? "#f0fdf4" : pct >= 75 ? "#fffbeb" : "#fff1f2", color: pct >= 90 ? "#16a34a" : pct >= 75 ? "#d97706" : "#e11d48", fontSize: "13px", fontWeight: 700 }}>
+          <div className="ml-auto flex flex-wrap gap-2">
+            <Button size="sm" variant="secondary" onClick={() => markAll("present")}>
+              <Check className="size-3.5" />
+              Mark All Present
+            </Button>
+            <Button size="sm" variant="secondary" onClick={() => markAll("absent")}>
+              <X className="size-3.5" />
+              Mark All Absent
+            </Button>
+          </div>
+
+          <Badge variant={pctVariant} className="px-3.5 py-1.5 text-sm font-semibold">
             {pct}% Present
-          </div>
+          </Badge>
         </div>
 
-        {/* Student List */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "1px", background: "#f8fafc" }}>
-          {students.map(s => {
-            const st = attendance[s.id] as AttendanceStatus;
-            const sc = statusConfig[st];
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3">
+          {students.map((s) => {
+            const st = attendance[s.id];
             return (
-              <div key={s.id} style={{ background: "#fff", padding: "14px 20px", display: "flex", alignItems: "center", gap: "12px" }}>
-                {/* Avatar */}
-                <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: "linear-gradient(135deg,#6366f1,#8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: "13px", fontWeight: 700, flexShrink: 0 }}>
+              <div
+                key={s.id}
+                className="flex items-center gap-3 border-b border-border px-5 py-3.5"
+              >
+                <div className="gradient-indigo flex size-9 shrink-0 items-center justify-center rounded-md text-sm font-semibold text-white">
                   {s.name.charAt(0)}
                 </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ fontSize: "13px", fontWeight: 600, color: "#0f172a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</p>
-                  <p style={{ fontSize: "11px", color: "#94a3b8", marginTop: "1px" }}>Roll #{s.roll}</p>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-text">{s.name}</p>
+                  <p className="mt-0.5 text-[11px] text-subtle">Roll #{s.roll}</p>
                 </div>
-                {/* Status buttons */}
-                <div style={{ display: "flex", gap: "4px" }}>
-                  {(["present", "absent", "late"] as AttendanceStatus[]).map(status => (
-                    <button key={status} onClick={() => mark(s.id, status)} style={{
-                      width: "28px", height: "28px", borderRadius: "8px", border: "none", cursor: "pointer",
-                      background: st === status ? statusConfig[status].bg : "#f8fafc",
-                      color: st === status ? statusConfig[status].color : "#94a3b8",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      transition: "all 0.15s",
-                    }}>
-                      {status === "present" ? <Check size={13} /> : status === "absent" ? <X size={13} /> : <Clock size={13} />}
-                    </button>
-                  ))}
+                <div className="flex gap-1">
+                  {(["present", "absent", "late"] as AttendanceStatus[]).map((status) => {
+                    const Icon = statusIcon[status];
+                    const isActive = st === status;
+                    return (
+                      <button
+                        key={status}
+                        onClick={() => mark(s.id, status)}
+                        aria-label={`Mark ${s.name} ${statusConfig[status].label}`}
+                        aria-pressed={isActive}
+                        className={cn(
+                          "focus-ring flex size-7 items-center justify-center rounded-sm transition-colors",
+                          isActive
+                            ? statusConfig[status].tone
+                            : "bg-surface-sunken text-subtle hover:bg-surface-hover hover:text-text"
+                        )}
+                      >
+                        <Icon className="size-3.5" />
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             );
           })}
         </div>
 
-        {/* Save */}
-        <div style={{ padding: "16px 20px", borderTop: "1px solid #f8fafc", display: "flex", justifyContent: "flex-end", gap: "10px" }}>
-          {saved && <p style={{ fontSize: "13px", color: "#16a34a", fontWeight: 600, display: "flex", alignItems: "center", gap: "5px" }}><Check size={14} /> Attendance saved!</p>}
-          <button onClick={() => setSaved(true)} style={{ padding: "10px 24px", borderRadius: "12px", border: "none", background: "linear-gradient(135deg,#6366f1,#8b5cf6)", color: "#fff", fontSize: "13px", fontWeight: 700, cursor: "pointer", boxShadow: "0 4px 12px rgba(99,102,241,0.3)" }}>
-            Save Attendance
-          </button>
+        <div className="flex items-center justify-end gap-3 px-5 py-4">
+          {saved && (
+            <p className="flex items-center gap-1.5 text-sm font-medium text-success-text">
+              <Check className="size-4" />
+              Attendance saved!
+            </p>
+          )}
+          <Button onClick={() => setSaved(true)}>Save Attendance</Button>
         </div>
-      </div>
+      </Card>
     </div>
   );
 }

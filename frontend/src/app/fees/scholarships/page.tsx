@@ -1,6 +1,31 @@
 "use client";
+
 import React, { useState } from "react";
-import { Plus, Search, Edit, Trash2, Award, Download, CheckCircle, Clock, XCircle } from "lucide-react";
+import {
+  Award,
+  CheckCircle,
+  Clock,
+  Download,
+  GraduationCap,
+  HeartHandshake,
+  Pencil,
+  Plus,
+  Search,
+  Trash2,
+  XCircle,
+} from "lucide-react";
+import {
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  Input,
+  PageHeader,
+  StatCard,
+  Table,
+  type Column,
+} from "@/components/ui";
+import { cn } from "@/lib/utils";
 
 const scholarships = [
   { id: "SCH001", student: "Priya Patel",    class: "9-B",  type: "Merit",       percentage: 100, amount: 10900, reason: "School Topper",         status: "active",  since: "Apr 2025" },
@@ -13,189 +38,260 @@ const scholarships = [
   { id: "SCH008", student: "Sunita Devi",    class: "8-A",  type: "Need-Based",  percentage: 75,  amount: 6600,  reason: "Orphan Student",        status: "active",  since: "Apr 2025" },
 ];
 
-const typeColors: Record<string, { bg: string; color: string }> = {
-  "Merit":      { bg: "#eff6ff", color: "#2563eb" },
-  "Need-Based": { bg: "#f0fdf4", color: "#16a34a" },
-  "Sports":     { bg: "#fffbeb", color: "#d97706" },
-  "Cultural":   { bg: "#f5f3ff", color: "#7c3aed" },
+type Scholarship = (typeof scholarships)[number];
+
+type BadgeVariant = "default" | "success" | "warning" | "danger" | "info";
+
+const typeStyles: Record<string, { variant: BadgeVariant; tile: string; bar: string }> = {
+  Merit: { variant: "info", tile: "bg-info-soft text-info-text", bar: "bg-info" },
+  "Need-Based": { variant: "success", tile: "bg-success-soft text-success-text", bar: "bg-success" },
+  Sports: { variant: "warning", tile: "bg-warning-soft text-warning-text", bar: "bg-warning" },
+  Cultural: { variant: "default", tile: "bg-primary-soft text-primary-text", bar: "bg-primary" },
 };
 
-const statusConfig: Record<string, { bg: string; color: string; icon: React.ElementType; label: string }> = {
-  active:  { bg: "#f0fdf4", color: "#16a34a", icon: CheckCircle, label: "Active"  },
-  pending: { bg: "#fffbeb", color: "#d97706", icon: Clock,       label: "Pending" },
-  expired: { bg: "#f8fafc", color: "#94a3b8", icon: XCircle,     label: "Expired" },
+const statusConfig: Record<
+  string,
+  { variant: BadgeVariant; icon: React.ElementType; label: string }
+> = {
+  active: { variant: "success", icon: CheckCircle, label: "Active" },
+  pending: { variant: "warning", icon: Clock, label: "Pending" },
+  expired: { variant: "default", icon: XCircle, label: "Expired" },
 };
 
 const tabs = ["All", "Active", "Pending", "Expired"];
+
+const inr = new Intl.NumberFormat("en-IN", {
+  style: "currency",
+  currency: "INR",
+  maximumFractionDigits: 0,
+});
 
 export default function ScholarshipsPage() {
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState("All");
 
-  const filtered = scholarships.filter(s => {
+  const filtered = scholarships.filter((s) => {
     const matchTab = activeTab === "All" || s.status === activeTab.toLowerCase();
-    const matchSearch = s.student.toLowerCase().includes(search.toLowerCase()) ||
+    const matchSearch =
+      s.student.toLowerCase().includes(search.toLowerCase()) ||
       s.type.toLowerCase().includes(search.toLowerCase()) ||
       s.class.toLowerCase().includes(search.toLowerCase());
     return matchTab && matchSearch;
   });
 
-  const totalSaved = scholarships.filter(s => s.status === "active").reduce((sum, s) => sum + s.amount, 0);
+  const totalSaved = scholarships
+    .filter((s) => s.status === "active")
+    .reduce((sum, s) => sum + s.amount, 0);
+
+  const fallbackType = { variant: "default" as BadgeVariant, tile: "bg-surface-hover text-muted", bar: "bg-primary" };
+
+  const columns: Column<Scholarship>[] = [
+    {
+      key: "id",
+      header: "ID",
+      sortable: true,
+      render: (s) => <span className="font-semibold text-primary">{s.id}</span>,
+    },
+    {
+      key: "student",
+      header: "Student",
+      sortable: true,
+      render: (s) => {
+        const tc = typeStyles[s.type] ?? fallbackType;
+        return (
+          <div className="flex items-center gap-3">
+            <div className={cn("flex size-9 shrink-0 items-center justify-center rounded-md", tc.tile)}>
+              <Award className="size-4" />
+            </div>
+            <span className="whitespace-nowrap font-medium text-text">{s.student}</span>
+          </div>
+        );
+      },
+    },
+    { key: "class", header: "Class", render: (s) => <Badge variant="info">{s.class}</Badge> },
+    {
+      key: "type",
+      header: "Type",
+      sortable: true,
+      render: (s) => (
+        <Badge variant={(typeStyles[s.type] ?? fallbackType).variant}>{s.type}</Badge>
+      ),
+    },
+    {
+      key: "percentage",
+      header: "Concession",
+      sortable: true,
+      render: (s) => {
+        const tc = typeStyles[s.type] ?? fallbackType;
+        return (
+          <div className="flex items-center gap-2">
+            <div className="h-1.5 w-16 overflow-hidden rounded-full bg-surface-hover">
+              <div className={cn("h-full rounded-full", tc.bar)} style={{ width: `${s.percentage}%` }} />
+            </div>
+            <span className="font-medium text-text">{s.percentage}%</span>
+          </div>
+        );
+      },
+    },
+    {
+      key: "amount",
+      header: "Amount Waived",
+      sortable: true,
+      align: "right",
+      render: (s) => (
+        <span className="whitespace-nowrap font-semibold text-primary">{inr.format(s.amount)}</span>
+      ),
+    },
+    {
+      key: "reason",
+      header: "Reason",
+      className: "max-w-45",
+      render: (s) => <span className="block truncate text-muted">{s.reason}</span>,
+    },
+    {
+      key: "since",
+      header: "Since",
+      sortable: true,
+      render: (s) => <span className="whitespace-nowrap text-subtle">{s.since}</span>,
+    },
+    {
+      key: "status",
+      header: "Status",
+      sortable: true,
+      render: (s) => {
+        const sc = statusConfig[s.status];
+        const StatusIcon = sc.icon;
+        return (
+          <Badge variant={sc.variant} className="gap-1.5">
+            <StatusIcon className="size-3" />
+            {sc.label}
+          </Badge>
+        );
+      },
+    },
+    {
+      key: "actions",
+      header: "",
+      align: "right",
+      render: (s) => (
+        <div className="flex items-center justify-end gap-1">
+          <button
+            title="Edit"
+            aria-label={`Edit scholarship ${s.id}`}
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+          >
+            <Pencil className="size-4" />
+          </button>
+          <button
+            title="Delete"
+            aria-label={`Delete scholarship ${s.id}`}
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-danger-soft hover:text-danger"
+          >
+            <Trash2 className="size-4" />
+          </button>
+        </div>
+      ),
+    },
+  ];
 
   return (
-    <div style={{ maxWidth: "1600px", display: "flex", flexDirection: "column", gap: "24px" }}>
+    <div className="flex flex-col gap-5">
+      <PageHeader
+        title="Scholarships & Concessions"
+        description="Manage fee waivers, merit and need-based scholarships"
+        actions={
+          <>
+            <Button variant="outline">
+              <Download className="size-4" />
+              Export
+            </Button>
+            <Button>
+              <Plus className="size-4" />
+              Add Scholarship
+            </Button>
+          </>
+        }
+      />
 
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div>
-          <h1 style={{ fontSize: "22px", fontWeight: 800, color: "#0f172a", letterSpacing: "-0.3px" }}>Scholarships & Concessions</h1>
-          <p style={{ fontSize: "13px", color: "#94a3b8", marginTop: "4px" }}>Manage fee waivers, merit and need-based scholarships</p>
-        </div>
-        <div style={{ display: "flex", gap: "10px" }}>
-          <button style={{ display: "flex", alignItems: "center", gap: "6px", padding: "9px 16px", borderRadius: "12px", border: "1px solid #e2e8f0", background: "#fff", fontSize: "13px", fontWeight: 600, color: "#334155", cursor: "pointer" }}>
-            <Download size={14} /> Export
-          </button>
-          <button style={{ display: "flex", alignItems: "center", gap: "6px", padding: "9px 18px", borderRadius: "12px", border: "none", background: "linear-gradient(135deg,#7c3aed,#8b5cf6)", fontSize: "13px", fontWeight: 600, color: "#fff", cursor: "pointer", boxShadow: "0 4px 12px rgba(124,58,237,0.35)" }}>
-            <Plus size={14} /> Add Scholarship
-          </button>
-        </div>
-      </div>
-
-      {/* Stats */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "16px" }}>
-        {[
-          { label: "Total Scholarships", value: scholarships.length,                                    icon: "🎓", color: "#7c3aed", bg: "#f5f3ff" },
-          { label: "Active",             value: scholarships.filter(s => s.status === "active").length,  icon: "✅", color: "#16a34a", bg: "#f0fdf4" },
-          { label: "Total Fee Waived",   value: `₹${totalSaved.toLocaleString()}`,                      icon: "💜", color: "#7c3aed", bg: "#f5f3ff" },
-          { label: "Pending Review",     value: scholarships.filter(s => s.status === "pending").length, icon: "⏳", color: "#d97706", bg: "#fffbeb" },
-        ].map(s => (
-          <div key={s.label} style={{ background: "#fff", borderRadius: "16px", border: "1px solid #f1f5f9", padding: "20px", boxShadow: "0 1px 4px rgba(0,0,0,0.04)", display: "flex", alignItems: "center", gap: "14px" }}>
-            <div style={{ width: "48px", height: "48px", borderRadius: "14px", background: s.bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "22px", flexShrink: 0 }}>{s.icon}</div>
-            <div>
-              <p style={{ fontSize: "12px", color: "#64748b", fontWeight: 500 }}>{s.label}</p>
-              <p style={{ fontSize: "22px", fontWeight: 800, color: s.color, lineHeight: 1.1 }}>{s.value}</p>
-            </div>
-          </div>
-        ))}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard label="Total Scholarships" value={scholarships.length} icon={GraduationCap} tone="violet" />
+        <StatCard
+          label="Active"
+          value={scholarships.filter((s) => s.status === "active").length}
+          icon={CheckCircle}
+          tone="emerald"
+        />
+        <StatCard label="Total Fee Waived" value={inr.format(totalSaved)} icon={HeartHandshake} tone="violet" />
+        <StatCard
+          label="Pending Review"
+          value={scholarships.filter((s) => s.status === "pending").length}
+          icon={Clock}
+          tone="amber"
+        />
       </div>
 
       {/* Scholarship Type Breakdown */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "14px" }}>
-        {Object.entries(typeColors).map(([type, tc]) => {
-          const count = scholarships.filter(s => s.type === type && s.status === "active").length;
-          const total = scholarships.filter(s => s.type === type && s.status === "active").reduce((sum, s) => sum + s.amount, 0);
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {Object.keys(typeStyles).map((type) => {
+          const active = scholarships.filter((s) => s.type === type && s.status === "active");
+          const total = active.reduce((sum, s) => sum + s.amount, 0);
+          const tc = typeStyles[type];
           return (
-            <div key={type} style={{ background: "#fff", borderRadius: "14px", border: "1px solid #f1f5f9", padding: "16px 18px", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "10px" }}>
-                <div style={{ width: "32px", height: "32px", borderRadius: "9px", background: tc.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <Award size={15} color={tc.color} />
+            <Card key={type}>
+              <CardContent>
+                <div className="mb-2.5 flex items-center gap-2">
+                  <div className={cn("flex size-8 shrink-0 items-center justify-center rounded-md", tc.tile)}>
+                    <Award className="size-4" />
+                  </div>
+                  <span className="text-sm font-semibold text-text">{type}</span>
                 </div>
-                <span style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a" }}>{type}</span>
-              </div>
-              <p style={{ fontSize: "22px", fontWeight: 800, color: tc.color }}>{count}</p>
-              <p style={{ fontSize: "11px", color: "#94a3b8", marginTop: "2px" }}>₹{total.toLocaleString()} waived</p>
-            </div>
+                <p className="text-xl font-semibold text-text">{active.length}</p>
+                <p className="mt-0.5 text-xs text-subtle">{inr.format(total)} waived</p>
+              </CardContent>
+            </Card>
           );
         })}
       </div>
 
-      {/* Table */}
-      <div style={{ background: "#fff", borderRadius: "16px", border: "1px solid #f1f5f9", boxShadow: "0 1px 4px rgba(0,0,0,0.04)", overflow: "hidden" }}>
-        <div style={{ padding: "16px 20px", borderBottom: "1px solid #f8fafc", display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
-          <div style={{ display: "flex", background: "#f8fafc", borderRadius: "12px", padding: "4px", gap: "2px" }}>
-            {tabs.map(tab => (
-              <button key={tab} onClick={() => setActiveTab(tab)} style={{
-                padding: "7px 16px", borderRadius: "9px", border: "none", cursor: "pointer",
-                fontSize: "12px", fontWeight: 600, transition: "all 0.15s",
-                background: activeTab === tab ? "#fff" : "transparent",
-                color: activeTab === tab ? "#0f172a" : "#64748b",
-                boxShadow: activeTab === tab ? "0 1px 4px rgba(0,0,0,0.08)" : "none",
-              }}>{tab}</button>
-            ))}
-          </div>
-          <div style={{ position: "relative", flex: 1, maxWidth: "300px" }}>
-            <Search size={14} color="#94a3b8" style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)" }} />
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search scholarships..."
-              style={{ width: "100%", paddingLeft: "36px", paddingRight: "16px", paddingTop: "9px", paddingBottom: "9px", fontSize: "13px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "12px", outline: "none", color: "#334155", fontFamily: "inherit" }}
-              onFocus={e => { e.target.style.borderColor = "#6366f1"; e.target.style.boxShadow = "0 0 0 3px rgba(99,102,241,0.1)"; }}
-              onBlur={e => { e.target.style.borderColor = "#e2e8f0"; e.target.style.boxShadow = "none"; }}
-            />
-          </div>
-          <p style={{ marginLeft: "auto", fontSize: "12px", color: "#94a3b8" }}>{filtered.length} records</p>
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex gap-1 rounded-md bg-surface-sunken p-1">
+          {tabs.map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              aria-pressed={activeTab === tab}
+              className={cn(
+                "focus-ring rounded-sm px-3.5 py-1.5 text-xs font-medium transition-colors",
+                activeTab === tab
+                  ? "bg-surface-raised text-text shadow-sm"
+                  : "text-muted hover:text-text"
+              )}
+            >
+              {tab}
+            </button>
+          ))}
         </div>
 
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr style={{ background: "#fafafa", borderBottom: "1px solid #f1f5f9" }}>
-                {["ID", "Student", "Class", "Type", "Concession", "Amount Waived", "Reason", "Since", "Status", "Actions"].map(h => (
-                  <th key={h} style={{ padding: "12px 20px", textAlign: "left", fontSize: "11px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em", whiteSpace: "nowrap" }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((s, i) => {
-                const tc = typeColors[s.type] ?? { bg: "#f8fafc", color: "#64748b" };
-                const sc = statusConfig[s.status];
-                const StatusIcon = sc.icon;
-                return (
-                  <tr key={s.id}
-                    style={{ borderBottom: i < filtered.length - 1 ? "1px solid #f8fafc" : "none", transition: "background 0.15s" }}
-                    onMouseEnter={e => (e.currentTarget as HTMLTableRowElement).style.background = "#fafafa"}
-                    onMouseLeave={e => (e.currentTarget as HTMLTableRowElement).style.background = "transparent"}
-                  >
-                    <td style={{ padding: "14px 20px", fontSize: "12px", fontWeight: 700, color: "#7c3aed" }}>{s.id}</td>
-                    <td style={{ padding: "14px 20px" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                        <div style={{ width: "34px", height: "34px", borderRadius: "10px", background: tc.bg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                          <Award size={15} color={tc.color} />
-                        </div>
-                        <span style={{ fontSize: "13px", fontWeight: 600, color: "#0f172a", whiteSpace: "nowrap" }}>{s.student}</span>
-                      </div>
-                    </td>
-                    <td style={{ padding: "14px 20px" }}>
-                      <span style={{ fontSize: "11px", fontWeight: 700, padding: "4px 10px", borderRadius: "20px", background: "#eff6ff", color: "#2563eb" }}>{s.class}</span>
-                    </td>
-                    <td style={{ padding: "14px 20px" }}>
-                      <span style={{ fontSize: "11px", fontWeight: 700, padding: "4px 10px", borderRadius: "20px", background: tc.bg, color: tc.color }}>{s.type}</span>
-                    </td>
-                    <td style={{ padding: "14px 20px" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                        <div style={{ flex: 1, height: "6px", background: "#f1f5f9", borderRadius: "4px", overflow: "hidden", width: "60px" }}>
-                          <div style={{ height: "100%", width: `${s.percentage}%`, background: `linear-gradient(90deg,${tc.color},${tc.color}88)`, borderRadius: "4px" }} />
-                        </div>
-                        <span style={{ fontSize: "13px", fontWeight: 700, color: tc.color }}>{s.percentage}%</span>
-                      </div>
-                    </td>
-                    <td style={{ padding: "14px 20px", fontSize: "14px", fontWeight: 800, color: "#7c3aed" }}>₹{s.amount.toLocaleString()}</td>
-                    <td style={{ padding: "14px 20px", fontSize: "12px", color: "#64748b", maxWidth: "180px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.reason}</td>
-                    <td style={{ padding: "14px 20px", fontSize: "12px", color: "#94a3b8", whiteSpace: "nowrap" }}>{s.since}</td>
-                    <td style={{ padding: "14px 20px" }}>
-                      <div style={{ display: "inline-flex", alignItems: "center", gap: "5px", padding: "5px 10px", borderRadius: "20px", background: sc.bg }}>
-                        <StatusIcon size={12} color={sc.color} />
-                        <span style={{ fontSize: "11px", fontWeight: 700, color: sc.color }}>{sc.label}</span>
-                      </div>
-                    </td>
-                    <td style={{ padding: "14px 20px" }}>
-                      <div style={{ display: "flex", gap: "4px" }}>
-                        {[{ Icon: Edit, hoverBg: "#f0fdf4", color: "#16a34a" }, { Icon: Trash2, hoverBg: "#fff1f2", color: "#e11d48" }].map(({ Icon, hoverBg, color }, idx) => (
-                          <button key={idx}
-                            style={{ padding: "7px", borderRadius: "9px", border: "none", background: "transparent", cursor: "pointer", color: "#94a3b8", display: "flex", alignItems: "center", transition: "all 0.15s" }}
-                            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = hoverBg; (e.currentTarget as HTMLButtonElement).style.color = color; }}
-                            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; (e.currentTarget as HTMLButtonElement).style.color = "#94a3b8"; }}
-                          >
-                            <Icon size={14} />
-                          </button>
-                        ))}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        <div className="min-w-60 flex-1">
+          <Input
+            type="search"
+            placeholder="Search scholarships…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            icon={<Search className="size-4" />}
+            aria-label="Search scholarships"
+          />
         </div>
+        <p className="text-xs text-muted">{filtered.length} records</p>
       </div>
+
+      <Table
+        columns={columns}
+        rows={filtered}
+        rowKey={(s) => s.id}
+        emptyTitle="No scholarships found"
+        emptyDescription="Try adjusting your filters to see more results."
+      />
     </div>
   );
 }

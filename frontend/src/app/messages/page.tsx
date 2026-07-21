@@ -1,6 +1,9 @@
 "use client";
+
 import React, { useState } from "react";
 import { Search, Send, Plus, MoreVertical, Phone, Video, Paperclip, Smile } from "lucide-react";
+import { Avatar, Button, Input } from "@/components/ui";
+import { cn } from "@/lib/utils";
 
 const conversations = [
   { id: 1,  name: "Dr. Priya Sharma",   role: "Math Teacher",      avatar: "P", unread: 3, last: "Can you share the exam schedule?",          time: "10:42 AM", online: true  },
@@ -33,174 +36,200 @@ const chatMessages: Record<number, { id: number; from: "me" | "them"; text: stri
   ],
 };
 
-const avatarColors = ["#6366f1", "#0891b2", "#16a34a", "#d97706", "#e11d48", "#9333ea", "#ea580c", "#0f172a"];
+const iconButtonClasses =
+  "focus-ring rounded-md p-2 text-subtle transition-colors hover:bg-surface-hover hover:text-text";
 
 export default function MessagesPage() {
-  const [activeId, setActiveId]   = useState(1);
-  const [search, setSearch]       = useState("");
-  const [input, setInput]         = useState("");
-  const [messages, setMessages]   = useState(chatMessages);
+  const [activeId, setActiveId] = useState(1);
+  const [search, setSearch] = useState("");
+  const [input, setInput] = useState("");
+  const [messages, setMessages] = useState(chatMessages);
 
-  const active = conversations.find(c => c.id === activeId)!;
-  const chat   = messages[activeId] ?? [];
+  const active = conversations.find((c) => c.id === activeId)!;
+  const chat = messages[activeId] ?? [];
 
-  const filtered = conversations.filter(c =>
-    c.name.toLowerCase().includes(search.toLowerCase()) ||
-    c.role.toLowerCase().includes(search.toLowerCase())
+  const filtered = conversations.filter(
+    (c) =>
+      c.name.toLowerCase().includes(search.toLowerCase()) ||
+      c.role.toLowerCase().includes(search.toLowerCase())
   );
 
   function sendMessage() {
     if (!input.trim()) return;
-    const newMsg = { id: Date.now(), from: "me" as const, text: input.trim(), time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) };
-    setMessages(prev => ({ ...prev, [activeId]: [...(prev[activeId] ?? []), newMsg] }));
+    const newMsg = {
+      id: Date.now(),
+      from: "me" as const,
+      text: input.trim(),
+      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+    };
+    setMessages((prev) => ({ ...prev, [activeId]: [...(prev[activeId] ?? []), newMsg] }));
     setInput("");
   }
 
   return (
-    <div style={{ maxWidth: "1400px" }}>
-      <div style={{ display: "flex", height: "calc(100vh - 120px)", background: "#fff", borderRadius: "20px", border: "1px solid #f1f5f9", boxShadow: "0 1px 4px rgba(0,0,0,0.04)", overflow: "hidden" }}>
-
-        {/* Sidebar */}
-        <div style={{ width: "320px", flexShrink: 0, borderRight: "1px solid #f1f5f9", display: "flex", flexDirection: "column" }}>
-
-          {/* Sidebar Header */}
-          <div style={{ padding: "20px 16px 12px", borderBottom: "1px solid #f8fafc" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px" }}>
-              <h2 style={{ fontSize: "16px", fontWeight: 800, color: "#0f172a" }}>Messages</h2>
-              <button style={{ width: "32px", height: "32px", borderRadius: "10px", border: "none", background: "linear-gradient(135deg,#6366f1,#8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", boxShadow: "0 2px 8px rgba(99,102,241,0.3)" }}>
-                <Plus size={15} color="#fff" />
-              </button>
-            </div>
-            <div style={{ position: "relative" }}>
-              <Search size={13} color="#94a3b8" style={{ position: "absolute", left: "11px", top: "50%", transform: "translateY(-50%)" }} />
-              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search conversations..."
-                style={{ width: "100%", paddingLeft: "34px", paddingRight: "12px", paddingTop: "8px", paddingBottom: "8px", fontSize: "13px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", outline: "none", color: "#334155", fontFamily: "inherit" }}
-                onFocus={e => { e.target.style.borderColor = "#6366f1"; e.target.style.boxShadow = "0 0 0 3px rgba(99,102,241,0.1)"; }}
-                onBlur={e  => { e.target.style.borderColor = "#e2e8f0"; e.target.style.boxShadow = "none"; }}
-              />
-            </div>
+    // The shell is a fixed-height flex column; every scrolling descendant gets
+    // min-h-0 so it scrolls instead of stretching the shell.
+    <div className="flex h-[calc(100vh-140px)] min-h-0 overflow-hidden rounded-lg border border-border bg-surface-raised shadow-sm">
+      {/* Conversation sidebar */}
+      <div className="flex w-80 min-h-0 shrink-0 flex-col border-r border-border">
+        <div className="border-b border-border px-4 pb-3 pt-5">
+          <div className="mb-3.5 flex items-center justify-between gap-2">
+            <h2 className="text-base font-semibold text-text">Messages</h2>
+            <Button size="sm" aria-label="New conversation" className="px-2 py-2">
+              <Plus className="size-4" />
+            </Button>
           </div>
+          <Input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search conversations…"
+            icon={<Search className="size-4" />}
+            aria-label="Search conversations"
+          />
+        </div>
 
-          {/* Conversation List */}
-          <div style={{ flex: 1, overflowY: "auto", padding: "8px" }}>
-            {filtered.map((c, idx) => {
-              const isActive = c.id === activeId;
-              const color    = avatarColors[idx % avatarColors.length];
-              return (
-                <div key={c.id} onClick={() => setActiveId(c.id)}
-                  style={{ display: "flex", alignItems: "center", gap: "12px", padding: "10px 12px", borderRadius: "12px", cursor: "pointer", transition: "background 0.15s", background: isActive ? "#eff6ff" : "transparent", marginBottom: "2px" }}
-                  onMouseEnter={ev => { if (!isActive) (ev.currentTarget as HTMLDivElement).style.background = "#f8fafc"; }}
-                  onMouseLeave={ev => { if (!isActive) (ev.currentTarget as HTMLDivElement).style.background = "transparent"; }}
-                >
-                  {/* Avatar */}
-                  <div style={{ position: "relative", flexShrink: 0 }}>
-                    <div style={{ width: "44px", height: "44px", borderRadius: "14px", background: color, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: "15px", fontWeight: 700 }}>
-                      {c.avatar}
-                    </div>
-                    {c.online && (
-                      <span style={{ position: "absolute", bottom: "2px", right: "2px", width: "10px", height: "10px", borderRadius: "50%", background: "#22c55e", border: "2px solid #fff" }} />
+        <div className="min-h-0 flex-1 overflow-y-auto p-2">
+          {filtered.map((c) => {
+            const isActive = c.id === activeId;
+            return (
+              <button
+                key={c.id}
+                onClick={() => setActiveId(c.id)}
+                aria-current={isActive}
+                className={cn(
+                  "focus-ring mb-0.5 flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left transition-colors",
+                  isActive ? "bg-primary-soft" : "hover:bg-surface-hover"
+                )}
+              >
+                <div className="relative shrink-0">
+                  <Avatar name={c.name} size="md" />
+                  {c.online && (
+                    <span className="absolute bottom-0 right-0 size-2.5 rounded-full border-2 border-surface-raised bg-success" />
+                  )}
+                </div>
+
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <p
+                      className={cn(
+                        "truncate text-sm text-text",
+                        c.unread > 0 ? "font-semibold" : "font-medium"
+                      )}
+                    >
+                      {c.name}
+                    </p>
+                    <span className="shrink-0 text-xs text-subtle">{c.time}</span>
+                  </div>
+                  <div className="mt-0.5 flex items-center justify-between gap-2">
+                    <p
+                      className={cn(
+                        "flex-1 truncate text-xs",
+                        c.unread > 0 ? "font-medium text-text" : "text-subtle"
+                      )}
+                    >
+                      {c.last}
+                    </p>
+                    {c.unread > 0 && (
+                      <span className="flex size-4.5 shrink-0 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-white">
+                        {c.unread}
+                      </span>
                     )}
                   </div>
-
-                  {/* Info */}
-                  <div style={{ flex: 1, overflow: "hidden" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <p style={{ fontSize: "13px", fontWeight: c.unread > 0 ? 700 : 600, color: "#0f172a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</p>
-                      <span style={{ fontSize: "11px", color: "#94a3b8", flexShrink: 0, marginLeft: "8px" }}>{c.time}</span>
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "2px" }}>
-                      <p style={{ fontSize: "12px", color: c.unread > 0 ? "#334155" : "#94a3b8", fontWeight: c.unread > 0 ? 500 : 400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{c.last}</p>
-                      {c.unread > 0 && (
-                        <span style={{ flexShrink: 0, marginLeft: "8px", width: "18px", height: "18px", borderRadius: "50%", background: "#6366f1", color: "#fff", fontSize: "10px", fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>{c.unread}</span>
-                      )}
-                    </div>
-                  </div>
                 </div>
-              );
-            })}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Chat area */}
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <div className="flex items-center justify-between gap-3 border-b border-border px-6 py-4">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="relative shrink-0">
+              <Avatar name={active.name} size="md" />
+              {active.online && (
+                <span className="absolute bottom-0 right-0 size-2.5 rounded-full border-2 border-surface-raised bg-success" />
+              )}
+            </div>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-text">{active.name}</p>
+              <p className={cn("mt-0.5 truncate text-xs", active.online ? "text-success" : "text-subtle")}>
+                {active.online ? "Online" : active.role}
+              </p>
+            </div>
+          </div>
+          <div className="flex shrink-0 items-center gap-1">
+            <button aria-label="Voice call" className={iconButtonClasses}>
+              <Phone className="size-4.5" />
+            </button>
+            <button aria-label="Video call" className={iconButtonClasses}>
+              <Video className="size-4.5" />
+            </button>
+            <button aria-label="More options" className={iconButtonClasses}>
+              <MoreVertical className="size-4.5" />
+            </button>
           </div>
         </div>
 
-        {/* Chat Area */}
-        <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-
-          {/* Chat Header */}
-          <div style={{ padding: "16px 24px", borderBottom: "1px solid #f1f5f9", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-              <div style={{ position: "relative" }}>
-                <div style={{ width: "44px", height: "44px", borderRadius: "14px", background: avatarColors[conversations.findIndex(c => c.id === activeId) % avatarColors.length], display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: "15px", fontWeight: 700 }}>
-                  {active.avatar}
-                </div>
-                {active.online && (
-                  <span style={{ position: "absolute", bottom: "2px", right: "2px", width: "10px", height: "10px", borderRadius: "50%", background: "#22c55e", border: "2px solid #fff" }} />
-                )}
-              </div>
-              <div>
-                <p style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a" }}>{active.name}</p>
-                <p style={{ fontSize: "12px", color: active.online ? "#16a34a" : "#94a3b8", marginTop: "1px" }}>
-                  {active.online ? "Online" : active.role}
-                </p>
-              </div>
+        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-6">
+          {chat.length === 0 && (
+            <div className="flex flex-1 items-center justify-center">
+              <p className="text-sm text-subtle">No messages yet. Say hi! 👋</p>
             </div>
-            <div style={{ display: "flex", gap: "4px" }}>
-              {[Phone, Video, MoreVertical].map((Icon, idx) => (
-                <button key={idx}
-                  style={{ padding: "8px", borderRadius: "10px", border: "none", background: "transparent", cursor: "pointer", color: "#94a3b8", display: "flex", alignItems: "center", transition: "all 0.15s" }}
-                  onMouseEnter={ev => { (ev.currentTarget as HTMLButtonElement).style.background = "#f8fafc"; (ev.currentTarget as HTMLButtonElement).style.color = "#334155"; }}
-                  onMouseLeave={ev => { (ev.currentTarget as HTMLButtonElement).style.background = "transparent"; (ev.currentTarget as HTMLButtonElement).style.color = "#94a3b8"; }}
-                ><Icon size={18} /></button>
-              ))}
-            </div>
-          </div>
-
-          {/* Messages */}
-          <div style={{ flex: 1, overflowY: "auto", padding: "24px", display: "flex", flexDirection: "column", gap: "12px" }}>
-            {chat.length === 0 && (
-              <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "#94a3b8" }}>
-                <p style={{ fontSize: "13px" }}>No messages yet. Say hi! 👋</p>
-              </div>
-            )}
-            {chat.map(msg => (
-              <div key={msg.id} style={{ display: "flex", justifyContent: msg.from === "me" ? "flex-end" : "flex-start" }}>
-                <div style={{ maxWidth: "65%" }}>
-                  <div style={{
-                    padding: "10px 14px",
-                    borderRadius: msg.from === "me" ? "16px 16px 4px 16px" : "16px 16px 16px 4px",
-                    background: msg.from === "me" ? "linear-gradient(135deg,#6366f1,#8b5cf6)" : "#f1f5f9",
-                    color: msg.from === "me" ? "#fff" : "#0f172a",
-                    fontSize: "13px",
-                    lineHeight: 1.5,
-                    boxShadow: msg.from === "me" ? "0 2px 8px rgba(99,102,241,0.25)" : "none",
-                  }}>
+          )}
+          {chat.map((msg) => {
+            const mine = msg.from === "me";
+            return (
+              <div key={msg.id} className={cn("flex", mine ? "justify-end" : "justify-start")}>
+                <div className="max-w-[65%]">
+                  <div
+                    className={cn(
+                      "px-3.5 py-2.5 text-sm leading-relaxed",
+                      mine
+                        ? "rounded-lg rounded-br-sm bg-primary text-white shadow-sm"
+                        : "rounded-lg rounded-bl-sm bg-surface-hover text-text"
+                    )}
+                  >
                     {msg.text}
                   </div>
-                  <p style={{ fontSize: "11px", color: "#94a3b8", marginTop: "4px", textAlign: msg.from === "me" ? "right" : "left" }}>{msg.time}</p>
+                  <p
+                    className={cn("mt-1 text-xs text-subtle", mine ? "text-right" : "text-left")}
+                  >
+                    {msg.time}
+                  </p>
                 </div>
               </div>
-            ))}
-          </div>
+            );
+          })}
+        </div>
 
-          {/* Input */}
-          <div style={{ padding: "16px 24px", borderTop: "1px solid #f1f5f9" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "10px", background: "#f8fafc", borderRadius: "16px", padding: "8px 8px 8px 16px", border: "1px solid #e2e8f0" }}>
-              <button style={{ padding: "6px", borderRadius: "8px", border: "none", background: "transparent", cursor: "pointer", color: "#94a3b8", display: "flex", alignItems: "center" }}>
-                <Paperclip size={16} />
-              </button>
-              <input
-                value={input}
-                onChange={e => setInput(e.target.value)}
-                onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
-                placeholder="Type a message..."
-                style={{ flex: 1, border: "none", background: "transparent", outline: "none", fontSize: "13px", color: "#334155", fontFamily: "inherit" }}
-              />
-              <button style={{ padding: "6px", borderRadius: "8px", border: "none", background: "transparent", cursor: "pointer", color: "#94a3b8", display: "flex", alignItems: "center" }}>
-                <Smile size={16} />
-              </button>
-              <button onClick={sendMessage}
-                style={{ padding: "9px 16px", borderRadius: "12px", border: "none", background: input.trim() ? "linear-gradient(135deg,#6366f1,#8b5cf6)" : "#e2e8f0", cursor: input.trim() ? "pointer" : "default", color: input.trim() ? "#fff" : "#94a3b8", display: "flex", alignItems: "center", gap: "6px", fontSize: "13px", fontWeight: 600, transition: "all 0.15s", boxShadow: input.trim() ? "0 2px 8px rgba(99,102,241,0.3)" : "none" }}>
-                <Send size={14} /> Send
-              </button>
-            </div>
+        <div className="border-t border-border px-6 py-4">
+          <div className="flex items-center gap-2 rounded-md border border-border bg-surface px-2 py-2 pl-3">
+            <button aria-label="Attach file" className={cn(iconButtonClasses, "p-1.5")}>
+              <Paperclip className="size-4" />
+            </button>
+            <input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  sendMessage();
+                }
+              }}
+              placeholder="Type a message…"
+              aria-label="Message"
+              className="min-w-0 flex-1 border-none bg-transparent text-sm text-text outline-none placeholder:text-subtle"
+            />
+            <button aria-label="Insert emoji" className={cn(iconButtonClasses, "p-1.5")}>
+              <Smile className="size-4" />
+            </button>
+            <Button onClick={sendMessage} disabled={!input.trim()} size="sm">
+              <Send className="size-4" />
+              Send
+            </Button>
           </div>
         </div>
       </div>

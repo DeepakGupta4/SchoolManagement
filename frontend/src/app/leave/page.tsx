@@ -1,6 +1,30 @@
 "use client";
+
 import React, { useState } from "react";
-import { Search, Plus, Download, Eye, Check, X, CalendarDays, Clock, CheckCircle, XCircle, Users } from "lucide-react";
+import {
+  Search,
+  Plus,
+  Download,
+  Eye,
+  Check,
+  X,
+  CalendarDays,
+  Clock,
+  CheckCircle,
+  XCircle,
+  Users,
+} from "lucide-react";
+import {
+  Avatar,
+  Badge,
+  Button,
+  Input,
+  PageHeader,
+  Select,
+  StatCard,
+  Table,
+  type Column,
+} from "@/components/ui";
 
 const leaveRequests = [
   { id: "LV001", name: "Mr. Suresh Kumar",   role: "History Teacher",    type: "Sick Leave",    from: "14 Jul 2025", to: "16 Jul 2025", days: 3, reason: "Fever and cold",          status: "Pending",  dept: "Teaching" },
@@ -24,286 +48,373 @@ const leaveBalance = [
   { name: "Ms. Kavita Joshi",  dept: "Library",       sick: 12, casual: 11, earned: 15, used: 1,  remaining: 37 },
 ];
 
-const statusStyle: Record<string, { bg: string; color: string }> = {
-  Pending:  { bg: "#fffbeb", color: "#d97706" },
-  Approved: { bg: "#f0fdf4", color: "#16a34a" },
-  Rejected: { bg: "#fff1f2", color: "#e11d48" },
+type LeaveRequest = (typeof leaveRequests)[number];
+type LeaveBalance = (typeof leaveBalance)[number];
+
+type BadgeVariant = "default" | "success" | "warning" | "danger" | "info";
+
+const STATUS_META: Record<string, { variant: BadgeVariant; dot: string }> = {
+  Pending: { variant: "warning", dot: "bg-warning" },
+  Approved: { variant: "success", dot: "bg-success" },
+  Rejected: { variant: "danger", dot: "bg-danger" },
 };
 
-const leaveTypeColor: Record<string, { bg: string; color: string }> = {
-  "Sick Leave":      { bg: "#fff1f2", color: "#e11d48" },
-  "Casual Leave":    { bg: "#eff6ff", color: "#2563eb" },
-  "Earned Leave":    { bg: "#f0fdf4", color: "#16a34a" },
-  "Maternity Leave": { bg: "#fdf4ff", color: "#9333ea" },
+const LEAVE_TYPE_VARIANT: Record<string, BadgeVariant> = {
+  "Sick Leave": "danger",
+  "Casual Leave": "info",
+  "Earned Leave": "success",
+  "Maternity Leave": "default",
 };
 
 const tabs = ["Requests", "Leave Balance"] as const;
 
-export default function LeavePage() {
-  const [tab, setTab]               = useState<typeof tabs[number]>("Requests");
-  const [search, setSearch]         = useState("");
-  const [statusFilter, setStatusFilter] = useState("All");
-  const [typeFilter, setTypeFilter]     = useState("All");
+/** Usage bands share the status palette: green under half, amber, then red. */
+function usageTone(pct: number) {
+  if (pct >= 80) return { bar: "bg-danger", text: "text-danger" };
+  if (pct >= 50) return { bar: "bg-warning", text: "text-warning" };
+  return { bar: "bg-success", text: "text-success" };
+}
 
-  const filtered = leaveRequests.filter(l => {
-    const matchSearch = l.name.toLowerCase().includes(search.toLowerCase()) ||
-                        l.id.toLowerCase().includes(search.toLowerCase()) ||
-                        l.dept.toLowerCase().includes(search.toLowerCase());
+export default function LeavePage() {
+  const [tab, setTab] = useState<(typeof tabs)[number]>("Requests");
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("All");
+  const [typeFilter, setTypeFilter] = useState("All");
+
+  const filtered = leaveRequests.filter((l) => {
+    const matchSearch =
+      l.name.toLowerCase().includes(search.toLowerCase()) ||
+      l.id.toLowerCase().includes(search.toLowerCase()) ||
+      l.dept.toLowerCase().includes(search.toLowerCase());
     const matchStatus = statusFilter === "All" || l.status === statusFilter;
-    const matchType   = typeFilter === "All" || l.type === typeFilter;
+    const matchType = typeFilter === "All" || l.type === typeFilter;
     return matchSearch && matchStatus && matchType;
   });
 
-  const pending  = leaveRequests.filter(l => l.status === "Pending").length;
-  const approved = leaveRequests.filter(l => l.status === "Approved").length;
-  const rejected = leaveRequests.filter(l => l.status === "Rejected").length;
-  const onLeave  = leaveRequests.filter(l => l.status === "Approved").reduce((s, l) => s + (l.days <= 5 ? 1 : 0), 0);
+  const pending = leaveRequests.filter((l) => l.status === "Pending").length;
+  const approved = leaveRequests.filter((l) => l.status === "Approved").length;
+  const rejected = leaveRequests.filter((l) => l.status === "Rejected").length;
+  const onLeave = leaveRequests
+    .filter((l) => l.status === "Approved")
+    .reduce((s, l) => s + (l.days <= 5 ? 1 : 0), 0);
+
+  const requestColumns: Column<LeaveRequest>[] = [
+    {
+      key: "name",
+      header: "Staff Member",
+      sortable: true,
+      render: (l) => (
+        <div className="flex items-center gap-3">
+          <Avatar name={l.name} size="sm" />
+          <div className="min-w-0">
+            <p className="truncate font-medium text-text">{l.name}</p>
+            <p className="truncate text-xs text-subtle">{l.role}</p>
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: "type",
+      header: "Leave Type",
+      sortable: true,
+      render: (l) => (
+        <Badge variant={LEAVE_TYPE_VARIANT[l.type] ?? "default"}>{l.type}</Badge>
+      ),
+    },
+    {
+      key: "from",
+      header: "From",
+      render: (l) => (
+        <span className="flex items-center gap-1.5 whitespace-nowrap text-muted">
+          <CalendarDays className="size-3.5 text-subtle" />
+          {l.from}
+        </span>
+      ),
+    },
+    {
+      key: "to",
+      header: "To",
+      render: (l) => (
+        <span className="flex items-center gap-1.5 whitespace-nowrap text-muted">
+          <CalendarDays className="size-3.5 text-subtle" />
+          {l.to}
+        </span>
+      ),
+    },
+    {
+      key: "days",
+      header: "Days",
+      sortable: true,
+      align: "right",
+      render: (l) => (
+        <span className="inline-flex rounded-sm bg-primary-soft px-2 py-0.5 text-xs font-semibold text-primary-text">
+          {l.days}d
+        </span>
+      ),
+    },
+    {
+      key: "reason",
+      header: "Reason",
+      render: (l) => <span className="block max-w-xs truncate text-muted">{l.reason}</span>,
+    },
+    {
+      key: "status",
+      header: "Status",
+      sortable: true,
+      render: (l) => <Badge variant={STATUS_META[l.status].variant}>{l.status}</Badge>,
+    },
+    {
+      key: "actions",
+      header: "",
+      align: "right",
+      render: (l) => (
+        <div className="flex items-center justify-end gap-1">
+          {l.status === "Pending" ? (
+            <>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="px-2 hover:bg-success-soft hover:text-success"
+                aria-label={`Approve leave for ${l.name}`}
+              >
+                <Check className="size-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="px-2 hover:bg-danger-soft hover:text-danger"
+                aria-label={`Reject leave for ${l.name}`}
+              >
+                <X className="size-4" />
+              </Button>
+            </>
+          ) : (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="px-2"
+              aria-label={`View leave request for ${l.name}`}
+            >
+              <Eye className="size-4" />
+            </Button>
+          )}
+        </div>
+      ),
+    },
+  ];
+
+  const balanceColumns: Column<LeaveBalance>[] = [
+    {
+      key: "name",
+      header: "Staff Member",
+      sortable: true,
+      render: (b) => (
+        <div className="flex items-center gap-3">
+          <Avatar name={b.name} size="sm" />
+          <p className="truncate font-medium text-text">{b.name}</p>
+        </div>
+      ),
+    },
+    {
+      key: "dept",
+      header: "Department",
+      sortable: true,
+      render: (b) => <Badge variant="info">{b.dept}</Badge>,
+    },
+    {
+      key: "sick",
+      header: "Sick Leave",
+      sortable: true,
+      align: "right",
+      render: (b) => <span className="font-medium text-danger">{b.sick}</span>,
+    },
+    {
+      key: "casual",
+      header: "Casual Leave",
+      sortable: true,
+      align: "right",
+      render: (b) => <span className="font-medium text-info">{b.casual}</span>,
+    },
+    {
+      key: "earned",
+      header: "Earned Leave",
+      sortable: true,
+      align: "right",
+      render: (b) => <span className="font-medium text-success">{b.earned}</span>,
+    },
+    {
+      key: "used",
+      header: "Used",
+      sortable: true,
+      align: "right",
+      render: (b) => <span className="font-semibold text-text">{b.used}</span>,
+    },
+    {
+      key: "remaining",
+      header: "Remaining",
+      sortable: true,
+      align: "right",
+      render: (b) => <span className="font-semibold text-primary">{b.remaining}</span>,
+    },
+    {
+      key: "usage",
+      header: "Usage",
+      render: (b) => {
+        const total = b.sick + b.casual + b.earned;
+        const pct = Math.min(Math.round((b.used / total) * 100), 100);
+        const tone = usageTone(pct);
+        return (
+          <div className="flex min-w-36 items-center gap-2">
+            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-hover">
+              <div className={`h-full rounded-full ${tone.bar}`} style={{ width: `${pct}%` }} />
+            </div>
+            <span className={`w-8 text-right text-xs font-semibold ${tone.text}`}>{pct}%</span>
+          </div>
+        );
+      },
+    },
+  ];
+
+  const isRequests = tab === "Requests";
 
   return (
-    <div style={{ maxWidth: "1600px", display: "flex", flexDirection: "column", gap: "24px" }}>
+    <div className="flex flex-col gap-5">
+      <PageHeader
+        title="Leave Management"
+        description="Track and manage staff leave requests"
+        actions={
+          <>
+            <Button variant="outline">
+              <Download className="size-4" />
+              Export
+            </Button>
+            <Button>
+              <Plus className="size-4" />
+              Apply Leave
+            </Button>
+          </>
+        }
+      />
 
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div>
-          <h1 style={{ fontSize: "22px", fontWeight: 800, color: "#0f172a", letterSpacing: "-0.3px" }}>Leave Management</h1>
-          <p style={{ fontSize: "13px", color: "#94a3b8", marginTop: "4px" }}>Track and manage staff leave requests</p>
-        </div>
-        <div style={{ display: "flex", gap: "10px" }}>
-          <button style={{ display: "flex", alignItems: "center", gap: "6px", padding: "9px 16px", borderRadius: "12px", border: "1px solid #e2e8f0", background: "#fff", fontSize: "13px", fontWeight: 600, color: "#334155", cursor: "pointer" }}>
-            <Download size={14} /> Export
-          </button>
-          <button style={{ display: "flex", alignItems: "center", gap: "6px", padding: "9px 18px", borderRadius: "12px", border: "none", background: "linear-gradient(135deg,#10b981,#059669)", fontSize: "13px", fontWeight: 600, color: "#fff", cursor: "pointer", boxShadow: "0 4px 12px rgba(16,185,129,0.35)" }}>
-            <Plus size={14} /> Apply Leave
-          </button>
-        </div>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard label="Pending" value={pending} icon={Clock} tone="amber" />
+        <StatCard label="Approved" value={approved} icon={CheckCircle} tone="emerald" />
+        <StatCard label="Rejected" value={rejected} icon={XCircle} tone="rose" />
+        <StatCard label="On Leave Today" value={onLeave} icon={Users} tone="indigo" />
       </div>
 
-      {/* Stats */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "16px" }}>
-        {[
-          { label: "Pending",  value: pending,  icon: <Clock size={22} />,        color: "#d97706", bg: "#fffbeb" },
-          { label: "Approved", value: approved, icon: <CheckCircle size={22} />,  color: "#16a34a", bg: "#f0fdf4" },
-          { label: "Rejected", value: rejected, icon: <XCircle size={22} />,      color: "#e11d48", bg: "#fff1f2" },
-          { label: "On Leave Today", value: onLeave, icon: <Users size={22} />,   color: "#6366f1", bg: "#eff6ff" },
-        ].map(s => (
-          <div key={s.label} style={{ background: "#fff", borderRadius: "16px", border: "1px solid #f1f5f9", padding: "20px", boxShadow: "0 1px 4px rgba(0,0,0,0.04)", display: "flex", alignItems: "center", gap: "14px" }}>
-            <div style={{ width: "48px", height: "48px", borderRadius: "14px", background: s.bg, display: "flex", alignItems: "center", justifyContent: "center", color: s.color, flexShrink: 0 }}>{s.icon}</div>
-            <div>
-              <p style={{ fontSize: "12px", color: "#64748b", fontWeight: 500 }}>{s.label}</p>
-              <p style={{ fontSize: "28px", fontWeight: 800, color: s.color, lineHeight: 1.1, letterSpacing: "-0.5px" }}>{s.value}</p>
+      <div className="flex flex-wrap items-center gap-3">
+        <div
+          role="tablist"
+          aria-label="Leave views"
+          className="inline-flex gap-1 rounded-md bg-surface-sunken p-1"
+        >
+          {tabs.map((t) => (
+            <button
+              key={t}
+              role="tab"
+              aria-selected={tab === t}
+              onClick={() => {
+                setTab(t);
+                setSearch("");
+                setStatusFilter("All");
+                setTypeFilter("All");
+              }}
+              className={`focus-ring rounded-sm px-4 py-1.5 text-xs font-medium transition-colors ${
+                tab === t ? "bg-surface-raised text-text shadow-sm" : "text-muted hover:text-text"
+              }`}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
+
+        {isRequests && (
+          <>
+            <div className="min-w-60 flex-1">
+              <Input
+                type="search"
+                placeholder="Search by name or ID…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                icon={<Search className="size-4" />}
+                aria-label="Search leave requests"
+              />
             </div>
-          </div>
-        ))}
+            <div className="w-48">
+              <Select
+                value={typeFilter}
+                onChange={(e) => setTypeFilter(e.target.value)}
+                options={[
+                  { label: "All Types", value: "All" },
+                  ...["Sick Leave", "Casual Leave", "Earned Leave", "Maternity Leave"].map((t) => ({
+                    label: t,
+                    value: t,
+                  })),
+                ]}
+                aria-label="Filter by leave type"
+              />
+            </div>
+            <div className="w-40">
+              <Select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                options={[
+                  { label: "All Status", value: "All" },
+                  ...["Pending", "Approved", "Rejected"].map((s) => ({ label: s, value: s })),
+                ]}
+                aria-label="Filter by status"
+              />
+            </div>
+            <p className="ml-auto text-xs text-subtle">{filtered.length} requests</p>
+          </>
+        )}
       </div>
 
-      {/* Table Card */}
-      <div style={{ background: "#fff", borderRadius: "16px", border: "1px solid #f1f5f9", boxShadow: "0 1px 4px rgba(0,0,0,0.04)", overflow: "hidden" }}>
+      {isRequests ? (
+        <Table
+          columns={requestColumns}
+          rows={filtered}
+          rowKey={(l) => l.id}
+          emptyTitle="No leave requests found"
+          emptyDescription="Try adjusting your filters"
+        />
+      ) : (
+        <Table
+          columns={balanceColumns}
+          rows={leaveBalance}
+          rowKey={(b) => b.name}
+          emptyTitle="No leave balances found"
+        />
+      )}
 
-        {/* Toolbar */}
-        <div style={{ padding: "16px 20px", borderBottom: "1px solid #f8fafc", display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
-          <div style={{ display: "flex", background: "#f8fafc", borderRadius: "12px", padding: "4px", gap: "2px" }}>
-            {tabs.map(t => (
-              <button key={t} onClick={() => { setTab(t); setSearch(""); setStatusFilter("All"); setTypeFilter("All"); }} style={{
-                padding: "7px 18px", borderRadius: "9px", border: "none", cursor: "pointer",
-                fontSize: "12px", fontWeight: 600, transition: "all 0.15s",
-                background: tab === t ? "#fff" : "transparent",
-                color: tab === t ? "#0f172a" : "#64748b",
-                boxShadow: tab === t ? "0 1px 4px rgba(0,0,0,0.08)" : "none",
-              }}>{t}</button>
-            ))}
-          </div>
-
-          {tab === "Requests" && (
+      <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted">
+        <p>
+          {isRequests ? (
             <>
-              <div style={{ position: "relative", flex: 1, maxWidth: "280px" }}>
-                <Search size={14} color="#94a3b8" style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)" }} />
-                <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name or ID..."
-                  style={{ width: "100%", paddingLeft: "36px", paddingRight: "16px", paddingTop: "9px", paddingBottom: "9px", fontSize: "13px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "12px", outline: "none", color: "#334155", fontFamily: "inherit" }}
-                  onFocus={e => { e.target.style.borderColor = "#10b981"; e.target.style.boxShadow = "0 0 0 3px rgba(16,185,129,0.1)"; }}
-                  onBlur={e  => { e.target.style.borderColor = "#e2e8f0"; e.target.style.boxShadow = "none"; }}
-                />
-              </div>
-              <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}
-                style={{ padding: "9px 14px", fontSize: "13px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "12px", outline: "none", color: "#334155", cursor: "pointer" }}>
-                <option value="All">All Types</option>
-                {["Sick Leave", "Casual Leave", "Earned Leave", "Maternity Leave"].map(t => <option key={t}>{t}</option>)}
-              </select>
-              <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
-                style={{ padding: "9px 14px", fontSize: "13px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "12px", outline: "none", color: "#334155", cursor: "pointer" }}>
-                <option value="All">All Status</option>
-                {["Pending", "Approved", "Rejected"].map(s => <option key={s}>{s}</option>)}
-              </select>
-              <p style={{ marginLeft: "auto", fontSize: "12px", color: "#94a3b8" }}>{filtered.length} requests</p>
+              <strong className="font-semibold text-text">{filtered.length}</strong> of{" "}
+              <strong className="font-semibold text-text">{leaveRequests.length}</strong> requests
+            </>
+          ) : (
+            <>
+              <strong className="font-semibold text-text">{leaveBalance.length}</strong> staff
+              members
             </>
           )}
-        </div>
-
-        {/* Requests Table */}
-        {tab === "Requests" && (
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr style={{ background: "#fafafa", borderBottom: "1px solid #f1f5f9" }}>
-                  {["Staff Member", "Leave Type", "From", "To", "Days", "Reason", "Status", "Actions"].map(h => (
-                    <th key={h} style={{ padding: "12px 20px", textAlign: "left", fontSize: "11px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em", whiteSpace: "nowrap" }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((l, i) => {
-                  const ss = statusStyle[l.status];
-                  const lt = leaveTypeColor[l.type] ?? { bg: "#f8fafc", color: "#64748b" };
-                  return (
-                    <tr key={l.id}
-                      style={{ borderBottom: i < filtered.length - 1 ? "1px solid #f8fafc" : "none", transition: "background 0.15s" }}
-                      onMouseEnter={ev => (ev.currentTarget as HTMLTableRowElement).style.background = "#fafafa"}
-                      onMouseLeave={ev => (ev.currentTarget as HTMLTableRowElement).style.background = "transparent"}
-                    >
-                      <td style={{ padding: "14px 20px" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                          <div style={{ width: "38px", height: "38px", borderRadius: "12px", background: "linear-gradient(135deg,#10b981,#059669)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: "14px", fontWeight: 700, flexShrink: 0 }}>
-                            {l.name.charAt(0)}
-                          </div>
-                          <div>
-                            <p style={{ fontSize: "13px", fontWeight: 600, color: "#0f172a" }}>{l.name}</p>
-                            <p style={{ fontSize: "11px", color: "#94a3b8", marginTop: "1px" }}>{l.role}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td style={{ padding: "14px 20px" }}>
-                        <span style={{ fontSize: "11px", fontWeight: 700, padding: "4px 10px", borderRadius: "20px", background: lt.bg, color: lt.color }}>{l.type}</span>
-                      </td>
-                      <td style={{ padding: "14px 20px" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "12px", color: "#64748b" }}>
-                          <CalendarDays size={12} color="#94a3b8" />{l.from}
-                        </div>
-                      </td>
-                      <td style={{ padding: "14px 20px" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "12px", color: "#64748b" }}>
-                          <CalendarDays size={12} color="#94a3b8" />{l.to}
-                        </div>
-                      </td>
-                      <td style={{ padding: "14px 20px" }}>
-                        <span style={{ fontSize: "13px", fontWeight: 700, color: "#6366f1", background: "#eff6ff", padding: "4px 10px", borderRadius: "8px" }}>{l.days}d</span>
-                      </td>
-                      <td style={{ padding: "14px 20px", fontSize: "12px", color: "#64748b", maxWidth: "180px" }}>
-                        <span style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l.reason}</span>
-                      </td>
-                      <td style={{ padding: "14px 20px" }}>
-                        <span style={{ fontSize: "11px", fontWeight: 700, padding: "5px 10px", borderRadius: "20px", background: ss.bg, color: ss.color }}>{l.status}</span>
-                      </td>
-                      <td style={{ padding: "14px 20px" }}>
-                        <div style={{ display: "flex", gap: "4px" }}>
-                          {l.status === "Pending" ? (
-                            <>
-                              {[{ Icon: Check, hoverBg: "#f0fdf4", color: "#16a34a" }, { Icon: X, hoverBg: "#fff1f2", color: "#e11d48" }].map(({ Icon, hoverBg, color }, idx) => (
-                                <button key={idx}
-                                  style={{ padding: "7px", borderRadius: "9px", border: "none", background: "transparent", cursor: "pointer", color: "#94a3b8", display: "flex", alignItems: "center", transition: "all 0.15s" }}
-                                  onMouseEnter={ev => { (ev.currentTarget as HTMLButtonElement).style.background = hoverBg; (ev.currentTarget as HTMLButtonElement).style.color = color; }}
-                                  onMouseLeave={ev => { (ev.currentTarget as HTMLButtonElement).style.background = "transparent"; (ev.currentTarget as HTMLButtonElement).style.color = "#94a3b8"; }}
-                                ><Icon size={14} /></button>
-                              ))}
-                            </>
-                          ) : (
-                            <button
-                              style={{ padding: "7px", borderRadius: "9px", border: "none", background: "transparent", cursor: "pointer", color: "#94a3b8", display: "flex", alignItems: "center", transition: "all 0.15s" }}
-                              onMouseEnter={ev => { (ev.currentTarget as HTMLButtonElement).style.background = "#eff6ff"; (ev.currentTarget as HTMLButtonElement).style.color = "#2563eb"; }}
-                              onMouseLeave={ev => { (ev.currentTarget as HTMLButtonElement).style.background = "transparent"; (ev.currentTarget as HTMLButtonElement).style.color = "#94a3b8"; }}
-                            ><Eye size={14} /></button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-            {filtered.length === 0 && (
-              <div style={{ textAlign: "center", padding: "48px", color: "#94a3b8" }}>
-                <CalendarDays size={40} color="#e2e8f0" style={{ margin: "0 auto 12px" }} />
-                <p style={{ fontSize: "14px", fontWeight: 600 }}>No leave requests found</p>
-              </div>
-            )}
+        </p>
+        {isRequests && (
+          <div className="flex flex-wrap items-center gap-4">
+            {["Pending", "Approved", "Rejected"].map((st) => {
+              const count = filtered.filter((l) => l.status === st).length;
+              return (
+                <span key={st} className="flex items-center gap-1.5">
+                  <span className={`size-2 rounded-full ${STATUS_META[st].dot}`} />
+                  {st}: <strong className="font-semibold text-text">{count}</strong>
+                </span>
+              );
+            })}
           </div>
         )}
-
-        {/* Leave Balance Table */}
-        {tab === "Leave Balance" && (
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr style={{ background: "#fafafa", borderBottom: "1px solid #f1f5f9" }}>
-                  {["Staff Member", "Department", "Sick Leave", "Casual Leave", "Earned Leave", "Used", "Remaining", "Usage"].map(h => (
-                    <th key={h} style={{ padding: "12px 20px", textAlign: "left", fontSize: "11px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em", whiteSpace: "nowrap" }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {leaveBalance.map((b, i) => {
-                  const total = b.sick + b.casual + b.earned;
-                  const pct   = Math.min(Math.round((b.used / total) * 100), 100);
-                  const barColor = pct >= 80 ? "#e11d48" : pct >= 50 ? "#d97706" : "#16a34a";
-                  return (
-                    <tr key={b.name}
-                      style={{ borderBottom: i < leaveBalance.length - 1 ? "1px solid #f8fafc" : "none", transition: "background 0.15s" }}
-                      onMouseEnter={ev => (ev.currentTarget as HTMLTableRowElement).style.background = "#fafafa"}
-                      onMouseLeave={ev => (ev.currentTarget as HTMLTableRowElement).style.background = "transparent"}
-                    >
-                      <td style={{ padding: "14px 20px" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                          <div style={{ width: "38px", height: "38px", borderRadius: "12px", background: "linear-gradient(135deg,#10b981,#059669)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: "14px", fontWeight: 700, flexShrink: 0 }}>
-                            {b.name.charAt(0)}
-                          </div>
-                          <p style={{ fontSize: "13px", fontWeight: 600, color: "#0f172a" }}>{b.name}</p>
-                        </div>
-                      </td>
-                      <td style={{ padding: "14px 20px" }}>
-                        <span style={{ fontSize: "12px", fontWeight: 600, padding: "4px 10px", borderRadius: "20px", background: "#eff6ff", color: "#2563eb" }}>{b.dept}</span>
-                      </td>
-                      <td style={{ padding: "14px 20px", fontSize: "13px", fontWeight: 700, color: "#e11d48" }}>{b.sick}</td>
-                      <td style={{ padding: "14px 20px", fontSize: "13px", fontWeight: 700, color: "#2563eb" }}>{b.casual}</td>
-                      <td style={{ padding: "14px 20px", fontSize: "13px", fontWeight: 700, color: "#16a34a" }}>{b.earned}</td>
-                      <td style={{ padding: "14px 20px", fontSize: "13px", fontWeight: 700, color: "#0f172a" }}>{b.used}</td>
-                      <td style={{ padding: "14px 20px", fontSize: "13px", fontWeight: 700, color: "#6366f1" }}>{b.remaining}</td>
-                      <td style={{ padding: "14px 20px", minWidth: "140px" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                          <div style={{ flex: 1, height: "6px", background: "#f1f5f9", borderRadius: "99px", overflow: "hidden" }}>
-                            <div style={{ height: "100%", width: `${pct}%`, background: barColor, borderRadius: "99px" }} />
-                          </div>
-                          <span style={{ fontSize: "11px", fontWeight: 700, color: barColor, minWidth: "32px" }}>{pct}%</span>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {/* Footer */}
-        <div style={{ padding: "14px 20px", borderTop: "1px solid #f8fafc", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <p style={{ fontSize: "12px", color: "#94a3b8" }}>
-            {tab === "Requests"
-              ? <><strong style={{ color: "#334155" }}>{filtered.length}</strong> of <strong style={{ color: "#334155" }}>{leaveRequests.length}</strong> requests</>
-              : <><strong style={{ color: "#334155" }}>{leaveBalance.length}</strong> staff members</>
-            }
-          </p>
-          {tab === "Requests" && (
-            <div style={{ display: "flex", gap: "16px" }}>
-              {["Pending", "Approved", "Rejected"].map(st => {
-                const ss = statusStyle[st];
-                const count = filtered.filter(l => l.status === st).length;
-                return (
-                  <div key={st} style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-                    <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: ss.color, display: "inline-block" }} />
-                    <span style={{ fontSize: "12px", color: "#64748b" }}>{st}: <strong style={{ color: "#0f172a" }}>{count}</strong></span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
       </div>
     </div>
   );

@@ -1,6 +1,17 @@
 "use client";
+
 import React, { useState } from "react";
-import { Search, CreditCard, CheckCircle, User, DollarSign } from "lucide-react";
+import { CheckCircle, DollarSign, Search, User } from "lucide-react";
+import {
+  Button,
+  Card,
+  CardContent,
+  CardHeader,
+  Input,
+  PageHeader,
+  Select,
+} from "@/components/ui";
+import { cn } from "@/lib/utils";
 
 const students = [
   { id: "STU001", name: "Arjun Sharma",    class: "10-A", rollNo: "01", totalFee: 10900, paid: 5450,  due: 5450  },
@@ -14,207 +25,218 @@ const students = [
 const paymentMethods = ["Cash", "Online Transfer", "Cheque", "DD", "UPI"];
 const feeTypes = ["Tuition Fee", "Transport Fee", "Lab Fee", "Library Fee", "Sports Fee", "Miscellaneous", "Full Fee"];
 
+const inr = new Intl.NumberFormat("en-IN", {
+  style: "currency",
+  currency: "INR",
+  maximumFractionDigits: 0,
+});
+
 export default function CollectFeePage() {
   const [search, setSearch] = useState("");
-  const [selected, setSelected] = useState<typeof students[0] | null>(null);
+  const [selected, setSelected] = useState<(typeof students)[0] | null>(null);
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState("Cash");
   const [feeType, setFeeType] = useState("Tuition Fee");
   const [success, setSuccess] = useState(false);
 
-  const filtered = students.filter(s =>
-    s.name.toLowerCase().includes(search.toLowerCase()) ||
-    s.id.toLowerCase().includes(search.toLowerCase()) ||
-    s.class.toLowerCase().includes(search.toLowerCase())
+  const filtered = students.filter(
+    (s) =>
+      s.name.toLowerCase().includes(search.toLowerCase()) ||
+      s.id.toLowerCase().includes(search.toLowerCase()) ||
+      s.class.toLowerCase().includes(search.toLowerCase())
   );
 
   const handleCollect = () => {
     if (!selected || !amount) return;
     setSuccess(true);
-    setTimeout(() => { setSuccess(false); setSelected(null); setAmount(""); }, 3000);
-  };
-
-  const inputStyle: React.CSSProperties = {
-    width: "100%", padding: "10px 14px", fontSize: "13px", background: "#f8fafc",
-    border: "1px solid #e2e8f0", borderRadius: "12px", outline: "none",
-    color: "#334155", fontFamily: "inherit", boxSizing: "border-box",
+    setTimeout(() => {
+      setSuccess(false);
+      setSelected(null);
+      setAmount("");
+    }, 3000);
   };
 
   return (
-    <div style={{ maxWidth: "1600px", display: "flex", flexDirection: "column", gap: "24px" }}>
-
-      {/* Header */}
-      <div>
-        <h1 style={{ fontSize: "22px", fontWeight: 800, color: "#0f172a", letterSpacing: "-0.3px" }}>Collect Fee</h1>
-        <p style={{ fontSize: "13px", color: "#94a3b8", marginTop: "4px" }}>Search student and record fee payment</p>
-      </div>
+    <div className="flex flex-col gap-5">
+      <PageHeader title="Collect Fee" description="Search student and record fee payment" />
 
       {success && (
-        <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "14px", padding: "16px 20px", display: "flex", alignItems: "center", gap: "12px" }}>
-          <CheckCircle size={20} color="#16a34a" />
-          <div>
-            <p style={{ fontSize: "14px", fontWeight: 700, color: "#15803d" }}>Payment Recorded Successfully!</p>
-            <p style={{ fontSize: "12px", color: "#16a34a", marginTop: "2px" }}>Receipt has been generated. Redirecting...</p>
+        <div className="flex items-center gap-3 rounded-lg border border-border bg-success-soft px-5 py-4">
+          <CheckCircle className="size-5 shrink-0 text-success" />
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-success-text">Payment Recorded Successfully!</p>
+            <p className="mt-0.5 text-xs text-success-text">
+              Receipt has been generated. Redirecting…
+            </p>
           </div>
         </div>
       )}
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 380px", gap: "20px", alignItems: "start" }}>
-
+      <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-3">
         {/* Student Search */}
-        <div style={{ background: "#fff", borderRadius: "16px", border: "1px solid #f1f5f9", boxShadow: "0 1px 4px rgba(0,0,0,0.04)", overflow: "hidden" }}>
-          <div style={{ padding: "16px 20px", borderBottom: "1px solid #f8fafc" }}>
-            <p style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a" }}>Select Student</p>
-            <div style={{ position: "relative", marginTop: "12px" }}>
-              <Search size={14} color="#94a3b8" style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)" }} />
-              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name, ID or class..."
-                style={{ ...inputStyle, paddingLeft: "36px" }}
-                onFocus={e => { e.target.style.borderColor = "#6366f1"; e.target.style.boxShadow = "0 0 0 3px rgba(99,102,241,0.1)"; }}
-                onBlur={e => { e.target.style.borderColor = "#e2e8f0"; e.target.style.boxShadow = "none"; }}
-              />
-            </div>
-          </div>
+        <Card className="xl:col-span-2">
+          <CardHeader className="flex-col items-stretch gap-3">
+            <p className="text-sm font-semibold text-text">Select Student</p>
+            <Input
+              type="search"
+              placeholder="Search by name, ID or class…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              icon={<Search className="size-4" />}
+              aria-label="Search students"
+            />
+          </CardHeader>
 
           <div>
-            {filtered.map((s, i) => (
-              <div key={s.id}
-                onClick={() => { setSelected(s); setAmount(String(s.due)); }}
-                style={{
-                  padding: "14px 20px", borderBottom: i < filtered.length - 1 ? "1px solid #f8fafc" : "none",
-                  cursor: "pointer", transition: "background 0.15s",
-                  background: selected?.id === s.id ? "#eff6ff" : "transparent",
-                  borderLeft: selected?.id === s.id ? "3px solid #6366f1" : "3px solid transparent",
-                }}
-                onMouseEnter={e => { if (selected?.id !== s.id) (e.currentTarget as HTMLDivElement).style.background = "#fafafa"; }}
-                onMouseLeave={e => { if (selected?.id !== s.id) (e.currentTarget as HTMLDivElement).style.background = "transparent"; }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                  <div style={{ width: "40px", height: "40px", borderRadius: "12px", background: s.due === 0 ? "#f0fdf4" : "#fff1f2", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                    <User size={18} color={s.due === 0 ? "#16a34a" : "#e11d48"} />
+            {filtered.map((s, i) => {
+              const isSelected = selected?.id === s.id;
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => {
+                    setSelected(s);
+                    setAmount(String(s.due));
+                  }}
+                  aria-pressed={isSelected}
+                  className={cn(
+                    "focus-ring flex w-full items-center gap-3 border-l-2 px-5 py-3.5 text-left transition-colors",
+                    i < filtered.length - 1 && "border-b border-b-border",
+                    isSelected
+                      ? "border-l-primary bg-primary-soft"
+                      : "border-l-transparent hover:bg-surface-hover"
+                  )}
+                >
+                  <div
+                    className={cn(
+                      "flex size-10 shrink-0 items-center justify-center rounded-md",
+                      s.due === 0 ? "bg-success-soft text-success-text" : "bg-danger-soft text-danger-text"
+                    )}
+                  >
+                    <User className="size-4.5" />
                   </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                      <p style={{ fontSize: "13px", fontWeight: 600, color: "#0f172a" }}>{s.name}</p>
-                      <span style={{ fontSize: "13px", fontWeight: 700, color: s.due === 0 ? "#16a34a" : "#e11d48" }}>
-                        {s.due === 0 ? "✓ Cleared" : `₹${s.due.toLocaleString()} due`}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="truncate text-sm font-medium text-text">{s.name}</p>
+                      <span
+                        className={cn(
+                          "shrink-0 text-sm font-semibold",
+                          s.due === 0 ? "text-success" : "text-danger"
+                        )}
+                      >
+                        {s.due === 0 ? "✓ Cleared" : `${inr.format(s.due)} due`}
                       </span>
                     </div>
-                    <div style={{ display: "flex", gap: "12px", marginTop: "4px" }}>
-                      <span style={{ fontSize: "11px", color: "#94a3b8" }}>{s.id}</span>
-                      <span style={{ fontSize: "11px", color: "#94a3b8" }}>Class {s.class}</span>
-                      <span style={{ fontSize: "11px", color: "#94a3b8" }}>Roll #{s.rollNo}</span>
+                    <div className="mt-1 flex flex-wrap gap-3 text-xs text-subtle">
+                      <span>{s.id}</span>
+                      <span>Class {s.class}</span>
+                      <span>Roll #{s.rollNo}</span>
                     </div>
-                    {/* Progress bar */}
-                    <div style={{ marginTop: "8px", height: "4px", background: "#f1f5f9", borderRadius: "4px", overflow: "hidden" }}>
-                      <div style={{ height: "100%", width: `${(s.paid / s.totalFee) * 100}%`, background: s.due === 0 ? "#16a34a" : "linear-gradient(90deg,#6366f1,#8b5cf6)", borderRadius: "4px", transition: "width 0.3s" }} />
+                    <div className="mt-2 h-1 overflow-hidden rounded-full bg-surface-hover">
+                      <div
+                        className={cn("h-full rounded-full", s.due === 0 ? "bg-success" : "bg-primary")}
+                        style={{ width: `${(s.paid / s.totalFee) * 100}%` }}
+                      />
                     </div>
-                    <p style={{ fontSize: "10px", color: "#94a3b8", marginTop: "3px" }}>₹{s.paid.toLocaleString()} paid of ₹{s.totalFee.toLocaleString()}</p>
+                    <p className="mt-1 text-[11px] text-subtle">
+                      {inr.format(s.paid)} paid of {inr.format(s.totalFee)}
+                    </p>
                   </div>
-                </div>
-              </div>
-            ))}
+                </button>
+              );
+            })}
           </div>
-        </div>
+        </Card>
 
         {/* Payment Form */}
-        <div style={{ background: "#fff", borderRadius: "16px", border: "1px solid #f1f5f9", boxShadow: "0 1px 4px rgba(0,0,0,0.04)", overflow: "hidden" }}>
-          <div style={{ padding: "18px 20px 14px", borderBottom: "1px solid #f8fafc" }}>
-            <p style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a" }}>Payment Details</p>
-          </div>
-          <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "16px" }}>
-
+        <Card>
+          <CardHeader>
+            <p className="text-sm font-semibold text-text">Payment Details</p>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
             {selected ? (
-              <div style={{ background: "#eff6ff", borderRadius: "12px", padding: "14px", display: "flex", alignItems: "center", gap: "10px" }}>
-                <div style={{ width: "40px", height: "40px", borderRadius: "10px", background: "#dbeafe", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                  <User size={18} color="#2563eb" />
+              <div className="flex items-center gap-3 rounded-md bg-primary-soft p-3.5">
+                <div className="flex size-10 shrink-0 items-center justify-center rounded-md bg-surface-raised text-primary">
+                  <User className="size-4.5" />
                 </div>
-                <div>
-                  <p style={{ fontSize: "13px", fontWeight: 700, color: "#1e40af" }}>{selected.name}</p>
-                  <p style={{ fontSize: "11px", color: "#3b82f6" }}>Class {selected.class} · {selected.id}</p>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-primary-text">{selected.name}</p>
+                  <p className="truncate text-xs text-primary-text">
+                    Class {selected.class} · {selected.id}
+                  </p>
                 </div>
               </div>
             ) : (
-              <div style={{ background: "#f8fafc", borderRadius: "12px", padding: "14px", textAlign: "center" }}>
-                <p style={{ fontSize: "12px", color: "#94a3b8" }}>← Select a student first</p>
+              <div className="rounded-md bg-surface-sunken p-3.5 text-center">
+                <p className="text-xs text-subtle">← Select a student first</p>
               </div>
             )}
 
-            <div>
-              <label style={{ fontSize: "12px", fontWeight: 600, color: "#374151", display: "block", marginBottom: "6px" }}>Fee Type</label>
-              <select value={feeType} onChange={e => setFeeType(e.target.value)} style={{ ...inputStyle, cursor: "pointer" }}>
-                {feeTypes.map(t => <option key={t}>{t}</option>)}
-              </select>
-            </div>
+            <Select
+              label="Fee Type"
+              value={feeType}
+              onChange={(e) => setFeeType(e.target.value)}
+              options={feeTypes.map((t) => ({ label: t, value: t }))}
+            />
 
-            <div>
-              <label style={{ fontSize: "12px", fontWeight: 600, color: "#374151", display: "block", marginBottom: "6px" }}>Amount (₹)</label>
-              <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Enter amount"
-                style={inputStyle}
-                onFocus={e => { e.target.style.borderColor = "#6366f1"; e.target.style.boxShadow = "0 0 0 3px rgba(99,102,241,0.1)"; }}
-                onBlur={e => { e.target.style.borderColor = "#e2e8f0"; e.target.style.boxShadow = "none"; }}
-              />
-            </div>
+            <Input
+              label="Amount (₹)"
+              type="number"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder="Enter amount"
+            />
 
-            <div>
-              <label style={{ fontSize: "12px", fontWeight: 600, color: "#374151", display: "block", marginBottom: "6px" }}>Payment Method</label>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-                {paymentMethods.map(m => (
-                  <button key={m} onClick={() => setMethod(m)} style={{
-                    padding: "7px 14px", borderRadius: "10px", fontSize: "12px", fontWeight: 600, cursor: "pointer", transition: "all 0.15s",
-                    border: method === m ? "none" : "1px solid #e2e8f0",
-                    background: method === m ? "linear-gradient(135deg,#6366f1,#8b5cf6)" : "#f8fafc",
-                    color: method === m ? "#fff" : "#64748b",
-                    boxShadow: method === m ? "0 2px 8px rgba(99,102,241,0.3)" : "none",
-                  }}>{m}</button>
+            <div className="flex flex-col gap-1.5">
+              <p className="text-xs font-medium text-muted">Payment Method</p>
+              <div className="flex flex-wrap gap-2">
+                {paymentMethods.map((m) => (
+                  <Button
+                    key={m}
+                    type="button"
+                    size="sm"
+                    variant={method === m ? "primary" : "outline"}
+                    onClick={() => setMethod(m)}
+                    aria-pressed={method === m}
+                  >
+                    {m}
+                  </Button>
                 ))}
               </div>
             </div>
 
-            <div>
-              <label style={{ fontSize: "12px", fontWeight: 600, color: "#374151", display: "block", marginBottom: "6px" }}>Remarks (optional)</label>
-              <input placeholder="Add a note..." style={inputStyle}
-                onFocus={e => { e.target.style.borderColor = "#6366f1"; e.target.style.boxShadow = "0 0 0 3px rgba(99,102,241,0.1)"; }}
-                onBlur={e => { e.target.style.borderColor = "#e2e8f0"; e.target.style.boxShadow = "none"; }}
-              />
-            </div>
+            <Input label="Remarks (optional)" placeholder="Add a note…" />
 
             {selected && amount && (
-              <div style={{ background: "#f8fafc", borderRadius: "12px", padding: "14px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
-                  <span style={{ fontSize: "12px", color: "#64748b" }}>Student</span>
-                  <span style={{ fontSize: "12px", fontWeight: 600, color: "#0f172a" }}>{selected.name}</span>
+              <div className="rounded-md bg-surface-sunken p-3.5">
+                <div className="mb-2 flex justify-between gap-3 text-xs">
+                  <span className="text-muted">Student</span>
+                  <span className="font-medium text-text">{selected.name}</span>
                 </div>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
-                  <span style={{ fontSize: "12px", color: "#64748b" }}>Fee Type</span>
-                  <span style={{ fontSize: "12px", fontWeight: 600, color: "#0f172a" }}>{feeType}</span>
+                <div className="mb-2 flex justify-between gap-3 text-xs">
+                  <span className="text-muted">Fee Type</span>
+                  <span className="font-medium text-text">{feeType}</span>
                 </div>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
-                  <span style={{ fontSize: "12px", color: "#64748b" }}>Method</span>
-                  <span style={{ fontSize: "12px", fontWeight: 600, color: "#0f172a" }}>{method}</span>
+                <div className="mb-2 flex justify-between gap-3 text-xs">
+                  <span className="text-muted">Method</span>
+                  <span className="font-medium text-text">{method}</span>
                 </div>
-                <div style={{ height: "1px", background: "#e2e8f0", margin: "10px 0" }} />
-                <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a" }}>Total</span>
-                  <span style={{ fontSize: "16px", fontWeight: 800, color: "#6366f1" }}>₹{Number(amount).toLocaleString()}</span>
+                <div className="my-2.5 h-px bg-border" />
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-sm font-semibold text-text">Total</span>
+                  <span className="text-base font-semibold text-primary">
+                    {inr.format(Number(amount))}
+                  </span>
                 </div>
               </div>
             )}
 
-            <button onClick={handleCollect} disabled={!selected || !amount}
-              style={{
-                display: "flex", alignItems: "center", justifyContent: "center", gap: "8px",
-                padding: "12px", borderRadius: "12px", border: "none", cursor: selected && amount ? "pointer" : "not-allowed",
-                background: selected && amount ? "linear-gradient(135deg,#6366f1,#8b5cf6)" : "#f1f5f9",
-                color: selected && amount ? "#fff" : "#94a3b8",
-                fontSize: "14px", fontWeight: 700,
-                boxShadow: selected && amount ? "0 4px 12px rgba(99,102,241,0.35)" : "none",
-                transition: "all 0.15s",
-              }}
-            >
-              <DollarSign size={16} /> Collect & Generate Receipt
-            </button>
-          </div>
-        </div>
+            <Button onClick={handleCollect} disabled={!selected || !amount} className="w-full">
+              <DollarSign className="size-4" />
+              Collect &amp; Generate Receipt
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

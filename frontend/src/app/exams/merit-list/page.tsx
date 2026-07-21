@@ -1,6 +1,31 @@
 "use client";
+
 import React, { useState } from "react";
-import { Trophy, Medal, Search, Download } from "lucide-react";
+import {
+  Award,
+  Crown,
+  Download,
+  GraduationCap,
+  Medal,
+  Percent,
+  Search,
+  Trophy,
+  XCircle,
+} from "lucide-react";
+import {
+  Avatar,
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  Input,
+  PageHeader,
+  Select,
+  StatCard,
+  Table,
+  type Column,
+} from "@/components/ui";
+import { cn } from "@/lib/utils";
 
 const meritData = [
   { id: "S002", name: "Priya Patel",   class: "10-A", roll: 2,  total: 565, pct: 94.2, grade: "A+", attendance: 98 },
@@ -15,220 +40,297 @@ const meritData = [
   { id: "S005", name: "Karan Singh",   class: "10-A", roll: 5,  total: 292, pct: 48.7, grade: "F",  attendance: 65 },
 ];
 
-const gradeStyle: Record<string, { bg: string; color: string }> = {
-  "A+": { bg: "#f0fdf4", color: "#16a34a" },
-  "A":  { bg: "#eff6ff", color: "#2563eb" },
-  "B+": { bg: "#f5f3ff", color: "#7c3aed" },
-  "B":  { bg: "#fffbeb", color: "#d97706" },
-  "C":  { bg: "#fff7ed", color: "#ea580c" },
-  "F":  { bg: "#fff1f2", color: "#e11d48" },
+type MeritStudent = (typeof meritData)[number];
+
+const MAX_TOTAL = 600;
+
+/** Grade chip tones, expressed only in semantic tokens. */
+const gradeClass: Record<string, string> = {
+  "A+": "bg-success-soft text-success-text",
+  A: "bg-info-soft text-info-text",
+  "B+": "bg-primary-soft text-primary-text",
+  B: "bg-warning-soft text-warning-text",
+  C: "bg-surface-hover text-muted",
+  F: "bg-danger-soft text-danger-text",
 };
+
+/** Podium/rank medal styling for the top three, by zero-based position. */
+const podiumTile = ["gradient-amber", "bg-border-strong", "gradient-rose"];
+const podiumPedestal = [
+  "h-24 bg-warning-soft text-warning-text",
+  "h-16 bg-surface-hover text-muted",
+  "h-12 bg-danger-soft text-danger-text",
+];
 
 const classes = ["All", "6-A", "7-A", "8-A", "9-A", "10-A", "11-A", "12-A"];
 const exams   = ["Mid-Term Exam", "Unit Test 1", "Final Exam"];
+
+const toOptions = (values: string[]) => values.map((v) => ({ label: v, value: v }));
 
 export default function MeritListPage() {
   const [search,   setSearch]   = useState("");
   const [selClass, setSelClass] = useState("10-A");
   const [selExam,  setSelExam]  = useState("Mid-Term Exam");
 
-  const filtered = meritData.filter(s =>
+  const filtered = meritData.filter((s) =>
     s.name.toLowerCase().includes(search.toLowerCase())
   );
 
   const top3 = meritData.slice(0, 3);
+  const classAverage = (
+    meritData.reduce((a, b) => a + b.pct, 0) / meritData.length
+  ).toFixed(1);
+
+  const columns: Column<MeritStudent>[] = [
+    {
+      key: "rank",
+      header: "Rank",
+      render: (s) => {
+        const i = filtered.indexOf(s);
+        return (
+          <div
+            className={cn(
+              "flex size-9 items-center justify-center rounded-md text-xs font-semibold",
+              i < 3 ? `${podiumTile[i]} text-white` : "bg-surface-hover text-muted"
+            )}
+          >
+            #{i + 1}
+          </div>
+        );
+      },
+    },
+    {
+      key: "name",
+      header: "Student",
+      sortable: true,
+      render: (s) => (
+        <div className="flex items-center gap-3">
+          <Avatar name={s.name} size="sm" />
+          <div className="min-w-0">
+            <p className="truncate font-medium text-text">{s.name}</p>
+            <p className="truncate text-xs text-subtle">
+              Roll #{s.roll} · {s.id}
+            </p>
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: "class",
+      header: "Class",
+      sortable: true,
+      render: (s) => <Badge variant="info">{s.class}</Badge>,
+    },
+    {
+      key: "total",
+      header: "Total Marks",
+      sortable: true,
+      align: "right",
+      render: (s) => (
+        <span className="whitespace-nowrap font-semibold text-text">
+          {s.total}
+          <span className="ml-0.5 text-xs font-normal text-subtle">/{MAX_TOTAL}</span>
+        </span>
+      ),
+    },
+    {
+      key: "pct",
+      header: "Percentage",
+      sortable: true,
+      render: (s) => {
+        const bar = s.pct >= 75 ? "bg-success" : s.pct >= 50 ? "bg-warning" : "bg-danger";
+        const text =
+          s.pct >= 75 ? "text-success-text" : s.pct >= 50 ? "text-warning-text" : "text-danger-text";
+        return (
+          <div className="flex items-center gap-2">
+            <div className="h-1.5 w-16 overflow-hidden rounded-full bg-surface-hover">
+              <div className={cn("h-full rounded-full", bar)} style={{ width: `${s.pct}%` }} />
+            </div>
+            <span className={cn("text-xs font-semibold", text)}>{s.pct}%</span>
+          </div>
+        );
+      },
+    },
+    {
+      key: "grade",
+      header: "Grade",
+      sortable: true,
+      render: (s) => (
+        <Badge className={cn("font-semibold", gradeClass[s.grade])}>{s.grade}</Badge>
+      ),
+    },
+    {
+      key: "attendance",
+      header: "Attendance",
+      sortable: true,
+      render: (s) => {
+        const ok = s.attendance >= 75;
+        return (
+          <div className="flex items-center gap-2">
+            <div className="h-1.5 w-12 overflow-hidden rounded-full bg-surface-hover">
+              <div
+                className={cn("h-full rounded-full", ok ? "bg-success" : "bg-danger")}
+                style={{ width: `${s.attendance}%` }}
+              />
+            </div>
+            <span
+              className={cn(
+                "text-xs font-semibold",
+                ok ? "text-success-text" : "text-danger-text"
+              )}
+            >
+              {s.attendance}%
+            </span>
+          </div>
+        );
+      },
+    },
+  ];
 
   return (
-    <div style={{ maxWidth: "1600px", display: "flex", flexDirection: "column", gap: "24px" }}>
+    <div className="flex flex-col gap-5">
+      <PageHeader
+        title="Merit List"
+        description="Top performing students ranked by score"
+        actions={
+          <Button>
+            <Download className="size-4" />
+            Download List
+          </Button>
+        }
+      />
 
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div>
-          <p style={{ fontSize: "12px", color: "#6366f1", fontWeight: 600, marginBottom: "4px" }}>Examinations</p>
-          <h1 style={{ fontSize: "22px", fontWeight: 800, color: "#0f172a", letterSpacing: "-0.3px" }}>Merit List</h1>
-          <p style={{ fontSize: "13px", color: "#94a3b8", marginTop: "4px" }}>Top performing students ranked by score</p>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          label="Total Students"
+          value={meritData.length}
+          icon={GraduationCap}
+          tone="indigo"
+        />
+        <StatCard
+          label="Pass"
+          value={meritData.filter((s) => s.grade !== "F").length}
+          icon={Award}
+          tone="emerald"
+        />
+        <StatCard
+          label="Fail"
+          value={meritData.filter((s) => s.grade === "F").length}
+          icon={XCircle}
+          tone="rose"
+        />
+        <StatCard label="Class Average" value={`${classAverage}%`} icon={Percent} tone="amber" />
+      </div>
+
+      <Card>
+        <CardContent className="py-8">
+          <p className="mb-7 text-center text-[10px] font-semibold uppercase tracking-widest text-subtle">
+            Top Performers
+          </p>
+          <div className="flex items-end justify-center gap-5">
+            {/* 2nd place */}
+            <div className="max-w-44 flex-1 text-center">
+              <Avatar name={top3[1].name} size="lg" className="mx-auto" />
+              <Medal className="mx-auto mt-1.5 size-5 text-muted" />
+              <p className="mt-1 text-sm font-semibold text-text">{top3[1].name}</p>
+              <p className="mt-0.5 text-xs text-muted">{top3[1].pct}%</p>
+              <p className="text-xs text-subtle">
+                {top3[1].total}/{MAX_TOTAL}
+              </p>
+              <div
+                className={cn(
+                  "mt-3 flex items-center justify-center rounded-t-md text-2xl font-semibold",
+                  podiumPedestal[1]
+                )}
+              >
+                2
+              </div>
+            </div>
+
+            {/* 1st place */}
+            <div className="max-w-48 flex-1 text-center">
+              <Crown className="mx-auto mb-1 size-7 text-warning" />
+              <Avatar name={top3[0].name} size="lg" className="mx-auto" />
+              <Trophy className="mx-auto mt-1.5 size-5.5 text-warning" />
+              <p className="mt-1 text-base font-semibold text-text">{top3[0].name}</p>
+              <p className="mt-0.5 text-sm font-semibold text-warning-text">{top3[0].pct}%</p>
+              <p className="text-xs text-subtle">
+                {top3[0].total}/{MAX_TOTAL}
+              </p>
+              <div
+                className={cn(
+                  "mt-3 flex items-center justify-center rounded-t-md text-3xl font-semibold",
+                  podiumPedestal[0]
+                )}
+              >
+                1
+              </div>
+            </div>
+
+            {/* 3rd place */}
+            <div className="max-w-44 flex-1 text-center">
+              <Avatar name={top3[2].name} size="lg" className="mx-auto" />
+              <Medal className="mx-auto mt-1.5 size-5 text-danger" />
+              <p className="mt-1 text-sm font-semibold text-text">{top3[2].name}</p>
+              <p className="mt-0.5 text-xs text-danger-text">{top3[2].pct}%</p>
+              <p className="text-xs text-subtle">
+                {top3[2].total}/{MAX_TOTAL}
+              </p>
+              <div
+                className={cn(
+                  "mt-3 flex items-center justify-center rounded-t-md text-xl font-semibold",
+                  podiumPedestal[2]
+                )}
+              >
+                3
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="w-36">
+          <Select
+            value={selClass}
+            onChange={(e) => setSelClass(e.target.value)}
+            options={toOptions(classes)}
+            aria-label="Filter by class"
+          />
         </div>
-        <button style={{ display: "flex", alignItems: "center", gap: "6px", padding: "9px 18px", borderRadius: "12px", border: "none", background: "linear-gradient(135deg,#6366f1,#8b5cf6)", fontSize: "13px", fontWeight: 600, color: "#fff", cursor: "pointer", boxShadow: "0 4px 12px rgba(99,102,241,0.35)" }}>
-          <Download size={14} /> Download List
-        </button>
-      </div>
-
-      {/* Stats */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "16px" }}>
-        {[
-          { label: "Total Students", value: meritData.length,                                    icon: "👨🎓", color: "#6366f1", bg: "#eff6ff" },
-          { label: "Pass",           value: meritData.filter(s => s.grade !== "F").length,        icon: "✅",   color: "#16a34a", bg: "#f0fdf4" },
-          { label: "Fail",           value: meritData.filter(s => s.grade === "F").length,        icon: "❌",   color: "#e11d48", bg: "#fff1f2" },
-          { label: "Class Average",  value: `${(meritData.reduce((a,b) => a + b.pct, 0) / meritData.length).toFixed(1)}%`, icon: "📊", color: "#d97706", bg: "#fffbeb" },
-        ].map(s => (
-          <div key={s.label} style={{ background: "#fff", borderRadius: "16px", border: "1px solid #f1f5f9", padding: "20px", boxShadow: "0 1px 4px rgba(0,0,0,0.04)", display: "flex", alignItems: "center", gap: "14px" }}>
-            <div style={{ width: "48px", height: "48px", borderRadius: "14px", background: s.bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "22px", flexShrink: 0 }}>{s.icon}</div>
-            <div>
-              <p style={{ fontSize: "12px", color: "#64748b", fontWeight: 500 }}>{s.label}</p>
-              <p style={{ fontSize: "26px", fontWeight: 800, color: s.color, lineHeight: 1.1, letterSpacing: "-0.5px" }}>{s.value}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Podium */}
-      <div style={{ background: "#fff", borderRadius: "16px", border: "1px solid #f1f5f9", padding: "32px 24px", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
-        <p style={{ fontSize: "11px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "28px", textAlign: "center" }}>🏆 Top Performers</p>
-        <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "center", gap: "20px" }}>
-
-          {/* 2nd Place */}
-          <div style={{ textAlign: "center", flex: 1, maxWidth: "180px" }}>
-            <div style={{ width: "60px", height: "60px", borderRadius: "50%", background: "linear-gradient(135deg,#94a3b8,#64748b)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 8px", color: "#fff", fontSize: "22px", fontWeight: 800, boxShadow: "0 4px 14px rgba(100,116,139,0.35)" }}>
-              {top3[1].name.charAt(0)}
-            </div>
-            <Medal size={20} color="#94a3b8" style={{ margin: "0 auto 6px" }} />
-            <p style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a" }}>{top3[1].name}</p>
-            <p style={{ fontSize: "12px", color: "#64748b", marginTop: "2px" }}>{top3[1].pct}%</p>
-            <p style={{ fontSize: "11px", color: "#94a3b8", marginTop: "1px" }}>{top3[1].total}/600</p>
-            <div style={{ height: "70px", background: "linear-gradient(180deg,#e2e8f0,#f1f5f9)", borderRadius: "10px 10px 0 0", marginTop: "12px", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <span style={{ fontSize: "24px", fontWeight: 800, color: "#94a3b8" }}>2</span>
-            </div>
-          </div>
-
-          {/* 1st Place */}
-          <div style={{ textAlign: "center", flex: 1, maxWidth: "200px" }}>
-            <div style={{ fontSize: "28px", marginBottom: "4px" }}>👑</div>
-            <div style={{ width: "72px", height: "72px", borderRadius: "50%", background: "linear-gradient(135deg,#f59e0b,#d97706)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 8px", color: "#fff", fontSize: "26px", fontWeight: 800, boxShadow: "0 6px 20px rgba(245,158,11,0.45)" }}>
-              {top3[0].name.charAt(0)}
-            </div>
-            <Trophy size={22} color="#f59e0b" style={{ margin: "0 auto 6px" }} />
-            <p style={{ fontSize: "15px", fontWeight: 800, color: "#0f172a" }}>{top3[0].name}</p>
-            <p style={{ fontSize: "13px", color: "#d97706", fontWeight: 700, marginTop: "2px" }}>{top3[0].pct}%</p>
-            <p style={{ fontSize: "11px", color: "#94a3b8", marginTop: "1px" }}>{top3[0].total}/600</p>
-            <div style={{ height: "100px", background: "linear-gradient(180deg,#fef3c7,#fde68a)", borderRadius: "10px 10px 0 0", marginTop: "12px", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <span style={{ fontSize: "32px", fontWeight: 800, color: "#d97706" }}>1</span>
-            </div>
-          </div>
-
-          {/* 3rd Place */}
-          <div style={{ textAlign: "center", flex: 1, maxWidth: "180px" }}>
-            <div style={{ width: "54px", height: "54px", borderRadius: "50%", background: "linear-gradient(135deg,#ea580c,#c2410c)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 8px", color: "#fff", fontSize: "20px", fontWeight: 800, boxShadow: "0 4px 14px rgba(234,88,12,0.35)" }}>
-              {top3[2].name.charAt(0)}
-            </div>
-            <Medal size={18} color="#ea580c" style={{ margin: "0 auto 6px" }} />
-            <p style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a" }}>{top3[2].name}</p>
-            <p style={{ fontSize: "12px", color: "#ea580c", marginTop: "2px" }}>{top3[2].pct}%</p>
-            <p style={{ fontSize: "11px", color: "#94a3b8", marginTop: "1px" }}>{top3[2].total}/600</p>
-            <div style={{ height: "50px", background: "linear-gradient(180deg,#fed7aa,#fdba74)", borderRadius: "10px 10px 0 0", marginTop: "12px", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <span style={{ fontSize: "20px", fontWeight: 800, color: "#ea580c" }}>3</span>
-            </div>
-          </div>
-
+        <div className="w-48">
+          <Select
+            value={selExam}
+            onChange={(e) => setSelExam(e.target.value)}
+            options={toOptions(exams)}
+            aria-label="Filter by exam"
+          />
         </div>
-      </div>
-
-      {/* Filters + Table */}
-      <div style={{ background: "#fff", borderRadius: "16px", border: "1px solid #f1f5f9", boxShadow: "0 1px 4px rgba(0,0,0,0.04)", overflow: "hidden" }}>
-
-        {/* Toolbar */}
-        <div style={{ padding: "16px 20px", borderBottom: "1px solid #f8fafc", display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
-          <select value={selClass} onChange={e => setSelClass(e.target.value)}
-            style={{ padding: "9px 14px", fontSize: "13px", fontWeight: 600, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "12px", outline: "none", color: "#334155", cursor: "pointer" }}>
-            {classes.map(c => <option key={c}>{c}</option>)}
-          </select>
-          <select value={selExam} onChange={e => setSelExam(e.target.value)}
-            style={{ padding: "9px 14px", fontSize: "13px", fontWeight: 600, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "12px", outline: "none", color: "#334155", cursor: "pointer" }}>
-            {exams.map(e => <option key={e}>{e}</option>)}
-          </select>
-          <div style={{ position: "relative", flex: 1, maxWidth: "280px" }}>
-            <Search size={14} color="#94a3b8" style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)" }} />
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search student..."
-              style={{ width: "100%", paddingLeft: "36px", paddingRight: "16px", paddingTop: "9px", paddingBottom: "9px", fontSize: "13px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "12px", outline: "none", color: "#334155", fontFamily: "inherit" }}
-              onFocus={e => { e.target.style.borderColor = "#6366f1"; e.target.style.boxShadow = "0 0 0 3px rgba(99,102,241,0.1)"; }}
-              onBlur={e  => { e.target.style.borderColor = "#e2e8f0"; e.target.style.boxShadow = "none"; }}
-            />
-          </div>
-          <p style={{ marginLeft: "auto", fontSize: "12px", color: "#94a3b8" }}>{filtered.length} students</p>
+        <div className="min-w-60 max-w-xs flex-1">
+          <Input
+            type="search"
+            placeholder="Search student…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            icon={<Search className="size-4" />}
+            aria-label="Search students"
+          />
         </div>
-
-        {/* Table */}
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr style={{ background: "#fafafa", borderBottom: "1px solid #f1f5f9" }}>
-              {["Rank", "Student", "Class", "Total Marks", "Percentage", "Grade", "Attendance"].map(h => (
-                <th key={h} style={{ padding: "12px 20px", textAlign: "left", fontSize: "11px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em" }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((s, i) => {
-              const gs = gradeStyle[s.grade];
-              const rankBg = ["linear-gradient(135deg,#f59e0b,#d97706)", "linear-gradient(135deg,#94a3b8,#64748b)", "linear-gradient(135deg,#ea580c,#c2410c)"];
-              const rowBg  = i === 0 ? "#fffdf0" : i === 1 ? "#fafafa" : i === 2 ? "#fff8f5" : "transparent";
-              const attColor = s.attendance >= 75 ? "#16a34a" : "#e11d48";
-
-              return (
-                <tr key={s.id}
-                  style={{ borderBottom: i < filtered.length - 1 ? "1px solid #f8fafc" : "none", background: rowBg, transition: "background 0.15s" }}
-                  onMouseEnter={ev => (ev.currentTarget as HTMLTableRowElement).style.background = "#f8fafc"}
-                  onMouseLeave={ev => (ev.currentTarget as HTMLTableRowElement).style.background = rowBg}
-                >
-                  {/* Rank */}
-                  <td style={{ padding: "14px 20px" }}>
-                    <div style={{ width: "34px", height: "34px", borderRadius: "10px", background: i < 3 ? rankBg[i] : "#f1f5f9", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: i < 3 ? "0 2px 8px rgba(0,0,0,0.15)" : "none" }}>
-                      <span style={{ fontSize: "13px", fontWeight: 800, color: i < 3 ? "#fff" : "#64748b" }}>#{i + 1}</span>
-                    </div>
-                  </td>
-
-                  {/* Student */}
-                  <td style={{ padding: "14px 20px" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                      <div style={{ width: "38px", height: "38px", borderRadius: "12px", background: "linear-gradient(135deg,#6366f1,#8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: "14px", fontWeight: 700, flexShrink: 0, boxShadow: "0 2px 8px rgba(99,102,241,0.25)" }}>
-                        {s.name.charAt(0)}
-                      </div>
-                      <div>
-                        <p style={{ fontSize: "13px", fontWeight: 600, color: "#0f172a" }}>{s.name}</p>
-                        <p style={{ fontSize: "11px", color: "#94a3b8", marginTop: "1px" }}>Roll #{s.roll} · {s.id}</p>
-                      </div>
-                    </div>
-                  </td>
-
-                  {/* Class */}
-                  <td style={{ padding: "14px 20px" }}>
-                    <span style={{ fontSize: "12px", fontWeight: 600, padding: "4px 10px", borderRadius: "20px", background: "#eff6ff", color: "#2563eb" }}>{s.class}</span>
-                  </td>
-
-                  {/* Total */}
-                  <td style={{ padding: "14px 20px" }}>
-                    <span style={{ fontSize: "15px", fontWeight: 800, color: "#0f172a" }}>{s.total}</span>
-                    <span style={{ fontSize: "11px", color: "#94a3b8", marginLeft: "2px" }}>/600</span>
-                  </td>
-
-                  {/* Percentage */}
-                  <td style={{ padding: "14px 20px" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                      <div style={{ width: "70px", height: "6px", background: "#f1f5f9", borderRadius: "99px", overflow: "hidden" }}>
-                        <div style={{ height: "100%", width: `${s.pct}%`, background: s.pct >= 75 ? "#10b981" : s.pct >= 50 ? "#f59e0b" : "#ef4444", borderRadius: "99px" }} />
-                      </div>
-                      <span style={{ fontSize: "13px", fontWeight: 700, color: s.pct >= 75 ? "#16a34a" : s.pct >= 50 ? "#d97706" : "#e11d48" }}>{s.pct}%</span>
-                    </div>
-                  </td>
-
-                  {/* Grade */}
-                  <td style={{ padding: "14px 20px" }}>
-                    <span style={{ fontSize: "13px", fontWeight: 800, padding: "5px 12px", borderRadius: "20px", background: gs.bg, color: gs.color }}>{s.grade}</span>
-                  </td>
-
-                  {/* Attendance */}
-                  <td style={{ padding: "14px 20px" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                      <div style={{ width: "50px", height: "5px", background: "#f1f5f9", borderRadius: "99px", overflow: "hidden" }}>
-                        <div style={{ height: "100%", width: `${s.attendance}%`, background: attColor, borderRadius: "99px" }} />
-                      </div>
-                      <span style={{ fontSize: "12px", fontWeight: 700, color: attColor }}>{s.attendance}%</span>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+        <p className="ml-auto text-xs text-muted">{filtered.length} students</p>
       </div>
+
+      <Table
+        columns={columns}
+        rows={filtered}
+        rowKey={(s) => s.id}
+        // Top three carry a podium tint so placement reads at a glance.
+        // Rank is list position, matching how the Rank column derives it.
+        rowClassName={(s) =>
+          ["bg-warning-soft", "bg-surface-hover", "bg-danger-soft"][filtered.indexOf(s)]
+        }
+        emptyTitle="No students found"
+        emptyDescription="Try a different search term."
+      />
     </div>
   );
 }

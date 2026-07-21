@@ -25,6 +25,8 @@ interface TableProps<T> {
   rowKey: (row: T) => string;
   loading?: boolean;
   onRowClick?: (row: T) => void;
+  /** Extra classes per row — for selection tints, rank highlights, muted rows. */
+  rowClassName?: (row: T) => string | undefined;
   emptyTitle?: string;
   emptyDescription?: string;
   emptyAction?: React.ReactNode;
@@ -41,6 +43,7 @@ export function Table<T>({
   rowKey,
   loading,
   onRowClick,
+  rowClassName,
   emptyTitle = "No records found",
   emptyDescription,
   emptyAction,
@@ -134,7 +137,8 @@ export function Table<T>({
                   onClick={onRowClick ? () => onRowClick(row) : undefined}
                   className={cn(
                     "border-b border-border last:border-0 transition-colors",
-                    onRowClick && "cursor-pointer hover:bg-surface-hover"
+                    onRowClick && "cursor-pointer hover:bg-surface-hover",
+                    rowClassName?.(row)
                   )}
                 >
                   {columns.map((col) => (

@@ -1,6 +1,28 @@
 "use client";
+
 import React, { useState } from "react";
-import { Search, Download, Star, TrendingUp, Award, Target, Users, ChevronUp, ChevronDown, Minus } from "lucide-react";
+import {
+  Search,
+  Download,
+  Star,
+  TrendingUp,
+  Award,
+  Target,
+  ChevronUp,
+  ChevronDown,
+  Minus,
+} from "lucide-react";
+import {
+  Avatar,
+  Badge,
+  Button,
+  Input,
+  PageHeader,
+  Select,
+  StatCard,
+  Table,
+  type Column,
+} from "@/components/ui";
 
 const staffPerformance = [
   { id: "ST001", name: "Mr. Rajesh Sharma",  role: "Principal",         dept: "Administration", q1: 92, q2: 94, q3: 96, rating: 4.8, trend: "up",   grade: "A+" },
@@ -24,231 +46,254 @@ const teacherPerformance = [
   { id: "T008", name: "Mr. Vikram Gupta",   subject: "Phy. Education",   classes: "6-12",     q1: 80, q2: 82, q3: 83, rating: 4.1, trend: "up",   grade: "B+" },
 ];
 
-const gradeColor: Record<string, { bg: string; color: string }> = {
-  "A+": { bg: "#f0fdf4", color: "#16a34a" },
-  "A":  { bg: "#eff6ff", color: "#2563eb" },
-  "B+": { bg: "#fffbeb", color: "#d97706" },
-  "B":  { bg: "#fff7ed", color: "#ea580c" },
-  "C":  { bg: "#fff1f2", color: "#e11d48" },
+type StaffPerf = (typeof staffPerformance)[number];
+type TeacherPerf = (typeof teacherPerformance)[number];
+type PerfRow = StaffPerf | TeacherPerf;
+
+type BadgeVariant = "default" | "success" | "warning" | "danger" | "info";
+
+const GRADE_META: Record<string, { variant: BadgeVariant; dot: string }> = {
+  "A+": { variant: "success", dot: "bg-success" },
+  A: { variant: "info", dot: "bg-info" },
+  "B+": { variant: "warning", dot: "bg-warning" },
+  B: { variant: "default", dot: "bg-subtle" },
+  C: { variant: "danger", dot: "bg-danger" },
 };
 
-const deptColors: Record<string, { bg: string; color: string }> = {
-  Administration: { bg: "#eff6ff", color: "#2563eb" },
-  Finance:        { bg: "#f0fdf4", color: "#16a34a" },
-  HR:             { bg: "#fdf4ff", color: "#9333ea" },
-  IT:             { bg: "#ecfeff", color: "#0891b2" },
-  Library:        { bg: "#fffbeb", color: "#d97706" },
-  Security:       { bg: "#fff1f2", color: "#e11d48" },
-  Canteen:        { bg: "#fff7ed", color: "#ea580c" },
+/** Departments and subjects both fall back to the neutral badge. */
+const CATEGORY_VARIANT: Record<string, BadgeVariant> = {
+  Administration: "info",
+  Finance: "success",
+  HR: "default",
+  IT: "info",
+  Library: "warning",
+  Security: "danger",
+  Canteen: "warning",
+  Mathematics: "info",
+  Physics: "default",
+  English: "success",
+  History: "warning",
+  Chemistry: "default",
+  "Computer Science": "info",
+  Biology: "success",
+  "Phy. Education": "danger",
 };
 
-const subjectColors: Record<string, { bg: string; color: string }> = {
-  Mathematics:        { bg: "#eff6ff", color: "#2563eb" },
-  Physics:            { bg: "#f5f3ff", color: "#7c3aed" },
-  English:            { bg: "#f0fdf4", color: "#16a34a" },
-  History:            { bg: "#fffbeb", color: "#d97706" },
-  Chemistry:          { bg: "#fdf4ff", color: "#9333ea" },
-  "Computer Science": { bg: "#ecfeff", color: "#0891b2" },
-  Biology:            { bg: "#f0fdf4", color: "#059669" },
-  "Phy. Education":   { bg: "#fff1f2", color: "#e11d48" },
-};
-
-const tabs = ["Staff", "Teachers"] as const;
+const isStaffRow = (p: PerfRow): p is StaffPerf => "dept" in p;
 
 function TrendIcon({ trend }: { trend: string }) {
-  if (trend === "up")   return <ChevronUp size={14} color="#16a34a" />;
-  if (trend === "down") return <ChevronDown size={14} color="#e11d48" />;
-  return <Minus size={14} color="#94a3b8" />;
+  if (trend === "up") return <ChevronUp className="size-4 text-success" />;
+  if (trend === "down") return <ChevronDown className="size-4 text-danger" />;
+  return <Minus className="size-4 text-subtle" />;
+}
+
+function trendClass(trend: string) {
+  if (trend === "up") return "text-success";
+  if (trend === "down") return "text-danger";
+  return "text-subtle";
+}
+
+function scoreTone(score: number) {
+  if (score >= 90) return { bar: "bg-success", text: "text-success" };
+  if (score >= 80) return { bar: "bg-info", text: "text-info" };
+  if (score >= 70) return { bar: "bg-warning", text: "text-warning" };
+  return { bar: "bg-danger", text: "text-danger" };
 }
 
 function ScoreBar({ score }: { score: number }) {
-  const color = score >= 90 ? "#16a34a" : score >= 80 ? "#2563eb" : score >= 70 ? "#d97706" : "#e11d48";
+  const tone = scoreTone(score);
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-      <div style={{ width: "80px", height: "6px", background: "#f1f5f9", borderRadius: "99px", overflow: "hidden" }}>
-        <div style={{ height: "100%", width: `${score}%`, background: color, borderRadius: "99px" }} />
+    <div className="flex items-center gap-2">
+      <div className="h-1.5 w-20 overflow-hidden rounded-full bg-surface-hover">
+        {/* Width is genuinely data-driven — the only inline style on this page. */}
+        <div className={`h-full rounded-full ${tone.bar}`} style={{ width: `${score}%` }} />
       </div>
-      <span style={{ fontSize: "12px", fontWeight: 700, color }}>{score}</span>
+      <span className={`text-xs font-semibold ${tone.text}`}>{score}</span>
     </div>
   );
 }
 
+const tabs = ["Staff", "Teachers"] as const;
+
 export default function PerformancePage() {
-  const [tab, setTab]     = useState<typeof tabs[number]>("Staff");
+  const [tab, setTab] = useState<(typeof tabs)[number]>("Staff");
   const [search, setSearch] = useState("");
   const [gradeFilter, setGradeFilter] = useState("All");
 
-  const data = tab === "Staff" ? staffPerformance : teacherPerformance;
+  const data: PerfRow[] = tab === "Staff" ? staffPerformance : teacherPerformance;
 
-  const filtered = data.filter(p => {
-    const matchSearch = p.name.toLowerCase().includes(search.toLowerCase()) ||
-                        p.id.toLowerCase().includes(search.toLowerCase());
-    const matchGrade  = gradeFilter === "All" || p.grade === gradeFilter;
+  const filtered = data.filter((p) => {
+    const matchSearch =
+      p.name.toLowerCase().includes(search.toLowerCase()) ||
+      p.id.toLowerCase().includes(search.toLowerCase());
+    const matchGrade = gradeFilter === "All" || p.grade === gradeFilter;
     return matchSearch && matchGrade;
   });
 
-  const avgScore  = Math.round(data.reduce((s, p) => s + p.q3, 0) / data.length);
-  const topPerf   = data.filter(p => p.grade === "A+" || p.grade === "A").length;
-  const improving = data.filter(p => p.trend === "up").length;
+  const avgScore = Math.round(data.reduce((s, p) => s + p.q3, 0) / data.length);
+  const topPerf = data.filter((p) => p.grade === "A+" || p.grade === "A").length;
+  const improving = data.filter((p) => p.trend === "up").length;
   const avgRating = (data.reduce((s, p) => s + p.rating, 0) / data.length).toFixed(1);
 
+  const columns: Column<PerfRow>[] = [
+    {
+      key: "name",
+      header: "Name",
+      sortable: true,
+      render: (p) => (
+        <div className="flex items-center gap-3">
+          <Avatar name={p.name} size="sm" />
+          <div className="min-w-0">
+            <p className="truncate font-medium text-text">{p.name}</p>
+            <p className="truncate text-xs text-subtle">
+              {isStaffRow(p) ? p.role : `Class ${p.classes}`}
+            </p>
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: "category",
+      header: tab === "Staff" ? "Department" : "Subject",
+      sortable: true,
+      sortValue: (p) => (isStaffRow(p) ? p.dept : p.subject),
+      render: (p) => {
+        const label = isStaffRow(p) ? p.dept : p.subject;
+        return <Badge variant={CATEGORY_VARIANT[label] ?? "default"}>{label}</Badge>;
+      },
+    },
+    { key: "q1", header: "Q1 Score", sortable: true, render: (p) => <ScoreBar score={p.q1} /> },
+    { key: "q2", header: "Q2 Score", sortable: true, render: (p) => <ScoreBar score={p.q2} /> },
+    { key: "q3", header: "Q3 Score", sortable: true, render: (p) => <ScoreBar score={p.q3} /> },
+    {
+      key: "rating",
+      header: "Rating",
+      sortable: true,
+      align: "right",
+      render: (p) => (
+        <span className="inline-flex items-center gap-1 font-medium text-text">
+          <Star className="size-3.5 fill-warning text-warning" />
+          {p.rating}
+        </span>
+      ),
+    },
+    {
+      key: "trend",
+      header: "Trend",
+      sortable: true,
+      render: (p) => (
+        <span className={`inline-flex items-center gap-1 text-xs font-medium capitalize ${trendClass(p.trend)}`}>
+          <TrendIcon trend={p.trend} />
+          {p.trend}
+        </span>
+      ),
+    },
+    {
+      key: "grade",
+      header: "Grade",
+      sortable: true,
+      render: (p) => (
+        <Badge variant={GRADE_META[p.grade]?.variant ?? "default"} className="font-semibold">
+          {p.grade}
+        </Badge>
+      ),
+    },
+  ];
+
   return (
-    <div style={{ maxWidth: "1600px", display: "flex", flexDirection: "column", gap: "24px" }}>
+    <div className="flex flex-col gap-5">
+      <PageHeader
+        title="Performance"
+        description="Track and evaluate staff & teacher performance"
+        actions={
+          <Button variant="outline">
+            <Download className="size-4" />
+            Export Report
+          </Button>
+        }
+      />
 
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div>
-          <h1 style={{ fontSize: "22px", fontWeight: 800, color: "#0f172a", letterSpacing: "-0.3px" }}>Performance</h1>
-          <p style={{ fontSize: "13px", color: "#94a3b8", marginTop: "4px" }}>Track and evaluate staff & teacher performance</p>
-        </div>
-        <button style={{ display: "flex", alignItems: "center", gap: "6px", padding: "9px 16px", borderRadius: "12px", border: "1px solid #e2e8f0", background: "#fff", fontSize: "13px", fontWeight: 600, color: "#334155", cursor: "pointer" }}>
-          <Download size={14} /> Export Report
-        </button>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard label="Avg Score" value={avgScore} suffix="%" icon={Target} tone="indigo" />
+        <StatCard label="Top Performers" value={topPerf} icon={Award} tone="emerald" />
+        <StatCard label="Improving" value={improving} icon={TrendingUp} tone="cyan" />
+        <StatCard label="Avg Rating" value={avgRating} icon={Star} tone="amber" />
       </div>
 
-      {/* Stats */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "16px" }}>
-        {[
-          { label: "Avg Score",      value: `${avgScore}%`, icon: <Target size={22} />,    color: "#6366f1", bg: "#eff6ff" },
-          { label: "Top Performers", value: topPerf,        icon: <Award size={22} />,     color: "#16a34a", bg: "#f0fdf4" },
-          { label: "Improving",      value: improving,      icon: <TrendingUp size={22} />,color: "#0891b2", bg: "#ecfeff" },
-          { label: "Avg Rating",     value: avgRating,      icon: <Star size={22} />,      color: "#d97706", bg: "#fffbeb" },
-        ].map(s => (
-          <div key={s.label} style={{ background: "#fff", borderRadius: "16px", border: "1px solid #f1f5f9", padding: "20px", boxShadow: "0 1px 4px rgba(0,0,0,0.04)", display: "flex", alignItems: "center", gap: "14px" }}>
-            <div style={{ width: "48px", height: "48px", borderRadius: "14px", background: s.bg, display: "flex", alignItems: "center", justifyContent: "center", color: s.color, flexShrink: 0 }}>{s.icon}</div>
-            <div>
-              <p style={{ fontSize: "12px", color: "#64748b", fontWeight: 500 }}>{s.label}</p>
-              <p style={{ fontSize: "28px", fontWeight: 800, color: s.color, lineHeight: 1.1, letterSpacing: "-0.5px" }}>{s.value}</p>
-            </div>
-          </div>
-        ))}
+      <div className="flex flex-wrap items-center gap-3">
+        <div
+          role="tablist"
+          aria-label="Performance views"
+          className="inline-flex gap-1 rounded-md bg-surface-sunken p-1"
+        >
+          {tabs.map((t) => (
+            <button
+              key={t}
+              role="tab"
+              aria-selected={tab === t}
+              onClick={() => {
+                setTab(t);
+                setSearch("");
+                setGradeFilter("All");
+              }}
+              className={`focus-ring rounded-sm px-4 py-1.5 text-xs font-medium transition-colors ${
+                tab === t ? "bg-surface-raised text-text shadow-sm" : "text-muted hover:text-text"
+              }`}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
+
+        <div className="min-w-60 flex-1">
+          <Input
+            type="search"
+            placeholder="Search by name or ID…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            icon={<Search className="size-4" />}
+            aria-label="Search performance records"
+          />
+        </div>
+
+        <div className="w-40">
+          <Select
+            value={gradeFilter}
+            onChange={(e) => setGradeFilter(e.target.value)}
+            options={[
+              { label: "All Grades", value: "All" },
+              ...["A+", "A", "B+", "B", "C"].map((g) => ({ label: g, value: g })),
+            ]}
+            aria-label="Filter by grade"
+          />
+        </div>
+
+        <p className="ml-auto text-xs text-subtle">{filtered.length} records</p>
       </div>
 
-      {/* Table Card */}
-      <div style={{ background: "#fff", borderRadius: "16px", border: "1px solid #f1f5f9", boxShadow: "0 1px 4px rgba(0,0,0,0.04)", overflow: "hidden" }}>
+      <Table
+        columns={columns}
+        rows={filtered}
+        rowKey={(p) => p.id}
+        emptyTitle="No records found"
+        emptyDescription="Try adjusting your filters"
+      />
 
-        {/* Toolbar */}
-        <div style={{ padding: "16px 20px", borderBottom: "1px solid #f8fafc", display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
-          <div style={{ display: "flex", background: "#f8fafc", borderRadius: "12px", padding: "4px", gap: "2px" }}>
-            {tabs.map(t => (
-              <button key={t} onClick={() => { setTab(t); setSearch(""); setGradeFilter("All"); }} style={{
-                padding: "7px 18px", borderRadius: "9px", border: "none", cursor: "pointer",
-                fontSize: "12px", fontWeight: 600, transition: "all 0.15s",
-                background: tab === t ? "#fff" : "transparent",
-                color: tab === t ? "#0f172a" : "#64748b",
-                boxShadow: tab === t ? "0 1px 4px rgba(0,0,0,0.08)" : "none",
-              }}>{t}</button>
-            ))}
-          </div>
-
-          <div style={{ position: "relative", flex: 1, maxWidth: "280px" }}>
-            <Search size={14} color="#94a3b8" style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)" }} />
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name or ID..."
-              style={{ width: "100%", paddingLeft: "36px", paddingRight: "16px", paddingTop: "9px", paddingBottom: "9px", fontSize: "13px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "12px", outline: "none", color: "#334155", fontFamily: "inherit" }}
-              onFocus={e => { e.target.style.borderColor = "#6366f1"; e.target.style.boxShadow = "0 0 0 3px rgba(99,102,241,0.1)"; }}
-              onBlur={e  => { e.target.style.borderColor = "#e2e8f0"; e.target.style.boxShadow = "none"; }}
-            />
-          </div>
-
-          <select value={gradeFilter} onChange={e => setGradeFilter(e.target.value)}
-            style={{ padding: "9px 14px", fontSize: "13px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "12px", outline: "none", color: "#334155", cursor: "pointer" }}>
-            <option value="All">All Grades</option>
-            {["A+", "A", "B+", "B", "C"].map(g => <option key={g}>{g}</option>)}
-          </select>
-
-          <p style={{ marginLeft: "auto", fontSize: "12px", color: "#94a3b8" }}>{filtered.length} records</p>
-        </div>
-
-        {/* Table */}
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr style={{ background: "#fafafa", borderBottom: "1px solid #f1f5f9" }}>
-                {["Name", tab === "Staff" ? "Department" : "Subject", "Q1 Score", "Q2 Score", "Q3 Score", "Rating", "Trend", "Grade"].map(h => (
-                  <th key={h} style={{ padding: "12px 20px", textAlign: "left", fontSize: "11px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em", whiteSpace: "nowrap" }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((p, i) => {
-                const badge = tab === "Staff"
-                  ? (deptColors[(p as typeof staffPerformance[0]).dept] ?? { bg: "#f8fafc", color: "#64748b" })
-                  : (subjectColors[(p as typeof teacherPerformance[0]).subject] ?? { bg: "#f8fafc", color: "#64748b" });
-                const gc = gradeColor[p.grade] ?? { bg: "#f8fafc", color: "#64748b" };
-                const label = tab === "Staff"
-                  ? (p as typeof staffPerformance[0]).dept
-                  : (p as typeof teacherPerformance[0]).subject;
-
-                return (
-                  <tr key={p.id}
-                    style={{ borderBottom: i < filtered.length - 1 ? "1px solid #f8fafc" : "none", transition: "background 0.15s" }}
-                    onMouseEnter={ev => (ev.currentTarget as HTMLTableRowElement).style.background = "#fafafa"}
-                    onMouseLeave={ev => (ev.currentTarget as HTMLTableRowElement).style.background = "transparent"}
-                  >
-                    <td style={{ padding: "14px 20px" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                        <div style={{ width: "38px", height: "38px", borderRadius: "12px", background: "linear-gradient(135deg,#6366f1,#8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: "14px", fontWeight: 700, flexShrink: 0 }}>
-                          {p.name.charAt(0)}
-                        </div>
-                        <div>
-                          <p style={{ fontSize: "13px", fontWeight: 600, color: "#0f172a" }}>{p.name}</p>
-                          <p style={{ fontSize: "11px", color: "#94a3b8", marginTop: "1px" }}>
-                            {tab === "Staff" ? (p as typeof staffPerformance[0]).role : `Class ${(p as typeof teacherPerformance[0]).classes}`}
-                          </p>
-                        </div>
-                      </div>
-                    </td>
-                    <td style={{ padding: "14px 20px" }}>
-                      <span style={{ fontSize: "12px", fontWeight: 600, padding: "4px 10px", borderRadius: "20px", background: badge.bg, color: badge.color }}>{label}</span>
-                    </td>
-                    <td style={{ padding: "14px 20px" }}><ScoreBar score={p.q1} /></td>
-                    <td style={{ padding: "14px 20px" }}><ScoreBar score={p.q2} /></td>
-                    <td style={{ padding: "14px 20px" }}><ScoreBar score={p.q3} /></td>
-                    <td style={{ padding: "14px 20px" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                        <Star size={13} color="#f59e0b" fill="#f59e0b" />
-                        <span style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a" }}>{p.rating}</span>
-                      </div>
-                    </td>
-                    <td style={{ padding: "14px 20px" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                        <TrendIcon trend={p.trend} />
-                        <span style={{ fontSize: "12px", fontWeight: 600, color: p.trend === "up" ? "#16a34a" : p.trend === "down" ? "#e11d48" : "#94a3b8", textTransform: "capitalize" }}>{p.trend}</span>
-                      </div>
-                    </td>
-                    <td style={{ padding: "14px 20px" }}>
-                      <span style={{ fontSize: "13px", fontWeight: 800, padding: "5px 12px", borderRadius: "20px", background: gc.bg, color: gc.color }}>{p.grade}</span>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          {filtered.length === 0 && (
-            <div style={{ textAlign: "center", padding: "48px", color: "#94a3b8" }}>
-              <Users size={40} color="#e2e8f0" style={{ margin: "0 auto 12px" }} />
-              <p style={{ fontSize: "14px", fontWeight: 600 }}>No records found</p>
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div style={{ padding: "14px 20px", borderTop: "1px solid #f8fafc", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <p style={{ fontSize: "12px", color: "#94a3b8" }}>
-            Showing <strong style={{ color: "#334155" }}>{filtered.length}</strong> of <strong style={{ color: "#334155" }}>{data.length}</strong> records
-          </p>
-          <div style={{ display: "flex", gap: "16px" }}>
-            {["A+", "A", "B+", "B"].map(g => {
-              const gc = gradeColor[g];
-              const count = filtered.filter(p => p.grade === g).length;
-              return (
-                <div key={g} style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-                  <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: gc.color, display: "inline-block" }} />
-                  <span style={{ fontSize: "12px", color: "#64748b" }}>{g}: <strong style={{ color: "#0f172a" }}>{count}</strong></span>
-                </div>
-              );
-            })}
-          </div>
+      <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted">
+        <p>
+          Showing <strong className="font-semibold text-text">{filtered.length}</strong> of{" "}
+          <strong className="font-semibold text-text">{data.length}</strong> records
+        </p>
+        <div className="flex flex-wrap items-center gap-4">
+          {["A+", "A", "B+", "B"].map((g) => {
+            const count = filtered.filter((p) => p.grade === g).length;
+            return (
+              <span key={g} className="flex items-center gap-1.5">
+                <span className={`size-2 rounded-full ${GRADE_META[g].dot}`} />
+                {g}: <strong className="font-semibold text-text">{count}</strong>
+              </span>
+            );
+          })}
         </div>
       </div>
     </div>

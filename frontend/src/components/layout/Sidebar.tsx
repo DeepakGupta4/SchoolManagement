@@ -277,10 +277,10 @@ export function Sidebar() {
           onScroll={(e) => {
             savedScroll.current = e.currentTarget.scrollTop;
           }}
-          className={cn(
-            "sidebar-scroll flex-1 overflow-y-auto overflow-x-hidden py-3",
-            isCollapsed && !isMobileOpen ? "px-3" : "px-3"
-          )}
+          // `min-h-0` is required: without it a flex-1 child grows to its
+          // content height instead of scrolling, pushing the collapse
+          // button off the bottom of the rail.
+          className="sidebar-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-3"
         >
           {visibleGroups.length === 0 && (
             <p className="px-2 py-6 text-center text-xs text-subtle">

@@ -1,6 +1,30 @@
 "use client";
-import React, { useState } from "react";
-import { Plus, Download, Calendar, Clock, Users, Edit, Trash2, Eye, Search } from "lucide-react";
+
+import React, { useMemo, useState } from "react";
+import {
+  Calendar,
+  CalendarCheck,
+  CalendarClock,
+  CheckCircle,
+  Clock,
+  Download,
+  Edit,
+  Eye,
+  PencilLine,
+  Plus,
+  Search,
+  Trash2,
+} from "lucide-react";
+import {
+  Badge,
+  Button,
+  Input,
+  PageHeader,
+  StatCard,
+  Table,
+  type Column,
+} from "@/components/ui";
+import { cn } from "@/lib/utils";
 
 const scheduleData = [
   { id: "EX001", exam: "Mid-Term Exam",   subject: "Mathematics",   class: "10-A", date: "Jul 28, 2025", time: "8:30 AM", duration: "3 hrs",  room: "Hall A", invigilator: "Dr. Priya Sharma",  totalMarks: 100, status: "upcoming" },
@@ -12,121 +36,226 @@ const scheduleData = [
   { id: "EX007", exam: "Practical",       subject: "Chemistry",     class: "12-A", date: "Jul 08, 2025", time: "9:00 AM", duration: "2 hrs",  room: "Chem Lab", invigilator: "Ms. Kavita Singh", totalMarks: 30,  status: "completed"},
 ];
 
-const statusConfig: Record<string, { bg: string; color: string }> = {
-  upcoming:  { bg: "#eff6ff", color: "#2563eb" },
-  ongoing:   { bg: "#fffbeb", color: "#d97706" },
-  completed: { bg: "#f0fdf4", color: "#16a34a" },
+type ScheduledExam = (typeof scheduleData)[number];
+type BadgeVariant = React.ComponentProps<typeof Badge>["variant"];
+
+const statusVariant: Record<string, BadgeVariant> = {
+  upcoming: "info",
+  ongoing: "warning",
+  completed: "success",
 };
+
+const tabs = ["All", "Upcoming", "Ongoing", "Completed"];
 
 export default function ExamSchedulePage() {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("All");
 
-  const filtered = scheduleData.filter(e => {
-    const matchFilter = filter === "All" || e.status === filter.toLowerCase();
-    const matchSearch = e.subject.toLowerCase().includes(search.toLowerCase()) || e.class.toLowerCase().includes(search.toLowerCase()) || e.exam.toLowerCase().includes(search.toLowerCase());
-    return matchFilter && matchSearch;
-  });
+  const filtered = useMemo(
+    () =>
+      scheduleData.filter((e) => {
+        const matchFilter = filter === "All" || e.status === filter.toLowerCase();
+        const q = search.toLowerCase();
+        const matchSearch =
+          e.subject.toLowerCase().includes(q) ||
+          e.class.toLowerCase().includes(q) ||
+          e.exam.toLowerCase().includes(q);
+        return matchFilter && matchSearch;
+      }),
+    [filter, search]
+  );
+
+  const columns: Column<ScheduledExam>[] = [
+    {
+      key: "exam",
+      header: "Exam",
+      sortable: true,
+      render: (e) => <span className="whitespace-nowrap font-medium text-text">{e.exam}</span>,
+    },
+    {
+      key: "subject",
+      header: "Subject",
+      sortable: true,
+      render: (e) => <span className="whitespace-nowrap text-text">{e.subject}</span>,
+    },
+    {
+      key: "class",
+      header: "Class",
+      sortable: true,
+      render: (e) => <Badge variant="info">{e.class}</Badge>,
+    },
+    {
+      key: "date",
+      header: "Date",
+      render: (e) => (
+        <span className="inline-flex items-center gap-1.5 whitespace-nowrap font-medium text-text">
+          <Calendar className="size-3 text-subtle" />
+          {e.date}
+        </span>
+      ),
+    },
+    {
+      key: "time",
+      header: "Time",
+      render: (e) => (
+        <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-muted">
+          <Clock className="size-3 text-subtle" />
+          {e.time}
+        </span>
+      ),
+    },
+    {
+      key: "duration",
+      header: "Duration",
+      render: (e) => <span className="whitespace-nowrap text-muted">{e.duration}</span>,
+    },
+    {
+      key: "room",
+      header: "Room",
+      sortable: true,
+      render: (e) => <span className="whitespace-nowrap text-muted">{e.room}</span>,
+    },
+    {
+      key: "invigilator",
+      header: "Invigilator",
+      sortable: true,
+      render: (e) => <span className="whitespace-nowrap text-text">{e.invigilator}</span>,
+    },
+    {
+      key: "totalMarks",
+      header: "Marks",
+      sortable: true,
+      align: "right",
+      render: (e) => (
+        <span className="whitespace-nowrap font-semibold text-text">
+          {e.totalMarks}
+          <span className="ml-0.5 text-xs font-normal text-subtle">pts</span>
+        </span>
+      ),
+    },
+    {
+      key: "status",
+      header: "Status",
+      sortable: true,
+      render: (e) => (
+        <Badge variant={statusVariant[e.status] ?? "default"} className="capitalize">
+          {e.status}
+        </Badge>
+      ),
+    },
+    {
+      key: "actions",
+      header: "",
+      align: "right",
+      render: (e) => (
+        <div className="flex items-center justify-end gap-1">
+          <button
+            aria-label={`View ${e.exam} — ${e.subject}`}
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+          >
+            <Eye className="size-4" />
+          </button>
+          <button
+            aria-label={`Edit ${e.exam} — ${e.subject}`}
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+          >
+            <Edit className="size-4" />
+          </button>
+          <button
+            aria-label={`Delete ${e.exam} — ${e.subject}`}
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-danger-soft hover:text-danger"
+          >
+            <Trash2 className="size-4" />
+          </button>
+        </div>
+      ),
+    },
+  ];
 
   return (
-    <div style={{ maxWidth: "1600px", display: "flex", flexDirection: "column", gap: "24px" }}>
+    <div className="flex flex-col gap-5">
+      <PageHeader
+        title="Exam Schedule"
+        description="View and manage all scheduled examinations"
+        actions={
+          <>
+            <Button variant="outline">
+              <Download className="size-4" />
+              Export
+            </Button>
+            <Button>
+              <Plus className="size-4" />
+              Add Exam
+            </Button>
+          </>
+        }
+      />
 
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div>
-          <p style={{ fontSize: "12px", color: "#6366f1", fontWeight: 600, marginBottom: "4px" }}>Examinations</p>
-          <h1 style={{ fontSize: "22px", fontWeight: 800, color: "#0f172a", letterSpacing: "-0.3px" }}>Exam Schedule</h1>
-          <p style={{ fontSize: "13px", color: "#94a3b8", marginTop: "4px" }}>View and manage all scheduled examinations</p>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          label="Total Scheduled"
+          value={scheduleData.length}
+          icon={CalendarCheck}
+          tone="indigo"
+        />
+        <StatCard
+          label="Upcoming"
+          value={scheduleData.filter((e) => e.status === "upcoming").length}
+          icon={CalendarClock}
+          tone="cyan"
+        />
+        <StatCard
+          label="Ongoing"
+          value={scheduleData.filter((e) => e.status === "ongoing").length}
+          icon={PencilLine}
+          tone="amber"
+        />
+        <StatCard
+          label="Completed"
+          value={scheduleData.filter((e) => e.status === "completed").length}
+          icon={CheckCircle}
+          tone="emerald"
+        />
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="inline-flex gap-1 rounded-md bg-surface-sunken p-1">
+          {tabs.map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setFilter(tab)}
+              aria-pressed={filter === tab}
+              className={cn(
+                "focus-ring rounded-sm px-3.5 py-1.5 text-xs font-medium transition-colors",
+                filter === tab
+                  ? "bg-surface-raised text-text shadow-sm"
+                  : "text-muted hover:text-text"
+              )}
+            >
+              {tab}
+            </button>
+          ))}
         </div>
-        <div style={{ display: "flex", gap: "10px" }}>
-          <button style={{ display: "flex", alignItems: "center", gap: "6px", padding: "9px 16px", borderRadius: "12px", border: "1px solid #e2e8f0", background: "#fff", fontSize: "13px", fontWeight: 600, color: "#334155", cursor: "pointer" }}>
-            <Download size={14} /> Export
-          </button>
-          <button style={{ display: "flex", alignItems: "center", gap: "6px", padding: "9px 18px", borderRadius: "12px", border: "none", background: "linear-gradient(135deg,#6366f1,#8b5cf6)", fontSize: "13px", fontWeight: 600, color: "#fff", cursor: "pointer", boxShadow: "0 4px 12px rgba(99,102,241,0.35)" }}>
-            <Plus size={14} /> Add Exam
-          </button>
+
+        <div className="min-w-60 max-w-xs flex-1">
+          <Input
+            type="search"
+            placeholder="Search exams…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            icon={<Search className="size-4" />}
+            aria-label="Search scheduled exams"
+          />
         </div>
       </div>
 
-      {/* Stats */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "16px" }}>
-        {[
-          { label: "Total Scheduled", value: scheduleData.length,                                    icon: "📅", color: "#6366f1", bg: "#eff6ff" },
-          { label: "Upcoming",        value: scheduleData.filter(e => e.status === "upcoming").length, icon: "⏰", color: "#2563eb", bg: "#dbeafe" },
-          { label: "Ongoing",         value: scheduleData.filter(e => e.status === "ongoing").length,  icon: "📝", color: "#d97706", bg: "#fffbeb" },
-          { label: "Completed",       value: scheduleData.filter(e => e.status === "completed").length,icon: "✅", color: "#16a34a", bg: "#f0fdf4" },
-        ].map(s => (
-          <div key={s.label} style={{ background: "#fff", borderRadius: "16px", border: "1px solid #f1f5f9", padding: "20px", boxShadow: "0 1px 4px rgba(0,0,0,0.04)", display: "flex", alignItems: "center", gap: "14px" }}>
-            <div style={{ width: "48px", height: "48px", borderRadius: "14px", background: s.bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "22px" }}>{s.icon}</div>
-            <div>
-              <p style={{ fontSize: "12px", color: "#64748b", fontWeight: 500 }}>{s.label}</p>
-              <p style={{ fontSize: "28px", fontWeight: 800, color: s.color, lineHeight: 1.1, letterSpacing: "-0.5px" }}>{s.value}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Table */}
-      <div style={{ background: "#fff", borderRadius: "16px", border: "1px solid #f1f5f9", boxShadow: "0 1px 4px rgba(0,0,0,0.04)", overflow: "hidden" }}>
-        <div style={{ padding: "16px 20px", borderBottom: "1px solid #f8fafc", display: "flex", alignItems: "center", gap: "12px" }}>
-          <div style={{ display: "flex", background: "#f8fafc", borderRadius: "12px", padding: "4px", gap: "2px" }}>
-            {["All", "Upcoming", "Ongoing", "Completed"].map(tab => (
-              <button key={tab} onClick={() => setFilter(tab)} style={{ padding: "7px 14px", borderRadius: "9px", border: "none", cursor: "pointer", fontSize: "12px", fontWeight: 600, background: filter === tab ? "#fff" : "transparent", color: filter === tab ? "#0f172a" : "#64748b", boxShadow: filter === tab ? "0 1px 4px rgba(0,0,0,0.08)" : "none", transition: "all 0.15s" }}>{tab}</button>
-            ))}
-          </div>
-          <div style={{ position: "relative", flex: 1, maxWidth: "280px" }}>
-            <Search size={14} color="#94a3b8" style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)" }} />
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search exams..."
-              style={{ width: "100%", paddingLeft: "36px", paddingRight: "16px", paddingTop: "9px", paddingBottom: "9px", fontSize: "13px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "12px", outline: "none", color: "#334155", fontFamily: "inherit" }} />
-          </div>
-        </div>
-
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr style={{ background: "#fafafa", borderBottom: "1px solid #f1f5f9" }}>
-              {["Exam", "Subject", "Class", "Date", "Time", "Duration", "Room", "Invigilator", "Marks", "Status", "Actions"].map(h => (
-                <th key={h} style={{ padding: "12px 20px", textAlign: "left", fontSize: "11px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em", whiteSpace: "nowrap" }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((e, i) => {
-              const sc = statusConfig[e.status];
-              return (
-                <tr key={e.id} style={{ borderBottom: i < filtered.length - 1 ? "1px solid #f8fafc" : "none" }}
-                  onMouseEnter={ev => (ev.currentTarget as HTMLTableRowElement).style.background = "#fafafa"}
-                  onMouseLeave={ev => (ev.currentTarget as HTMLTableRowElement).style.background = "transparent"}>
-                  <td style={{ padding: "14px 20px", fontSize: "13px", fontWeight: 600, color: "#0f172a" }}>{e.exam}</td>
-                  <td style={{ padding: "14px 20px", fontSize: "13px", color: "#334155" }}>{e.subject}</td>
-                  <td style={{ padding: "14px 20px" }}><span style={{ fontSize: "12px", fontWeight: 600, padding: "4px 10px", borderRadius: "20px", background: "#eff6ff", color: "#2563eb" }}>{e.class}</span></td>
-                  <td style={{ padding: "14px 20px" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "12px", color: "#334155", fontWeight: 600 }}><Calendar size={12} color="#94a3b8" />{e.date}</div>
-                  </td>
-                  <td style={{ padding: "14px 20px" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "12px", color: "#64748b" }}><Clock size={11} color="#94a3b8" />{e.time}</div>
-                  </td>
-                  <td style={{ padding: "14px 20px", fontSize: "12px", color: "#64748b" }}>{e.duration}</td>
-                  <td style={{ padding: "14px 20px", fontSize: "12px", color: "#64748b" }}>{e.room}</td>
-                  <td style={{ padding: "14px 20px", fontSize: "12px", color: "#334155" }}>{e.invigilator}</td>
-                  <td style={{ padding: "14px 20px" }}><span style={{ fontSize: "14px", fontWeight: 800, color: "#0f172a" }}>{e.totalMarks}</span><span style={{ fontSize: "11px", color: "#94a3b8", marginLeft: "2px" }}>pts</span></td>
-                  <td style={{ padding: "14px 20px" }}><span style={{ fontSize: "11px", fontWeight: 700, padding: "4px 10px", borderRadius: "20px", background: sc.bg, color: sc.color, textTransform: "capitalize" }}>{e.status}</span></td>
-                  <td style={{ padding: "14px 20px" }}>
-                    <div style={{ display: "flex", gap: "4px" }}>
-                      {[{ Icon: Eye, hoverBg: "#eff6ff", color: "#2563eb" }, { Icon: Edit, hoverBg: "#f0fdf4", color: "#16a34a" }, { Icon: Trash2, hoverBg: "#fff1f2", color: "#e11d48" }].map(({ Icon, hoverBg, color }, idx) => (
-                        <button key={idx} style={{ padding: "7px", borderRadius: "9px", border: "none", background: "transparent", cursor: "pointer", color: "#94a3b8", display: "flex" }}
-                          onMouseEnter={ev => { (ev.currentTarget as HTMLButtonElement).style.background = hoverBg; (ev.currentTarget as HTMLButtonElement).style.color = color; }}
-                          onMouseLeave={ev => { (ev.currentTarget as HTMLButtonElement).style.background = "transparent"; (ev.currentTarget as HTMLButtonElement).style.color = "#94a3b8"; }}>
-                          <Icon size={14} />
-                        </button>
-                      ))}
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      <Table
+        columns={columns}
+        rows={filtered}
+        rowKey={(e) => e.id}
+        emptyTitle="No scheduled exams found"
+        emptyDescription="Try adjusting your filters"
+      />
     </div>
   );
 }

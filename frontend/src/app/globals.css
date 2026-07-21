@@ -147,10 +147,12 @@
   --font-sans: var(--font-inter), system-ui, sans-serif;
 }
 
+/* NOTE: never add `padding: 0` or `margin: 0` here. This block is unlayered,
+   and unlayered CSS outranks Tailwind's `@layer utilities` — it would
+   silently kill every padding and margin utility in the app. Preflight
+   already resets both from inside @layer base, where utilities still win. */
 * {
   box-sizing: border-box;
-  padding: 0;
-  margin: 0;
 }
 
 html,

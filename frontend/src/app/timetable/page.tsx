@@ -1,6 +1,9 @@
 "use client";
+
 import React, { useState } from "react";
 import { ChevronLeft, ChevronRight, Plus, Download, Clock } from "lucide-react";
+import { Button, Card, CardContent, PageHeader } from "@/components/ui";
+import { cn } from "@/lib/utils";
 
 const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const periods = [
@@ -16,18 +19,23 @@ const periods = [
   { id: 10, time: "2:15 - 3:00" },
 ];
 
-const subjectColors: Record<string, { bg: string; color: string; border: string }> = {
-  Mathematics:         { bg: "#eff6ff", color: "#2563eb", border: "#bfdbfe" },
-  Physics:             { bg: "#f5f3ff", color: "#7c3aed", border: "#ddd6fe" },
-  Chemistry:           { bg: "#fdf4ff", color: "#9333ea", border: "#f0abfc" },
-  Biology:             { bg: "#f0fdf4", color: "#16a34a", border: "#bbf7d0" },
-  English:             { bg: "#fff7ed", color: "#c2410c", border: "#fed7aa" },
-  History:             { bg: "#fffbeb", color: "#d97706", border: "#fde68a" },
-  Geography:           { bg: "#ecfdf5", color: "#059669", border: "#a7f3d0" },
-  "Computer Science":  { bg: "#ecfeff", color: "#0891b2", border: "#a5f3fc" },
-  "Physical Education":{ bg: "#fff1f2", color: "#e11d48", border: "#fecdd3" },
-  Hindi:               { bg: "#fefce8", color: "#ca8a04", border: "#fef08a" },
-  "Free Period":       { bg: "#f8fafc", color: "#94a3b8", border: "#e2e8f0" },
+/**
+ * Subjects are keyed onto the semantic status palette instead of bespoke hex.
+ * The tile text colour drives the legend dot too (`bg-current`), so a subject
+ * only ever needs one entry here.
+ */
+const subjectTone: Record<string, string> = {
+  Mathematics: "bg-primary-soft text-primary-text border-primary",
+  Physics: "bg-info-soft text-info-text border-info",
+  Chemistry: "bg-success-soft text-success-text border-success",
+  Biology: "bg-warning-soft text-warning-text border-warning",
+  English: "bg-danger-soft text-danger-text border-danger",
+  History: "bg-primary-soft text-primary-text border-primary",
+  Geography: "bg-info-soft text-info-text border-info",
+  "Computer Science": "bg-success-soft text-success-text border-success",
+  "Physical Education": "bg-warning-soft text-warning-text border-warning",
+  Hindi: "bg-danger-soft text-danger-text border-danger",
+  "Free Period": "bg-surface-hover text-muted border-border",
 };
 
 type TimetableEntry = { subject: string; teacher: string } | null;
@@ -49,85 +57,103 @@ export default function TimetablePage() {
   const [highlightDay, setHighlightDay] = useState<string | null>(days[todayIndex] ?? "Monday");
 
   return (
-    <div style={{ maxWidth: "1600px", display: "flex", flexDirection: "column", gap: "24px" }}>
+    <div className="flex flex-col gap-5">
+      <PageHeader
+        title="Timetable"
+        description="Weekly class schedule & period management"
+        actions={
+          <>
+            <Button variant="outline">
+              <Download className="size-4" />
+              Export PDF
+            </Button>
+            <Button>
+              <Plus className="size-4" />
+              Edit Timetable
+            </Button>
+          </>
+        }
+      />
 
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div>
-          <h1 style={{ fontSize: "22px", fontWeight: 800, color: "#0f172a", letterSpacing: "-0.3px" }}>Timetable</h1>
-          <p style={{ fontSize: "13px", color: "#94a3b8", marginTop: "4px" }}>Weekly class schedule & period management</p>
-        </div>
-        <div style={{ display: "flex", gap: "10px" }}>
-          <button style={{ display: "flex", alignItems: "center", gap: "6px", padding: "9px 16px", borderRadius: "12px", border: "1px solid #e2e8f0", background: "#fff", fontSize: "13px", fontWeight: 600, color: "#334155", cursor: "pointer" }}>
-            <Download size={14} /> Export PDF
-          </button>
-          <button style={{ display: "flex", alignItems: "center", gap: "6px", padding: "9px 18px", borderRadius: "12px", border: "none", background: "linear-gradient(135deg,#6366f1,#8b5cf6)", fontSize: "13px", fontWeight: 600, color: "#fff", cursor: "pointer", boxShadow: "0 4px 12px rgba(99,102,241,0.35)" }}>
-            <Plus size={14} /> Edit Timetable
-          </button>
-        </div>
-      </div>
-
-      {/* Controls */}
-      <div style={{ background: "#fff", borderRadius: "16px", border: "1px solid #f1f5f9", padding: "16px 20px", boxShadow: "0 1px 4px rgba(0,0,0,0.04)", display: "flex", alignItems: "center", gap: "16px", flexWrap: "wrap" }}>
-        {/* Class selector */}
-        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <span style={{ fontSize: "13px", fontWeight: 600, color: "#64748b" }}>Class:</span>
-          <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-            {classes.map(c => (
-              <button key={c} onClick={() => setSelectedClass(c)} style={{
-                padding: "6px 14px", borderRadius: "9px", border: "none", cursor: "pointer",
-                fontSize: "12px", fontWeight: 700, transition: "all 0.15s",
-                background: selectedClass === c ? "linear-gradient(135deg,#6366f1,#8b5cf6)" : "#f8fafc",
-                color: selectedClass === c ? "#fff" : "#64748b",
-                boxShadow: selectedClass === c ? "0 2px 8px rgba(99,102,241,0.3)" : "none",
-              }}>
-                {c}
-              </button>
-            ))}
+      <Card>
+        <CardContent className="flex flex-wrap items-center gap-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-medium text-muted">Class:</span>
+            <div className="flex flex-wrap gap-1.5">
+              {classes.map((c) => (
+                <Button
+                  key={c}
+                  size="sm"
+                  variant={selectedClass === c ? "primary" : "secondary"}
+                  onClick={() => setSelectedClass(c)}
+                >
+                  {c}
+                </Button>
+              ))}
+            </div>
           </div>
-        </div>
 
-        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "8px" }}>
-          <button style={{ padding: "7px", borderRadius: "9px", border: "1px solid #e2e8f0", background: "#fff", cursor: "pointer" }}><ChevronLeft size={15} color="#64748b" /></button>
-          <span style={{ fontSize: "13px", fontWeight: 600, color: "#334155" }}>Week of Jul 14 – Jul 19, 2025</span>
-          <button style={{ padding: "7px", borderRadius: "9px", border: "1px solid #e2e8f0", background: "#fff", cursor: "pointer" }}><ChevronRight size={15} color="#64748b" /></button>
-        </div>
-      </div>
+          <div className="ml-auto flex items-center gap-2">
+            <Button variant="outline" size="sm" aria-label="Previous week" className="px-2">
+              <ChevronLeft className="size-4" />
+            </Button>
+            <span className="whitespace-nowrap text-sm font-medium text-text">
+              Week of Jul 14 – Jul 19, 2025
+            </span>
+            <Button variant="outline" size="sm" aria-label="Next week" className="px-2">
+              <ChevronRight className="size-4" />
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
-      {/* Timetable Grid */}
-      <div style={{ background: "#fff", borderRadius: "16px", border: "1px solid #f1f5f9", boxShadow: "0 1px 4px rgba(0,0,0,0.04)", overflow: "hidden" }}>
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "900px" }}>
+      <Card className="overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[900px] border-collapse text-sm">
             <thead>
-              <tr style={{ background: "#fafafa", borderBottom: "2px solid #f1f5f9" }}>
-                {/* Time column header */}
-                <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em", width: "110px", borderRight: "1px solid #f1f5f9" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-                    <Clock size={13} /> Time
-                  </div>
+              <tr className="border-b border-border bg-surface-sunken">
+                <th
+                  scope="col"
+                  className="w-28 border-r border-border px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-muted"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <Clock className="size-3.5" />
+                    Time
+                  </span>
                 </th>
-                {days.map(day => {
+                {days.map((day) => {
                   const isToday = day === (days[todayIndex] ?? "");
+                  const isHighlighted = highlightDay === day;
                   return (
-                    <th key={day} onClick={() => setHighlightDay(highlightDay === day ? null : day)}
-                      style={{ padding: "14px 12px", textAlign: "center", fontSize: "12px", fontWeight: 700, cursor: "pointer", transition: "background 0.15s", borderRight: "1px solid #f1f5f9", background: isToday ? "#eff6ff" : "transparent", color: isToday ? "#2563eb" : "#334155" }}>
+                    <th
+                      key={day}
+                      scope="col"
+                      onClick={() => setHighlightDay(isHighlighted ? null : day)}
+                      className={cn(
+                        "cursor-pointer border-r border-border px-3 py-3.5 text-center text-xs font-semibold transition-colors",
+                        isToday ? "bg-primary-soft text-primary-text" : "text-text",
+                        isHighlighted && !isToday && "bg-surface-hover"
+                      )}
+                    >
                       <div>{day}</div>
-                      {isToday && <div style={{ fontSize: "10px", color: "#6366f1", fontWeight: 600, marginTop: "2px" }}>Today</div>}
+                      {isToday && (
+                        <div className="mt-0.5 text-[10px] font-semibold text-primary">Today</div>
+                      )}
                     </th>
                   );
                 })}
               </tr>
             </thead>
             <tbody>
-              {periods.map((period, pi) => {
+              {periods.map((period) => {
                 if (period.isBreak) {
                   return (
-                    <tr key={period.id} style={{ background: "#fafafa" }}>
-                      <td style={{ padding: "8px 20px", borderRight: "1px solid #f1f5f9", borderBottom: "1px solid #f1f5f9" }}>
-                        <div style={{ fontSize: "11px", color: "#94a3b8", fontWeight: 600 }}>{period.time}</div>
+                    <tr key={period.id} className="border-b border-border bg-surface-sunken">
+                      <td className="border-r border-border px-5 py-2">
+                        <span className="text-[11px] font-medium text-subtle">{period.time}</span>
                       </td>
-                      <td colSpan={6} style={{ padding: "8px 20px", borderBottom: "1px solid #f1f5f9", textAlign: "center" }}>
-                        <span style={{ fontSize: "11px", fontWeight: 700, color: "#94a3b8", background: "#f1f5f9", padding: "3px 12px", borderRadius: "20px" }}>
+                      <td colSpan={6} className="px-5 py-2 text-center">
+                        <span className="inline-flex items-center rounded-full bg-surface-hover px-3 py-0.5 text-[11px] font-semibold text-muted">
                           ☕ {period.label}
                         </span>
                       </td>
@@ -136,36 +162,49 @@ export default function TimetablePage() {
                 }
 
                 return (
-                  <tr key={period.id} style={{ borderBottom: pi < periods.length - 1 ? "1px solid #f8fafc" : "none" }}>
-                    {/* Time */}
-                    <td style={{ padding: "10px 20px", borderRight: "1px solid #f1f5f9", verticalAlign: "middle" }}>
-                      <div style={{ fontSize: "11px", fontWeight: 700, color: "#64748b" }}>P{period.id > 4 ? period.id - 1 : period.id}</div>
-                      <div style={{ fontSize: "10px", color: "#94a3b8", marginTop: "2px" }}>{period.time}</div>
+                  <tr key={period.id} className="border-b border-border last:border-0">
+                    <td className="border-r border-border px-5 py-2.5 align-middle">
+                      <div className="text-[11px] font-semibold text-muted">
+                        P{period.id > 4 ? period.id - 1 : period.id}
+                      </div>
+                      <div className="mt-0.5 text-[10px] text-subtle">{period.time}</div>
                     </td>
 
-                    {/* Day cells */}
-                    {days.map(day => {
+                    {days.map((day) => {
                       const entry = timetableData[day]?.[period.id];
                       const isToday = day === (days[todayIndex] ?? "");
-                      const sc = entry ? (subjectColors[entry.subject] ?? subjectColors["Free Period"]) : null;
+                      const isHighlighted = highlightDay === day;
+                      const tone = entry
+                        ? subjectTone[entry.subject] ?? subjectTone["Free Period"]
+                        : null;
 
                       return (
-                        <td key={day} style={{ padding: "8px", borderRight: "1px solid #f8fafc", verticalAlign: "middle", background: isToday ? "#fafeff" : "transparent", minWidth: "130px" }}>
-                          {entry ? (
-                            <div style={{
-                              padding: "8px 10px", borderRadius: "10px",
-                              background: sc!.bg, border: `1px solid ${sc!.border}`,
-                              cursor: "pointer", transition: "all 0.15s",
-                            }}
-                              onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.transform = "scale(1.02)"}
-                              onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.transform = "scale(1)"}
+                        <td
+                          key={day}
+                          className={cn(
+                            "min-w-32 border-r border-border p-2 align-middle transition-colors",
+                            isToday
+                              ? "bg-primary-soft/40"
+                              : isHighlighted
+                                ? "bg-surface-hover"
+                                : undefined
+                          )}
+                        >
+                          {entry && tone ? (
+                            <div
+                              className={cn(
+                                "cursor-pointer rounded-sm border px-2.5 py-2 transition-transform hover:scale-[1.02]",
+                                tone
+                              )}
                             >
-                              <p style={{ fontSize: "12px", fontWeight: 700, color: sc!.color, lineHeight: 1.2 }}>{entry.subject}</p>
-                              {entry.teacher && <p style={{ fontSize: "10px", color: "#94a3b8", marginTop: "3px" }}>{entry.teacher}</p>}
+                              <p className="text-xs font-semibold leading-tight">{entry.subject}</p>
+                              {entry.teacher && (
+                                <p className="mt-0.5 text-[10px] text-muted">{entry.teacher}</p>
+                              )}
                             </div>
                           ) : (
-                            <div style={{ padding: "8px 10px", borderRadius: "10px", background: "#f8fafc", border: "1px dashed #e2e8f0", textAlign: "center" }}>
-                              <span style={{ fontSize: "10px", color: "#cbd5e1" }}>—</span>
+                            <div className="rounded-sm border border-dashed border-border bg-surface-sunken px-2.5 py-2 text-center">
+                              <span className="text-[10px] text-subtle">—</span>
                             </div>
                           )}
                         </td>
@@ -177,21 +216,31 @@ export default function TimetablePage() {
             </tbody>
           </table>
         </div>
-      </div>
+      </Card>
 
-      {/* Subject Legend */}
-      <div style={{ background: "#fff", borderRadius: "16px", border: "1px solid #f1f5f9", padding: "16px 20px", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
-        <p style={{ fontSize: "11px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "12px" }}>Subject Legend</p>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-          {Object.entries(subjectColors).filter(([k]) => k !== "Free Period").map(([subject, sc]) => (
-            <div key={subject} style={{ display: "flex", alignItems: "center", gap: "6px", padding: "5px 12px", borderRadius: "20px", background: sc.bg, border: `1px solid ${sc.border}` }}>
-              <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: sc.color, display: "inline-block" }} />
-              <span style={{ fontSize: "12px", fontWeight: 600, color: sc.color }}>{subject}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
+      <Card>
+        <CardContent>
+          <p className="mb-3 text-[10px] font-semibold uppercase tracking-widest text-subtle">
+            Subject Legend
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {Object.entries(subjectTone)
+              .filter(([k]) => k !== "Free Period")
+              .map(([subject, tone]) => (
+                <span
+                  key={subject}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium",
+                    tone
+                  )}
+                >
+                  <span className="size-2 rounded-full bg-current" />
+                  {subject}
+                </span>
+              ))}
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

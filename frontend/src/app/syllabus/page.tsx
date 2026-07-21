@@ -1,6 +1,9 @@
 "use client";
+
 import React, { useState } from "react";
 import { ChevronDown, ChevronRight, CheckCircle, Circle, Clock, BookOpen, Download, Plus } from "lucide-react";
+import { Badge, Button, Card, CardContent, PageHeader, Select } from "@/components/ui";
+import { cn } from "@/lib/utils";
 
 const syllabusData = [
   {
@@ -84,14 +87,31 @@ const syllabusData = [
   },
 ];
 
-const statusConfig: Record<string, { color: string; bg: string; label: string }> = {
-  completed:   { color: "#16a34a", bg: "#f0fdf4", label: "Completed"   },
-  "in-progress":{ color: "#d97706", bg: "#fffbeb", label: "In Progress" },
-  pending:     { color: "#94a3b8", bg: "#f8fafc", label: "Pending"     },
+type BadgeVariant = "default" | "success" | "warning";
+
+const statusConfig: Record<string, { variant: BadgeVariant; bar: string; label: string }> = {
+  completed:     { variant: "success", bar: "bg-success", label: "Completed"   },
+  "in-progress": { variant: "warning", bar: "bg-warning", label: "In Progress" },
+  pending:       { variant: "default", bar: "bg-border-strong", label: "Pending" },
 };
+
+/** Subject accents come from the gradient utility set, not raw hex. */
+const subjectTone: Record<string, { tile: string; bar: string; text: string }> = {
+  Mathematics: { tile: "gradient-indigo", bar: "bg-primary", text: "text-primary" },
+  Physics:     { tile: "gradient-violet", bar: "bg-info",    text: "text-info-text" },
+  Chemistry:   { tile: "gradient-emerald", bar: "bg-success", text: "text-success-text" },
+};
+
+const FALLBACK_TONE = { tile: "gradient-indigo", bar: "bg-primary", text: "text-primary" };
 
 const classes  = ["6-A", "7-A", "8-A", "9-A", "10-A", "11-A", "12-A"];
 const subjects = ["All Subjects", "Mathematics", "Physics", "Chemistry", "English", "Biology"];
+
+function StatusIcon({ status, className }: { status: string; className?: string }) {
+  if (status === "completed") return <CheckCircle className={cn("text-success", className)} />;
+  if (status === "in-progress") return <Clock className={cn("text-warning", className)} />;
+  return <Circle className={cn("text-subtle", className)} />;
+}
 
 export default function SyllabusPage() {
   const [selClass,   setSelClass]   = useState("10-A");
@@ -108,181 +128,232 @@ export default function SyllabusPage() {
   const completedTotal  = syllabusData.reduce((a, s) => a + s.completedChapters, 0);
   const overallPct      = Math.round((completedTotal / totalChapters) * 100);
 
+  const overallText =
+    overallPct >= 75 ? "text-success-text" : overallPct >= 50 ? "text-warning-text" : "text-danger-text";
+
   return (
-    <div style={{ maxWidth: "1600px", display: "flex", flexDirection: "column", gap: "24px" }}>
+    <div className="flex flex-col gap-5">
+      <PageHeader
+        title="Syllabus Tracker"
+        description="Track chapter-wise syllabus completion progress"
+        actions={
+          <>
+            <Button variant="outline">
+              <Download className="size-4" />
+              Export
+            </Button>
+            <Button>
+              <Plus className="size-4" />
+              Add Chapter
+            </Button>
+          </>
+        }
+      />
 
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div>
-          <h1 style={{ fontSize: "22px", fontWeight: 800, color: "#0f172a", letterSpacing: "-0.3px" }}>Syllabus Tracker</h1>
-          <p style={{ fontSize: "13px", color: "#94a3b8", marginTop: "4px" }}>Track chapter-wise syllabus completion progress</p>
-        </div>
-        <div style={{ display: "flex", gap: "10px" }}>
-          <button style={{ display: "flex", alignItems: "center", gap: "6px", padding: "9px 16px", borderRadius: "12px", border: "1px solid #e2e8f0", background: "#fff", fontSize: "13px", fontWeight: 600, color: "#334155", cursor: "pointer" }}>
-            <Download size={14} /> Export
-          </button>
-          <button style={{ display: "flex", alignItems: "center", gap: "6px", padding: "9px 18px", borderRadius: "12px", border: "none", background: "linear-gradient(135deg,#6366f1,#8b5cf6)", fontSize: "13px", fontWeight: 600, color: "#fff", cursor: "pointer", boxShadow: "0 4px 12px rgba(99,102,241,0.35)" }}>
-            <Plus size={14} /> Add Chapter
-          </button>
-        </div>
-      </div>
+      <Card>
+        <CardContent className="flex flex-wrap items-center gap-3">
+          <div className="w-40">
+            <Select
+              value={selClass}
+              onChange={(e) => setSelClass(e.target.value)}
+              options={classes.map((c) => ({ label: `Class ${c}`, value: c }))}
+              aria-label="Select class"
+            />
+          </div>
+          <div className="flex flex-wrap gap-1 rounded-md bg-surface-sunken p-1">
+            {subjects.map((s) => (
+              <Button
+                key={s}
+                size="sm"
+                variant={selSubject === s ? "primary" : "ghost"}
+                onClick={() => setSelSubject(s)}
+                className="whitespace-nowrap"
+              >
+                {s}
+              </Button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
-      {/* Filters */}
-      <div style={{ background: "#fff", borderRadius: "16px", border: "1px solid #f1f5f9", padding: "16px 20px", boxShadow: "0 1px 4px rgba(0,0,0,0.04)", display: "flex", alignItems: "center", gap: "12px" }}>
-        <select value={selClass} onChange={e => setSelClass(e.target.value)}
-          style={{ padding: "9px 14px", fontSize: "13px", fontWeight: 600, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "12px", outline: "none", color: "#334155", cursor: "pointer" }}>
-          {classes.map(c => <option key={c}>Class {c}</option>)}
-        </select>
-        <div style={{ display: "flex", background: "#f8fafc", borderRadius: "12px", padding: "4px", gap: "2px" }}>
-          {subjects.map(s => (
-            <button key={s} onClick={() => setSelSubject(s)} style={{
-              padding: "7px 14px", borderRadius: "9px", border: "none", cursor: "pointer",
-              fontSize: "12px", fontWeight: 600, transition: "all 0.15s",
-              background: selSubject === s ? "#fff" : "transparent",
-              color: selSubject === s ? "#0f172a" : "#64748b",
-              boxShadow: selSubject === s ? "0 1px 4px rgba(0,0,0,0.08)" : "none",
-              whiteSpace: "nowrap",
-            }}>{s}</button>
-          ))}
-        </div>
-      </div>
+      <Card>
+        <CardContent>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm font-semibold text-text">
+              Overall Syllabus Completion — {selClass}
+            </p>
+            <span className={cn("text-xl font-semibold", overallText)}>{overallPct}%</span>
+          </div>
+          <div className="h-2.5 overflow-hidden rounded-full bg-surface-hover">
+            <div
+              className="h-full rounded-full bg-primary transition-all"
+              style={{ width: `${overallPct}%` }}
+            />
+          </div>
+          <div className="mt-3.5 flex flex-wrap gap-x-6 gap-y-2">
+            {[
+              { label: "Total Chapters", value: totalChapters,                       dot: "bg-primary" },
+              { label: "Completed",      value: completedTotal,                      dot: "bg-success" },
+              { label: "In Progress",    value: totalChapters - completedTotal - 8,  dot: "bg-warning" },
+              { label: "Pending",        value: 8,                                   dot: "bg-border-strong" },
+            ].map((s) => (
+              <span key={s.label} className="flex items-center gap-1.5 text-xs text-muted">
+                <span className={cn("size-2 rounded-full", s.dot)} />
+                {s.label}:
+                <span className="font-semibold text-text">{s.value}</span>
+              </span>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
-      {/* Overall Progress */}
-      <div style={{ background: "#fff", borderRadius: "16px", border: "1px solid #f1f5f9", padding: "20px 24px", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
-          <p style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a" }}>Overall Syllabus Completion — {selClass}</p>
-          <span style={{ fontSize: "22px", fontWeight: 800, color: overallPct >= 75 ? "#16a34a" : overallPct >= 50 ? "#d97706" : "#e11d48" }}>{overallPct}%</span>
-        </div>
-        <div style={{ height: "10px", background: "#f1f5f9", borderRadius: "99px", overflow: "hidden" }}>
-          <div style={{ height: "100%", width: `${overallPct}%`, background: "linear-gradient(90deg,#6366f1,#8b5cf6)", borderRadius: "99px", transition: "width 0.6s ease" }} />
-        </div>
-        <div style={{ display: "flex", gap: "24px", marginTop: "14px" }}>
-          {[
-            { label: "Total Chapters",     value: totalChapters,                    color: "#6366f1" },
-            { label: "Completed",          value: completedTotal,                   color: "#16a34a" },
-            { label: "In Progress",        value: totalChapters - completedTotal - 8, color: "#d97706" },
-            { label: "Pending",            value: 8,                                color: "#94a3b8" },
-          ].map(s => (
-            <div key={s.label} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-              <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: s.color, display: "inline-block" }} />
-              <span style={{ fontSize: "12px", color: "#64748b" }}>{s.label}:</span>
-              <span style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a" }}>{s.value}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Subject Cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "16px" }}>
-        {filtered.map(s => {
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        {filtered.map((s) => {
           const pct = Math.round((s.completedChapters / s.totalChapters) * 100);
+          const tone = subjectTone[s.subject] ?? FALLBACK_TONE;
           return (
-            <div key={s.subject} style={{ background: "#fff", borderRadius: "16px", border: "1px solid #f1f5f9", padding: "20px", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "14px" }}>
-                <div style={{ width: "42px", height: "42px", borderRadius: "12px", background: s.bg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                  <BookOpen size={18} color={s.color} />
+            <Card key={s.subject}>
+              <CardContent>
+                <div className="mb-3.5 flex items-center gap-3">
+                  <div
+                    className={cn(
+                      "flex size-11 shrink-0 items-center justify-center rounded-md text-white shadow-sm",
+                      tone.tile
+                    )}
+                  >
+                    <BookOpen className="size-5" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-text">{s.subject}</p>
+                    <p className="mt-0.5 truncate text-[11px] text-muted">{s.teacher}</p>
+                  </div>
+                  <span className={cn("text-base font-semibold", tone.text)}>{pct}%</span>
                 </div>
-                <div style={{ flex: 1 }}>
-                  <p style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a" }}>{s.subject}</p>
-                  <p style={{ fontSize: "11px", color: "#94a3b8", marginTop: "1px" }}>{s.teacher}</p>
+                <div className="h-1.5 overflow-hidden rounded-full bg-surface-hover">
+                  <div
+                    className={cn("h-full rounded-full", tone.bar)}
+                    style={{ width: `${pct}%` }}
+                  />
                 </div>
-                <span style={{ fontSize: "16px", fontWeight: 800, color: s.color }}>{pct}%</span>
-              </div>
-              <div style={{ height: "6px", background: "#f1f5f9", borderRadius: "99px", overflow: "hidden" }}>
-                <div style={{ height: "100%", width: `${pct}%`, background: s.color, borderRadius: "99px" }} />
-              </div>
-              <p style={{ fontSize: "11px", color: "#94a3b8", marginTop: "8px" }}>{s.completedChapters} of {s.totalChapters} chapters completed</p>
-            </div>
+                <p className="mt-2 text-[11px] text-muted">
+                  {s.completedChapters} of {s.totalChapters} chapters completed
+                </p>
+              </CardContent>
+            </Card>
           );
         })}
       </div>
 
-      {/* Detailed Accordion */}
-      <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-        {filtered.map(subj => {
+      <div className="flex flex-col gap-3">
+        {filtered.map((subj) => {
           const isSubjOpen = openSubjects[subj.subject];
           const pct = Math.round((subj.completedChapters / subj.totalChapters) * 100);
-          return (
-            <div key={subj.subject} style={{ background: "#fff", borderRadius: "16px", border: "1px solid #f1f5f9", boxShadow: "0 1px 4px rgba(0,0,0,0.04)", overflow: "hidden" }}>
+          const tone = subjectTone[subj.subject] ?? FALLBACK_TONE;
 
-              {/* Subject Header */}
-              <button onClick={() => toggleSubject(subj.subject)}
-                style={{ width: "100%", padding: "18px 20px", display: "flex", alignItems: "center", gap: "14px", border: "none", background: "transparent", cursor: "pointer", textAlign: "left" }}>
-                <div style={{ width: "40px", height: "40px", borderRadius: "12px", background: subj.bg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                  <BookOpen size={18} color={subj.color} />
+          return (
+            <Card key={subj.subject} className="overflow-hidden">
+              <button
+                onClick={() => toggleSubject(subj.subject)}
+                aria-expanded={Boolean(isSubjOpen)}
+                className="focus-ring flex w-full items-center gap-3.5 px-5 py-4 text-left transition-colors hover:bg-surface-hover"
+              >
+                <div
+                  className={cn(
+                    "flex size-10 shrink-0 items-center justify-center rounded-md text-white",
+                    tone.tile
+                  )}
+                >
+                  <BookOpen className="size-4.5" />
                 </div>
-                <div style={{ flex: 1 }}>
-                  <p style={{ fontSize: "15px", fontWeight: 700, color: "#0f172a" }}>{subj.subject}</p>
-                  <div style={{ display: "flex", alignItems: "center", gap: "12px", marginTop: "4px" }}>
-                    <div style={{ width: "120px", height: "5px", background: "#f1f5f9", borderRadius: "99px", overflow: "hidden" }}>
-                      <div style={{ height: "100%", width: `${pct}%`, background: subj.color, borderRadius: "99px" }} />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-text">{subj.subject}</p>
+                  <div className="mt-1 flex items-center gap-3">
+                    <div className="h-1.5 w-30 overflow-hidden rounded-full bg-surface-hover">
+                      <div
+                        className={cn("h-full rounded-full", tone.bar)}
+                        style={{ width: `${pct}%` }}
+                      />
                     </div>
-                    <span style={{ fontSize: "12px", color: "#64748b" }}>{subj.completedChapters}/{subj.totalChapters} chapters · {pct}%</span>
+                    <span className="text-xs text-muted">
+                      {subj.completedChapters}/{subj.totalChapters} chapters · {pct}%
+                    </span>
                   </div>
                 </div>
-                {isSubjOpen ? <ChevronDown size={18} color="#94a3b8" /> : <ChevronRight size={18} color="#94a3b8" />}
+                {isSubjOpen ? (
+                  <ChevronDown className="size-4.5 shrink-0 text-subtle" />
+                ) : (
+                  <ChevronRight className="size-4.5 shrink-0 text-subtle" />
+                )}
               </button>
 
-              {/* Units */}
               {isSubjOpen && (
-                <div style={{ borderTop: "1px solid #f8fafc" }}>
+                <div className="border-t border-border">
                   {subj.units.map((unit, ui) => {
                     const unitKey = `${subj.subject}-${ui}`;
                     const isUnitOpen = openUnits[unitKey] !== false;
-                    const unitCompleted = unit.chapters.every(c => c.status === "completed");
-                    const unitInProgress = unit.chapters.some(c => c.status === "in-progress");
+                    const unitCompleted = unit.chapters.every((c) => c.status === "completed");
+                    const unitInProgress = unit.chapters.some((c) => c.status === "in-progress");
+                    const unitStatus = unitCompleted
+                      ? "completed"
+                      : unitInProgress
+                        ? "in-progress"
+                        : "pending";
 
                     return (
-                      <div key={ui} style={{ borderBottom: ui < subj.units.length - 1 ? "1px solid #f8fafc" : "none" }}>
-                        {/* Unit Header */}
-                        <button onClick={() => toggleUnit(unitKey)}
-                          style={{ width: "100%", padding: "14px 20px 14px 28px", display: "flex", alignItems: "center", gap: "10px", border: "none", background: "#fafafa", cursor: "pointer", textAlign: "left" }}>
-                          {unitCompleted
-                            ? <CheckCircle size={16} color="#16a34a" />
-                            : unitInProgress
-                              ? <Clock size={16} color="#d97706" />
-                              : <Circle size={16} color="#cbd5e1" />
-                          }
-                          <span style={{ flex: 1, fontSize: "13px", fontWeight: 600, color: "#334155" }}>{unit.unit}</span>
-                          <span style={{ fontSize: "11px", color: "#94a3b8" }}>{unit.chapters.length} chapters</span>
-                          {isUnitOpen ? <ChevronDown size={14} color="#94a3b8" /> : <ChevronRight size={14} color="#94a3b8" />}
+                      <div key={unitKey} className="border-b border-border last:border-0">
+                        <button
+                          onClick={() => toggleUnit(unitKey)}
+                          aria-expanded={isUnitOpen}
+                          className="focus-ring flex w-full items-center gap-2.5 bg-surface-sunken py-3.5 pl-7 pr-5 text-left transition-colors hover:bg-surface-hover"
+                        >
+                          <StatusIcon status={unitStatus} className="size-4 shrink-0" />
+                          <span className="min-w-0 flex-1 truncate text-sm font-medium text-text">
+                            {unit.unit}
+                          </span>
+                          <span className="shrink-0 text-[11px] text-subtle">
+                            {unit.chapters.length} chapters
+                          </span>
+                          {isUnitOpen ? (
+                            <ChevronDown className="size-3.5 shrink-0 text-subtle" />
+                          ) : (
+                            <ChevronRight className="size-3.5 shrink-0 text-subtle" />
+                          )}
                         </button>
 
-                        {/* Chapters */}
                         {isUnitOpen && (
                           <div>
                             {unit.chapters.map((ch, ci) => {
                               const sc = statusConfig[ch.status];
                               const chPct = Math.round((ch.completedTopics / ch.topics) * 100);
                               return (
-                                <div key={ci}
-                                  style={{ padding: "12px 20px 12px 52px", display: "flex", alignItems: "center", gap: "12px", borderTop: "1px solid #f8fafc", transition: "background 0.15s" }}
-                                  onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.background = "#f8fafc"}
-                                  onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.background = "transparent"}
+                                <div
+                                  key={`${unitKey}-${ci}`}
+                                  className="flex flex-wrap items-center gap-3 border-t border-border py-3 pl-13 pr-5 transition-colors hover:bg-surface-hover"
                                 >
-                                  {ch.status === "completed"
-                                    ? <CheckCircle size={15} color="#16a34a" style={{ flexShrink: 0 }} />
-                                    : ch.status === "in-progress"
-                                      ? <Clock size={15} color="#d97706" style={{ flexShrink: 0 }} />
-                                      : <Circle size={15} color="#cbd5e1" style={{ flexShrink: 0 }} />
-                                  }
-                                  <p style={{ flex: 1, fontSize: "13px", color: "#334155", fontWeight: 500 }}>{ch.name}</p>
+                                  <StatusIcon status={ch.status} className="size-4 shrink-0" />
+                                  <p className="min-w-0 flex-1 truncate text-sm text-text">
+                                    {ch.name}
+                                  </p>
 
-                                  {/* Topics progress */}
-                                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                                    <div style={{ width: "60px", height: "4px", background: "#f1f5f9", borderRadius: "99px", overflow: "hidden" }}>
-                                      <div style={{ height: "100%", width: `${chPct}%`, background: sc.color, borderRadius: "99px" }} />
+                                  <div className="flex items-center gap-2">
+                                    <div className="h-1 w-16 overflow-hidden rounded-full bg-surface-hover">
+                                      <div
+                                        className={cn("h-full rounded-full", sc.bar)}
+                                        style={{ width: `${chPct}%` }}
+                                      />
                                     </div>
-                                    <span style={{ fontSize: "11px", color: "#94a3b8" }}>{ch.completedTopics}/{ch.topics}</span>
+                                    <span className="text-[11px] text-subtle">
+                                      {ch.completedTopics}/{ch.topics}
+                                    </span>
                                   </div>
 
                                   {ch.date !== "—" && (
-                                    <span style={{ fontSize: "11px", color: "#94a3b8", width: "52px", textAlign: "right" }}>{ch.date}</span>
+                                    <span className="w-13 text-right text-[11px] text-subtle">
+                                      {ch.date}
+                                    </span>
                                   )}
 
-                                  <span style={{ fontSize: "11px", fontWeight: 700, padding: "3px 8px", borderRadius: "20px", background: sc.bg, color: sc.color, whiteSpace: "nowrap" }}>
-                                    {sc.label}
-                                  </span>
+                                  <Badge variant={sc.variant}>{sc.label}</Badge>
                                 </div>
                               );
                             })}
@@ -293,7 +364,7 @@ export default function SyllabusPage() {
                   })}
                 </div>
               )}
-            </div>
+            </Card>
           );
         })}
       </div>
