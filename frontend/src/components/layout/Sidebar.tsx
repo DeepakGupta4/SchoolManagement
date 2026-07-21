@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { useSidebarStore } from "@/store";
 import { navGroups, type NavEntry } from "@/lib/navigation";
-import { Tooltip, TooltipProvider } from "@/components/ui/Tooltip";
+import { Tooltip } from "@/components/ui/Tooltip";
 import { cn } from "@/lib/utils";
 
 /* ------------------------------------------------------------------ */
@@ -94,7 +94,9 @@ function NavBranch({
   const pathname = usePathname();
   const Icon = item.icon;
   const childActive = item.children!.some((c) => pathname === c.href);
-  const isActive = pathname === item.href || childActive;
+  // startsWith also catches detail routes (/students/stu_001) that aren't
+  // listed as children but still belong under this parent.
+  const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`) || childActive;
 
   // Open state is derived from the route, with a manual toggle layered on
   // top. Tying the override to the pathname means navigating to a child
@@ -199,7 +201,7 @@ export function Sidebar() {
   const width = isCollapsed ? "72px" : "260px";
 
   return (
-    <TooltipProvider>
+    <>
       {/* Mobile scrim */}
       {isMobileOpen && (
         <div
@@ -345,6 +347,6 @@ export function Sidebar() {
           </button>
         </div>
       </aside>
-    </TooltipProvider>
+    </>
   );
 }
