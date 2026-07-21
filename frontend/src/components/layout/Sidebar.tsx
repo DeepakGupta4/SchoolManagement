@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -164,18 +164,12 @@ function NavBranch({
 export function Sidebar() {
   const { isCollapsed, toggle, isMobileOpen, closeMobile } = useSidebarStore();
   const pathname = usePathname();
-  const navRef = useRef<HTMLDivElement>(null);
-  const savedScroll = useRef(0);
 
   const [filter, setFilter] = useState("");
 
-  // Preserve nav scroll across route changes — the sidebar remounts on
-  // navigation, so the position has to be restored by hand.
-  useEffect(() => {
-    const el = navRef.current;
-    if (!el) return;
-    el.scrollTop = savedScroll.current;
-  }, [pathname]);
+  // No scroll save/restore needed: the (app) route group means this component
+  // mounts once for the session, so the scroll container is never recreated
+  // and the browser keeps its position across navigations on its own.
 
   // Close the mobile drawer whenever the route changes.
   useEffect(() => {
@@ -275,14 +269,12 @@ export function Sidebar() {
 
         {/* Nav */}
         <div
-          ref={navRef}
-          onScroll={(e) => {
-            savedScroll.current = e.currentTarget.scrollTop;
-          }}
           // `min-h-0` is required: without it a flex-1 child grows to its
           // content height instead of scrolling, pushing the collapse
           // button off the bottom of the rail.
-          className="sidebar-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-3"
+          // `overscroll-contain` stops scroll chaining — reaching the end of
+          // the nav must not start scrolling the page behind it.
+          className="sidebar-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain px-3 py-3"
         >
           {visibleGroups.length === 0 && (
             <p className="px-2 py-6 text-center text-xs text-subtle">

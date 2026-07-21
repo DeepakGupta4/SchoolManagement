@@ -8,7 +8,10 @@ import { useSidebarStore } from "@/store";
 /**
  * The authenticated app chrome: sidebar + topbar + content well.
  *
- * Every route layout renders this, so shell changes happen in one place.
+ * Rendered once by the (app) route group layout, so it is never torn down
+ * between navigations — that's what keeps the sidebar's scroll position and
+ * expanded groups intact when moving between sections.
+ *
  * Below `lg` the sidebar becomes an overlay drawer and the content well
  * takes the full width, so the rail offset is applied via a CSS variable
  * that only the desktop breakpoint consumes.
