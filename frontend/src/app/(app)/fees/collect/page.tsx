@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useState } from "react";
 import {
   BadgeIndianRupee,
   CheckCircle2,
@@ -66,11 +66,11 @@ export default function CollectFeePage() {
   const [className, setClassName] = useState("");
   const [standing, setStanding] = useState("due");
 
-  const filters = useMemo(() => ({ search, className, standing }), [search, className, standing]);
-  const filterKey = JSON.stringify(filters);
-  const fetcher = useMemo(
-    () => () => feeAccountsApi.list(JSON.parse(filterKey)),
-    [filterKey]
+  // Deps are the primitive filter values, so the fetcher only changes when a
+  // filter actually changes — not on every unrelated render.
+  const fetcher = useCallback(
+    () => feeAccountsApi.list({ search, className, standing }),
+    [search, className, standing]
   );
   const { items: accounts, loading, error, refetch } = useAsyncList<StudentFeeAccount>(fetcher);
 
@@ -88,12 +88,12 @@ export default function CollectFeePage() {
 
   const balance = selected ? balanceOf(selected) : 0;
 
-  const allocations: PaymentAllocation[] = useMemo(() => {
-    if (!selected) return [];
-    return Object.entries(entered)
-      .map(([head, value]) => ({ head, amount: Math.max(0, Math.round(Number(value) || 0)) }))
-      .filter((a) => a.amount > 0);
-  }, [entered, selected]);
+  // Cheap to recompute each render; the React Compiler handles memoisation.
+  const allocations: PaymentAllocation[] = !selected
+    ? []
+    : Object.entries(entered)
+        .map(([head, value]) => ({ head, amount: Math.max(0, Math.round(Number(value) || 0)) }))
+        .filter((a) => a.amount > 0);
 
   const collecting = allocations.reduce((sum, a) => sum + a.amount, 0);
   const overpaying = collecting > balance;

@@ -1,0 +1,83 @@
+▲ Next.js 16.2.10 (Turbopack)
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 71s
+  Running TypeScript ...
+  Finished TypeScript in 45s ...
+  Collecting page data using 7 workers ...
+  Generating static pages using 7 workers (0/63) ...
+  Generating static pages using 7 workers (15/63) 
+  Generating static pages using 7 workers (31/63) 
+  Generating static pages using 7 workers (47/63) 
+✓ Generating static pages using 7 workers (63/63) in 2.4s
+  Finalizing page optimization ...
+
+Route (app)
+┌ ○ /
+├ ○ /_not-found
+├ ○ /ai
+├ ○ /analytics
+├ ○ /announcements
+├ ○ /assignments
+├ ○ /attendance
+├ ○ /canteen
+├ ○ /certificates
+├ ○ /classes
+├ ○ /dashboard
+├ ○ /events
+├ ○ /exams
+├ ○ /exams/admit-cards
+├ ○ /exams/marks
+├ ○ /exams/merit-list
+├ ○ /exams/report-cards
+├ ○ /exams/schedule
+├ ○ /expenses
+├ ○ /fees
+├ ○ /fees/collect
+├ ○ /fees/defaulters
+├ ○ /fees/receipts
+├ ○ /fees/scholarships
+├ ○ /fees/structure
+├ ○ /health
+├ ○ /hostel
+├ ○ /id-cards
+├ ○ /inventory
+├ ○ /labs
+├ ○ /leave
+├ ○ /library
+├ ○ /lms
+├ ○ /lms/classes
+├ ○ /lms/material
+├ ○ /login
+├ ○ /messages
+├ ○ /mobile
+├ ○ /notices
+├ ○ /payroll
+├ ○ /performance
+├ ○ /recruitment
+├ ○ /security
+├ ○ /settings
+├ ○ /staff
+├ ○ /students
+├ ƒ /students/[id]
+├ ○ /students/admissions
+├ ○ /students/alumni
+├ ○ /students/documents
+├ ○ /students/id-cards
+├ ○ /students/promotions
+├ ○ /students/transfers
+├ ○ /syllabus
+├ ○ /teachers
+├ ƒ /teachers/[id]
+├ ○ /teachers/allocation
+├ ○ /teachers/departments
+├ ○ /teachers/id-cards
+├ ○ /timetable
+├ ○ /transport
+├ ○ /visitors
+└ ○ /workflows
+
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+
