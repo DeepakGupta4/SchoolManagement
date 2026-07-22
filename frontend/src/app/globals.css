@@ -256,6 +256,18 @@ body {
   from { background-position: 200% 0; }
   to { background-position: -200% 0; }
 }
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Staggered entrance for insight grids. Each child animates a beat after the
+   last; the delay is set inline per item. Reduced-motion users get it instantly
+   via the block below. */
+.stagger-in > * {
+  opacity: 0;
+  animation: fade-in-up var(--duration-base) var(--ease-out) forwards;
+}
 
 /* ---------------------------------------------------------------
    Print — ID cards and admit cards are physical artefacts.
@@ -297,5 +309,9 @@ body {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+  /* Ensure staggered children don't stay stuck at opacity 0. */
+  .stagger-in > * {
+    opacity: 1;
   }
 }

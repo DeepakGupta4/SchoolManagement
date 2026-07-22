@@ -334,7 +334,7 @@ export default function ExamsPage() {
             </Button>
             <Button onClick={openCreate}>
               <Plus className="size-4" />
-              Schedule Exam
+              Add Exam
             </Button>
           </>
         }
@@ -405,7 +405,7 @@ export default function ExamsPage() {
             emptyAction={
               <Button variant="outline" onClick={openCreate}>
                 <Plus className="size-4" />
-                Schedule Exam
+                Add Exam
               </Button>
             }
           />

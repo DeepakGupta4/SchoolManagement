@@ -3,6 +3,7 @@ export { Badge } from "./Badge";
 export { Card, CardHeader, CardContent } from "./Card";
 export { PageHeader } from "./PageHeader";
 export { StatCard, type StatTone } from "./StatCard";
+export { CountUp } from "./CountUp";
 export { Input, Textarea, Field, controlClasses } from "./Input";
 export { Select, type SelectOption } from "./Select";
 export { MultiSelect } from "./MultiSelect";

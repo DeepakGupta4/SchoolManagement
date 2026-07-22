@@ -11,6 +11,7 @@ import {
   MapPin,
   Pencil,
   Phone,
+  Sparkles,
   Stethoscope,
   Trash2,
   UserRound,
@@ -29,6 +30,8 @@ import {
 } from "@/components/ui";
 import { getStudent, deleteStudent, updateStudent } from "@/lib/api/students";
 import { fullName, type Student, type StudentFormValues, type StudentStatus } from "@/types/student";
+import { assessStudent, RISK_META } from "@/lib/insights";
+import { cn } from "@/lib/utils";
 import { StudentFormModal } from "../StudentFormModal";
 
 const STATUS_VARIANT: Record<StudentStatus, "success" | "default" | "info" | "warning"> = {
@@ -275,6 +278,70 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
           tone={student.feeDue > 0 ? "warning" : "success"}
         />
       </div>
+
+      {/* Rule-based risk assessment — signature "insight" feature */}
+      {(() => {
+        const risk = assessStudent(student);
+        const meta = RISK_META[risk.level];
+        return (
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <Sparkles className="size-4 text-primary" />
+                <h2 className="text-sm font-semibold text-text">Risk assessment</h2>
+                <Badge variant="outline">Rule-based</Badge>
+              </div>
+              <Badge variant={meta.variant}>
+                {meta.label} · {risk.score}/100
+              </Badge>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-3">
+              <div
+                className="h-2 overflow-hidden rounded-full bg-surface-hover"
+                role="progressbar"
+                aria-valuenow={risk.score}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-label="Risk score"
+              >
+                <div
+                  className={cn(
+                    "h-full rounded-full",
+                    risk.level === "high" ? "bg-danger" : risk.level === "medium" ? "bg-warning" : "bg-success"
+                  )}
+                  style={{ width: `${Math.max(4, risk.score)}%` }}
+                />
+              </div>
+
+              {risk.factors.length > 0 ? (
+                <ul className="flex flex-col gap-1.5">
+                  {risk.factors.map((f) => (
+                    <li key={f} className="flex items-start gap-2 text-sm text-muted">
+                      <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-border-strong" />
+                      {f}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-muted">
+                  No risk factors flagged — attendance, performance and fees are all healthy.
+                </p>
+              )}
+
+              {risk.recommendation && (
+                <p className="rounded-md bg-primary-soft px-3.5 py-2.5 text-sm text-primary-text">
+                  <span className="font-semibold">Recommended:</span> {risk.recommendation}
+                </p>
+              )}
+
+              <p className="text-[11px] text-subtle">
+                Computed from a transparent weighted formula, not an AI model. Attendance, academic
+                average and fee status drive the score.
+              </p>
+            </CardContent>
+          </Card>
+        );
+      })()}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card>
