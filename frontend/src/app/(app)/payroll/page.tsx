@@ -39,6 +39,7 @@ import {
 import { useChartTheme } from "@/hooks/useChartTheme";
 import { cn } from "@/lib/utils";
 import { exportToCsv } from "@/lib/exportCsv";
+import { PayslipModal, type PayrollEmployee } from "./PayslipModal";
 
 const payrollData = [
   { id: "EMP001", name: "Dr. Priya Sharma",    role: "Teacher",       dept: "Mathematics",       basic: 55000, hra: 22000, ta: 5000, deductions: 8250,  net: 73750, status: "paid",    bank: "SBI ****4521"   },
@@ -105,7 +106,30 @@ export default function PayrollPage() {
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState("All");
   const [roleFilter, setRoleFilter] = useState("All");
+  const [payslipFor, setPayslipFor] = useState<PayrollEmployee | null>(null);
   const { toast } = useToast();
+
+  /** One employee's row exported as their payslip line. */
+  const downloadSlip = (emp: PayrollEmployee) => {
+    exportToCsv<PayrollEmployee>(
+      `payslip-${emp.id}`,
+      [
+        { header: "Employee ID", value: (e) => e.id },
+        { header: "Name", value: (e) => e.name },
+        { header: "Designation", value: (e) => e.role },
+        { header: "Department", value: (e) => e.dept },
+        { header: "Basic", value: (e) => e.basic },
+        { header: "HRA", value: (e) => e.hra },
+        { header: "TA", value: (e) => e.ta },
+        { header: "Deductions", value: (e) => e.deductions },
+        { header: "Net Pay", value: (e) => e.net },
+        { header: "Bank", value: (e) => e.bank },
+        { header: "Status", value: (e) => e.status },
+      ],
+      [emp]
+    );
+    toast({ title: "Payslip downloaded", description: `${emp.name}'s salary slip exported.` });
+  };
 
   const filtered = payrollData.filter((e) => {
     const tabVal = activeTab === "On Hold" ? "on-hold" : activeTab.toLowerCase();
@@ -251,19 +275,22 @@ export default function PayrollPage() {
       align: "right",
       render: (emp) => (
         <div className="flex items-center justify-end gap-1">
-          {[
-            { Icon: Eye, label: "View Slip" },
-            { Icon: Download, label: "Download" },
-          ].map(({ Icon, label }) => (
-            <button
-              key={label}
-              title={label}
-              aria-label={`${label} — ${emp.name}`}
-              className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
-            >
-              <Icon className="size-4" />
-            </button>
-          ))}
+          <button
+            onClick={() => setPayslipFor(emp)}
+            title="View salary slip"
+            aria-label={`View salary slip — ${emp.name}`}
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+          >
+            <Eye className="size-4" />
+          </button>
+          <button
+            onClick={() => downloadSlip(emp)}
+            title="Download salary slip"
+            aria-label={`Download salary slip — ${emp.name}`}
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+          >
+            <Download className="size-4" />
+          </button>
         </div>
       ),
     },
@@ -394,6 +421,8 @@ export default function PayrollPage() {
           </span>
         </p>
       </div>
+
+      <PayslipModal employee={payslipFor} onOpenChange={(open) => !open && setPayslipFor(null)} />
     </div>
   );
 }

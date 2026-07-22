@@ -1,7 +1,7 @@
 "use client";
 
-import { School } from "lucide-react";
-import { Avatar } from "@/components/ui";
+import { GraduationCap } from "lucide-react";
+import { PhotoFrame } from "./PhotoFrame";
 import { QrCode } from "./QrCode";
 
 export interface AdmitCardSubject {
@@ -49,18 +49,24 @@ export function AdmitCard({ data }: { data: AdmitCardData }) {
       style={{ aspectRatio: "1 / 1.414" }}
     >
       {/* Masthead */}
-      <div className="flex shrink-0 items-center gap-2.5 border-b-2 border-indigo-600 px-4 py-3">
-        <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-indigo-600 text-white">
-          <School className="size-5" />
+      <div className="shrink-0 border-b-2 border-indigo-600">
+        <div className="flex items-center gap-3 px-4 py-3">
+          <div className="flex size-11 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-indigo-600 to-violet-600 text-white shadow-sm">
+            <GraduationCap className="size-6" />
+          </div>
+          <div className="min-w-0 flex-1 leading-tight">
+            <p className="truncate text-base font-bold uppercase tracking-wide">Springdale School</p>
+            <p className="truncate text-[9px] text-slate-500">
+              Mayur Vihar, New Delhi 110091 · CBSE Affiliation No. 2730123
+            </p>
+            <p className="truncate text-[8px] text-slate-400">
+              Ph: 011-2345-6789 · www.springdale.edu
+            </p>
+          </div>
         </div>
-        <div className="min-w-0 flex-1 text-center leading-tight">
-          <p className="truncate text-sm font-bold uppercase tracking-wide">Springdale School</p>
-          <p className="truncate text-[9px] text-slate-500">
-            Mayur Vihar, New Delhi 110091 · CBSE Affiliation No. 2730123
-          </p>
-          <p className="mt-1 inline-block rounded bg-indigo-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-indigo-700">
-            Admit Card · {data.session}
-          </p>
+        <div className="flex items-center justify-center gap-2 bg-slate-900 py-1 text-white">
+          <span className="text-[11px] font-bold uppercase tracking-[0.2em]">Admit Card</span>
+          <span className="text-[9px] opacity-70">· {data.session}</span>
         </div>
       </div>
 
@@ -68,11 +74,7 @@ export function AdmitCard({ data }: { data: AdmitCardData }) {
         {/* Candidate */}
         <div className="flex gap-3">
           <div className="flex shrink-0 flex-col items-center gap-1.5">
-            <Avatar
-              name={data.studentName}
-              src={data.photo}
-              className="size-[68px] rounded-md ring-1 ring-slate-300"
-            />
+            <PhotoFrame src={data.photo} name={data.studentName} className="w-[58px]" />
             <QrCode value={`${data.admissionNo}|${data.examName}`} className="size-11" />
           </div>
 

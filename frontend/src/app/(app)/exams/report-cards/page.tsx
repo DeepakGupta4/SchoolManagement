@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Download, Eye, Printer, QrCode, Search } from "lucide-react";
+import { Download, Eye, QrCode, Search } from "lucide-react";
 import {
   Avatar,
   Badge,
@@ -11,9 +11,16 @@ import {
   Input,
   PageHeader,
   Table,
+  useToast,
   type Column,
 } from "@/components/ui";
 import { cn } from "@/lib/utils";
+import { exportToCsv } from "@/lib/exportCsv";
+import type { ReportCardData } from "@/components/cards/ReportCard";
+import { ReportCardModal } from "./ReportCardModal";
+
+const EXAM_NAME = "Mid-Term Examination 2025-26";
+const SESSION = "2025-26";
 
 const reportCards = [
   { id: "S001", name: "Aarav Sharma",  class: "10-A", roll: 1,  subjects: { Mathematics: 92, Physics: 88, Chemistry: 85, English: 90, Biology: 87, History: 82 }, attendance: 94, rank: 2  },
@@ -52,13 +59,53 @@ const MAX_TOTAL = subjectList.length * 100;
 const totalOf = (s: ReportCard) => Object.values(s.subjects).reduce((a, b) => a + b, 0);
 const pctOf = (s: ReportCard) => Math.round((totalOf(s) / MAX_TOTAL) * 100);
 
+/** Maps the page's row shape onto the printable ReportCard document. */
+function toReportData(s: ReportCard): ReportCardData {
+  const [className, section] = s.class.split("-");
+  return {
+    studentName: s.name,
+    admissionNo: s.id,
+    rollNo: s.roll,
+    className: `Class ${className}`,
+    section: section ?? "A",
+    fatherName: `Mr. ${s.name.split(" ").slice(-1)[0]}`,
+    session: SESSION,
+    examName: EXAM_NAME,
+    subjects: subjectList.map((sub) => ({
+      subject: sub,
+      maxMarks: 100,
+      obtained: s.subjects[sub as keyof typeof s.subjects],
+    })),
+    attendancePercent: s.attendance,
+    rank: s.rank,
+    classSize: 40,
+  };
+}
+
 export default function ReportCardsPage() {
+  const { toast } = useToast();
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<ReportCard | null>(null);
+  const [preview, setPreview] = useState<ReportCardData | null>(null);
 
   const filtered = reportCards.filter(
     (s) => s.name.toLowerCase().includes(search.toLowerCase()) || s.id.includes(search)
   );
+
+  const downloadCard = (s: ReportCard) => {
+    exportToCsv<{ subject: string }>(
+      `report-${s.id}`,
+      [
+        { header: "Student", value: () => s.name },
+        { header: "Class", value: () => s.class },
+        { header: "Subject", value: (r) => r.subject },
+        { header: "Marks", value: (r) => s.subjects[r.subject as keyof typeof s.subjects] },
+        { header: "Max", value: () => 100 },
+      ],
+      subjectList.map((subject) => ({ subject }))
+    );
+    toast({ title: "Report card exported", description: `${s.name}'s marks downloaded as CSV.` });
+  };
 
   const columns: Column<ReportCard>[] = [
     {
@@ -129,22 +176,20 @@ export default function ReportCardsPage() {
           onClick={(e) => e.stopPropagation()}
         >
           <button
+            onClick={() => setPreview(toReportData(s))}
             aria-label={`View ${s.name}'s report card`}
+            title="View report card"
             className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
           >
             <Eye className="size-4" />
           </button>
           <button
+            onClick={() => downloadCard(s)}
             aria-label={`Download ${s.name}'s report card`}
+            title="Download marks (CSV)"
             className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
           >
             <Download className="size-4" />
-          </button>
-          <button
-            aria-label={`Print ${s.name}'s report card`}
-            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
-          >
-            <Printer className="size-4" />
           </button>
         </div>
       ),
@@ -157,9 +202,29 @@ export default function ReportCardsPage() {
         title="Report Cards"
         description="View and download student report cards"
         actions={
-          <Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              exportToCsv<ReportCard>(
+                "report-cards",
+                [
+                  { header: "Student", value: (s) => s.name },
+                  { header: "Class", value: (s) => s.class },
+                  { header: "Roll", value: (s) => s.roll },
+                  { header: "Total", value: (s) => totalOf(s) },
+                  { header: "Max", value: () => MAX_TOTAL },
+                  { header: "Percentage", value: (s) => pctOf(s) },
+                  { header: "Grade", value: (s) => getGrade(pctOf(s)) },
+                  { header: "Rank", value: (s) => s.rank },
+                  { header: "Attendance", value: (s) => s.attendance },
+                ],
+                filtered
+              );
+              toast({ title: "Exported", description: `${filtered.length} report cards downloaded.` });
+            }}
+          >
             <Download className="size-4" />
-            Bulk Download
+            Bulk export
           </Button>
         }
       />
@@ -261,15 +326,17 @@ export default function ReportCardsPage() {
                   </div>
                 </div>
 
-                <Button className="mt-4 w-full">
-                  <Download className="size-4" />
-                  Download PDF
+                <Button className="mt-4 w-full" onClick={() => setPreview(toReportData(selected))}>
+                  <Eye className="size-4" />
+                  Open full report card
                 </Button>
               </CardContent>
             </Card>
           );
         })()}
       </div>
+
+      <ReportCardModal data={preview} onOpenChange={(open) => !open && setPreview(null)} />
     </div>
   );
 }

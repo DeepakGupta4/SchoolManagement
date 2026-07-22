@@ -289,8 +289,11 @@ body {
     padding: 0;
   }
   .id-card,
-  .admit-card {
-    /* Browsers strip backgrounds by default; these cards are unreadable without them. */
+  .admit-card,
+  .receipt,
+  .payslip,
+  .report-card {
+    /* Browsers strip backgrounds by default; these documents are unreadable without them. */
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
     box-shadow: none;

@@ -131,7 +131,9 @@ function NavBranch({
       </button>
 
       {open && (
-        <div className="ml-4 mt-0.5 flex flex-col border-l border-border pl-3">
+        <div className="relative ml-[18px] mt-0.5 flex flex-col gap-0.5 pl-3.5">
+          {/* Connector spine */}
+          <span className="absolute left-0 top-1 bottom-1 w-px bg-border" aria-hidden />
           {item.children!.map((child) => {
             const active = pathname === child.href;
             return (
@@ -141,13 +143,21 @@ function NavBranch({
                 onClick={onNavigate}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "focus-ring rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors",
+                  "focus-ring group/child relative flex items-center gap-2.5 rounded-md py-1.5 pl-2 pr-2.5 text-xs font-medium transition-colors",
                   active
                     ? "bg-primary-soft text-primary-text"
                     : "text-subtle hover:bg-surface-hover hover:text-text"
                 )}
               >
-                {child.title}
+                {/* Connector node */}
+                <span
+                  className={cn(
+                    "absolute -left-3.5 top-1/2 size-1.5 -translate-y-1/2 rounded-full transition-colors",
+                    active ? "bg-primary" : "bg-border-strong group-hover/child:bg-subtle"
+                  )}
+                  aria-hidden
+                />
+                <span className="truncate">{child.title}</span>
               </Link>
             );
           })}
