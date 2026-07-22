@@ -1,48 +1,33 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { CheckSquare, IdCard as IdCardIcon, Printer, Search, Square, Users } from "lucide-react";
 import {
-  Button, Card, CardContent, EmptyState, Input, PageHeader, Select, StatCard, useToast,
+  Button, Card, CardContent, EmptyState, Input, PageHeader, Select, Skeleton, StatCard, useToast,
 } from "@/components/ui";
 import { IdCard, type IdCardHolder } from "@/components/cards/IdCard";
+import { useAsyncList } from "@/hooks/useAsyncList";
+import { listStudents, CLASS_OPTIONS } from "@/lib/api/students";
+import { fullName, type Student } from "@/types/student";
 
-const CLASSES = ["Class 6", "Class 7", "Class 8", "Class 9", "Class 10"];
-const SECTIONS = ["A", "B", "C"];
-const BLOOD = ["A+", "B+", "O+", "AB+", "A-", "O-"];
-const FIRST = ["Aarav", "Ananya", "Vivaan", "Diya", "Ishaan", "Saanvi", "Kabir", "Myra", "Arjun", "Kiara", "Rohan", "Tara", "Advik", "Anika", "Reyansh", "Neha", "Karan", "Priya"];
-const LAST = ["Sharma", "Verma", "Patel", "Gupta", "Singh", "Reddy", "Nair", "Iyer", "Joshi", "Mehta"];
-const GUARDIAN = ["Rajesh", "Sunita", "Manoj", "Rekha", "Sanjay", "Geeta"];
-
-/** Stable pseudo-random seed so the roster doesn't reshuffle between renders. */
-function pick<T>(arr: T[], seed: number) {
-  return arr[seed % arr.length];
+/** Maps a student record onto the ID-card holder shape, photo included. */
+function toHolder(s: Student): IdCardHolder {
+  return {
+    id: s.id,
+    name: fullName(s),
+    role: "Student",
+    identifier: s.admissionNo,
+    identifierLabel: "Adm. No.",
+    affiliation: `${s.className} · Section ${s.section}`,
+    bloodGroup: s.bloodGroup,
+    phone: s.phone,
+    guardianOrDesignation: s.guardian.name,
+    guardianLabel: s.guardian.relation,
+    validTill: "31 Mar 2026",
+    photo: s.avatar || undefined,
+    address: s.address,
+  };
 }
-
-const students: (IdCardHolder & { className: string; section: string; printed: boolean })[] =
-  Array.from({ length: 18 }, (_, i) => {
-    const first = FIRST[i % FIRST.length];
-    const last = pick(LAST, i * 3 + 1);
-    const className = pick(CLASSES, i * 5 + 2);
-    const section = pick(SECTIONS, i * 7 + 1);
-
-    return {
-      id: `stu_${String(i + 1).padStart(3, "0")}`,
-      name: `${first} ${last}`,
-      role: "Student",
-      identifier: `ADM${2024001 + i}`,
-      identifierLabel: "Adm. No.",
-      affiliation: `${className} · Section ${section}`,
-      bloodGroup: pick(BLOOD, i * 2 + 3),
-      phone: `9${810000000 + i * 137911}`,
-      guardianOrDesignation: `${pick(GUARDIAN, i * 4 + 1)} ${last}`,
-      guardianLabel: "Guardian",
-      validTill: "31 Mar 2026",
-      className,
-      section,
-      printed: i % 3 === 0,
-    };
-  });
 
 export default function StudentIdCardsPage() {
   const { toast } = useToast();
@@ -51,14 +36,13 @@ export default function StudentIdCardsPage() {
   const [className, setClassName] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return students.filter((s) => {
-      if (className && s.className !== className) return false;
-      if (!q) return true;
-      return s.name.toLowerCase().includes(q) || s.identifier.toLowerCase().includes(q);
-    });
-  }, [search, className]);
+  // Sourced from the real students API, so a photo added on the student form
+  // appears here on the card without any extra wiring.
+  const fetcher = useCallback(() => listStudents({ search, className }), [search, className]);
+  const { items: students, loading } = useAsyncList<Student>(fetcher);
+
+  const cards = useMemo(() => students.map(toHolder), [students]);
+  const withPhoto = useMemo(() => students.filter((s) => s.avatar).length, [students]);
 
   const toggle = (id: string) =>
     setSelected((prev) => {
@@ -69,32 +53,30 @@ export default function StudentIdCardsPage() {
       return next;
     });
 
-  const allVisibleSelected = filtered.length > 0 && filtered.every((s) => selected.has(s.id));
+  const allVisibleSelected = cards.length > 0 && cards.every((c) => selected.has(c.id));
 
   const toggleAll = () =>
     setSelected((prev) => {
       const next = new Set(prev);
-      if (allVisibleSelected) filtered.forEach((s) => next.delete(s.id));
-      else filtered.forEach((s) => next.add(s.id));
+      if (allVisibleSelected) cards.forEach((c) => next.delete(c.id));
+      else cards.forEach((c) => next.add(c.id));
       return next;
     });
 
-  const printTargets = selected.size > 0 ? filtered.filter((s) => selected.has(s.id)) : filtered;
+  const printCount = selected.size > 0 ? selected.size : cards.length;
 
   const handlePrint = () => {
-    if (printTargets.length === 0) {
+    if (printCount === 0) {
       toast({ title: "Nothing to print", description: "No cards match the current filters.", variant: "warning" });
       return;
     }
     toast({
-      title: `Preparing ${printTargets.length} card${printTargets.length > 1 ? "s" : ""}`,
+      title: `Preparing ${printCount} card${printCount > 1 ? "s" : ""}`,
       description: "Your browser's print dialog will open.",
     });
     // Let the toast paint before the print dialog blocks the main thread.
     setTimeout(() => window.print(), 250);
   };
-
-  const printedCount = students.filter((s) => s.printed).length;
 
   return (
     <div className="flex flex-col gap-5">
@@ -112,8 +94,8 @@ export default function StudentIdCardsPage() {
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard label="Total students" value={students.length} icon={Users} tone="indigo" />
-          <StatCard label="Cards printed" value={printedCount} icon={IdCardIcon} tone="emerald" />
-          <StatCard label="Pending print" value={students.length - printedCount} icon={Printer} tone="amber" />
+          <StatCard label="With photo" value={withPhoto} icon={IdCardIcon} tone="emerald" />
+          <StatCard label="Photo pending" value={students.length - withPhoto} icon={Printer} tone="amber" />
           <StatCard label="Selected" value={selected.size} icon={CheckSquare} tone="violet" />
         </div>
 
@@ -133,18 +115,24 @@ export default function StudentIdCardsPage() {
               value={className}
               onChange={(e) => setClassName(e.target.value)}
               placeholder="All classes"
-              options={CLASSES.map((c) => ({ label: c, value: c }))}
+              options={CLASS_OPTIONS.map((c) => ({ label: c, value: c }))}
               aria-label="Filter by class"
             />
           </div>
-          <Button variant="outline" onClick={toggleAll} disabled={filtered.length === 0}>
+          <Button variant="outline" onClick={toggleAll} disabled={cards.length === 0}>
             {allVisibleSelected ? <Square className="size-4" /> : <CheckSquare className="size-4" />}
             {allVisibleSelected ? "Clear selection" : "Select all"}
           </Button>
         </div>
       </div>
 
-      {filtered.length === 0 ? (
+      {loading ? (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="aspect-[0.631/1] w-full" />
+          ))}
+        </div>
+      ) : cards.length === 0 ? (
         <Card className="print-hide">
           <EmptyState
             icon={<IdCardIcon className="size-5" />}
@@ -154,15 +142,16 @@ export default function StudentIdCardsPage() {
         </Card>
       ) : (
         <div className="print-sheet grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {filtered.map((s) => {
-            const isSelected = selected.has(s.id);
+          {cards.map((holder) => {
+            const isSelected = selected.has(holder.id);
             const dimmed = selected.size > 0 && !isSelected;
+            const hasPhoto = students.find((s) => s.id === holder.id)?.avatar;
             return (
-              <div key={s.id} className={dimmed ? "print-hide" : undefined}>
+              <div key={holder.id} className={dimmed ? "print-hide" : undefined}>
                 <button
-                  onClick={() => toggle(s.id)}
+                  onClick={() => toggle(holder.id)}
                   aria-pressed={isSelected}
-                  aria-label={`Select ID card for ${s.name}`}
+                  aria-label={`Select ID card for ${holder.name}`}
                   className="focus-ring print-hide mb-2 flex w-full items-center gap-2 rounded-md px-1 text-left text-xs text-muted transition-colors hover:text-text"
                 >
                   {isSelected ? (
@@ -170,14 +159,14 @@ export default function StudentIdCardsPage() {
                   ) : (
                     <Square className="size-4" />
                   )}
-                  <span className="truncate">{s.name}</span>
-                  {s.printed && (
+                  <span className="truncate">{holder.name}</span>
+                  {hasPhoto && (
                     <span className="ml-auto shrink-0 rounded-full bg-success-soft px-1.5 py-0.5 text-[10px] font-medium text-success-text">
-                      Printed
+                      Photo
                     </span>
                   )}
                 </button>
-                <IdCard holder={s} />
+                <IdCard holder={holder} />
               </div>
             );
           })}
@@ -185,7 +174,8 @@ export default function StudentIdCardsPage() {
       )}
 
       <CardContent className="print-hide px-0 text-xs text-subtle">
-        Cards render at CR80 size (85.6 × 54 mm). The QR block is a visual placeholder — it is not yet scannable.
+        Cards render at portrait CR80 size (54 × 85.6 mm). Add a student photo from the student form and it
+        appears here automatically. The QR block is a visual placeholder — it is not yet scannable.
       </CardContent>
     </div>
   );

@@ -28,6 +28,8 @@ export const studentSchema = z.object({
     occupation: z.string().optional(),
   }),
   medicalNotes: z.string().optional(),
+  /** Uploaded photo as a data URL, or empty when none. */
+  avatar: z.string().optional(),
 });
 
 export type StudentSchema = z.infer<typeof studentSchema>;

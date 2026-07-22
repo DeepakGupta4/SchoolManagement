@@ -1,11 +1,14 @@
 "use client";
 
-import { useEffect } from "react";
-import { useForm } from "react-hook-form";
+import { useEffect, useState } from "react";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Modal, Button, Input, Textarea, Select } from "@/components/ui";
+import { Upload, X } from "lucide-react";
+import { Modal, Button, Input, Textarea, Select, useToast } from "@/components/ui";
+import { PhotoFrame } from "@/components/cards/PhotoFrame";
 import { studentSchema, type StudentSchema } from "@/lib/schemas/student";
 import { CLASS_OPTIONS, SECTION_OPTIONS } from "@/lib/api/students";
+import { fileToDataUrl } from "@/lib/image";
 import type { Student, StudentFormValues } from "@/types/student";
 
 const toOptions = (values: readonly string[]) =>
@@ -43,6 +46,7 @@ const emptyValues: StudentSchema = {
   address: "",
   guardian: { name: "", relation: "Father", phone: "", email: "", occupation: "" },
   medicalNotes: "",
+  avatar: "",
 };
 
 interface StudentFormModalProps {
@@ -69,15 +73,42 @@ export function StudentFormModal({
 }: StudentFormModalProps) {
   const isEdit = Boolean(student);
 
+  const { toast } = useToast();
+  const [uploading, setUploading] = useState(false);
+
   const {
     register,
     handleSubmit,
     reset,
+    control,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<StudentSchema>({
     resolver: zodResolver(studentSchema),
     defaultValues: emptyValues,
   });
+
+  // useWatch (not watch) so the React Compiler can still optimise this component.
+  const avatar = useWatch({ control, name: "avatar" });
+  const firstName = useWatch({ control, name: "firstName" });
+  const lastName = useWatch({ control, name: "lastName" });
+
+  const handlePhoto = async (file: File | undefined) => {
+    if (!file) return;
+    setUploading(true);
+    try {
+      const dataUrl = await fileToDataUrl(file);
+      setValue("avatar", dataUrl, { shouldDirty: true });
+    } catch (e) {
+      toast({
+        title: "Could not add photo",
+        description: e instanceof Error ? e.message : "Please try another image.",
+        variant: "error",
+      });
+    } finally {
+      setUploading(false);
+    }
+  };
 
   // Repopulate whenever the modal opens or the target student changes,
   // otherwise the previous student's values leak into the next open.
@@ -121,6 +152,50 @@ export function StudentFormModal({
       }
     >
       <form onSubmit={submit} className="flex flex-col gap-5">
+        <section>
+          <SectionTitle>Photo</SectionTitle>
+          <div className="flex items-center gap-4">
+            <PhotoFrame
+              src={avatar || undefined}
+              name={`${firstName} ${lastName}`.trim() || "Student"}
+              className="w-16 shrink-0"
+            />
+            <div className="flex flex-col gap-2">
+              <div className="flex flex-wrap gap-2">
+                <label className="focus-within:outline-none">
+                  <span className="focus-ring inline-flex cursor-pointer items-center gap-2 rounded-md border border-border px-4 py-2 text-sm font-medium text-text transition-colors hover:bg-surface-hover hover:border-border-strong">
+                    <Upload className="size-4" />
+                    {uploading ? "Processing…" : avatar ? "Change photo" : "Upload photo"}
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="sr-only"
+                    disabled={uploading}
+                    onChange={(e) => {
+                      handlePhoto(e.target.files?.[0]);
+                      e.target.value = ""; // allow re-selecting the same file
+                    }}
+                  />
+                </label>
+                {avatar && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => setValue("avatar", "", { shouldDirty: true })}
+                  >
+                    <X className="size-4" />
+                    Remove
+                  </Button>
+                )}
+              </div>
+              <p className="text-xs text-subtle">
+                Passport-style photo. Appears on the profile and the ID card. Resized automatically.
+              </p>
+            </div>
+          </div>
+        </section>
+
         <section>
           <SectionTitle>Identity</SectionTitle>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

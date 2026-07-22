@@ -36,10 +36,14 @@ export interface Student {
   medicalNotes?: string;
 }
 
-/** Fields the create/edit form owns. Server-derived fields are excluded. */
+/**
+ * Fields the create/edit form owns. Server-derived metrics are excluded, but
+ * `avatar` (the uploaded photo, stored inline as a data URL) is included so it
+ * flows straight through to the profile and the ID card.
+ */
 export type StudentFormValues = Omit<
   Student,
-  "id" | "attendancePercent" | "performancePercent" | "feeDue" | "avatar"
+  "id" | "attendancePercent" | "performancePercent" | "feeDue"
 >;
 
 export const fullName = (s: Student) => `${s.firstName} ${s.lastName}`;
