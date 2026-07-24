@@ -246,7 +246,7 @@ export function Hero({ onBookDemo }: { onBookDemo: () => void }) {
           {/* ------------------------------------------------------ Stage */}
           <motion.div
             style={{ y: stageY, scale: stageScale }}
-            className="relative perspective-1200 lg:-mr-8 xl:-mr-16"
+            className="relative perspective-1200"
           >
             <motion.div
               style={{ rotateX: tiltX, rotateY: tiltY }}
@@ -277,7 +277,7 @@ export function Hero({ onBookDemo }: { onBookDemo: () => void }) {
                 py={py}
                 depth={1.5}
                 delay={0.9}
-                className="-top-7 -left-10 lg:-left-16"
+                className="-top-6 -left-6 lg:-left-10"
               >
                 <div className="flex items-center gap-2.5">
                   <span className="grid h-9 w-9 place-items-center rounded-xl bg-brand-600/15 text-brand-500">
@@ -313,7 +313,7 @@ export function Hero({ onBookDemo }: { onBookDemo: () => void }) {
                 py={py}
                 depth={2.2}
                 delay={1.15}
-                className="top-[26%] -left-14 lg:-left-24"
+                className="-bottom-12 -left-4 lg:-left-10"
               >
                 <div className="w-[186px]">
                   <div className="mb-2 flex items-center gap-2">
@@ -343,7 +343,7 @@ export function Hero({ onBookDemo }: { onBookDemo: () => void }) {
                 py={py}
                 depth={1.8}
                 delay={1.05}
-                className="-right-8 -bottom-6 lg:-right-14"
+                className="top-[58%] -right-4 lg:-right-9"
               >
                 <div className="w-[168px]">
                   <div className="flex items-center justify-between">
@@ -370,7 +370,7 @@ export function Hero({ onBookDemo }: { onBookDemo: () => void }) {
                 py={py}
                 depth={2.6}
                 delay={1.3}
-                className="top-[8%] -right-10 lg:-right-16"
+                className="-top-8 -right-4 lg:-right-9"
               >
                 <div className="flex w-[190px] items-start gap-2.5">
                   <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-aqua-500/15 text-aqua-500">

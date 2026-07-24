@@ -6,6 +6,7 @@ import { EASE_PREMIUM } from '@/lib/motion'
 import { SectionHeading } from '@/components/ui/Primitives'
 import { LaptopFrame, PhoneFrame, TabletFrame } from '@/components/product/Devices'
 import { DashboardUI, PhoneUI } from '@/components/product/DashboardUI'
+import { ScaledPreview } from '@/components/product/ScaledPreview'
 import { Orb } from '@/components/effects/Backdrop'
 
 const SCENES = [
@@ -124,7 +125,9 @@ export function ProductShowcase() {
           <motion.div style={{ rotateX, scale }} className="relative preserve-3d">
             <LaptopFrame className="mx-auto max-w-5xl">
               <div className="relative h-full w-full">
-                <DashboardUI />
+                <ScaledPreview designWidth={1120} designHeight={700} className="h-full w-full">
+                  <DashboardUI />
+                </ScaledPreview>
                 {/* scene tint so switching reads as a change of context */}
                 <motion.div
                   key={scene}
@@ -142,7 +145,9 @@ export function ProductShowcase() {
               className="absolute -right-2 -bottom-10 z-20 hidden w-[168px] md:block lg:-right-6 lg:w-[196px]"
             >
               <PhoneFrame>
-                <PhoneUI />
+                <ScaledPreview designWidth={320} designHeight={693} className="w-full">
+                  <PhoneUI />
+                </ScaledPreview>
               </PhoneFrame>
             </motion.div>
 
@@ -152,9 +157,9 @@ export function ProductShowcase() {
               className="absolute -bottom-4 -left-4 z-10 hidden w-[240px] lg:block xl:-left-12 xl:w-[290px]"
             >
               <TabletFrame>
-                <div className="aspect-[4/3] w-full overflow-hidden">
+                <ScaledPreview designWidth={880} designHeight={660} className="w-full">
                   <DashboardUI compact />
-                </div>
+                </ScaledPreview>
               </TabletFrame>
             </motion.div>
           </motion.div>

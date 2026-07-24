@@ -1,32 +1,64 @@
-# React + TypeScript + Vite
+# BuildSchoolOS — Showcase Website
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+An award-tier marketing site for **BuildSchoolOS**, positioned like a billion-dollar SaaS
+company (Apple / Stripe / Linear / Vercel) rather than a traditional school ERP. Built to
+convert principals and institutions into booked demos.
 
-Currently, two official plugins are available:
+> This is a standalone site, independent of the main `frontend/` (Next.js) and `backend/` apps.
+> It has its own `package.json` and dev server.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Stack
 
-## React Compiler
+- **React 19** + **TypeScript** on **Vite**
+- **Tailwind CSS v4** (CSS-first `@theme` config, no `tailwind.config.js`)
+- **Framer Motion** — reveals, layout animations, magnetic/3D interactions
+- **GSAP + ScrollTrigger** + **Lenis** — smooth scroll driven by the GSAP ticker
+- **Embla Carousel** — testimonials
+- **Lucide** icons
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Everything visual is hand-built — no image mockups. The dashboard, phone and tablet previews
+are live DOM rendered through `ScaledPreview` so they stay crisp and theme-aware at any size.
 
-## Expanding the Oxlint configuration
+## Getting started
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+cd showcase-website
+npm install
+npm run dev      # http://localhost:5173
+npm run build    # production build to dist/
+npm run preview  # preview the production build
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+## Structure
+
+```
+src/
+├─ components/
+│  ├─ effects/     Aurora, particles, cursor, mouse glow, scroll progress, noise
+│  ├─ layout/      Navbar (mega-menu), Footer, DemoModal
+│  ├─ product/     DashboardUI, device frames, charts, ScaledPreview
+│  ├─ sections/    Hero, Trust, ProductShowcase, WhySchoolOS, Modules, AISection,
+│  │               WorkflowBuilder, Features, Pricing, Testimonials, FAQ, FinalCTA
+│  └─ ui/          MagneticButton, GlassCard, Reveal, Counter, Primitives, SocialIcons
+├─ data/site.ts    All copy: 100+ modules, AI agents, pricing, FAQ, nav, testimonials
+├─ hooks/          useLenis, useMouse, useTheme
+├─ lib/            utils, motion presets
+└─ index.css       Design system: tokens, light/dark themes, animations, utilities
+```
+
+## Design system
+
+- **Palette** — Brand `#6D28D9`, Azure `#2563EB`, Aqua `#06B6D4`; ink neutrals for
+  light/dark surfaces. Tokens live in `src/index.css` under `@theme` and `@layer base`.
+- **Type** — Inter (body), Plus Jakarta Sans (display), Space Grotesk (mono).
+- **Theme** — light + dark via a `.dark` class on `<html>`, persisted to `localStorage`,
+  toggled in the navbar. Respects `prefers-color-scheme` on first visit.
+- **Motion** — cinematic rise + de-blur reveals (never a plain fade). All motion is gated
+  behind `prefers-reduced-motion`.
+
+## Notes
+
+- No fabricated third-party logos or fake customer names — launch-partner placeholders and
+  founding-cohort framing are used instead.
+- Below-the-fold sections are code-split (`React.lazy`) so the hero paints fast.
+- The demo form is front-end only; wire `DemoModal`'s submit handler to your CRM/endpoint.

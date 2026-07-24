@@ -8,6 +8,7 @@ import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
 import authRoutes from "./modules/auth/auth.routes.js";
 import studentRoutes from "./modules/students/student.routes.js";
 import teacherRoutes from "./modules/teachers/teacher.routes.js";
+import feeRoutes from "./modules/fees/fee.routes.js";
 
 export function createApp() {
   const app = express();
@@ -41,6 +42,7 @@ export function createApp() {
   app.use("/api/auth", authRoutes);
   app.use("/api/students", studentRoutes);
   app.use("/api/teachers", teacherRoutes);
+  app.use("/api/fees", feeRoutes);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

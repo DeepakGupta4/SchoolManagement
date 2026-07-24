@@ -2,6 +2,7 @@ import { connectDatabase, disconnectDatabase } from "./config/db.js";
 import { User, hashPassword } from "./modules/auth/user.model.js";
 import { Student } from "./modules/students/student.model.js";
 import { Teacher } from "./modules/teachers/teacher.model.js";
+import { FeeAccount } from "./modules/fees/fee.model.js";
 
 /**
  * Seeds demo accounts and students.
@@ -54,6 +55,67 @@ export async function seedDatabase({ quiet = false } = {}) {
   // skipped every collection after students, leaving them silently empty.
   await seedStudents(log);
   await seedTeachers(log);
+  await seedFeeAccounts(log);
+}
+
+const FEE_HEADS = [
+  { head: "Tuition", base: 24000 },
+  { head: "Transport", base: 6000 },
+  { head: "Lab", base: 1800 },
+  { head: "Library", base: 900 },
+  { head: "Sports", base: 1200 },
+  { head: "Exam", base: 1500 },
+];
+
+/**
+ * Builds one fee account per student. Derived from the students already in the
+ * database rather than a separate fixture, so the two can never disagree.
+ */
+async function seedFeeAccounts(log: (msg: string) => void) {
+  if ((await FeeAccount.countDocuments()) > 0) {
+    log("  fee accounts already populated — skipped");
+    return;
+  }
+
+  const students = await Student.find({ schoolId: "school_1" });
+  if (students.length === 0) {
+    log("  no students to bill — skipped fee accounts");
+    return;
+  }
+
+  const accounts = students.map((s, i) => {
+    const roll = (i * 17) % 100;
+    // Roughly a third have paid in full, a third partly, a third barely.
+    const paidRatio = roll > 66 ? 1 : roll > 33 ? 0.5 : 0.15;
+
+    return {
+      schoolId: "school_1",
+      studentId: s._id,
+      admissionNo: s.admissionNo,
+      name: `${s.firstName} ${s.lastName}`,
+      className: s.className,
+      section: s.section,
+      rollNo: s.rollNo,
+      guardian: s.guardian.name,
+      guardianPhone: s.guardian.phone,
+      session: "2025-26",
+      heads: FEE_HEADS.map(({ head, base }, h) => {
+        // Transport only applies to students who use the bus.
+        const billed = head === "Transport" && roll % 3 === 0 ? 0 : base;
+        return {
+          head,
+          billed,
+          paid: Math.round((billed * (h === 0 ? paidRatio : paidRatio > 0.9 ? 1 : 0)) / 100) * 100,
+        };
+      }),
+      concession: roll % 7 === 0 ? 2000 : 0,
+      lateFee: paidRatio < 0.5 ? 500 : 0,
+      lastPaymentDate: paidRatio > 0.1 ? "2025-07-05" : null,
+    };
+  });
+
+  await FeeAccount.insertMany(accounts);
+  log(`  inserted ${accounts.length} fee accounts`);
 }
 
 async function seedStudents(log: (msg: string) => void) {

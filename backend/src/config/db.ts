@@ -19,11 +19,14 @@ export async function connectDatabase(): Promise<string> {
 
   if (!uri) {
     // Imported lazily so the dev-only dependency never loads in production.
-    const { MongoMemoryServer } = await import("mongodb-memory-server");
-    const server = await MongoMemoryServer.create();
+    // A REPLICA SET, not a standalone: fee collection writes the receipt and
+    // the ledger inside a transaction, and standalone MongoDB cannot do that.
+    // Atlas is already a replica set, so both paths behave identically.
+    const { MongoMemoryReplSet } = await import("mongodb-memory-server");
+    const server = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
     memoryServer = server;
     uri = server.getUri();
-    mode = "in-memory (development only — data is lost on restart)";
+    mode = "in-memory replica set (development only — data is lost on restart)";
   }
 
   await mongoose.connect(uri, { serverSelectionTimeoutMS: 10_000 });

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Search } from 'lucide-react'
+import { ChevronDown, Search } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { EASE_PREMIUM } from '@/lib/motion'
 import { MODULES, MODULE_CATEGORIES, type ModuleCategory } from '@/data/site'
@@ -19,18 +19,27 @@ const CATEGORY_TINT: Record<ModuleCategory, string> = {
   Platform: 'var(--color-aqua-400)',
 }
 
+/** Featured modules lead each view; the rest stay behind a single expand. */
+const COLLAPSED_COUNT = 24
+
 export function Modules() {
   const [filter, setFilter] = useState<Filter>('All')
   const [query, setQuery] = useState('')
+  const [expanded, setExpanded] = useState(false)
 
-  const visible = useMemo(() => {
+  const matches = useMemo(() => {
     const q = query.trim().toLowerCase()
     return MODULES.filter((m) => {
       const matchesCategory = filter === 'All' || m.category === filter
       const matchesQuery = !q || m.name.toLowerCase().includes(q)
       return matchesCategory && matchesQuery
-    })
+    }).sort((a, b) => Number(!!b.featured) - Number(!!a.featured))
   }, [filter, query])
+
+  const searching = query.trim().length > 0
+  const showAll = expanded || searching
+  const visible = showAll ? matches : matches.slice(0, COLLAPSED_COUNT)
+  const hidden = matches.length - visible.length
 
   const counts = useMemo(() => {
     const map = new Map<Filter, number>([['All', MODULES.length]])
@@ -111,7 +120,7 @@ export function Modules() {
         {/* Grid */}
         <motion.ul
           layout
-          className="mt-12 grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"
+          className="mt-12 grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6"
         >
           <AnimatePresence mode="popLayout">
             {visible.map((m, i) => (
@@ -123,26 +132,25 @@ export function Modules() {
                 exit={{ opacity: 0, scale: 0.92 }}
                 transition={{
                   duration: 0.45,
-                  delay: Math.min(i * 0.012, 0.35),
+                  delay: Math.min(i * 0.012, 0.4),
                   ease: EASE_PREMIUM,
                 }}
-                className={cn(
-                  'group relative',
-                  m.featured && 'sm:col-span-1 lg:col-span-2 xl:col-span-2',
-                )}
+                className="group relative"
               >
                 <div
                   className={cn(
-                    'relative flex h-full flex-col overflow-hidden rounded-2xl border border-[rgb(var(--glass-border)/0.08)] bg-surface p-4 transition-all duration-500',
-                    'hover:-translate-y-1 hover:border-brand-500/28 hover:shadow-premium',
-                    m.featured && 'md:p-5',
+                    'relative flex h-[132px] flex-col overflow-hidden rounded-2xl border bg-surface p-3.5 transition-all duration-500',
+                    'hover:-translate-y-1 hover:border-brand-500/30 hover:shadow-premium',
+                    m.featured
+                      ? 'border-brand-500/18'
+                      : 'border-[rgb(var(--glass-border)/0.08)]',
                   )}
                 >
                   <span
                     aria-hidden
                     className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-500 group-hover:opacity-100"
                     style={{
-                      background: `radial-gradient(120% 90% at 0% 0%, color-mix(in oklab, ${CATEGORY_TINT[m.category]} 14%, transparent), transparent 62%)`,
+                      background: `radial-gradient(120% 90% at 0% 0%, color-mix(in oklab, ${CATEGORY_TINT[m.category]} 16%, transparent), transparent 64%)`,
                     }}
                   />
 
@@ -156,20 +164,19 @@ export function Modules() {
                     <m.icon className="h-[17px] w-[17px]" strokeWidth={1.9} />
                   </span>
 
-                  <h3
-                    className={cn(
-                      'mt-3.5 leading-snug font-semibold text-strong',
-                      m.featured ? 'text-[15.5px]' : 'text-[13.5px]',
-                    )}
-                  >
+                  {m.featured && (
+                    <span
+                      aria-hidden
+                      className="absolute top-3.5 right-3.5 h-1.5 w-1.5 rounded-full"
+                      style={{ background: CATEGORY_TINT[m.category] }}
+                    />
+                  )}
+
+                  <h3 className="mt-3 text-[13px] leading-snug font-semibold text-balance text-strong">
                     {m.name}
                   </h3>
 
-                  {m.featured && m.blurb && (
-                    <p className="mt-1.5 text-[12.5px] leading-relaxed text-subtle">{m.blurb}</p>
-                  )}
-
-                  <span className="mt-auto pt-3 font-mono text-[9.5px] tracking-[0.14em] text-subtle uppercase">
+                  <span className="mt-auto font-mono text-[9px] tracking-[0.14em] text-subtle uppercase">
                     {m.category}
                   </span>
                 </div>
@@ -178,14 +185,27 @@ export function Modules() {
           </AnimatePresence>
         </motion.ul>
 
-        {visible.length === 0 && (
+        {matches.length === 0 && (
           <p className="mt-16 text-center text-[14.5px] text-subtle">
             No module matches “{query}”. Tell us what you need — we build it into the core.
           </p>
         )}
 
+        {hidden > 0 && (
+          <div className="mt-8 flex justify-center">
+            <button
+              type="button"
+              onClick={() => setExpanded(true)}
+              className="group inline-flex items-center gap-2 rounded-full glass px-5 py-2.5 text-[13.5px] font-medium text-strong transition-colors duration-400 hover:border-brand-400/40"
+            >
+              Show all {matches.length} modules
+              <ChevronDown className="h-3.5 w-3.5 transition-transform duration-300 group-hover:translate-y-0.5" />
+            </button>
+          </div>
+        )}
+
         <Reveal delay={0.1}>
-          <p className="mt-12 text-center text-[13.5px] text-subtle">
+          <p className="mt-10 text-center text-[13.5px] text-subtle">
             Showing{' '}
             <span className="font-semibold text-strong">
               {visible.length} of {MODULES.length}
