@@ -73,7 +73,7 @@ function OverviewSkeleton() {
 export default function DashboardPage() {
   const { user } = useAuthStore();
   const router = useRouter();
-  const { data, loading } = useDashboardInsights();
+  const { data, loading, error } = useDashboardInsights();
 
   const today = new Date().toLocaleDateString("en-IN", {
     weekday: "long",
@@ -108,7 +108,16 @@ export default function DashboardPage() {
           <span className="text-xs text-subtle">· live from your data</span>
         </div>
 
-        {loading || !data ? (
+        {error ? (
+          <Card>
+            <CardContent className="flex flex-col items-center gap-2 py-10 text-center">
+              <p className="text-sm font-medium text-danger">{error}</p>
+              <p className="text-xs text-muted">
+                Check that the API server is running, then reload this page.
+              </p>
+            </CardContent>
+          </Card>
+        ) : loading || !data ? (
           <OverviewSkeleton />
         ) : (
           <div className="stagger-in grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-6">

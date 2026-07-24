@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { Bell, ChevronDown, LogOut, Menu, Search, Settings } from "lucide-react";
 import { useAuthStore, useSidebarStore } from "@/store";
+import { logout as apiLogout } from "@/lib/api/auth";
 import { Avatar } from "@/components/ui";
 import { breadcrumbFor } from "@/lib/navigation";
 import { ThemeToggle } from "./ThemeToggle";
@@ -30,7 +31,7 @@ const INITIAL_NOTIFICATIONS: Notification[] = [
 ];
 
 export function Topbar() {
-  const { user, logout } = useAuthStore();
+  const { user, signOut } = useAuthStore();
   const { isCollapsed, openMobile } = useSidebarStore();
   const pathname = usePathname();
   const router = useRouter();
@@ -39,8 +40,11 @@ export function Topbar() {
   const [notifications, setNotifications] = useState(INITIAL_NOTIFICATIONS);
 
   const handleLogout = () => {
-    logout();
-    router.push("/login");
+    // Clears the stored token as well as the in-memory session, so a refresh
+    // can't silently restore the account that just signed out.
+    apiLogout();
+    signOut();
+    router.replace("/login");
   };
 
   const openNotification = (n: Notification) => {

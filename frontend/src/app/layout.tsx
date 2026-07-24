@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
+import { SessionProvider } from "@/components/providers/SessionProvider";
 import { ToastProvider } from "@/components/ui/Toast";
 import { TooltipProvider } from "@/components/ui/Tooltip";
 
@@ -19,7 +20,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <ThemeProvider>
           <ToastProvider>
             {/* App-wide so any page body can use <Tooltip>, not just the sidebar. */}
-            <TooltipProvider>{children}</TooltipProvider>
+            <TooltipProvider>
+              <SessionProvider>{children}</SessionProvider>
+            </TooltipProvider>
           </ToastProvider>
         </ThemeProvider>
       </body>

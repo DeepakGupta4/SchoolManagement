@@ -4,29 +4,25 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { School } from "lucide-react";
+import { School, TriangleAlert } from "lucide-react";
 import { Button, Card, CardContent, Input } from "@/components/ui";
 import { useAuthStore } from "@/store";
+import { login } from "@/lib/api/auth";
 import { loginSchema, type LoginSchema } from "@/lib/schemas/login";
-import type { UserRole } from "@/types";
 
-/**
- * Demo sign-in. There is no auth backend yet, so any well-formed credentials
- * are accepted and the chosen role is written to the client store. Swap the
- * body of `onSubmit` for a real token exchange when the API lands — nothing
- * else on this page needs to change.
- */
-
-const DEMO_ACCOUNTS: { role: UserRole; name: string; email: string; label: string }[] = [
-  { role: "school_admin", name: "Rajesh Kumar", email: "admin@springdale.edu", label: "School Admin" },
-  { role: "teacher", name: "Priya Sharma", email: "priya.sharma@springdale.edu", label: "Teacher" },
-  { role: "student", name: "Aarav Sharma", email: "aarav.sharma@springdale.edu", label: "Student" },
+/** Demo accounts seeded by the backend — all share one password. */
+const DEMO_ACCOUNTS = [
+  { label: "Admin", email: "admin@springdale.edu" },
+  { label: "Principal", email: "principal@springdale.edu" },
+  { label: "Teacher", email: "priya.sharma@springdale.edu" },
 ];
+
+const DEMO_PASSWORD = "springdale123";
 
 export default function LoginPage() {
   const router = useRouter();
-  const setUser = useAuthStore((s) => s.setUser);
-  const [selected, setSelected] = useState(0);
+  const signIn = useAuthStore((s) => s.signIn);
+  const [error, setError] = useState<string | null>(null);
 
   const {
     register,
@@ -37,22 +33,20 @@ export default function LoginPage() {
     resolver: zodResolver(loginSchema),
     defaultValues: {
       email: DEMO_ACCOUNTS[0].email,
-      password: "springdale",
+      password: DEMO_PASSWORD,
       remember: true,
     },
   });
 
   const onSubmit = handleSubmit(async (values) => {
-    const account = DEMO_ACCOUNTS[selected];
-    setUser({
-      id: String(selected + 1),
-      name: account.name,
-      email: values.email,
-      role: account.role,
-      avatar: "",
-      schoolId: "school_1",
-    });
-    router.push("/dashboard");
+    setError(null);
+    try {
+      const user = await login(values.email, values.password);
+      signIn(user);
+      router.replace("/dashboard");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not sign in. Please try again.");
+    }
   });
 
   return (
@@ -69,22 +63,17 @@ export default function LoginPage() {
         <Card>
           <CardContent className="flex flex-col gap-4">
             <div>
-              <p className="mb-2 text-xs font-medium text-muted">Sign in as</p>
+              <p className="mb-2 text-xs font-medium text-muted">Demo accounts</p>
               <div className="grid grid-cols-3 gap-1.5">
-                {DEMO_ACCOUNTS.map((account, i) => (
+                {DEMO_ACCOUNTS.map((account) => (
                   <button
-                    key={account.role}
+                    key={account.email}
                     type="button"
                     onClick={() => {
-                      setSelected(i);
                       setValue("email", account.email);
+                      setValue("password", DEMO_PASSWORD);
                     }}
-                    aria-pressed={selected === i}
-                    className={
-                      selected === i
-                        ? "focus-ring rounded-md bg-primary px-2 py-1.5 text-xs font-medium text-white"
-                        : "focus-ring rounded-md bg-surface-hover px-2 py-1.5 text-xs font-medium text-muted transition-colors hover:text-text"
-                    }
+                    className="focus-ring rounded-md bg-surface-hover px-2 py-1.5 text-xs font-medium text-muted transition-colors hover:text-text"
                   >
                     {account.label}
                   </button>
@@ -117,14 +106,21 @@ export default function LoginPage() {
                 <span className="text-sm text-muted">Keep me signed in</span>
               </label>
 
+              {error && (
+                <p className="flex items-start gap-2 rounded-md bg-danger-soft px-3 py-2.5 text-xs text-danger-text">
+                  <TriangleAlert className="mt-0.5 size-3.5 shrink-0" />
+                  {error}
+                </p>
+              )}
+
               <Button type="submit" disabled={isSubmitting} className="w-full">
                 {isSubmitting ? "Signing in…" : "Sign in"}
               </Button>
             </form>
 
             <p className="rounded-md bg-warning-soft px-3 py-2 text-xs text-warning-text">
-              Demo build — there is no auth backend yet, so any valid-looking
-              credentials will sign you in.
+              Demo build — accounts are seeded by the backend. Password for all:{" "}
+              <span className="font-mono font-semibold">{DEMO_PASSWORD}</span>
             </p>
           </CardContent>
         </Card>

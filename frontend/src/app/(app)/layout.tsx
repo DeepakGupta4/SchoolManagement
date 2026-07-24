@@ -14,17 +14,27 @@ import { useAuthStore } from "@/store";
  * scroll position, expanded groups and filter text all survive.
  */
 export default function AppLayout({ children }: { children: React.ReactNode }) {
-  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const status = useAuthStore((s) => s.status);
   const router = useRouter();
 
-  // Client-side guard only. It stops a signed-out user from sitting on a
-  // half-rendered dashboard, but it is NOT security — anyone can reach the
-  // page source. Real protection needs server-side session checks.
+  // Only redirect once the session has actually resolved — bouncing during
+  // `loading` would throw a signed-in user out on every page refresh.
   useEffect(() => {
-    if (!isAuthenticated) router.replace("/login");
-  }, [isAuthenticated, router]);
+    if (status === "guest") router.replace("/login");
+  }, [status, router]);
 
-  if (!isAuthenticated) return null;
+  if (status === "loading") {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-bg">
+        <div className="flex flex-col items-center gap-3">
+          <div className="size-6 animate-spin rounded-full border-2 border-border border-t-primary" />
+          <p className="text-sm text-muted">Restoring your session…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (status === "guest") return null;
 
   return <AppShell>{children}</AppShell>;
 }

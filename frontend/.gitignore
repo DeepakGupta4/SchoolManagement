@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Example files must be committed so anyone deploying knows what to set.
+!.env.example

@@ -74,7 +74,7 @@ function NavLeaf({
       {isActive && !collapsed && (
         <span className="absolute -left-2.5 top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-r-full bg-primary" />
       )}
-      <Icon className="size-4 shrink-0" />
+      <Icon className={cn("size-4 shrink-0", isActive && "text-primary")} />
       {!collapsed && <span className="flex-1 truncate">{item.title}</span>}
     </Link>
   );
@@ -297,7 +297,7 @@ export function Sidebar() {
             return (
               <div key={group.label} className={cn(gi > 0 && "mt-5")}>
                 {showLabel ? (
-                  <p className="mb-1.5 px-2.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-subtle">
+                  <p className="mb-1.5 px-2.5 text-[10px] font-bold uppercase tracking-[0.08em] text-muted">
                     {group.label}
                   </p>
                 ) : (

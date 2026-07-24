@@ -2,25 +2,29 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { User } from "@/types";
 
+/**
+ * `loading` matters: on a page refresh the token is verified against the
+ * server before we know who (if anyone) is signed in. Redirecting to /login
+ * during that window would bounce a perfectly valid session.
+ */
+export type AuthStatus = "loading" | "authenticated" | "guest";
+
 interface AuthStore {
   user: User | null;
+  status: AuthStatus;
   isAuthenticated: boolean;
-  setUser: (user: User) => void;
-  logout: () => void;
+  signIn: (user: User) => void;
+  signOut: () => void;
+  setGuest: () => void;
 }
 
 export const useAuthStore = create<AuthStore>((set) => ({
-  user: {
-    id: "1",
-    name: "Rajesh Kumar",
-    email: "admin@springdale.edu",
-    role: "school_admin",
-    avatar: "",
-    schoolId: "school_1",
-  },
-  isAuthenticated: true,
-  setUser: (user) => set({ user, isAuthenticated: true }),
-  logout: () => set({ user: null, isAuthenticated: false }),
+  user: null,
+  status: "loading",
+  isAuthenticated: false,
+  signIn: (user) => set({ user, status: "authenticated", isAuthenticated: true }),
+  signOut: () => set({ user: null, status: "guest", isAuthenticated: false }),
+  setGuest: () => set({ user: null, status: "guest", isAuthenticated: false }),
 }));
 
 interface SidebarStore {

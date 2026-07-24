@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.env
+*.log
+
+# Example files must be committed so anyone deploying knows what to set.
+!.env.example

@@ -38,18 +38,29 @@ export interface DashboardInsights {
 export function useDashboardInsights() {
   const [data, setData] = useState<DashboardInsights | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
 
     (async () => {
-      const [students, teachers, admissions, exams, accounts] = await Promise.all([
-        listStudents(),
-        listTeachers(),
-        admissionsApi.list(),
-        examsApi.list(),
-        feeAccountsApi.list(),
-      ]);
+      let students, teachers, admissions, exams, accounts;
+      try {
+        // Students now come over the network, so a failure here is a real
+        // possibility — without this the dashboard would spin forever.
+        [students, teachers, admissions, exams, accounts] = await Promise.all([
+          listStudents(),
+          listTeachers(),
+          admissionsApi.list(),
+          examsApi.list(),
+          feeAccountsApi.list(),
+        ]);
+      } catch (e) {
+        if (cancelled) return;
+        setError(e instanceof Error ? e.message : "Could not load dashboard data.");
+        setLoading(false);
+        return;
+      }
       if (cancelled) return;
 
       const thisMonth = new Date().getMonth();
@@ -91,5 +102,5 @@ export function useDashboardInsights() {
     };
   }, []);
 
-  return { data, loading };
+  return { data, loading, error };
 }
