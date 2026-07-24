@@ -1,6 +1,7 @@
 import { connectDatabase, disconnectDatabase } from "./config/db.js";
 import { User, hashPassword } from "./modules/auth/user.model.js";
 import { Student } from "./modules/students/student.model.js";
+import { Teacher } from "./modules/teachers/teacher.model.js";
 
 /**
  * Seeds demo accounts and students.
@@ -49,6 +50,13 @@ export async function seedDatabase({ quiet = false } = {}) {
   }
   log(`  ${DEMO_USERS.length} demo users ready`);
 
+  // Each collection is seeded independently — an early return here once
+  // skipped every collection after students, leaving them silently empty.
+  await seedStudents(log);
+  await seedTeachers(log);
+}
+
+async function seedStudents(log: (msg: string) => void) {
   const existing = await Student.countDocuments();
   if (existing > 0) {
     log(`  students collection already has ${existing} records — skipped`);
@@ -90,6 +98,53 @@ export async function seedDatabase({ quiet = false } = {}) {
 
   await Student.insertMany(students);
   log(`  inserted ${students.length} students`);
+}
+
+const T_FIRST = ["Priya", "Rahul", "Anita", "Suresh", "Kavita", "Amit", "Deepa", "Vikram", "Sunita", "Manoj", "Rekha", "Sanjay", "Nisha", "Alok"];
+const SUBJECTS = ["Mathematics", "Physics", "Chemistry", "Biology", "English", "Hindi", "History", "Geography", "Computer Science", "Physical Education"];
+const DEPARTMENTS = ["Science", "Mathematics", "Languages", "Social Studies", "Computer Science", "Sports"];
+const QUALIFICATIONS = ["M.Sc, B.Ed", "M.A, B.Ed", "Ph.D", "M.Tech", "B.Ed", "M.Com, B.Ed"];
+
+async function seedTeachers(log: (msg: string) => void) {
+  if ((await Teacher.countDocuments()) > 0) {
+    log("  teachers collection already populated — skipped");
+    return;
+  }
+
+  const teachers = Array.from({ length: 18 }, (_, i) => {
+    const firstName = pick(T_FIRST, i);
+    const lastName = pick(LAST, i * 3 + 2);
+    const primary = pick(SUBJECTS, i);
+    const roll = (i * 13) % 100;
+
+    return {
+      schoolId: "school_1",
+      employeeId: `EMP${1001 + i}`,
+      firstName,
+      lastName,
+      email: `${firstName.toLowerCase()}.${lastName.toLowerCase()}${i}@springdale.edu`,
+      phone: `9${820000000 + i * 219731}`,
+      gender: i % 2 === 0 ? "female" : "male",
+      dateOfBirth: `${1975 + (i % 18)}-0${(i % 9) + 1}-1${i % 9}`,
+      joiningDate: `${2012 + (i % 12)}-0${(i % 9) + 1}-0${(i % 8) + 1}`,
+      department: pick(DEPARTMENTS, i * 5 + 1),
+      subjects: roll > 60 ? [primary, pick(SUBJECTS, i + 3)] : [primary],
+      classes: [pick(CLASSES, i * 2), pick(CLASSES, i * 3 + 1)],
+      qualification: pick(QUALIFICATIONS, i),
+      experienceYears: 1 + (roll % 22),
+      employmentType: roll > 85 ? "part-time" : roll > 78 ? "contract" : "full-time",
+      status: roll > 88 ? "on-leave" : roll > 82 ? "inactive" : "active",
+      address: `${20 + i}, Civil Lines, New Delhi`,
+      salary: (35 + (roll % 60)) * 1000,
+      isClassTeacher: i % 3 === 0,
+      rating: Math.round((3.4 + (roll % 16) / 10) * 10) / 10,
+      attendancePercent: 78 + (roll % 22),
+      weeklyPeriods: 12 + (roll % 20),
+    };
+  });
+
+  await Teacher.insertMany(teachers);
+  log(`  inserted ${teachers.length} teachers`);
 }
 
 /** Standalone entry point: `npm run seed`. */

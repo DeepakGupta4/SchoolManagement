@@ -22,6 +22,7 @@ import { ParticleField } from '@/components/effects/ParticleField'
 import { MagneticButton } from '@/components/ui/MagneticButton'
 import { LiveDot } from '@/components/ui/Primitives'
 import { DashboardUI } from '@/components/product/DashboardUI'
+import { ScaledPreview } from '@/components/product/ScaledPreview'
 import { useHasPointer } from '@/hooks/useMouse'
 import { scrollToId } from '@/hooks/useLenis'
 
@@ -109,7 +110,7 @@ export function Hero({ onBookDemo }: { onBookDemo: () => void }) {
       id="top"
       ref={sectionRef}
       onPointerMove={onPointerMove}
-      className="relative isolate overflow-hidden pt-32 pb-20 md:pt-40 md:pb-28 lg:pt-44 lg:pb-32"
+      className="relative isolate overflow-hidden pt-28 pb-20 md:pt-32 md:pb-28 lg:pt-36 lg:pb-32"
     >
       <Aurora />
       <GridBackdrop />
@@ -119,7 +120,7 @@ export function Hero({ onBookDemo }: { onBookDemo: () => void }) {
       <div className="pointer-events-none absolute inset-x-0 bottom-0 -z-10 h-40 bg-[linear-gradient(180deg,transparent,rgb(var(--surface)))]" />
 
       <motion.div style={{ opacity: fade }} className="container-x">
-        <div className="grid items-center gap-14 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:gap-10 xl:gap-16">
+        <div className="grid items-center gap-14 lg:grid-cols-[minmax(0,1.02fr)_minmax(0,1fr)] lg:gap-12 xl:gap-16">
           {/* ------------------------------------------------------- Copy */}
           <motion.div style={{ y: copyY }} className="relative z-10 max-w-2xl">
             <motion.a
@@ -143,7 +144,7 @@ export function Hero({ onBookDemo }: { onBookDemo: () => void }) {
               <ArrowRight className="h-3.5 w-3.5 text-subtle transition-transform duration-300 group-hover:translate-x-0.5" />
             </motion.a>
 
-            <h1 className="mt-7 font-display text-[clamp(2.5rem,6.6vw,4.5rem)] leading-[1.02] font-extrabold tracking-[-0.04em]">
+            <h1 className="mt-7 font-display text-[clamp(2.25rem,4.6vw,3.5rem)] leading-[1.05] font-extrabold tracking-[-0.04em]">
               {['Building', "India's", 'Most', 'Advanced'].map((word, i) => (
                 <span key={word} className="inline-block overflow-hidden pb-[0.06em] align-bottom">
                   <motion.span
@@ -265,9 +266,9 @@ export function Hero({ onBookDemo }: { onBookDemo: () => void }) {
               />
 
               <div className="relative overflow-hidden rounded-[20px] glass-strong p-2 shadow-lift">
-                <div className="aspect-[16/11] w-full overflow-hidden rounded-[14px]">
+                <ScaledPreview className="w-full rounded-[14px]">
                   <DashboardUI />
-                </div>
+                </ScaledPreview>
               </div>
 
               {/* -------------------------------------------- Widgets */}

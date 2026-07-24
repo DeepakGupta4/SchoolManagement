@@ -16,10 +16,12 @@ export default defineConfig({
     cssCodeSplit: true,
     rollupOptions: {
       output: {
-        manualChunks: {
-          motion: ['framer-motion'],
-          gsap: ['gsap'],
-          carousel: ['embla-carousel-react'],
+        // Keep the heavy animation libs out of the entry chunk.
+        manualChunks(id) {
+          if (id.includes('node_modules/framer-motion')) return 'motion'
+          if (id.includes('node_modules/gsap') || id.includes('node_modules/lenis')) return 'scroll'
+          if (id.includes('node_modules/embla-carousel')) return 'carousel'
+          return undefined
         },
       },
     },

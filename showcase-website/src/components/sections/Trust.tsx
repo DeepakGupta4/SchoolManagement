@@ -1,9 +1,9 @@
-import CountUp from 'react-countup'
 import { motion } from 'framer-motion'
 import { ShieldCheck, Sparkles, Zap } from 'lucide-react'
 import { TRUST_STATS } from '@/data/site'
 import { Marquee } from '@/components/ui/Primitives'
 import { Reveal } from '@/components/ui/Reveal'
+import { Counter } from '@/components/ui/Counter'
 import { EASE_PREMIUM } from '@/lib/motion'
 import { cn } from '@/lib/utils'
 
@@ -61,16 +61,7 @@ export function Trust() {
                 className="pointer-events-none absolute inset-x-0 top-0 h-px scale-x-0 bg-[linear-gradient(90deg,transparent,var(--color-brand-500),transparent)] transition-transform duration-700 group-hover:scale-x-100"
               />
               <p className="font-display text-[clamp(2rem,4.4vw,3rem)] leading-none font-extrabold tracking-tight">
-                <span className="text-gradient">
-                  <CountUp
-                    end={stat.value}
-                    duration={2.6}
-                    separator=","
-                    enableScrollSpy
-                    scrollSpyOnce
-                  />
-                  {stat.suffix}
-                </span>
+                <Counter to={stat.value} suffix={stat.suffix} className="text-gradient" />
               </p>
               <p className="mt-3 text-[13.5px] font-medium text-strong">{stat.label}</p>
               <p className="mt-0.5 font-mono text-[10.5px] tracking-wide text-subtle uppercase">
