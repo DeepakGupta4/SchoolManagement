@@ -19,13 +19,16 @@ export function Logo({ className }: { className?: string }) {
       className={cn('group flex shrink-0 items-center gap-2.5', className)}
       aria-label="SchoolDeck home"
     >
-      {/* The actual logo lockup (icon + wordmark). Kept in a white rounded
-          chip because the image has a light background — this way it reads
-          cleanly on the navbar in both light and dark themes. Swap for a
-          transparent-background PNG to drop the chip. */}
-      <span className="relative overflow-hidden rounded-lg bg-white px-2.5 py-1.5 shadow-glow ring-1 ring-black/5">
+      <span className="relative grid h-9 w-9 place-items-center overflow-hidden rounded-xl bg-white shadow-glow ring-1 ring-black/5">
         <span className="absolute inset-0 -translate-x-full bg-[linear-gradient(110deg,transparent,rgb(255_255_255/0.6),transparent)] transition-transform duration-700 group-hover:translate-x-full" />
-        <img src="/logo.png" alt="SchoolDeck" className="relative h-6 w-auto object-contain" />
+        <img src="/logo-icon.png" alt="SchoolDeck" className="relative h-full w-full object-contain" />
+      </span>
+      {/* Two-tone wordmark matching the logo: "School" neutral, "Deck" blue.
+          "School" uses text-strong (not a fixed navy) so it stays legible in
+          dark mode; "Deck" keeps the logo's blue in both themes. */}
+      <span className="font-display text-[15px] leading-none font-extrabold tracking-tight">
+        <span className="text-strong">School</span>
+        <span className="text-[#2563eb]">Deck</span>
       </span>
     </a>
   )
