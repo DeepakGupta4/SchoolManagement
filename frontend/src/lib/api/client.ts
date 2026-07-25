@@ -8,7 +8,7 @@
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
-const TOKEN_KEY = "schoolos.token";
+const TOKEN_KEY = "schooldeck.token";
 
 export function getToken(): string | null {
   if (typeof window === "undefined") return null;

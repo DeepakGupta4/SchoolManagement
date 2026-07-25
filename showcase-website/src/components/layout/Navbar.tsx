@@ -23,8 +23,12 @@ export function Logo({ className }: { className?: string }) {
         <span className="absolute inset-0 -translate-x-full bg-[linear-gradient(110deg,transparent,rgb(255_255_255/0.6),transparent)] transition-transform duration-700 group-hover:translate-x-full" />
         <img src="/logo-icon.png" alt="SchoolDeck" className="relative h-full w-full object-contain" />
       </span>
-      <span className="font-display text-[17px] leading-none font-extrabold tracking-tight text-strong">
-        Build<span className="text-gradient">SchoolDeck</span>
+      {/* Two-tone wordmark matching the logo: "School" neutral, "Deck" blue.
+          "School" uses text-strong (not a fixed navy) so it stays legible in
+          dark mode; "Deck" keeps the logo's blue in both themes. */}
+      <span className="font-display text-[17px] leading-none font-extrabold tracking-tight">
+        <span className="text-strong">School</span>
+        <span className="text-[#2563eb]">Deck</span>
       </span>
     </a>
   )
