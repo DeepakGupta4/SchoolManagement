@@ -61,7 +61,7 @@ export function FinalCTA({ onBookDemo }: { onBookDemo: () => void }) {
                 >
                   Book Live Demo
                 </MagneticButton>
-                <MagneticButton size="lg" variant="outline" href="mailto:hello@buildschoolos.com">
+                <MagneticButton size="lg" variant="outline" href="mailto:hello@schooldeck.com">
                   Email the founders
                 </MagneticButton>
               </div>

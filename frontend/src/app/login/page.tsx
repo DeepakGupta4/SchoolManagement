@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { School, TriangleAlert } from "lucide-react";
+import { TriangleAlert } from "lucide-react";
 import { Button, Card, CardContent, Input } from "@/components/ui";
 import { useAuthStore } from "@/store";
 import { login } from "@/lib/api/auth";
@@ -53,10 +54,10 @@ export default function LoginPage() {
     <main className="flex min-h-screen items-center justify-center bg-bg px-4 py-10">
       <div className="w-full max-w-sm">
         <div className="mb-6 flex flex-col items-center text-center">
-          <div className="mb-3 flex size-11 items-center justify-center rounded-lg gradient-indigo shadow-sm">
-            <School className="size-5 text-white" />
+          <div className="mb-3 flex size-11 items-center justify-center overflow-hidden rounded-lg bg-white shadow-sm ring-1 ring-border">
+            <Image src="/logo-icon.png" alt="SchoolDeck" width={44} height={44} className="size-full object-contain" />
           </div>
-          <h1 className="text-lg font-semibold text-text">Sign in to EduManage</h1>
+          <h1 className="text-lg font-semibold text-text">Sign in to SchoolDeck</h1>
           <p className="mt-1 text-sm text-muted">Springdale School · New Delhi</p>
         </div>
 

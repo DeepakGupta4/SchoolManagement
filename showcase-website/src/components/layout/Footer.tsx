@@ -29,7 +29,7 @@ export function Footer() {
         className="pointer-events-none absolute inset-x-0 -bottom-6 flex justify-center overflow-hidden select-none md:-bottom-12"
       >
         <span className="font-display text-[19vw] leading-none font-extrabold tracking-tighter text-[rgb(var(--glass-border)/0.045)]">
-          SchoolOS
+          SchoolDeck
         </span>
       </div>
 
@@ -46,11 +46,11 @@ export function Footer() {
 
               <div className="mt-6 space-y-2.5">
                 <a
-                  href="mailto:hello@buildschoolos.com"
+                  href="mailto:hello@schooldeck.com"
                   className="flex items-center gap-2.5 text-[13.5px] text-body transition-colors duration-300 hover:text-strong"
                 >
                   <Mail className="h-3.5 w-3.5 text-brand-500" />
-                  hello@buildschoolos.com
+                  hello@schooldeck.com
                 </a>
                 <p className="flex items-center gap-2.5 text-[13.5px] text-subtle">
                   <MapPin className="h-3.5 w-3.5 text-brand-500" />
@@ -103,7 +103,7 @@ export function Footer() {
         {/* Bottom bar */}
         <div className="mt-16 flex flex-col items-center justify-between gap-4 border-t border-[rgb(var(--glass-border)/0.08)] pt-7 md:flex-row">
           <p className="text-[12.5px] text-subtle">
-            © {new Date().getFullYear()} BuildSchoolOS Technologies Pvt. Ltd. All rights reserved.
+            © {new Date().getFullYear()} SchoolDeck Technologies Pvt. Ltd. All rights reserved.
           </p>
           <div className="flex items-center gap-5">
             <span className="inline-flex items-center gap-2 font-mono text-[11px] text-subtle">

@@ -99,7 +99,7 @@ export function PhoneFrame({
 export function BrowserFrame({
   children,
   className,
-  url = 'app.buildschoolos.com/overview',
+  url = 'app.schooldeck.com/overview',
 }: {
   children: ReactNode
   className?: string

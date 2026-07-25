@@ -65,7 +65,7 @@ export interface PaymentAllocation {
   amount: number;
 }
 
-export type PaymentStatus = "paid" | "pending-clearance" | "cancelled";
+export type PaymentStatus = "paid" | "pending-clearance" | "cancelled" | "bounced";
 
 export interface Payment {
   id: string;
@@ -84,6 +84,21 @@ export interface Payment {
   remarks: string;
   collectedBy: string;
   status: PaymentStatus;
+  /** Set when the payment was reversed (cancelled or bounced). */
+  reversedAt?: string | null;
+  reversedBy?: string;
+  reversalReason?: string;
+}
+
+export interface FeeSummary {
+  collectedToday: number;
+  byMode: Record<string, number>;
+  totalCollected: number;
+  outstanding: number;
+  defaulters: number;
+  pendingClearance: number;
+  accounts: number;
+  receipts: number;
 }
 
 /* ------------------------------------------------------------------ */
@@ -186,4 +201,30 @@ export async function collectPayment(input: {
     method: "POST",
     body: { accountId: account.id, allocations, method, reference, bank, remarks },
   });
+}
+
+/** Marks a pending cheque/DD as realised. */
+export async function clearPayment(id: string): Promise<Payment> {
+  return apiRequest<Payment>(`/api/fees/payments/${id}/clear`, { method: "POST" });
+}
+
+/** Marks a pending cheque/DD as bounced — the server reverses the ledger. */
+export async function bouncePayment(id: string, reason: string): Promise<Payment> {
+  return apiRequest<Payment>(`/api/fees/payments/${id}/bounce`, {
+    method: "POST",
+    body: { reason },
+  });
+}
+
+/** Cancels a receipt — the server returns the money to the ledger. */
+export async function cancelPayment(id: string, reason: string): Promise<Payment> {
+  return apiRequest<Payment>(`/api/fees/payments/${id}/cancel`, {
+    method: "POST",
+    body: { reason },
+  });
+}
+
+/** The fee dashboard's day-book figures, all derived server-side. */
+export async function getFeeSummary(): Promise<FeeSummary> {
+  return apiRequest<FeeSummary>("/api/fees/summary");
 }

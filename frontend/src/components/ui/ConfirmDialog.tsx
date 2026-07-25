@@ -15,6 +15,10 @@ interface ConfirmDialogProps {
   destructive?: boolean;
   loading?: boolean;
   onConfirm: () => void;
+  /** Blocks the confirm button, e.g. until a required reason is filled. */
+  confirmDisabled?: boolean;
+  /** Optional extra content below the message, e.g. a reason field. */
+  children?: React.ReactNode;
 }
 
 export function ConfirmDialog({
@@ -27,6 +31,8 @@ export function ConfirmDialog({
   destructive = false,
   loading = false,
   onConfirm,
+  confirmDisabled = false,
+  children,
 }: ConfirmDialogProps) {
   return (
     <Modal
@@ -39,19 +45,26 @@ export function ConfirmDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
             {cancelLabel}
           </Button>
-          <Button variant={destructive ? "danger" : "primary"} onClick={onConfirm} disabled={loading}>
+          <Button
+            variant={destructive ? "danger" : "primary"}
+            onClick={onConfirm}
+            disabled={loading || confirmDisabled}
+          >
             {loading ? "Working…" : confirmLabel}
           </Button>
         </>
       }
     >
-      <div className="flex gap-3">
-        {destructive && (
-          <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-danger-soft text-danger">
-            <AlertTriangle className="size-4" />
-          </div>
-        )}
-        <p className="text-sm text-muted">{description}</p>
+      <div className="flex flex-col gap-4">
+        <div className="flex gap-3">
+          {destructive && (
+            <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-danger-soft text-danger">
+              <AlertTriangle className="size-4" />
+            </div>
+          )}
+          <p className="text-sm text-muted">{description}</p>
+        </div>
+        {children}
       </div>
     </Modal>
   );

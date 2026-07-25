@@ -715,7 +715,7 @@ export const FAQS = [
   },
   {
     q: 'Can we white-label it for our group?',
-    a: 'On Enterprise and above, yes — your logo, palette, custom domain and branded parent apps on both stores. Parents never see the BuildSchoolOS name unless you want them to.',
+    a: 'On Enterprise and above, yes — your logo, palette, custom domain and branded parent apps on both stores. Parents never see the SchoolDeck name unless you want them to.',
   },
 ]
 

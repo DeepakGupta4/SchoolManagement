@@ -85,10 +85,16 @@ const paymentSchema = new Schema(
     collectedBy: { type: String, required: true },
     status: {
       type: String,
-      enum: ["paid", "pending-clearance", "cancelled"],
+      enum: ["paid", "pending-clearance", "cancelled", "bounced"],
       default: "paid",
       index: true,
     },
+
+    // Audit trail for anything that reverses money. A cancelled or bounced
+    // receipt keeps its row (never deleted) so the register stays complete.
+    reversedAt: { type: String, default: null },
+    reversedBy: { type: String, default: "" },
+    reversalReason: { type: String, default: "" },
   },
   { timestamps: true }
 );

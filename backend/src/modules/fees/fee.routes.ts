@@ -187,4 +187,169 @@ router.post("/collect", canCollect, validate(collectBody), async (req, res, next
   }
 });
 
+/* ------------------------------------------------------------------ */
+/* Status transitions                                                   */
+/*                                                                      */
+/* Anything that takes money BACK out of the ledger (bounce, cancel)    */
+/* must do it in the same transaction that changes the receipt status,  */
+/* or a failure mid-way leaves the books wrong.                         */
+/* ------------------------------------------------------------------ */
+
+/** Subtracts a payment's allocations back off the account's paid figures. */
+async function reverseAllocations(
+  payment: PaymentDoc,
+  session: mongoose.ClientSession,
+  schoolId: string
+) {
+  const account = await FeeAccount.findOne({
+    studentId: payment.studentId,
+    schoolId,
+  }).session(session);
+  if (!account) return; // account deleted; nothing to unwind
+
+  const byHead = new Map(payment.allocations.map((a) => [a.head, a.amount]));
+  for (const head of account.heads) {
+    const back = byHead.get(head.head);
+    if (back) head.paid = Math.max(0, head.paid - back);
+  }
+  await account.save({ session });
+}
+
+/** Marks a cheque/DD as realised. No ledger change — it was already counted. */
+router.post("/payments/:id/clear", canCollect, async (req, res, next) => {
+  try {
+    const payment = await Payment.findOne({ _id: req.params.id, schoolId: req.user!.schoolId });
+    if (!payment) throw ApiError.notFound("Payment not found.");
+    if (payment.status !== "pending-clearance") {
+      throw ApiError.badRequest("Only a pending cheque or DD can be cleared.");
+    }
+    payment.status = "paid";
+    await payment.save();
+    res.json({ data: toPublic(payment as PaymentDoc) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+const reversalBody = z.object({ reason: z.string().min(3, "A reason is required") });
+
+/** A bounced cheque never really paid — reverse the ledger and mark it. */
+router.post(
+  "/payments/:id/bounce",
+  canCollect,
+  validate(reversalBody),
+  async (req, res, next) => {
+    const dbSession = await mongoose.startSession();
+    try {
+      let updated: PaymentDoc | null = null;
+      await dbSession.withTransaction(async () => {
+        const payment = await Payment.findOne({
+          _id: req.params.id,
+          schoolId: req.user!.schoolId,
+        }).session(dbSession);
+        if (!payment) throw ApiError.notFound("Payment not found.");
+        if (payment.status !== "pending-clearance") {
+          throw ApiError.badRequest("Only a pending cheque or DD can bounce.");
+        }
+        await reverseAllocations(payment as PaymentDoc, dbSession, req.user!.schoolId);
+        payment.status = "bounced";
+        payment.reversedAt = new Date().toISOString().slice(0, 10);
+        payment.reversedBy = req.user!.email;
+        payment.reversalReason = (req.body as z.infer<typeof reversalBody>).reason;
+        await payment.save({ session: dbSession });
+        updated = payment as PaymentDoc;
+      });
+      res.json({ data: toPublic(updated!) });
+    } catch (err) {
+      next(err);
+    } finally {
+      await dbSession.endSession();
+    }
+  }
+);
+
+/** Cancels a wrongly-recorded receipt and returns the money to the ledger. */
+router.post(
+  "/payments/:id/cancel",
+  canCollect,
+  validate(reversalBody),
+  async (req, res, next) => {
+    const dbSession = await mongoose.startSession();
+    try {
+      let updated: PaymentDoc | null = null;
+      await dbSession.withTransaction(async () => {
+        const payment = await Payment.findOne({
+          _id: req.params.id,
+          schoolId: req.user!.schoolId,
+        }).session(dbSession);
+        if (!payment) throw ApiError.notFound("Payment not found.");
+        if (payment.status === "cancelled" || payment.status === "bounced") {
+          throw ApiError.badRequest("This payment has already been reversed.");
+        }
+        await reverseAllocations(payment as PaymentDoc, dbSession, req.user!.schoolId);
+        payment.status = "cancelled";
+        payment.reversedAt = new Date().toISOString().slice(0, 10);
+        payment.reversedBy = req.user!.email;
+        payment.reversalReason = (req.body as z.infer<typeof reversalBody>).reason;
+        await payment.save({ session: dbSession });
+        updated = payment as PaymentDoc;
+      });
+      res.json({ data: toPublic(updated!) });
+    } catch (err) {
+      next(err);
+    } finally {
+      await dbSession.endSession();
+    }
+  }
+);
+
+/**
+ * The accountant's day-book: today's collection broken down by mode, plus the
+ * headline figures the fee dashboard needs. All derived from the register and
+ * ledger — never stored, so it can't drift.
+ */
+router.get("/summary", async (req, res, next) => {
+  try {
+    const schoolId = req.user!.schoolId;
+    const today = new Date().toISOString().slice(0, 10);
+
+    const [accounts, payments] = await Promise.all([
+      FeeAccount.find({ schoolId }),
+      Payment.find({ schoolId }),
+    ]);
+
+    // Cancelled and bounced receipts are excluded from every money total.
+    const live = payments.filter((p) => p.status === "paid" || p.status === "pending-clearance");
+
+    const collectedToday = live
+      .filter((p) => p.date === today)
+      .reduce((sum, p) => sum + p.amount, 0);
+
+    const byMode: Record<string, number> = {};
+    for (const p of live.filter((p) => p.date === today)) {
+      byMode[p.method] = (byMode[p.method] ?? 0) + p.amount;
+    }
+
+    const totalCollected = live.reduce((sum, p) => sum + p.amount, 0);
+    const outstanding = accounts.reduce((sum, a) => sum + balanceOf(a), 0);
+    const defaulters = accounts.filter((a) => balanceOf(a) > 0).length;
+    const pendingClearance = payments.filter((p) => p.status === "pending-clearance").length;
+
+    res.json({
+      data: {
+        collectedToday,
+        byMode,
+        totalCollected,
+        outstanding,
+        defaulters,
+        pendingClearance,
+        accounts: accounts.length,
+        receipts: live.length,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 export default router;

@@ -1,20 +1,12 @@
 "use client";
 
-import React, { useState } from "react";
-import {
-  AlertTriangle,
-  Download,
-  Mail,
-  Phone,
-  Search,
-  Send,
-  Siren,
-  Users,
-  Wallet,
-} from "lucide-react";
+import { useCallback, useMemo, useState } from "react";
+import { AlertTriangle, Download, Search, Siren, Users, Wallet } from "lucide-react";
 import {
   Badge,
   Button,
+  Card,
+  CardContent,
   Input,
   PageHeader,
   StatCard,
@@ -24,20 +16,14 @@ import {
 } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import { exportToCsv } from "@/lib/exportCsv";
-import { FEE_DEFAULTERS as defaulters, type FeeDefaulter } from "@/lib/api/feeRecords";
-
-
-type Defaulter = FeeDefaulter;
-
-const urgencyConfig = (
-  months: number
-): { label: string; variant: "danger" | "warning" | "info"; tile: string } => {
-  if (months >= 3) return { label: "Critical", variant: "danger", tile: "bg-danger-soft text-danger-text" };
-  if (months === 2) return { label: "High", variant: "warning", tile: "bg-warning-soft text-warning-text" };
-  return { label: "Medium", variant: "info", tile: "bg-info-soft text-info-text" };
-};
-
-const filters = ["All", "Critical", "High", "Medium"];
+import { useAsyncList } from "@/hooks/useAsyncList";
+import {
+  feeAccountsApi,
+  balanceOf,
+  totalBilled,
+  totalPaid,
+  type StudentFeeAccount,
+} from "@/lib/api/feeLedger";
 
 const inr = new Intl.NumberFormat("en-IN", {
   style: "currency",
@@ -45,159 +31,161 @@ const inr = new Intl.NumberFormat("en-IN", {
   maximumFractionDigits: 0,
 });
 
+/** Whole months between a date and today; 0 if never paid can't be computed. */
+function monthsSince(iso: string | null): number | null {
+  if (!iso) return null;
+  const then = new Date(iso);
+  if (Number.isNaN(then.getTime())) return null;
+  const now = new Date();
+  const months = (now.getFullYear() - then.getFullYear()) * 12 + (now.getMonth() - then.getMonth());
+  return Math.max(0, months);
+}
+
+/** Urgency is driven by the outstanding AMOUNT — a real, derivable signal. */
+function urgency(due: number): { label: string; variant: "danger" | "warning" | "info"; tile: string } {
+  if (due >= 15000) return { label: "Critical", variant: "danger", tile: "bg-danger-soft text-danger-text" };
+  if (due >= 5000) return { label: "High", variant: "warning", tile: "bg-warning-soft text-warning-text" };
+  return { label: "Medium", variant: "info", tile: "bg-info-soft text-info-text" };
+}
+
+const TIERS = ["All", "Critical", "High", "Medium"];
+
 export default function DefaultersPage() {
-  const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState("All");
   const { toast } = useToast();
+  const [search, setSearch] = useState("");
+  const [tier, setTier] = useState("All");
 
-  const filtered = defaulters.filter((d) => {
-    const matchSearch =
-      d.name.toLowerCase().includes(search.toLowerCase()) ||
-      d.id.toLowerCase().includes(search.toLowerCase()) ||
-      d.class.toLowerCase().includes(search.toLowerCase());
-    const matchFilter =
-      filter === "All" ||
-      (filter === "Critical" && d.months >= 3) ||
-      (filter === "High" && d.months === 2) ||
-      (filter === "Medium" && d.months === 1);
-    return matchSearch && matchFilter;
-  });
+  // Only accounts with an outstanding balance — the server computes standing.
+  const fetcher = useCallback(() => feeAccountsApi.list({ search, standing: "due" }), [search]);
+  const { items, loading, error, refetch } = useAsyncList<StudentFeeAccount>(fetcher);
 
-  const totalDue = defaulters.reduce((s, d) => s + d.due, 0);
+  const rows = useMemo(() => {
+    return items
+      .map((a) => ({ account: a, due: balanceOf(a) }))
+      .filter(({ due }) => due > 0)
+      .filter(({ due }) => tier === "All" || urgency(due).label === tier)
+      .sort((a, b) => b.due - a.due);
+  }, [items, tier]);
+
+  const stats = useMemo(() => {
+    const withDue = items.map((a) => balanceOf(a)).filter((d) => d > 0);
+    return {
+      total: withDue.length,
+      due: withDue.reduce((s, d) => s + d, 0),
+      critical: withDue.filter((d) => d >= 15000).length,
+      high: withDue.filter((d) => d >= 5000 && d < 15000).length,
+    };
+  }, [items]);
 
   const handleExport = () => {
-    if (filtered.length === 0) {
-      toast({
-        title: "Nothing to export",
-        description: "No defaulters match the current filters.",
-        variant: "warning",
-      });
+    if (rows.length === 0) {
+      toast({ title: "Nothing to export", description: "No defaulters match the filters.", variant: "warning" });
       return;
     }
-    exportToCsv<Defaulter>(
+    exportToCsv<(typeof rows)[number]>(
       "fee-defaulters",
       [
-        { header: "Student ID", value: (d) => d.id },
-        { header: "Name", value: (d) => d.name },
-        { header: "Class", value: (d) => d.class },
-        { header: "Parent", value: (d) => d.parent },
-        { header: "Phone", value: (d) => d.phone },
-        { header: "Total Fee (INR)", value: (d) => d.totalFee },
-        { header: "Paid (INR)", value: (d) => d.paid },
-        { header: "Due (INR)", value: (d) => d.due },
-        { header: "Months Overdue", value: (d) => d.months },
-        { header: "Urgency", value: (d) => urgencyConfig(d.months).label },
-        { header: "Last Paid", value: (d) => d.lastPaid },
+        { header: "Admission No", value: (r) => r.account.admissionNo },
+        { header: "Name", value: (r) => r.account.name },
+        { header: "Class", value: (r) => `${r.account.className} ${r.account.section}` },
+        { header: "Guardian", value: (r) => r.account.guardian },
+        { header: "Phone", value: (r) => r.account.guardianPhone },
+        { header: "Billed (INR)", value: (r) => totalBilled(r.account) },
+        { header: "Paid (INR)", value: (r) => totalPaid(r.account) },
+        { header: "Due (INR)", value: (r) => r.due },
+        { header: "Last Paid", value: (r) => r.account.lastPaymentDate ?? "Never" },
+        { header: "Urgency", value: (r) => urgency(r.due).label },
       ],
-      filtered
+      rows
     );
-    toast({
-      title: "Export ready",
-      description: `${filtered.length} defaulter${filtered.length === 1 ? "" : "s"} exported to CSV.`,
-    });
+    toast({ title: "Export ready", description: `${rows.length} defaulters exported.` });
   };
 
-  const columns: Column<Defaulter>[] = [
+  type Row = (typeof rows)[number];
+
+  const columns: Column<Row>[] = [
     {
       key: "name",
       header: "Student",
       sortable: true,
-      render: (d) => {
-        const urg = urgencyConfig(d.months);
+      sortValue: (r) => r.account.name,
+      render: (r) => {
+        const urg = urgency(r.due);
         return (
           <div className="flex items-center gap-3">
             <div className={cn("flex size-9 shrink-0 items-center justify-center rounded-md", urg.tile)}>
               <AlertTriangle className="size-4" />
             </div>
             <div className="min-w-0">
-              <p className="truncate font-medium text-text">{d.name}</p>
-              <p className="truncate text-xs text-subtle">{d.id}</p>
+              <p className="truncate font-medium text-text">{r.account.name}</p>
+              <p className="truncate text-xs text-subtle">{r.account.admissionNo}</p>
             </div>
           </div>
         );
       },
     },
-    { key: "class", header: "Class", render: (d) => <Badge variant="info">{d.class}</Badge> },
     {
-      key: "parent",
-      header: "Parent / Guardian",
-      sortable: true,
-      render: (d) => <span className="whitespace-nowrap text-muted">{d.parent}</span>,
+      key: "class",
+      header: "Class",
+      render: (r) => <Badge variant="info">{`${r.account.className} · ${r.account.section}`}</Badge>,
     },
     {
-      key: "phone",
-      header: "Contact",
-      render: (d) => <span className="whitespace-nowrap text-muted">{d.phone}</span>,
-    },
-    {
-      key: "totalFee",
-      header: "Total Fee",
+      key: "guardian",
+      header: "Guardian",
       sortable: true,
-      align: "right",
-      render: (d) => <span className="whitespace-nowrap text-muted">{inr.format(d.totalFee)}</span>,
+      sortValue: (r) => r.account.guardian,
+      render: (r) => (
+        <div className="min-w-0">
+          <p className="truncate text-muted">{r.account.guardian}</p>
+          <p className="truncate text-xs text-subtle">{r.account.guardianPhone}</p>
+        </div>
+      ),
     },
     {
       key: "paid",
       header: "Paid",
       sortable: true,
+      sortValue: (r) => totalPaid(r.account),
       align: "right",
-      render: (d) => (
-        <span className="whitespace-nowrap font-medium text-success">{inr.format(d.paid)}</span>
+      render: (r) => (
+        <span className="whitespace-nowrap font-medium text-success">
+          {inr.format(totalPaid(r.account))}
+        </span>
       ),
     },
     {
       key: "due",
-      header: "Due Amount",
+      header: "Due",
       sortable: true,
+      sortValue: (r) => r.due,
       align: "right",
-      render: (d) => (
-        <span className="whitespace-nowrap font-semibold text-danger">{inr.format(d.due)}</span>
+      render: (r) => (
+        <span className="whitespace-nowrap font-semibold text-danger">{inr.format(r.due)}</span>
       ),
-    },
-    {
-      key: "months",
-      header: "Overdue",
-      sortable: true,
-      align: "right",
-      render: (d) => <span className="whitespace-nowrap text-muted">{d.months} mo.</span>,
     },
     {
       key: "lastPaid",
       header: "Last Paid",
-      render: (d) => <span className="whitespace-nowrap text-subtle">{d.lastPaid}</span>,
+      render: (r) => {
+        const months = monthsSince(r.account.lastPaymentDate);
+        return (
+          <span className="whitespace-nowrap text-subtle">
+            {r.account.lastPaymentDate
+              ? `${r.account.lastPaymentDate}${months ? ` · ${months} mo. ago` : ""}`
+              : "Never"}
+          </span>
+        );
+      },
     },
     {
       key: "urgency",
       header: "Urgency",
       sortable: true,
-      sortValue: (d) => d.months,
-      render: (d) => {
-        const urg = urgencyConfig(d.months);
+      sortValue: (r) => r.due,
+      render: (r) => {
+        const urg = urgency(r.due);
         return <Badge variant={urg.variant}>{urg.label}</Badge>;
       },
-    },
-    {
-      key: "actions",
-      header: "",
-      align: "right",
-      render: (d) => (
-        <div className="flex items-center justify-end gap-1">
-          {[
-            { Icon: Phone, label: "Call" },
-            { Icon: Mail, label: "Email" },
-            { Icon: Send, label: "Send reminder" },
-          ].map(({ Icon, label }) => (
-            <button
-              key={label}
-              title={label}
-              aria-label={`${label} — ${d.name}`}
-              className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
-            >
-              <Icon className="size-4" />
-            </button>
-          ))}
-        </div>
-      ),
     },
   ];
 
@@ -205,53 +193,35 @@ export default function DefaultersPage() {
     <div className="flex flex-col gap-5">
       <PageHeader
         title="Fee Defaulters"
-        description="Students with pending fee dues"
+        description="Students with an outstanding balance, derived live from the ledger."
         actions={
-          <>
-            <Button variant="outline" onClick={handleExport}>
-              <Download className="size-4" />
-              Export
-            </Button>
-            {/* Disabled until SMS/WhatsApp delivery is connected — this would
-                message every listed guardian. */}
-            <Button variant="danger" disabled title="Messaging is not connected yet">
-              <Send className="size-4" />
-              Send Reminders
-            </Button>
-          </>
+          <Button variant="outline" onClick={handleExport}>
+            <Download className="size-4" />
+            Export
+          </Button>
         }
       />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Total Defaulters" value={defaulters.length} icon={Users} tone="rose" />
-        <StatCard label="Total Due Amount" value={inr.format(totalDue)} icon={Wallet} tone="amber" />
-        <StatCard
-          label="Critical (3+ mo.)"
-          value={defaulters.filter((d) => d.months >= 3).length}
-          icon={Siren}
-          tone="rose"
-        />
-        <StatCard
-          label="High (2 mo.)"
-          value={defaulters.filter((d) => d.months === 2).length}
-          icon={AlertTriangle}
-          tone="amber"
-        />
+        <StatCard label="Total defaulters" value={stats.total} icon={Users} tone="rose" />
+        <StatCard label="Total due" value={inr.format(stats.due)} icon={Wallet} tone="amber" />
+        <StatCard label="Critical (≥ ₹15k)" value={stats.critical} icon={Siren} tone="rose" />
+        <StatCard label="High (≥ ₹5k)" value={stats.high} icon={AlertTriangle} tone="amber" />
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex gap-1 rounded-md bg-surface-sunken p-1">
-          {filters.map((f) => (
+          {TIERS.map((t) => (
             <button
-              key={f}
-              onClick={() => setFilter(f)}
-              aria-pressed={filter === f}
+              key={t}
+              onClick={() => setTier(t)}
+              aria-pressed={tier === t}
               className={cn(
                 "focus-ring rounded-sm px-3.5 py-1.5 text-xs font-medium transition-colors",
-                filter === f ? "bg-surface-raised text-text shadow-sm" : "text-muted hover:text-text"
+                tier === t ? "bg-surface-raised text-text shadow-sm" : "text-muted hover:text-text"
               )}
             >
-              {f}
+              {t}
             </button>
           ))}
         </div>
@@ -259,23 +229,35 @@ export default function DefaultersPage() {
         <div className="min-w-60 flex-1">
           <Input
             type="search"
-            placeholder="Search defaulters…"
+            placeholder="Search by name, admission no. or guardian…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             icon={<Search className="size-4" />}
             aria-label="Search defaulters"
           />
         </div>
-        <p className="text-xs text-muted">{filtered.length} students</p>
+        <p className="text-xs text-muted">{rows.length} students</p>
       </div>
 
-      <Table
-        columns={columns}
-        rows={filtered}
-        rowKey={(d) => d.id}
-        emptyTitle="No defaulters found"
-        emptyDescription="Try adjusting your filters to see more results."
-      />
+      {error ? (
+        <Card>
+          <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+            <p className="text-sm font-medium text-danger">{error}</p>
+            <Button variant="outline" onClick={refetch}>
+              Try again
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <Table
+          columns={columns}
+          rows={rows}
+          rowKey={(r) => r.account.id}
+          loading={loading}
+          emptyTitle="No defaulters found"
+          emptyDescription="Every listed student has cleared their dues. 🎉"
+        />
+      )}
     </div>
   );
 }

@@ -139,7 +139,7 @@ export function Hero({ onBookDemo }: { onBookDemo: () => void }) {
                 New
               </span>
               <span className="text-[13px] font-medium text-body">
-                SchoolOS AI — 10 copilots now live
+                SchoolDeck AI — 10 copilots now live
               </span>
               <ArrowRight className="h-3.5 w-3.5 text-subtle transition-transform duration-300 group-hover:translate-x-0.5" />
             </motion.a>
@@ -320,7 +320,7 @@ export function Hero({ onBookDemo }: { onBookDemo: () => void }) {
                     <span className="grid h-6 w-6 place-items-center rounded-lg bg-[linear-gradient(135deg,var(--color-brand-600),var(--color-azure-600))]">
                       <Sparkles className="h-3 w-3 text-white" />
                     </span>
-                    <p className="text-[11px] font-semibold text-strong">SchoolOS AI</p>
+                    <p className="text-[11px] font-semibold text-strong">SchoolDeck AI</p>
                     <LiveDot className="ml-auto" />
                   </div>
                   <p className="text-[10.5px] leading-snug text-subtle">

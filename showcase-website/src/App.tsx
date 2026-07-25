@@ -14,8 +14,8 @@ import { Trust } from '@/components/sections/Trust'
 const ProductShowcase = lazy(() =>
   import('@/components/sections/ProductShowcase').then((m) => ({ default: m.ProductShowcase })),
 )
-const WhySchoolOS = lazy(() =>
-  import('@/components/sections/WhySchoolOS').then((m) => ({ default: m.WhySchoolOS })),
+const WhySchoolDeck = lazy(() =>
+  import('@/components/sections/WhySchoolDeck').then((m) => ({ default: m.WhySchoolDeck })),
 )
 const Modules = lazy(() =>
   import('@/components/sections/Modules').then((m) => ({ default: m.Modules })),
@@ -76,7 +76,7 @@ function Site() {
 
         <Suspense fallback={<SectionFallback />}>
           <ProductShowcase />
-          <WhySchoolOS />
+          <WhySchoolDeck />
           <Modules />
           <AISection />
           <WorkflowBuilder />

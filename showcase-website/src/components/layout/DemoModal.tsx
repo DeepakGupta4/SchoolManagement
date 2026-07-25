@@ -86,7 +86,7 @@ export function DemoModal({ open, onClose }: { open: boolean; onClose: () => voi
                   Live demo
                 </span>
                 <h2 className="mt-4 font-display text-[26px] leading-tight font-bold">
-                  See BuildSchoolOS on your own data
+                  See SchoolDeck on your own data
                 </h2>
                 <p className="mt-2 text-[14px] leading-relaxed text-subtle">
                   Thirty minutes, no slides. We'll walk your actual workflows and hand you a

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ChevronDown, GraduationCap, Menu, Moon, Sun, X } from 'lucide-react'
+import { ChevronDown, Menu, Moon, Sun, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { EASE_PREMIUM } from '@/lib/motion'
 import { NAV_ITEMS } from '@/data/site'
@@ -17,14 +17,14 @@ export function Logo({ className }: { className?: string }) {
         scrollToId('top')
       }}
       className={cn('group flex shrink-0 items-center gap-2.5', className)}
-      aria-label="BuildSchoolOS home"
+      aria-label="SchoolDeck home"
     >
-      <span className="relative grid h-9 w-9 place-items-center overflow-hidden rounded-xl bg-[linear-gradient(135deg,var(--color-brand-600),var(--color-azure-600)_60%,var(--color-aqua-500))] shadow-glow">
-        <span className="absolute inset-0 -translate-x-full bg-[linear-gradient(110deg,transparent,rgb(255_255_255/0.5),transparent)] transition-transform duration-700 group-hover:translate-x-full" />
-        <GraduationCap className="relative h-[18px] w-[18px] text-white" strokeWidth={2.4} />
+      <span className="relative grid h-9 w-9 place-items-center overflow-hidden rounded-xl bg-white shadow-glow ring-1 ring-black/5">
+        <span className="absolute inset-0 -translate-x-full bg-[linear-gradient(110deg,transparent,rgb(255_255_255/0.6),transparent)] transition-transform duration-700 group-hover:translate-x-full" />
+        <img src="/logo-icon.png" alt="SchoolDeck" className="relative h-full w-full object-contain" />
       </span>
       <span className="font-display text-[17px] leading-none font-extrabold tracking-tight text-strong">
-        Build<span className="text-gradient">SchoolOS</span>
+        Build<span className="text-gradient">SchoolDeck</span>
       </span>
     </a>
   )

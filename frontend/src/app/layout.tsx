@@ -9,8 +9,8 @@ import { TooltipProvider } from "@/components/ui/Tooltip";
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 export const metadata: Metadata = {
-  title: "EduManage — School Management System",
-  description: "Complete School Management SaaS Platform",
+  title: "SchoolDeck — School Management System",
+  description: "SchoolDeck — the operating system for modern schools",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

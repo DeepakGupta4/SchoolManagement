@@ -9,7 +9,7 @@ import { Reveal } from '@/components/ui/Reveal'
 
 type Mode = 'before' | 'after'
 
-export function WhySchoolOS() {
+export function WhySchoolDeck() {
   const [mode, setMode] = useState<Mode>('before')
   const items = mode === 'before' ? PROBLEMS : SOLUTIONS
   const isAfter = mode === 'after'
@@ -18,7 +18,7 @@ export function WhySchoolOS() {
     <section id="why" className="relative scroll-mt-24 overflow-hidden py-24 md:py-32 lg:py-40">
       <div className="container-x">
         <SectionHeading
-          eyebrow="Why BuildSchoolOS"
+          eyebrow="Why SchoolDeck"
           title={
             <>
               Your school is not short on effort.
@@ -60,7 +60,7 @@ export function WhySchoolOS() {
                       )}
                     />
                   )}
-                  {m === 'before' ? 'Without a system' : 'With BuildSchoolOS'}
+                  {m === 'before' ? 'Without a system' : 'With SchoolDeck'}
                 </button>
               ))}
             </div>

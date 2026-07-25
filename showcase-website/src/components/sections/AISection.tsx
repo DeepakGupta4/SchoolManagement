@@ -126,7 +126,7 @@ export function AISection() {
           eyebrow="The unfair advantage"
           title={
             <>
-              Meet <span className="text-gradient">SchoolOS AI</span>
+              Meet <span className="text-gradient">SchoolDeck AI</span>
             </>
           }
           description="Ten role-aware copilots that read your live school data and do the work — not a chatbot bolted onto a dashboard."

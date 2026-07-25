@@ -60,7 +60,7 @@ const TONE_DOT: Record<string, string> = {
 }
 
 /**
- * A live, DOM-rendered replica of the BuildSchoolOS admin console.
+ * A live, DOM-rendered replica of the SchoolDeck admin console.
  * Rendered rather than screenshotted so it stays crisp at any size,
  * respects the active theme, and can animate on scroll.
  */
@@ -100,7 +100,7 @@ export function DashboardUI({
           </div>
           {!compact && (
             <span className="font-display text-[11px] font-bold tracking-tight text-strong">
-              SchoolOS
+              SchoolDeck
             </span>
           )}
         </div>

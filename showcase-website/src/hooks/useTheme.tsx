@@ -10,7 +10,7 @@ type ThemeContextValue = {
 
 const ThemeContext = createContext<ThemeContextValue | null>(null)
 
-const STORAGE_KEY = 'buildschoolos-theme'
+const STORAGE_KEY = 'schooldeck-theme'
 
 function readInitialTheme(): Theme {
   if (typeof window === 'undefined') return 'dark'

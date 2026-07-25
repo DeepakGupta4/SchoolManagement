@@ -1,16 +1,10 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  ChevronDown,
-  PanelLeftClose,
-  PanelLeftOpen,
-  School,
-  Search,
-  X,
-} from "lucide-react";
+import { ChevronDown, PanelLeftClose, PanelLeftOpen, Search, X } from "lucide-react";
 import { useSidebarStore } from "@/store";
 import { navGroups, type NavEntry } from "@/lib/navigation";
 import { Tooltip } from "@/components/ui/Tooltip";
@@ -234,12 +228,14 @@ export function Sidebar() {
             isCollapsed && !isMobileOpen ? "justify-center px-0" : "px-4"
           )}
         >
-          <div className="flex size-8 shrink-0 items-center justify-center rounded-md gradient-indigo shadow-sm">
-            <School className="size-4 text-white" />
+          {/* White tile so the logo (which has a light background) reads cleanly
+              on the sidebar surface in both light and dark themes. */}
+          <div className="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-md bg-white shadow-sm ring-1 ring-border">
+            <Image src="/logo-icon.png" alt="SchoolDeck" width={32} height={32} className="size-full object-contain" />
           </div>
           {(!isCollapsed || isMobileOpen) && (
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold text-text">EduManage</p>
+              <p className="truncate text-sm font-semibold text-text">SchoolDeck</p>
               <p className="truncate text-[11px] text-subtle">Springdale School</p>
             </div>
           )}
