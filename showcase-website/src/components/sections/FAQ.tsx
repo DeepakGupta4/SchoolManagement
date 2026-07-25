@@ -18,7 +18,7 @@ export function FAQ({ onBookDemo }: { onBookDemo: () => void }) {
           <div className="lg:sticky lg:top-28 lg:self-start">
             <SectionHeading
               align="left"
-              eyebrow="Questions"
+              eyebrow="Frequently Asked Questions"
               title={
                 <>
                   Everything you'd ask

@@ -686,32 +686,48 @@ export const TESTIMONIALS = [
 
 export const FAQS = [
   {
-    q: 'How long does implementation actually take?',
+    q: 'What can SchoolDeck actually run for our school?',
+    a: 'One connected platform for the whole school: admissions and enquiries, student and staff records, attendance, timetables, exams and report cards, fee collection, payroll, transport, hostel, library, ID and admit cards, communication and analytics. It is a single system instead of five disconnected tools, so the same data flows everywhere.',
+  },
+  {
+    q: 'How long does it take to get up and running?',
     a: 'A single campus is typically live in 14 days. That includes data migration, role setup, staff training and a parallel-run week. Multi-campus groups average four to six weeks. You get a named onboarding lead for the entire period.',
   },
   {
     q: 'Can you migrate our existing data?',
-    a: 'Yes. We import from Excel, Tally, and every major ERP including Teachmint, Fedena, Entab and MyClassCampus. Historical fee ledgers, marks and attendance come across with their audit trail intact. Migration is included at no cost on annual plans.',
+    a: 'Yes. We import from Excel, Tally, and every major school ERP including Teachmint, Fedena, Entab and MyClassCampus. Historical fee ledgers, marks and attendance come across with their audit trail intact. Migration is included at no cost on annual plans.',
   },
   {
-    q: 'What happens to our data if we leave?',
-    a: 'It stays yours. Export everything, records, documents and ledgers, in open formats at any time from the admin console, no support ticket required. We also provide a full database dump on request during offboarding.',
+    q: 'Do we have to buy every module at once?',
+    a: 'No. Everything sits on one data model, so you switch on only the modules you need today and add the rest whenever you are ready. There is no fresh migration, no new vendor and no extra login when you grow into more of the platform.',
   },
   {
-    q: 'Is the AI trained on our students’ data?',
-    a: 'Your data is never used to train shared models. Each school runs against an isolated context, all inference is logged for audit, and AI features can be disabled per role or turned off entirely from settings.',
+    q: 'Do parents, students, teachers and drivers get their own apps?',
+    a: 'Yes. Each role gets its own view. Parents see fees, attendance, results, homework and bus location; students get timetable, assignments and results; teachers mark attendance and enter marks; drivers get their route and student list. Everyone works from the same live data, updated in real time.',
+  },
+  {
+    q: 'Can we collect fees online and support part payments?',
+    a: 'Yes. Fees can be collected at the counter or online through UPI, cards and net banking, with automatic receipts. The ledger supports partial payments, discounts, fines and cheque or DD handling, and every transaction is reconciled into a day-book you can close each evening.',
+  },
+  {
+    q: 'How does the AI help, and is it trained on our students’ data?',
+    a: 'Role-aware copilots read your live school data to draft the principal’s daily briefing, flag fee defaulters and at-risk students, and answer questions in plain language. Your data is never used to train shared models, each school runs in an isolated context, all inference is logged for audit, and AI can be disabled per role or turned off entirely.',
+  },
+  {
+    q: 'Is our data secure, and what happens if we leave?',
+    a: 'Every record is scoped to your school with role-based access, encrypted in transit and at rest, and backed up continuously. Your data stays yours: export records, documents and ledgers in open formats any time from the admin console, and we provide a full database dump on request during offboarding.',
   },
   {
     q: 'Does it work when the internet goes down?',
     a: 'Attendance, marks entry and fee collection continue offline on the mobile and desktop apps, then sync automatically with conflict resolution when the connection returns.',
   },
   {
-    q: 'How is pricing calculated for seasonal enrolment?',
-    a: 'You are billed on your enrolled headcount at the start of each term, not peak admissions traffic. Enquiries, alumni and staff accounts are never counted as students.',
+    q: 'Which biometric and transport hardware do you support?',
+    a: 'Fingerprint, face and RFID devices from eSSL, Mantra, ZKTeco, Realtime and Hikvision work out of the box. GPS trackers stream over standard protocols, so most fleet hardware connects without custom work.',
   },
   {
-    q: 'Which hardware do you support?',
-    a: 'Fingerprint, face and RFID devices from eSSL, Mantra, ZKTeco, Realtime and Hikvision work out of the box. GPS trackers stream over standard protocols, so most fleet hardware connects without custom work.',
+    q: 'How is pricing calculated for seasonal enrolment?',
+    a: 'You are billed on your enrolled headcount at the start of each term, not peak admissions traffic. Enquiries, alumni and staff accounts are never counted as students.',
   },
   {
     q: 'Can we white-label it for our group?',
