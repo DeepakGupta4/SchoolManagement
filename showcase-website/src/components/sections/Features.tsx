@@ -48,7 +48,7 @@ export function Features() {
               <span className="text-gradient">consumer-grade polish.</span>
             </>
           }
-          description="The parts nobody demos but everybody depends on — security, uptime, offline resilience and open APIs."
+          description="The parts nobody demos but everybody depends on: security, uptime, offline resilience and open APIs."
         />
 
         <div className="mt-14 grid gap-3.5 md:grid-cols-2 lg:grid-cols-3">
@@ -79,7 +79,7 @@ export function Features() {
                 Plays well with everything you already run
               </h3>
               <p className="mx-auto mt-3 max-w-xl text-[14.5px] text-subtle">
-                Payments, meetings, identity, messaging and hardware — connected natively, not
+                Payments, meetings, identity, messaging and hardware, connected natively, not
                 through a brittle middle layer.
               </p>
             </div>

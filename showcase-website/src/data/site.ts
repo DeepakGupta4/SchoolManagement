@@ -174,7 +174,7 @@ export const TRUST_STATS = [
 export const PROBLEMS = [
   {
     title: 'Manual work everywhere',
-    body: 'Attendance registers, fee receipts and marksheets re-typed into spreadsheets — every single day.',
+    body: 'Attendance registers, fee receipts and marksheets re-typed into spreadsheets, every single day.',
     metric: '18 hrs/week lost',
     icon: ClipboardCheck,
   },
@@ -219,7 +219,7 @@ export const SOLUTIONS = [
   },
   {
     title: 'Communication that lands',
-    body: 'WhatsApp, SMS, email and in-app — routed automatically, with delivery receipts on every message.',
+    body: 'WhatsApp, SMS, email and in-app, routed automatically, with delivery receipts on every message.',
     metric: '98% delivery',
     icon: Bell,
   },
@@ -417,7 +417,7 @@ export const AI_AGENTS = [
     role: 'Revenue intelligence',
     icon: Wallet,
     prompt: 'Project this quarter’s collection.',
-    answer: '₹2.84 Cr expected — 94% confidence. ₹18.6 L at risk across 62 families.',
+    answer: '₹2.84 Cr expected at 94% confidence. ₹18.6 L at risk across 62 families.',
   },
   {
     name: 'AI Timetable',
@@ -655,7 +655,7 @@ export const TESTIMONIALS = [
   },
   {
     quote:
-      'The AI Principal briefing is the first thing I open. It tells me what moved and what needs me — not another dashboard to decode.',
+      'The AI Principal briefing is the first thing I open. It tells me what moved and what needs me, not another dashboard to decode.',
     name: 'Director, International School',
     meta: 'Bengaluru · 1,800 students',
     initials: 'DI',
@@ -687,7 +687,7 @@ export const TESTIMONIALS = [
 export const FAQS = [
   {
     q: 'How long does implementation actually take?',
-    a: 'A single campus is typically live in 14 days — that includes data migration, role setup, staff training and a parallel-run week. Multi-campus groups average four to six weeks. You get a named onboarding lead for the entire period.',
+    a: 'A single campus is typically live in 14 days. That includes data migration, role setup, staff training and a parallel-run week. Multi-campus groups average four to six weeks. You get a named onboarding lead for the entire period.',
   },
   {
     q: 'Can you migrate our existing data?',
@@ -695,7 +695,7 @@ export const FAQS = [
   },
   {
     q: 'What happens to our data if we leave?',
-    a: 'It stays yours. Export everything — records, documents and ledgers — in open formats at any time from the admin console, no support ticket required. We also provide a full database dump on request during offboarding.',
+    a: 'It stays yours. Export everything, records, documents and ledgers, in open formats at any time from the admin console, no support ticket required. We also provide a full database dump on request during offboarding.',
   },
   {
     q: 'Is the AI trained on our students’ data?',
@@ -715,7 +715,7 @@ export const FAQS = [
   },
   {
     q: 'Can we white-label it for our group?',
-    a: 'On Enterprise and above, yes — your logo, palette, custom domain and branded parent apps on both stores. Parents never see the SchoolDeck name unless you want them to.',
+    a: 'On Enterprise and above, yes. Your logo, palette, custom domain and branded parent apps on both stores. Parents never see the SchoolDeck name unless you want them to.',
   },
 ]
 

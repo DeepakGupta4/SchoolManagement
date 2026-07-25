@@ -66,7 +66,7 @@ export function Modules() {
               <span className="text-gradient">Nothing is an integration.</span>
             </>
           }
-          description="One data model underneath all of it. Turn on what you need today, switch on the rest whenever you're ready — no migration, no new vendor, no extra login."
+          description="One data model underneath all of it. Turn on what you need today, switch on the rest whenever you're ready. No migration, no new vendor, no extra login."
         />
 
         {/* Controls */}
@@ -78,7 +78,7 @@ export function Modules() {
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search modules — payroll, hostel, timetable…"
+                placeholder="Search modules: payroll, hostel, timetable…"
                 aria-label="Search modules"
                 className="h-12 w-full rounded-2xl glass pr-4 pl-11 text-[14px] text-strong placeholder:text-subtle focus:border-brand-400/40"
               />
@@ -187,7 +187,7 @@ export function Modules() {
 
         {matches.length === 0 && (
           <p className="mt-16 text-center text-[14.5px] text-subtle">
-            No module matches “{query}”. Tell us what you need — we build it into the core.
+            No module matches “{query}”. Tell us what you need and we build it into the core.
           </p>
         )}
 

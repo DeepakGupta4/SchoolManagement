@@ -80,7 +80,7 @@ export function ProductShowcase() {
               <span className="text-gradient">Every screen your school lives in.</span>
             </>
           }
-          description="Not a screenshot gallery — this is the actual interface, rendered live and running the same components your staff will use every morning."
+          description="This is not a screenshot gallery. It's the actual interface, rendered live and running the same components your staff will use every morning."
         />
 
         {/* Scene switcher */}

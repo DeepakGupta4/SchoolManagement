@@ -129,7 +129,7 @@ export function AISection() {
               Meet <span className="text-gradient">SchoolDeck AI</span>
             </>
           }
-          description="Ten role-aware copilots that read your live school data and do the work — not a chatbot bolted onto a dashboard."
+          description="Ten role-aware copilots that read your live school data and do the work. Not a chatbot bolted onto a dashboard."
         />
 
         <div className="mt-14 grid gap-6 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:gap-10">

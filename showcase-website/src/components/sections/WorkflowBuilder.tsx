@@ -115,7 +115,7 @@ export function WorkflowBuilder() {
               <span className="text-gradient">Without writing a line of code.</span>
             </>
           }
-          description="Drag a trigger, drop a few actions, publish. Every module in SchoolDeck is available as a block — so a single admission can fan out into fees, messages and certificates automatically."
+          description="Drag a trigger, drop a few actions, publish. Every module in SchoolDeck is available as a block, so a single admission can fan out into fees, messages and certificates automatically."
         />
 
         <div className="mt-14 grid gap-6 lg:grid-cols-[minmax(0,260px)_minmax(0,1fr)] lg:gap-8">

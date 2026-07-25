@@ -139,7 +139,7 @@ export function Hero({ onBookDemo }: { onBookDemo: () => void }) {
                 New
               </span>
               <span className="text-[13px] font-medium text-body">
-                SchoolDeck AI — 10 copilots now live
+                SchoolDeck AI · 10 copilots now live
               </span>
               <ArrowRight className="h-3.5 w-3.5 text-subtle transition-transform duration-300 group-hover:translate-x-0.5" />
             </motion.a>
@@ -194,7 +194,7 @@ export function Hero({ onBookDemo }: { onBookDemo: () => void }) {
                 ))}
               </div>
               <p className="mt-5 max-w-xl text-[16px] leading-relaxed text-subtle md:text-[17.5px]">
-                Everything schools need — in{' '}
+                Everything schools need, in{' '}
                 <span className="font-semibold text-strong">one intelligent platform</span>. 100+
                 native modules, an AI suite that actually runs the operation, and analytics your
                 board will read twice.

@@ -40,21 +40,21 @@ export function Footer() {
             <div>
               <Logo />
               <p className="mt-5 max-w-sm text-[14px] leading-relaxed text-subtle">
-                Building India's most advanced school operating system — one intelligent platform
+                Building India's most advanced school operating system. One intelligent platform
                 for admissions, academics, finance, operations and AI.
               </p>
 
               <div className="mt-6 space-y-2.5">
                 <a
-                  href="mailto:hello@schooldeck.com"
+                  href="mailto:schooldeck.in@gmail.com"
                   className="flex items-center gap-2.5 text-[13.5px] text-body transition-colors duration-300 hover:text-strong"
                 >
                   <Mail className="h-3.5 w-3.5 text-brand-500" />
-                  hello@schooldeck.com
+                  schooldeck.in@gmail.com
                 </a>
                 <p className="flex items-center gap-2.5 text-[13.5px] text-subtle">
                   <MapPin className="h-3.5 w-3.5 text-brand-500" />
-                  Bengaluru · Pune · Remote-first
+                  Uttar Pradesh, India
                 </p>
               </div>
 

@@ -26,7 +26,7 @@ export function FAQ({ onBookDemo }: { onBookDemo: () => void }) {
                   <span className="text-gradient">in the first meeting.</span>
                 </>
               }
-              description="Still unsure? Thirty minutes with our team answers most of it — including the awkward ones."
+              description="Still unsure? Thirty minutes with our team answers most of it, including the awkward ones."
             />
             <Reveal delay={0.15}>
               <MagneticButton className="mt-7" size="md" variant="outline" onClick={onBookDemo}>
