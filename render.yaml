@@ -1,0 +1,38 @@
+# Render Blueprint for the SchoolDeck backend API.
+#
+# Deploy: Render Dashboard → New → Blueprint → pick this repo. Render reads this
+# file and creates the service with the correct build/start commands. You only
+# have to fill the two secrets marked `sync: false` (MONGODB_URI, CORS_ORIGINS).
+#
+# Or configure a plain Web Service manually with these exact settings:
+#   Root Directory : backend
+#   Build Command  : npm install --include=dev && npm run build
+#   Start Command  : npm start
+services:
+  - type: web
+    name: schooldeck-api
+    runtime: node
+    plan: free
+    rootDir: backend
+    # --include=dev forces TypeScript (a devDependency) to install even under
+    # NODE_ENV=production, so `tsc` is available to compile src/ into dist/.
+    buildCommand: npm install --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "20"
+      # A strong secret is generated once by Render and kept stable across deploys.
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      # Fill these in the dashboard (sync:false = not stored in the repo):
+      #   MONGODB_URI  → your Atlas connection string
+      #   CORS_ORIGINS → your frontend URL(s), comma-separated, no trailing slash
+      - key: MONGODB_URI
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
