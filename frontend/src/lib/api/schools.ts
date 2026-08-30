@@ -82,3 +82,8 @@ export async function resetSchoolPassword(schoolId: string): Promise<ResetPasswo
     method: "POST",
   });
 }
+
+/** Permanently delete a school, its logins and its registration request. */
+export async function deleteSchool(schoolId: string): Promise<void> {
+  await apiRequest<void>(`/api/schools/${schoolId}`, { method: "DELETE" });
+}

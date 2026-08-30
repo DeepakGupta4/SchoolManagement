@@ -16,12 +16,14 @@ import {
   Loader2,
   GraduationCap,
   XCircle,
+  Trash2,
 } from "lucide-react";
 import {
   Badge,
   Button,
   Card,
   CardContent,
+  ConfirmDialog,
   Input,
   Modal,
   PageHeader,
@@ -34,6 +36,7 @@ import { useAsyncList } from "@/hooks/useAsyncList";
 import {
   activateFree,
   activatePaid,
+  deleteSchool,
   extendTrial,
   listSchools,
   resetSchoolPassword,
@@ -103,6 +106,19 @@ export default function SchoolsPage() {
   const [managing, setManaging] = useState<ManagedSchool | null>(null);
   const [busy, setBusy] = useState(false);
   const [creds, setCreds] = useState<{ schoolName: string; email: string; password: string; emailDelivered: boolean } | null>(null);
+  const [deleting, setDeleting] = useState<ManagedSchool | null>(null);
+
+  const handleDelete = useCallback(async () => {
+    if (!deleting) return;
+    try {
+      await deleteSchool(deleting.schoolId);
+      toast({ title: "School deleted", description: `${deleting.name} and its data were removed.` });
+      setDeleting(null);
+      refetch();
+    } catch (e) {
+      toast({ title: "Delete failed", description: e instanceof Error ? e.message : "Please try again.", variant: "error" });
+    }
+  }, [deleting, toast, refetch]);
 
   const stats = useMemo(() => {
     const s = { total: schools.length, trial: 0, active: 0, expired: 0, suspended: 0 };
@@ -309,9 +325,31 @@ export default function SchoolsPage() {
               <ManageBtn icon={CreditCard} label="Activate Yearly" disabled={busy} onClick={() => run("Yearly plan activated", () => activatePaid(managing.schoolId, "yearly"))} />
               <ManageBtn icon={KeyRound} label="Reset password" disabled={busy} onClick={() => resetPassword(managing)} />
             </div>
+
+            <button
+              disabled={busy}
+              onClick={() => {
+                const d = managing;
+                setManaging(null);
+                setDeleting(d);
+              }}
+              className="flex w-full items-center justify-center gap-2 rounded-lg border border-danger-soft px-3 py-2.5 text-sm font-medium text-danger-text transition-colors hover:bg-danger-soft disabled:opacity-50"
+            >
+              <Trash2 className="size-4" /> Delete school permanently
+            </button>
           </div>
         )}
       </Modal>
+
+      <ConfirmDialog
+        open={!!deleting}
+        onOpenChange={(o) => !o && setDeleting(null)}
+        title={`Delete ${deleting?.name ?? ""}?`}
+        description="This permanently removes the school, all its user logins and its registration request. This cannot be undone."
+        confirmLabel="Delete permanently"
+        destructive
+        onConfirm={handleDelete}
+      />
 
       {/* Credentials after reset */}
       <Modal

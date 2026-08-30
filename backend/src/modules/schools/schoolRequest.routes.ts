@@ -122,11 +122,17 @@ router.get("/stats/overview", async (_req, res, next) => {
     let trialsExpired = 0;
     let paid = 0;
     let suspended = 0;
+    let revenue = 0; // ₹ value of currently-active paid subscriptions
     for (const s of schools) {
       const a = evaluateAccess(s);
       if (a.status === "suspended") suspended++;
-      else if (a.status === "active") paid++;
-      else if (a.status === "trial") activeTrials++;
+      else if (a.status === "active") {
+        // Free-access accounts read as "active" but aren't paying.
+        if (!s.subscription.freeAccess && s.subscription.plan !== "trial") {
+          paid++;
+          revenue += (s.subscription.plan === "yearly" ? env.PLAN_YEARLY_PRICE : env.PLAN_MONTHLY_PRICE) / 100;
+        }
+      } else if (a.status === "trial") activeTrials++;
       else if (a.status === "expired") trialsExpired++;
     }
 
@@ -140,7 +146,7 @@ router.get("/stats/overview", async (_req, res, next) => {
         trialsExpired,
         paidSchools: paid,
         suspendedSchools: suspended,
-        revenue: 0,
+        revenue,
       },
     });
   } catch (err) {
@@ -301,6 +307,27 @@ router.post("/:id/reject", validate(rejectSchema), async (req, res, next) => {
     );
 
     res.json({ data: toPublicRequest(request) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * Fully remove a request AND everything it created — the tenant school and all
+ * its user logins — in one go, so nothing is left orphaned across collections.
+ */
+router.delete("/:id", async (req, res, next) => {
+  try {
+    const request = await SchoolRequest.findById(req.params.id);
+    if (!request) throw ApiError.notFound("Request not found.");
+
+    if (request.schoolId) {
+      await School.deleteOne({ schoolId: request.schoolId });
+      await User.deleteMany({ schoolId: request.schoolId });
+    }
+    await SchoolRequest.deleteOne({ _id: request._id });
+
+    res.status(204).send();
   } catch (err) {
     next(err);
   }

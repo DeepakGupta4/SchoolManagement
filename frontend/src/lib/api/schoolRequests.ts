@@ -88,3 +88,8 @@ export async function rejectSchoolRequest(id: string, reason?: string): Promise<
     body: { reason },
   });
 }
+
+/** Removes the request and everything it created (school + user logins). */
+export async function deleteSchoolRequest(id: string): Promise<void> {
+  await apiRequest<void>(`/api/school-requests/${id}`, { method: "DELETE" });
+}

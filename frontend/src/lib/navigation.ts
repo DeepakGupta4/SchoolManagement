@@ -45,6 +45,7 @@ export const navGroups: NavGroup[] = [
     label: "Platform Admin",
     scope: "platform",
     items: [
+      { title: "Overview", href: "/overview", icon: LayoutDashboard },
       { title: "School Requests", href: "/school-requests", icon: Building2 },
       { title: "Schools", href: "/schools", icon: School },
     ],

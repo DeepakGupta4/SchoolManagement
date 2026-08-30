@@ -9,6 +9,7 @@ import { generateTempPassword } from "../../utils/password.js";
 import { sendEmail, isEmailConfigured } from "../../utils/email.js";
 import { passwordResetEmail } from "./emails.js";
 import { School, evaluateAccess, toPublicSchool, resetReminders, type SchoolDoc } from "./school.model.js";
+import { SchoolRequest } from "./schoolRequest.model.js";
 
 const router = Router();
 const DAY = 86_400_000;
@@ -232,6 +233,21 @@ router.post("/:schoolId/suspend", async (req, res, next) => {
     school.subscription.status = "suspended";
     await school.save();
     res.json({ data: toPublicSchool(school) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** Permanently remove a school, its user logins and its registration request. */
+router.delete("/:schoolId", async (req, res, next) => {
+  try {
+    const schoolId = String(req.params.schoolId);
+    const school = await School.findOne({ schoolId });
+    if (!school) throw ApiError.notFound("School not found.");
+    await User.deleteMany({ schoolId });
+    await SchoolRequest.deleteMany({ schoolId });
+    await School.deleteOne({ schoolId });
+    res.status(204).send();
   } catch (err) {
     next(err);
   }

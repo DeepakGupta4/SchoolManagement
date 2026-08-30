@@ -19,6 +19,7 @@ import {
   Play,
   Loader2,
   KeyRound,
+  Trash2,
 } from "lucide-react";
 import {
   Badge,
@@ -38,6 +39,7 @@ import { useAuthStore } from "@/store";
 import { useAsyncList } from "@/hooks/useAsyncList";
 import {
   approveSchoolRequest,
+  deleteSchoolRequest,
   getRequestStats,
   listSchoolRequests,
   rejectSchoolRequest,
@@ -168,6 +170,23 @@ export default function SchoolRequestsPage() {
   >(null);
   const [managing, setManaging] = useState<SchoolRequest | null>(null);
   const [manageBusy, setManageBusy] = useState(false);
+  const [deletingReq, setDeletingReq] = useState<SchoolRequest | null>(null);
+
+  const handleDeleteRequest = useCallback(async () => {
+    if (!deletingReq) return;
+    try {
+      await deleteSchoolRequest(deletingReq.id);
+      toast({ title: "Deleted", description: `${deletingReq.schoolName} was removed.` });
+      setDeletingReq(null);
+      reload();
+    } catch (e) {
+      toast({
+        title: "Delete failed",
+        description: e instanceof Error ? e.message : "Please try again.",
+        variant: "error",
+      });
+    }
+  }, [deletingReq, toast, reload]);
 
   const runManage = useCallback(
     async (label: string, fn: () => Promise<unknown>) => {
@@ -374,6 +393,9 @@ export default function SchoolRequestsPage() {
                 <SlidersHorizontal className="size-4" /> Manage
               </Button>
             )}
+            <Button size="sm" variant="ghost" onClick={() => setDeletingReq(r)} title="Delete">
+              <Trash2 className="size-4 text-danger-text" />
+            </Button>
           </div>
         ),
       },
@@ -537,6 +559,17 @@ export default function SchoolRequestsPage() {
           rows={3}
         />
       </ConfirmDialog>
+
+      {/* Delete (full cleanup) */}
+      <ConfirmDialog
+        open={!!deletingReq}
+        onOpenChange={(o) => !o && setDeletingReq(null)}
+        title={`Delete ${deletingReq?.schoolName ?? ""}?`}
+        description="This permanently removes the request and, if approved, the school and all its user logins. This cannot be undone."
+        confirmLabel="Delete permanently"
+        destructive
+        onConfirm={handleDeleteRequest}
+      />
 
       {/* Approval result — shows the one-time temporary password */}
       <Modal
