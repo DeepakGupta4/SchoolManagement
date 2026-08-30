@@ -12,6 +12,7 @@ import feeRoutes from "./modules/fees/fee.routes.js";
 import schoolRequestRoutes from "./modules/schools/schoolRequest.routes.js";
 import schoolRoutes from "./modules/schools/school.routes.js";
 import subscriptionRoutes from "./modules/schools/subscription.routes.js";
+import notificationRoutes from "./modules/notifications/notification.routes.js";
 import { requireAuth } from "./middleware/auth.js";
 import { checkSubscription } from "./middleware/subscription.js";
 
@@ -57,6 +58,7 @@ export function createApp() {
   // Not gated: schools can read their own subscription state and pay while locked.
   app.use("/api/schools", schoolRoutes);
   app.use("/api/subscription", subscriptionRoutes);
+  app.use("/api/notifications", notificationRoutes);
   app.use("/api/school-requests", schoolRequestRoutes);
 
   app.use(notFoundHandler);

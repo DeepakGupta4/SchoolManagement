@@ -8,6 +8,8 @@ import { useAuthStore, useSidebarStore } from "@/store";
 import { logout as apiLogout } from "@/lib/api/auth";
 import { Avatar } from "@/components/ui";
 import { breadcrumbFor } from "@/lib/navigation";
+import { useNotifications } from "@/hooks/useNotifications";
+import type { AppNotification } from "@/lib/api/notifications";
 import { ThemeToggle } from "./ThemeToggle";
 import { CommandPalette } from "./CommandPalette";
 import { cn } from "@/lib/utils";
@@ -15,20 +17,17 @@ import { cn } from "@/lib/utils";
 const menuItemClasses =
   "flex cursor-pointer items-center gap-2.5 rounded-md px-3 py-2 text-[13px] outline-none transition-colors";
 
-interface Notification {
-  id: number;
-  title: string;
-  detail: string;
-  unread: boolean;
-  /** Where clicking the notification takes you. */
-  href: string;
+/** "just now", "5m", "3h", "2d" — compact relative time for the bell. */
+function relativeTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const m = Math.floor(diff / 60_000);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  return `${d}d ago`;
 }
-
-const INITIAL_NOTIFICATIONS: Notification[] = [
-  { id: 1, title: "14 students marked absent", detail: "Attendance · today", unread: true, href: "/attendance" },
-  { id: 2, title: "₹1,24,000 fees pending", detail: "Finance · 9 defaulters", unread: true, href: "/fees/defaulters" },
-  { id: 3, title: "Exam schedule published", detail: "Examinations · 2 days ago", unread: false, href: "/exams/schedule" },
-];
 
 export function Topbar() {
   const { user, signOut } = useAuthStore();
@@ -37,7 +36,7 @@ export function Topbar() {
   const router = useRouter();
 
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const [notifications, setNotifications] = useState(INITIAL_NOTIFICATIONS);
+  const { items: notifications, unread: unreadCount, markAll, markOne } = useNotifications();
 
   const handleLogout = () => {
     // Clears the stored token as well as the in-memory session, so a refresh
@@ -47,18 +46,13 @@ export function Topbar() {
     router.replace("/login");
   };
 
-  const openNotification = (n: Notification) => {
-    setNotifications((prev) =>
-      prev.map((item) => (item.id === n.id ? { ...item, unread: false } : item))
-    );
-    router.push(n.href);
+  const openNotification = (n: AppNotification) => {
+    markOne(n.id);
+    if (n.link) router.push(n.link);
   };
 
-  const markAllRead = () =>
-    setNotifications((prev) => prev.map((item) => ({ ...item, unread: false })));
+  const markAllRead = () => markAll();
   const trail = breadcrumbFor(pathname);
-  // Derived from state, not the seed const — otherwise the badge never clears.
-  const unreadCount = notifications.filter((n) => n.unread).length;
 
   // ⌘K / Ctrl+K opens the palette from anywhere.
   useEffect(() => {
@@ -170,12 +164,14 @@ export function Topbar() {
                       <span
                         className={cn(
                           "mt-1.5 size-1.5 shrink-0 rounded-full",
-                          n.unread ? "bg-primary" : "bg-transparent"
+                          !n.read ? "bg-primary" : "bg-transparent"
                         )}
                       />
                       <span className="min-w-0">
                         <span className="block text-[13px] font-medium text-text">{n.title}</span>
-                        <span className="mt-0.5 block text-[11px] text-subtle">{n.detail}</span>
+                        <span className="mt-0.5 block text-[11px] text-subtle">
+                          {[n.body, relativeTime(n.createdAt)].filter(Boolean).join(" · ")}
+                        </span>
                       </span>
                     </DropdownMenu.Item>
                   ))}

@@ -6,6 +6,7 @@ import {
   trialExpiredEmail,
   subscriptionExpiringSoonEmail,
 } from "./emails.js";
+import { notifySchool } from "../notifications/notification.model.js";
 
 /**
  * Sweeps every school and sends any subscription email that has come due —
@@ -47,6 +48,12 @@ export async function runSubscriptionReminders(now: Date = new Date()): Promise<
             loginUrl: env.APP_LOGIN_URL,
           })
         );
+        void notifySchool(school.schoolId, {
+          type: "sub_expiring",
+          title: "Subscription expiring soon",
+          body: `Your plan ends in ${days(sub.paidEndDate)} day(s). Renew to avoid interruption.`,
+          link: "/subscription",
+        });
         sub.notifiedPaidEnding = true;
         counts.paidEnding++;
         changed = true;
@@ -62,6 +69,12 @@ export async function runSubscriptionReminders(now: Date = new Date()): Promise<
             loginUrl: env.APP_LOGIN_URL,
           })
         );
+        void notifySchool(school.schoolId, {
+          type: "trial_ending",
+          title: "Free trial ending soon",
+          body: `${days(sub.trialEndDate)} day(s) left. Activate a plan to keep access.`,
+          link: "/subscription",
+        });
         sub.notifiedTrialEnding = true;
         counts.trialEnding++;
         changed = true;
@@ -70,6 +83,12 @@ export async function runSubscriptionReminders(now: Date = new Date()): Promise<
         await sendEmail(
           trialExpiredEmail({ to: school.email, schoolName: school.name, loginUrl: env.APP_LOGIN_URL })
         );
+        void notifySchool(school.schoolId, {
+          type: "trial_expired",
+          title: "Your free trial has expired",
+          body: `Activate a subscription to continue. Your data is safe.`,
+          link: "/subscription",
+        });
         sub.notifiedTrialExpired = true;
         counts.trialExpired++;
         changed = true;

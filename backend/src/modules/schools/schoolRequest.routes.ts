@@ -12,6 +12,7 @@ import { School, evaluateAccess } from "./school.model.js";
 import { Student } from "../students/student.model.js";
 import { Teacher } from "../teachers/teacher.model.js";
 import { requestReceivedEmail, approvalEmail, rejectionEmail } from "./emails.js";
+import { notifySuperAdmin, notifySchool } from "../notifications/notification.model.js";
 
 const router = Router();
 
@@ -54,6 +55,13 @@ router.post("/", validate(registrationSchema), async (req, res, next) => {
 
     // Best-effort acknowledgement — never let a mail hiccup fail the sign-up.
     void sendEmail(requestReceivedEmail({ to: email, schoolName: body.schoolName }));
+    // In-app alert for the platform owner.
+    void notifySuperAdmin({
+      type: "school_request",
+      title: "New school registration",
+      body: `${body.schoolName} requested a 7-day free trial.`,
+      link: "/school-requests",
+    });
 
     res.status(201).json({
       data: { id: String(request._id), status: request.status },
@@ -260,6 +268,14 @@ router.post("/:id/approve", async (req, res, next) => {
     request.reviewedAt = now;
     request.schoolId = schoolId;
     await request.save();
+
+    // Welcome notification the school sees on first sign-in.
+    void notifySchool(schoolId, {
+      type: "approved",
+      title: "Your school was approved 🎉",
+      body: `Your 7-day free trial has started.`,
+      link: "/dashboard",
+    });
 
     // Fire-and-forget: don't make the admin wait on the SMTP handshake.
     void sendEmail(

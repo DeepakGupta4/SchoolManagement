@@ -9,6 +9,7 @@ import { School, toPublicSchool, resetReminders } from "./school.model.js";
 import { sendEmail } from "../../utils/email.js";
 import { paymentSuccessEmail } from "./emails.js";
 import { runSubscriptionReminders } from "./reminders.js";
+import { notifySchool } from "../notifications/notification.model.js";
 
 /**
  * Self-service subscription payment via Razorpay.
@@ -162,6 +163,12 @@ router.post("/verify", validate(verifySchema), async (req, res, next) => {
         paidUntil: end,
       })
     );
+    void notifySchool(school.schoolId, {
+      type: "payment",
+      title: "Subscription activated",
+      body: `Your ${chosen.name} plan is now active. Thank you!`,
+      link: "/subscription",
+    });
 
     res.json({ data: toPublicSchool(school) });
   } catch (err) {
