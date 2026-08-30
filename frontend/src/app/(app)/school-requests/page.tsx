@@ -18,6 +18,7 @@ import {
   Gift,
   Play,
   Loader2,
+  KeyRound,
 } from "lucide-react";
 import {
   Badge,
@@ -50,6 +51,7 @@ import {
   activateFree,
   activatePaid,
   extendTrial,
+  resetSchoolPassword,
   resumeSchool,
   suspendSchool,
 } from "@/lib/api/schools";
@@ -161,7 +163,9 @@ export default function SchoolRequestsPage() {
   const [rejecting, setRejecting] = useState<SchoolRequest | null>(null);
   const [rejectReason, setRejectReason] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [approveResult, setApproveResult] = useState<(ApproveResult & { schoolName: string }) | null>(null);
+  const [approveResult, setApproveResult] = useState<
+    (ApproveResult & { schoolName: string; reset?: boolean }) | null
+  >(null);
   const [managing, setManaging] = useState<SchoolRequest | null>(null);
   const [manageBusy, setManageBusy] = useState(false);
 
@@ -176,6 +180,37 @@ export default function SchoolRequestsPage() {
       } catch (e) {
         toast({
           title: "Action failed",
+          description: e instanceof Error ? e.message : "Please try again.",
+          variant: "error",
+        });
+      } finally {
+        setManageBusy(false);
+      }
+    },
+    [toast, reload]
+  );
+
+  const handleResetPassword = useCallback(
+    async (req: SchoolRequest) => {
+      setManageBusy(true);
+      try {
+        const result = await resetSchoolPassword(req.schoolId);
+        setManaging(null);
+        setApproveResult({
+          schoolId: req.schoolId,
+          email: result.email,
+          temporaryPassword: result.temporaryPassword,
+          emailDelivered: result.emailDelivered,
+          trialStartDate: "",
+          trialEndDate: req.trialEndDate ?? "",
+          userId: "",
+          schoolName: req.schoolName,
+          reset: true,
+        });
+        reload();
+      } catch (e) {
+        toast({
+          title: "Reset failed",
           description: e instanceof Error ? e.message : "Please try again.",
           variant: "error",
         });
@@ -491,8 +526,12 @@ export default function SchoolRequestsPage() {
       <Modal
         open={!!approveResult}
         onOpenChange={(o) => !o && setApproveResult(null)}
-        title="School approved 🎉"
-        description="A 7-day free trial has started."
+        title={approveResult?.reset ? "Password reset" : "School approved 🎉"}
+        description={
+          approveResult?.reset
+            ? "Share these new login details with the school."
+            : "A 7-day free trial has started."
+        }
         size="md"
         footer={
           <Button variant="primary" onClick={() => setApproveResult(null)}>
@@ -606,6 +645,12 @@ export default function SchoolRequestsPage() {
                 label="Activate Yearly"
                 disabled={manageBusy}
                 onClick={() => runManage("Yearly plan activated", () => activatePaid(managing.schoolId, "yearly"))}
+              />
+              <ManageBtn
+                icon={KeyRound}
+                label="Reset password"
+                disabled={manageBusy}
+                onClick={() => handleResetPassword(managing)}
               />
             </div>
           </div>

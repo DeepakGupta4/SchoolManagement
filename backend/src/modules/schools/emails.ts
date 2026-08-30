@@ -136,6 +136,44 @@ If you believe this is a mistake, just reply to this email and we'll take anothe
   };
 }
 
+/** A fresh temporary password issued by the Super Admin. */
+export function passwordResetEmail(input: {
+  to: string;
+  schoolName: string;
+  email: string;
+  temporaryPassword: string;
+  loginUrl: string;
+}): OutgoingEmail {
+  const text = `Hi,
+
+Your ${env.SOFTWARE_NAME} login password for ${input.schoolName} has been reset.
+
+Login details
+  Email:    ${input.email}
+  Password: ${input.temporaryPassword}
+  Login:    ${input.loginUrl}
+
+Please change your password after signing in.
+
+— ${env.SOFTWARE_NAME}`;
+  return {
+    to: input.to,
+    subject: `Your ${env.SOFTWARE_NAME} login password`,
+    text,
+    html: shell(
+      "Your login password",
+      `<p style="margin:0 0 16px;line-height:1.6">Your login password for <b>${input.schoolName}</b> has been reset. Here are your details:</p>
+       <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin:0 0 18px">
+         ${row("Email", input.email)}
+         ${row("Temporary password", `<code style="background:#eef2ff;color:${BRAND};padding:2px 8px;border-radius:6px;font-size:14px">${input.temporaryPassword}</code>`)}
+         ${row("Login URL", `<a href="${input.loginUrl}" style="color:${BRAND}">${input.loginUrl}</a>`)}
+       </table>
+       <a href="${input.loginUrl}" style="display:inline-block;background:${BRAND};color:#fff;text-decoration:none;padding:12px 22px;border-radius:10px;font-weight:600">Log in</a>
+       <p style="margin:18px 0 0;line-height:1.6;color:#64748b;font-size:13px">For your security, please change your password after signing in.</p>`
+    ),
+  };
+}
+
 /** Trial is ending in a couple of days. */
 export function trialEndingSoonEmail(input: {
   to: string;

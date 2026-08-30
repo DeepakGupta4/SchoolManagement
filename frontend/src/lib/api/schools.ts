@@ -70,3 +70,15 @@ export async function setTrialEnd(schoolId: string, trialEndDate: string): Promi
     body: { trialEndDate },
   });
 }
+
+export interface ResetPasswordResult {
+  email: string;
+  temporaryPassword: string;
+  emailDelivered: boolean;
+}
+
+export async function resetSchoolPassword(schoolId: string): Promise<ResetPasswordResult> {
+  return apiRequest<ResetPasswordResult>(`/api/schools/${schoolId}/reset-password`, {
+    method: "POST",
+  });
+}

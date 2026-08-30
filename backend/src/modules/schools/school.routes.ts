@@ -3,6 +3,11 @@ import { z } from "zod";
 import { requireAuth, requireRole } from "../../middleware/auth.js";
 import { validate } from "../../middleware/validate.js";
 import { ApiError } from "../../utils/ApiError.js";
+import { env } from "../../config/env.js";
+import { User, hashPassword } from "../auth/user.model.js";
+import { generateTempPassword } from "../../utils/password.js";
+import { sendEmail } from "../../utils/email.js";
+import { passwordResetEmail } from "./emails.js";
 import { School, evaluateAccess, toPublicSchool, resetReminders, type SchoolDoc } from "./school.model.js";
 
 const router = Router();
@@ -162,6 +167,39 @@ router.patch("/:schoolId/trial", validate(trialEndSchema), async (req, res, next
     resetReminders(school.subscription);
     await school.save();
     res.json({ data: toPublicSchool(school) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * Reset the school admin's password to a fresh temporary one — for when the
+ * approval popup was missed or the credentials email didn't arrive. Returns the
+ * new password once (never stored in plain text) and emails it too.
+ */
+router.post("/:schoolId/reset-password", async (req, res, next) => {
+  try {
+    const school = await findSchool(String(req.params.schoolId));
+    const user = await User.findOne({ email: school.email, schoolId: school.schoolId });
+    if (!user) throw ApiError.notFound("No admin login found for this school.");
+
+    const tempPassword = generateTempPassword();
+    user.passwordHash = await hashPassword(tempPassword);
+    await user.save();
+
+    const mail = await sendEmail(
+      passwordResetEmail({
+        to: school.email,
+        schoolName: school.name,
+        email: school.email,
+        temporaryPassword: tempPassword,
+        loginUrl: env.APP_LOGIN_URL,
+      })
+    );
+
+    res.json({
+      data: { email: school.email, temporaryPassword: tempPassword, emailDelivered: mail.delivered },
+    });
   } catch (err) {
     next(err);
   }
