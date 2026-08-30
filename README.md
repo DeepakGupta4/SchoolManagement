@@ -1,11 +1,12 @@
-# SchoolOS — School Management Platform
+# SchoolDeck — School Management SaaS
 
-A school administration platform: a Next.js admin panel backed by an
-Express + MongoDB API.
+A multi-tenant school administration platform: a Next.js admin panel and a Vite
+marketing site, backed by an Express + MongoDB API.
 
 ```
-frontend/   Next.js 16 admin panel (React 19, Tailwind 4)
-backend/    Express 5 API (MongoDB via Mongoose, JWT auth, RBAC)
+frontend/          Next.js 16 admin panel (React 19, Tailwind 4)
+backend/           Express 5 API (MongoDB via Mongoose, JWT auth, RBAC)
+showcase-website/  Vite marketing site + school registration (/school/register)
 ```
 
 ---
@@ -104,16 +105,23 @@ Being explicit so nothing here is mistaken for finished:
 
 **Real and working**
 - JWT authentication, password hashing, role-based access control
-- Students: full CRUD against MongoDB, with server-side search, filtering and
-  pagination; photos upload and persist
+- Students, Teachers and Fees: full CRUD against MongoDB, tenant-scoped by
+  `schoolId`, with server-side search, filtering and pagination
+- SaaS onboarding: public registration (`/school/register`) → Super Admin
+  approval → 7-day free trial + emailed credentials
+- Subscription enforcement (server-authoritative): trial/paid expiry, a
+  full-screen lock when access lapses, and Super Admin overrides (extend,
+  activate free/paid, suspend/resume)
+- Razorpay payments with server-side signature verification, and reminder
+  emails (trial ending/expired, payment success, plan expiring)
 - The admin panel: ~60 screens, dark mode, command palette, CSV export,
   printable ID cards / admit cards / report cards / fee receipts
 
 **Not real yet**
-- Only the Students module is backed by the database. Every other module still
-  runs on in-memory mock data and resets on reload.
+- Attendance, exams and the other modules still run on in-memory mock data and
+  reset on reload; only Students/Teachers/Fees are database-backed.
 - "AI" features are transparent rule-based formulas, not a model.
 - QR codes are drawn placeholders — they encode nothing and will not scan.
 - No parent / student / teacher / driver apps yet. The backend has roles for
   them, which is the prerequisite, but the apps themselves are not built.
-- No integrations: WhatsApp, SMS, payment gateways and GPS are all absent.
+- No integrations beyond payments/email: WhatsApp, SMS and GPS are absent.
