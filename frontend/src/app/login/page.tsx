@@ -20,10 +20,10 @@ const DEMO_ACCOUNTS = [
 
 const DEMO_PASSWORD = "springdale123";
 
-// New schools sign up on the marketing site. Set NEXT_PUBLIC_SHOWCASE_URL to
-// that site's URL; falls back to a relative path in local dev.
-const SHOWCASE_URL = (process.env.NEXT_PUBLIC_SHOWCASE_URL ?? "").replace(/\/$/, "");
-const REGISTER_HREF = SHOWCASE_URL ? `${SHOWCASE_URL}/school/register` : "/school/register";
+// New schools sign up on the marketing site. Defaults to the deployed showcase
+// URL; override with NEXT_PUBLIC_SHOWCASE_URL if it changes (e.g. custom domain).
+const SHOWCASE_URL = (process.env.NEXT_PUBLIC_SHOWCASE_URL ?? "https://school-management-x3di.vercel.app").replace(/\/$/, "");
+const REGISTER_HREF = `${SHOWCASE_URL}/school/register`;
 
 export default function LoginPage() {
   const router = useRouter();
