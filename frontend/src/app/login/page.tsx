@@ -49,7 +49,8 @@ export default function LoginPage() {
     try {
       const user = await login(values.email, values.password);
       signIn(user);
-      router.replace("/dashboard");
+      // The platform owner has no school dashboard — send them to their console.
+      router.replace(user.role === "super_admin" ? "/school-requests" : "/dashboard");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not sign in. Please try again.");
     }

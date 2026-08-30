@@ -184,8 +184,13 @@ export function Sidebar() {
   const role = useAuthStore((s) => s.user?.role);
 
   const visibleGroups = useMemo(() => {
-    // Platform-owner groups are hidden from everyone else.
-    const allowed = navGroups.filter((g) => !g.superAdminOnly || role === "super_admin");
+    // The platform owner sees only platform groups; school users see only the
+    // tenant modules. "both" groups (Settings) show to everyone.
+    const isSuper = role === "super_admin";
+    const allowed = navGroups.filter((g) => {
+      const scope = g.scope ?? "school";
+      return scope === "both" || (scope === "platform" ? isSuper : !isSuper);
+    });
     if (!query) return allowed;
     return allowed
       .map((group) => ({

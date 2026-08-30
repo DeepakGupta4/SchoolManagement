@@ -24,8 +24,13 @@ export interface NavEntry {
 export interface NavGroup {
   label: string;
   items: NavEntry[];
-  /** Shown only to the platform owner (super_admin). */
-  superAdminOnly?: boolean;
+  /**
+   * Who sees this group:
+   *  - "platform": the platform owner (super_admin) only
+   *  - "school":   school users only (the tenant modules) — the default
+   *  - "both":     everyone signed in
+   */
+  scope?: "platform" | "school" | "both";
 }
 
 export const navGroups: NavGroup[] = [
@@ -38,9 +43,10 @@ export const navGroups: NavGroup[] = [
   },
   {
     label: "Platform Admin",
-    superAdminOnly: true,
+    scope: "platform",
     items: [
       { title: "School Requests", href: "/school-requests", icon: Building2 },
+      { title: "Schools", href: "/schools", icon: School },
     ],
   },
   {
@@ -138,6 +144,7 @@ export const navGroups: NavGroup[] = [
       },
       { title: "Expenses", href: "/expenses", icon: Package },
       { title: "Payroll", href: "/payroll", icon: Award },
+      { title: "Subscription", href: "/subscription", icon: DollarSign },
     ],
   },
   {
@@ -172,8 +179,8 @@ export const navGroups: NavGroup[] = [
   },
   {
     label: "System",
+    scope: "both",
     items: [
-      { title: "Subscription", href: "/subscription", icon: DollarSign },
       { title: "Settings", href: "/settings", icon: Settings },
       { title: "Security", href: "/security", icon: ShieldCheck },
     ],
