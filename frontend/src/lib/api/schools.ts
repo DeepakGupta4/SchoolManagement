@@ -1,0 +1,72 @@
+import { apiRequest } from "./client";
+import type { SubscriptionStatus } from "./subscription";
+
+/**
+ * Super Admin — manage a tenant school's subscription. All of these are
+ * platform-owner only (enforced on the server).
+ */
+
+export interface SchoolAccess {
+  status: SubscriptionStatus;
+  allowed: boolean;
+  daysRemaining: number | null;
+  trialEndDate: string | null;
+  paidEndDate: string | null;
+}
+
+export interface ManagedSchool {
+  id: string;
+  schoolId: string;
+  name: string;
+  ownerName: string;
+  email: string;
+  status: "active" | "suspended";
+  subscription: {
+    plan: "trial" | "monthly" | "yearly";
+    status: SubscriptionStatus;
+    trialEndDate: string | null;
+    paidEndDate: string | null;
+    freeAccess: boolean;
+  };
+  access: SchoolAccess;
+}
+
+export async function listSchools(): Promise<ManagedSchool[]> {
+  return apiRequest<ManagedSchool[]>("/api/schools");
+}
+
+export async function extendTrial(schoolId: string, days: number): Promise<ManagedSchool> {
+  return apiRequest<ManagedSchool>(`/api/schools/${schoolId}/extend`, {
+    method: "POST",
+    body: { days },
+  });
+}
+
+export async function activateFree(schoolId: string): Promise<ManagedSchool> {
+  return apiRequest<ManagedSchool>(`/api/schools/${schoolId}/activate-free`, { method: "POST" });
+}
+
+export async function activatePaid(
+  schoolId: string,
+  plan: "monthly" | "yearly"
+): Promise<ManagedSchool> {
+  return apiRequest<ManagedSchool>(`/api/schools/${schoolId}/activate-paid`, {
+    method: "POST",
+    body: { plan },
+  });
+}
+
+export async function suspendSchool(schoolId: string): Promise<ManagedSchool> {
+  return apiRequest<ManagedSchool>(`/api/schools/${schoolId}/suspend`, { method: "POST" });
+}
+
+export async function resumeSchool(schoolId: string): Promise<ManagedSchool> {
+  return apiRequest<ManagedSchool>(`/api/schools/${schoolId}/resume`, { method: "POST" });
+}
+
+export async function setTrialEnd(schoolId: string, trialEndDate: string): Promise<ManagedSchool> {
+  return apiRequest<ManagedSchool>(`/api/schools/${schoolId}/trial`, {
+    method: "PATCH",
+    body: { trialEndDate },
+  });
+}

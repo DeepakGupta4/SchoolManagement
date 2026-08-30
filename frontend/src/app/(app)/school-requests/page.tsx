@@ -13,6 +13,11 @@ import {
   Ban,
   CreditCard,
   GraduationCap,
+  SlidersHorizontal,
+  CalendarPlus,
+  Gift,
+  Play,
+  Loader2,
 } from "lucide-react";
 import {
   Badge,
@@ -41,6 +46,13 @@ import {
   type SchoolRequest,
   type TrialStatus,
 } from "@/lib/api/schoolRequests";
+import {
+  activateFree,
+  activatePaid,
+  extendTrial,
+  resumeSchool,
+  suspendSchool,
+} from "@/lib/api/schools";
 
 const STATUS_TABS: { value: RequestStatus | "all"; label: string }[] = [
   { value: "all", label: "All" },
@@ -150,6 +162,29 @@ export default function SchoolRequestsPage() {
   const [rejectReason, setRejectReason] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [approveResult, setApproveResult] = useState<(ApproveResult & { schoolName: string }) | null>(null);
+  const [managing, setManaging] = useState<SchoolRequest | null>(null);
+  const [manageBusy, setManageBusy] = useState(false);
+
+  const runManage = useCallback(
+    async (label: string, fn: () => Promise<unknown>) => {
+      setManageBusy(true);
+      try {
+        await fn();
+        toast({ title: label });
+        setManaging(null);
+        reload();
+      } catch (e) {
+        toast({
+          title: "Action failed",
+          description: e instanceof Error ? e.message : "Please try again.",
+          variant: "error",
+        });
+      } finally {
+        setManageBusy(false);
+      }
+    },
+    [toast, reload]
+  );
 
   const handleApprove = useCallback(
     async (req: SchoolRequest) => {
@@ -290,6 +325,11 @@ export default function SchoolRequestsPage() {
                   <XCircle className="size-4" />
                 </Button>
               </>
+            )}
+            {r.status === "approved" && r.schoolId && (
+              <Button size="sm" variant="outline" onClick={() => setManaging(r)}>
+                <SlidersHorizontal className="size-4" /> Manage
+              </Button>
             )}
           </div>
         ),
@@ -492,7 +532,115 @@ export default function SchoolRequestsPage() {
           </div>
         )}
       </Modal>
+
+      {/* Subscription controls (super admin overrides) */}
+      <Modal
+        open={!!managing}
+        onOpenChange={(o) => !o && setManaging(null)}
+        title={`Manage ${managing?.schoolName ?? ""}`}
+        description="Subscription controls"
+        size="md"
+      >
+        {managing && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between rounded-lg border border-border bg-surface-hover px-4 py-3 text-sm">
+              <span className="text-muted">Current status</span>
+              {managing.trialStatus ? (
+                <Badge variant={TRIAL_BADGE[managing.trialStatus]}>
+                  {TRIAL_LABEL[managing.trialStatus]}
+                </Badge>
+              ) : (
+                <span className="text-text">—</span>
+              )}
+            </div>
+
+            {manageBusy && (
+              <p className="flex items-center gap-2 text-sm text-muted">
+                <Loader2 className="size-4 animate-spin" /> Applying…
+              </p>
+            )}
+
+            <div className="grid grid-cols-2 gap-2.5">
+              <ManageBtn
+                icon={CalendarPlus}
+                label="Extend 7 days"
+                disabled={manageBusy}
+                onClick={() => runManage("Trial extended 7 days", () => extendTrial(managing.schoolId, 7))}
+              />
+              <ManageBtn
+                icon={CalendarPlus}
+                label="Extend 30 days"
+                disabled={manageBusy}
+                onClick={() => runManage("Trial extended 30 days", () => extendTrial(managing.schoolId, 30))}
+              />
+              <ManageBtn
+                icon={Gift}
+                label="Activate Free"
+                disabled={manageBusy}
+                onClick={() => runManage("Free access granted", () => activateFree(managing.schoolId))}
+              />
+              {managing.trialStatus === "suspended" ? (
+                <ManageBtn
+                  icon={Play}
+                  label="Resume"
+                  disabled={manageBusy}
+                  onClick={() => runManage("Account resumed", () => resumeSchool(managing.schoolId))}
+                />
+              ) : (
+                <ManageBtn
+                  icon={Ban}
+                  label="Suspend"
+                  disabled={manageBusy}
+                  danger
+                  onClick={() => runManage("Account suspended", () => suspendSchool(managing.schoolId))}
+                />
+              )}
+              <ManageBtn
+                icon={CreditCard}
+                label="Activate Monthly"
+                disabled={manageBusy}
+                onClick={() => runManage("Monthly plan activated", () => activatePaid(managing.schoolId, "monthly"))}
+              />
+              <ManageBtn
+                icon={CreditCard}
+                label="Activate Yearly"
+                disabled={manageBusy}
+                onClick={() => runManage("Yearly plan activated", () => activatePaid(managing.schoolId, "yearly"))}
+              />
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
+  );
+}
+
+function ManageBtn({
+  icon: Icon,
+  label,
+  onClick,
+  disabled,
+  danger,
+}: {
+  icon: typeof CalendarPlus;
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  danger?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={`flex items-center gap-2 rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors disabled:opacity-50 ${
+        danger
+          ? "border-danger-soft text-danger-text hover:bg-danger-soft"
+          : "border-border text-text hover:bg-surface-hover"
+      }`}
+    >
+      <Icon className="size-4 shrink-0" />
+      {label}
+    </button>
   );
 }
 
@@ -500,7 +648,7 @@ function Detail({ label, value, full }: { label: string; value: string; full?: b
   return (
     <div className={full ? "col-span-2" : ""}>
       <p className="text-xs text-muted">{label}</p>
-      <p className="mt-0.5 break-words text-text">{value}</p>
+      <p className="mt-0.5 wrap-break-word text-text">{value}</p>
     </div>
   );
 }

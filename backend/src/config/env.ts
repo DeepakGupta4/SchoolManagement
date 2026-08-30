@@ -47,6 +47,17 @@ const envSchema = z.object({
   SUPER_ADMIN_EMAIL: z.string().optional(),
   SUPER_ADMIN_PASSWORD: z.string().optional(),
   SUPER_ADMIN_NAME: z.string().default("Platform Owner"),
+
+  /**
+   * Razorpay. Optional: without keys the payment endpoints report "not
+   * configured" and schools activate via the Super Admin instead.
+   */
+  RAZORPAY_KEY_ID: z.string().optional(),
+  RAZORPAY_KEY_SECRET: z.string().optional(),
+
+  /** Plan prices in paise (₹1 = 100 paise). */
+  PLAN_MONTHLY_PRICE: z.coerce.number<number>().min(100).default(199900),
+  PLAN_YEARLY_PRICE: z.coerce.number<number>().min(100).default(1999900),
 });
 
 const parsed = envSchema.safeParse(process.env);

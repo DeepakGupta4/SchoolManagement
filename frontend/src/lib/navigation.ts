@@ -173,6 +173,7 @@ export const navGroups: NavGroup[] = [
   {
     label: "System",
     items: [
+      { title: "Subscription", href: "/subscription", icon: DollarSign },
       { title: "Settings", href: "/settings", icon: Settings },
       { title: "Security", href: "/security", icon: ShieldCheck },
     ],

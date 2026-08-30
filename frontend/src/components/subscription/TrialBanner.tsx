@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { AlertTriangle, Sparkles } from "lucide-react";
 import type { MySubscription } from "@/lib/api/subscription";
 
@@ -38,11 +39,15 @@ export function TrialBanner({ sub }: { sub: MySubscription }) {
         Free trial · {days} {days === 1 ? "day" : "days"} remaining
       </span>
       {endText && <span className="text-muted">Expires on {endText}</span>}
-      {urgent && (
-        <span className="ml-auto font-medium">
-          Your trial is ending soon — activate your subscription to keep access.
-        </span>
-      )}
+      {urgent && <span className="font-medium">Ending soon — activate to keep access.</span>}
+      <Link
+        href="/subscription"
+        className={`ml-auto rounded-md px-2.5 py-1 text-xs font-semibold transition-colors ${
+          urgent ? "bg-warning-text/10 hover:bg-warning-text/20" : "bg-primary text-white hover:opacity-90"
+        }`}
+      >
+        Activate now
+      </Link>
     </div>
   );
 }
