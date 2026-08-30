@@ -52,6 +52,8 @@ export interface RequestStats {
   paidSchools: number;
   suspendedSchools: number;
   revenue: number;
+  totalStudents: number;
+  totalStaff: number;
 }
 
 export interface ApproveResult {

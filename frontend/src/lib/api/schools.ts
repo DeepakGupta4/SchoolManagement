@@ -20,6 +20,15 @@ export interface ManagedSchool {
   name: string;
   ownerName: string;
   email: string;
+  phone: string;
+  city: string;
+  state: string;
+  /** Figures the school claimed at sign-up. */
+  studentCount: number;
+  teacherCount: number;
+  /** Real usage — records actually created in the system. */
+  studentsAdded: number;
+  staffAdded: number;
   status: "active" | "suspended";
   subscription: {
     plan: "trial" | "monthly" | "yearly";
@@ -29,6 +38,7 @@ export interface ManagedSchool {
     freeAccess: boolean;
   };
   access: SchoolAccess;
+  createdAt: string;
 }
 
 export async function listSchools(): Promise<ManagedSchool[]> {

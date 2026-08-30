@@ -10,6 +10,8 @@ import { sendEmail, isEmailConfigured } from "../../utils/email.js";
 import { passwordResetEmail } from "./emails.js";
 import { School, evaluateAccess, toPublicSchool, resetReminders, type SchoolDoc } from "./school.model.js";
 import { SchoolRequest } from "./schoolRequest.model.js";
+import { Student } from "../students/student.model.js";
+import { Teacher } from "../teachers/teacher.model.js";
 
 const router = Router();
 const DAY = 86_400_000;
@@ -64,11 +66,29 @@ router.get("/me", async (req, res, next) => {
 // Everything below is platform-owner only.
 router.use(requireRole("super_admin"));
 
-/** Every tenant school with its live access state, for the admin console. */
+/**
+ * Every tenant school with its live access state AND real usage — the actual
+ * number of students and staff each school has added (counted from their own
+ * records, not the figures claimed at sign-up).
+ */
 router.get("/", async (_req, res, next) => {
   try {
     const schools = await School.find().sort({ createdAt: -1 });
-    res.json({ data: schools.map(toPublicSchool), meta: { total: schools.length } });
+
+    const [studentAgg, teacherAgg] = await Promise.all([
+      Student.aggregate<{ _id: string; n: number }>([{ $group: { _id: "$schoolId", n: { $sum: 1 } } }]),
+      Teacher.aggregate<{ _id: string; n: number }>([{ $group: { _id: "$schoolId", n: { $sum: 1 } } }]),
+    ]);
+    const students = new Map(studentAgg.map((x) => [x._id, x.n]));
+    const staff = new Map(teacherAgg.map((x) => [x._id, x.n]));
+
+    const data = schools.map((s) => ({
+      ...toPublicSchool(s),
+      studentsAdded: students.get(s.schoolId) ?? 0,
+      staffAdded: staff.get(s.schoolId) ?? 0,
+    }));
+
+    res.json({ data, meta: { total: schools.length } });
   } catch (err) {
     next(err);
   }

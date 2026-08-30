@@ -183,7 +183,9 @@ export default function SchoolsPage() {
         render: (s) => (
           <div className="min-w-0">
             <p className="truncate font-medium text-text">{s.name}</p>
-            <p className="truncate text-xs text-muted">{s.schoolId}</p>
+            <p className="truncate text-xs text-muted">
+              {[s.city, s.state].filter(Boolean).join(", ") || s.schoolId}
+            </p>
           </div>
         ),
       },
@@ -194,6 +196,20 @@ export default function SchoolsPage() {
           <div className="min-w-0">
             <p className="truncate text-text">{s.ownerName}</p>
             <p className="truncate text-xs text-muted">{s.email}</p>
+          </div>
+        ),
+      },
+      {
+        key: "usage",
+        header: "Usage",
+        render: (s) => (
+          <div className="text-sm leading-tight">
+            <p className="text-text">
+              {s.studentsAdded} <span className="text-muted">students</span>
+            </p>
+            <p className="text-text">
+              {s.staffAdded} <span className="text-muted">staff</span>
+            </p>
           </div>
         ),
       },
@@ -301,6 +317,17 @@ export default function SchoolsPage() {
       >
         {managing && (
           <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-x-4 gap-y-3 rounded-lg border border-border bg-surface-hover p-4 text-sm">
+              <Info label="Owner" value={managing.ownerName} />
+              <Info label="Email" value={managing.email} />
+              <Info label="Phone" value={managing.phone || "—"} />
+              <Info label="Location" value={[managing.city, managing.state].filter(Boolean).join(", ") || "—"} />
+              <Info label="Students added" value={String(managing.studentsAdded)} />
+              <Info label="Staff added" value={String(managing.staffAdded)} />
+              <Info label="Joined" value={fmtDate(managing.createdAt)} />
+              <Info label="School ID" value={managing.schoolId} />
+            </div>
+
             <div className="flex items-center justify-between rounded-lg border border-border bg-surface-hover px-4 py-3 text-sm">
               <span className="text-muted">Current status</span>
               <Badge variant={BADGE[managing.access.status]}>{LABEL[managing.access.status]}</Badge>
@@ -377,6 +404,15 @@ export default function SchoolsPage() {
           </div>
         )}
       </Modal>
+    </div>
+  );
+}
+
+function Info({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-xs text-muted">{label}</p>
+      <p className="mt-0.5 truncate text-text" title={value}>{value}</p>
     </div>
   );
 }

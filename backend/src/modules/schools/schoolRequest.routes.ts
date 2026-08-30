@@ -9,6 +9,8 @@ import { generateTempPassword, slugify, shortId } from "../../utils/password.js"
 import { sendEmail, isEmailConfigured } from "../../utils/email.js";
 import { SchoolRequest, toPublicRequest, REQUEST_STATUSES } from "./schoolRequest.model.js";
 import { School, evaluateAccess } from "./school.model.js";
+import { Student } from "../students/student.model.js";
+import { Teacher } from "../teachers/teacher.model.js";
 import { requestReceivedEmail, approvalEmail, rejectionEmail } from "./emails.js";
 
 const router = Router();
@@ -111,11 +113,13 @@ router.get("/", validate(listQuerySchema, "query"), async (req, res, next) => {
 /** Aggregate counts for the Super Admin dashboard cards. */
 router.get("/stats/overview", async (_req, res, next) => {
   try {
-    const [pending, approved, rejected, schools] = await Promise.all([
+    const [pending, approved, rejected, schools, totalStudents, totalStaff] = await Promise.all([
       SchoolRequest.countDocuments({ status: "pending" }),
       SchoolRequest.countDocuments({ status: "approved" }),
       SchoolRequest.countDocuments({ status: "rejected" }),
       School.find(),
+      Student.countDocuments(),
+      Teacher.countDocuments(),
     ]);
 
     let activeTrials = 0;
@@ -147,6 +151,8 @@ router.get("/stats/overview", async (_req, res, next) => {
         paidSchools: paid,
         suspendedSchools: suspended,
         revenue,
+        totalStudents,
+        totalStaff,
       },
     });
   } catch (err) {

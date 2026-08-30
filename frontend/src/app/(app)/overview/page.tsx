@@ -14,6 +14,8 @@ import {
   ShieldX,
   Loader2,
   Inbox,
+  Users,
+  UserCheck,
 } from "lucide-react";
 import { Badge, Card, CardContent, PageHeader } from "@/components/ui";
 import { useAuthStore } from "@/store";
@@ -109,6 +111,8 @@ export default function OverviewPage() {
             <Stat label="Trials Expired" value={stats?.trialsExpired ?? 0} icon={XCircle} gradient="bg-gradient-to-br from-rose-500 to-red-500" />
             <Stat label="Suspended" value={stats?.suspendedSchools ?? 0} icon={Ban} gradient="bg-gradient-to-br from-slate-500 to-slate-600" />
             <Stat label="Monthly Revenue" value={inr.format(stats?.revenue ?? 0)} icon={IndianRupee} gradient="bg-gradient-to-br from-teal-500 to-emerald-600" />
+            <Stat label="Total Students" value={stats?.totalStudents ?? 0} icon={Users} gradient="bg-gradient-to-br from-fuchsia-500 to-pink-500" />
+            <Stat label="Total Staff" value={stats?.totalStaff ?? 0} icon={UserCheck} gradient="bg-gradient-to-br from-cyan-500 to-sky-500" />
             <Stat label="Rejected" value={stats?.rejectedRequests ?? 0} icon={XCircle} gradient="bg-gradient-to-br from-slate-400 to-slate-500" />
           </div>
 
