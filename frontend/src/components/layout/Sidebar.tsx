@@ -5,7 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ChevronDown, PanelLeftClose, PanelLeftOpen, Search, X } from "lucide-react";
-import { useSidebarStore } from "@/store";
+import { useSidebarStore, useAuthStore } from "@/store";
 import { navGroups, type NavEntry } from "@/lib/navigation";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { cn } from "@/lib/utils";
@@ -181,10 +181,13 @@ export function Sidebar() {
   }, [pathname, closeMobile]);
 
   const query = filter.trim().toLowerCase();
+  const role = useAuthStore((s) => s.user?.role);
 
   const visibleGroups = useMemo(() => {
-    if (!query) return navGroups;
-    return navGroups
+    // Platform-owner groups are hidden from everyone else.
+    const allowed = navGroups.filter((g) => !g.superAdminOnly || role === "super_admin");
+    if (!query) return allowed;
+    return allowed
       .map((group) => ({
         ...group,
         items: group.items.filter(
@@ -194,7 +197,7 @@ export function Sidebar() {
         ),
       }))
       .filter((group) => group.items.length > 0);
-  }, [query]);
+  }, [query, role]);
 
   const width = isCollapsed ? "72px" : "260px";
 

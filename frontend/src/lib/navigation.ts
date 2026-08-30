@@ -4,7 +4,7 @@ import {
   Bell, Settings, School, UserCheck, Award,
   FileText, BarChart3, MessageSquare, ShieldCheck, Cpu, Globe,
   Smartphone, Package, Utensils, HeartPulse, Trophy, Workflow,
-  IdCard, type LucideIcon,
+  IdCard, Building2, type LucideIcon,
 } from "lucide-react";
 
 export interface NavChild {
@@ -24,6 +24,8 @@ export interface NavEntry {
 export interface NavGroup {
   label: string;
   items: NavEntry[];
+  /** Shown only to the platform owner (super_admin). */
+  superAdminOnly?: boolean;
 }
 
 export const navGroups: NavGroup[] = [
@@ -32,6 +34,13 @@ export const navGroups: NavGroup[] = [
     items: [
       { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
       { title: "Analytics", href: "/analytics", icon: BarChart3 },
+    ],
+  },
+  {
+    label: "Platform Admin",
+    superAdminOnly: true,
+    items: [
+      { title: "School Requests", href: "/school-requests", icon: Building2 },
     ],
   },
   {

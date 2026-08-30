@@ -1,9 +1,10 @@
-import { lazy, Suspense, useCallback, useState } from 'react'
+import { lazy, Suspense, useCallback } from 'react'
+import { Route, Routes, useNavigate } from 'react-router-dom'
 import { useLenis } from '@/hooks/useLenis'
 import { ThemeProvider } from '@/hooks/useTheme'
 
 import { Navbar } from '@/components/layout/Navbar'
-import { DemoModal } from '@/components/layout/DemoModal'
+import { RegisterPage } from '@/pages/RegisterPage'
 import { AnimatedCursor, MouseGlow, ScrollProgress } from '@/components/effects/Cursor'
 import { NoiseOverlay } from '@/components/effects/Backdrop'
 
@@ -50,9 +51,9 @@ function SectionFallback() {
 
 function Site() {
   useLenis()
-  const [demoOpen, setDemoOpen] = useState(false)
-  const openDemo = useCallback(() => setDemoOpen(true), [])
-  const closeDemo = useCallback(() => setDemoOpen(false), [])
+  const navigate = useNavigate()
+  // Every "Book Demo / Start Free Demo" CTA now leads to the registration page.
+  const openDemo = useCallback(() => navigate('/school/register'), [navigate])
 
   return (
     <>
@@ -91,8 +92,6 @@ function Site() {
       <Suspense fallback={<div className="h-64" aria-hidden />}>
         <Footer />
       </Suspense>
-
-      <DemoModal open={demoOpen} onClose={closeDemo} />
     </>
   )
 }
@@ -100,7 +99,10 @@ function Site() {
 export default function App() {
   return (
     <ThemeProvider>
-      <Site />
+      <Routes>
+        <Route path="/" element={<Site />} />
+        <Route path="/school/register" element={<RegisterPage />} />
+      </Routes>
     </ThemeProvider>
   )
 }

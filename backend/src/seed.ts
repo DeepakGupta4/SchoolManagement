@@ -49,7 +49,18 @@ export async function seedDatabase({ quiet = false } = {}) {
       { upsert: true, new: true }
     );
   }
-  log(`  ${DEMO_USERS.length} demo users ready`);
+
+  // A platform-level Super Admin (not tenant-scoped) so the school-approval
+  // dashboard can be tried out in dev without configuring env credentials.
+  await User.findOneAndUpdate(
+    { email: "owner@schooldeck.in" },
+    {
+      $set: { name: "Platform Owner", role: "super_admin", schoolId: "platform", isActive: true },
+      $setOnInsert: { passwordHash: await hashPassword(DEMO_PASSWORD) },
+    },
+    { upsert: true, new: true }
+  );
+  log(`  ${DEMO_USERS.length + 1} demo users ready (incl. super admin owner@schooldeck.in)`);
 
   // Each collection is seeded independently — an early return here once
   // skipped every collection after students, leaving them silently empty.

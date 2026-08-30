@@ -1,10 +1,14 @@
 import { createApp } from "./app.js";
 import { connectDatabase, disconnectDatabase } from "./config/db.js";
+import { ensureSuperAdmin } from "./utils/ensureSuperAdmin.js";
 import { env } from "./config/env.js";
 
 async function start() {
   const mode = await connectDatabase();
   console.log(`Database connected — ${mode}`);
+
+  // Guarantee a platform owner exists (real DB and in-memory alike).
+  await ensureSuperAdmin();
 
   // The in-memory database is rebuilt per process, so a separately-run seed
   // would be invisible here. Seed at boot instead, but only in that mode —

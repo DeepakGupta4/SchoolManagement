@@ -20,8 +20,33 @@ const envSchema = z.object({
   JWT_SECRET: z.string().min(16, "JWT_SECRET must be at least 16 characters"),
   JWT_EXPIRES_IN: z.string().default("7d"),
 
-  /** Comma-separated list of origins allowed to call the API. */
-  CORS_ORIGINS: z.string().default("http://localhost:3000"),
+  /** Comma-separated list of origins allowed to call the API.
+   * Defaults cover the admin app (3000) and the showcase site (5173) in dev. */
+  CORS_ORIGINS: z.string().default("http://localhost:3000,http://localhost:5173"),
+
+  /** Product name shown in emails and templates. */
+  SOFTWARE_NAME: z.string().default("SchoolDeck"),
+
+  /** Where an approval email tells the school to sign in. */
+  APP_LOGIN_URL: z.string().default("http://localhost:3000/login"),
+
+  /** Length of the free trial, in days. The backend is the sole authority. */
+  TRIAL_DAYS: z.coerce.number<number>().min(1).default(7),
+
+  /**
+   * SMTP (Gmail app-password). Optional: when unset, emails are logged to the
+   * console instead of sent, so the approval flow works before mail is set up.
+   */
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+
+  /**
+   * A Super Admin is upserted at boot from these, so a fresh deployment always
+   * has a platform owner who can approve schools. Optional — skipped if unset.
+   */
+  SUPER_ADMIN_EMAIL: z.string().optional(),
+  SUPER_ADMIN_PASSWORD: z.string().optional(),
+  SUPER_ADMIN_NAME: z.string().default("Platform Owner"),
 });
 
 const parsed = envSchema.safeParse(process.env);
