@@ -5,7 +5,10 @@ import { requireAuth } from "../../middleware/auth.js";
 import { validate } from "../../middleware/validate.js";
 import { ApiError } from "../../utils/ApiError.js";
 import { env } from "../../config/env.js";
-import { School, toPublicSchool } from "./school.model.js";
+import { School, toPublicSchool, resetReminders } from "./school.model.js";
+import { sendEmail } from "../../utils/email.js";
+import { paymentSuccessEmail } from "./emails.js";
+import { runSubscriptionReminders } from "./reminders.js";
 
 /**
  * Self-service subscription payment via Razorpay.
@@ -34,6 +37,22 @@ function plans(): Plan[] {
 }
 
 const paymentConfigured = () => Boolean(env.RAZORPAY_KEY_ID && env.RAZORPAY_KEY_SECRET);
+
+/**
+ * Reminder sweep trigger for an external scheduler. Authenticated by a shared
+ * secret header, NOT a user token, so it sits above `requireAuth`. Idempotent —
+ * safe to call on any cadence.
+ */
+router.post("/run-reminders", async (req, res, next) => {
+  try {
+    if (!env.CRON_SECRET) throw new ApiError(503, "Reminder cron is not configured.");
+    if (req.header("x-cron-secret") !== env.CRON_SECRET) throw ApiError.unauthorized();
+    const counts = await runSubscriptionReminders();
+    res.json({ data: counts });
+  } catch (err) {
+    next(err);
+  }
+});
 
 router.use(requireAuth);
 
@@ -131,7 +150,18 @@ router.post("/verify", validate(verifySchema), async (req, res, next) => {
     sub.orderId = body.razorpay_order_id;
     sub.freeAccess = false;
     school.status = "active";
+    resetReminders(sub);
     await school.save();
+
+    void sendEmail(
+      paymentSuccessEmail({
+        to: school.email,
+        schoolName: school.name,
+        plan: chosen.name,
+        amountInr: chosen.priceInr,
+        paidUntil: end,
+      })
+    );
 
     res.json({ data: toPublicSchool(school) });
   } catch (err) {

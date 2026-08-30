@@ -39,6 +39,12 @@ const subscriptionSchema = new Schema(
     autoRenew: { type: Boolean, default: false },
     /** Free access granted by a Super Admin, bypassing payment. */
     freeAccess: { type: Boolean, default: false },
+
+    // Reminder de-duplication: each email is sent at most once per window and
+    // reset when the window changes (a trial is extended, a plan is renewed…).
+    notifiedTrialEnding: { type: Boolean, default: false },
+    notifiedTrialExpired: { type: Boolean, default: false },
+    notifiedPaidEnding: { type: Boolean, default: false },
   },
   { _id: false }
 );
@@ -137,6 +143,17 @@ export function evaluateAccess(
 function daysBetween(a: Date, b: Date): number {
   const ms = b.getTime() - a.getTime();
   return Math.max(0, Math.ceil(ms / 86_400_000));
+}
+
+/**
+ * Clears the reminder de-dup flags. Called whenever the subscription window
+ * moves (extended, renewed, trial date changed) so the relevant reminders can
+ * legitimately fire again for the new window.
+ */
+export function resetReminders(sub: SchoolDoc["subscription"]): void {
+  sub.notifiedTrialEnding = false;
+  sub.notifiedTrialExpired = false;
+  sub.notifiedPaidEnding = false;
 }
 
 /** Client-facing shape for a school, with the live access decision folded in. */

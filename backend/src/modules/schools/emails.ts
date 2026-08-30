@@ -136,6 +136,124 @@ If you believe this is a mistake, just reply to this email and we'll take anothe
   };
 }
 
+/** Trial is ending in a couple of days. */
+export function trialEndingSoonEmail(input: {
+  to: string;
+  schoolName: string;
+  daysRemaining: number;
+  trialEndDate: Date;
+  loginUrl: string;
+}): OutgoingEmail {
+  const end = fmtDate(input.trialEndDate);
+  const days = `${input.daysRemaining} ${input.daysRemaining === 1 ? "day" : "days"}`;
+  const text = `Hi,
+
+Your ${env.SOFTWARE_NAME} free trial for ${input.schoolName} ends in ${days}, on ${end}.
+
+Activate your subscription now to keep access — your data stays exactly as it is.
+Sign in: ${input.loginUrl}
+
+— ${env.SOFTWARE_NAME}`;
+  return {
+    to: input.to,
+    subject: `Your ${env.SOFTWARE_NAME} trial ends in ${days}`,
+    text,
+    html: shell(
+      "Your free trial is ending soon",
+      `<p style="margin:0 0 12px;line-height:1.6">Your free trial for <b>${input.schoolName}</b> ends in <b>${days}</b>, on <b>${end}</b>.</p>
+       <p style="margin:0 0 16px;line-height:1.6">Activate your subscription now to keep access — your data stays exactly as it is.</p>
+       <a href="${input.loginUrl}" style="display:inline-block;background:${BRAND};color:#fff;text-decoration:none;padding:12px 22px;border-radius:10px;font-weight:600">Activate subscription</a>`
+    ),
+  };
+}
+
+/** Trial has just expired. */
+export function trialExpiredEmail(input: { to: string; schoolName: string; loginUrl: string }): OutgoingEmail {
+  const text = `Hi,
+
+Your ${env.SOFTWARE_NAME} free trial for ${input.schoolName} has expired.
+
+Your school data is safe and has not been deleted. Activate a subscription to continue.
+Sign in: ${input.loginUrl}
+
+— ${env.SOFTWARE_NAME}`;
+  return {
+    to: input.to,
+    subject: `Your ${env.SOFTWARE_NAME} trial has expired`,
+    text,
+    html: shell(
+      "Your free trial has expired",
+      `<p style="margin:0 0 12px;line-height:1.6">Your free trial for <b>${input.schoolName}</b> has expired.</p>
+       <p style="margin:0 0 16px;line-height:1.6">Your school data is safe and has not been deleted. Activate a subscription to continue.</p>
+       <a href="${input.loginUrl}" style="display:inline-block;background:${BRAND};color:#fff;text-decoration:none;padding:12px 22px;border-radius:10px;font-weight:600">Activate now</a>`
+    ),
+  };
+}
+
+/** Payment received and subscription activated. */
+export function paymentSuccessEmail(input: {
+  to: string;
+  schoolName: string;
+  plan: string;
+  amountInr: number;
+  paidUntil: Date;
+}): OutgoingEmail {
+  const until = fmtDate(input.paidUntil);
+  const amount = `₹${input.amountInr.toLocaleString("en-IN")}`;
+  const text = `Hi,
+
+Thank you! Your ${input.plan} subscription for ${input.schoolName} is now active.
+
+Amount paid: ${amount}
+Active until: ${until}
+
+— ${env.SOFTWARE_NAME}`;
+  return {
+    to: input.to,
+    subject: `Payment received — your ${env.SOFTWARE_NAME} subscription is active`,
+    text,
+    html: shell(
+      "Your subscription is active 🎉",
+      `<p style="margin:0 0 16px;line-height:1.6">Thank you! Your <b>${input.plan}</b> subscription for <b>${input.schoolName}</b> is now active.</p>
+       <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin:0 0 8px">
+         ${row("Amount paid", amount)}
+         ${row("Active until", until)}
+       </table>`
+    ),
+  };
+}
+
+/** Paid subscription is ending in a few days. */
+export function subscriptionExpiringSoonEmail(input: {
+  to: string;
+  schoolName: string;
+  daysRemaining: number;
+  paidEndDate: Date;
+  loginUrl: string;
+}): OutgoingEmail {
+  const end = fmtDate(input.paidEndDate);
+  const days = `${input.daysRemaining} ${input.daysRemaining === 1 ? "day" : "days"}`;
+  const text = `Hi,
+
+Your ${env.SOFTWARE_NAME} subscription for ${input.schoolName} expires in ${days}, on ${end}.
+
+Renew now to avoid any interruption.
+Sign in: ${input.loginUrl}
+
+— ${env.SOFTWARE_NAME}`;
+  return {
+    to: input.to,
+    subject: `Your ${env.SOFTWARE_NAME} subscription expires in ${days}`,
+    text,
+    html: shell(
+      "Your subscription is expiring soon",
+      `<p style="margin:0 0 12px;line-height:1.6">Your subscription for <b>${input.schoolName}</b> expires in <b>${days}</b>, on <b>${end}</b>.</p>
+       <p style="margin:0 0 16px;line-height:1.6">Renew now to avoid any interruption.</p>
+       <a href="${input.loginUrl}" style="display:inline-block;background:${BRAND};color:#fff;text-decoration:none;padding:12px 22px;border-radius:10px;font-weight:600">Renew subscription</a>`
+    ),
+  };
+}
+
 function row(label: string, value: string): string {
   return `<tr>
     <td style="padding:11px 14px;background:#f8fafc;border-bottom:1px solid #e2e8f0;font-size:13px;color:#64748b;width:150px">${label}</td>

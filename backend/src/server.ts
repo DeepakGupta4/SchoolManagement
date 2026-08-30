@@ -1,6 +1,7 @@
 import { createApp } from "./app.js";
 import { connectDatabase, disconnectDatabase } from "./config/db.js";
 import { ensureSuperAdmin } from "./utils/ensureSuperAdmin.js";
+import { runSubscriptionReminders } from "./modules/schools/reminders.js";
 import { env } from "./config/env.js";
 
 async function start() {
@@ -9,6 +10,15 @@ async function start() {
 
   // Guarantee a platform owner exists (real DB and in-memory alike).
   await ensureSuperAdmin();
+
+  // Subscription reminder sweep (trial-ending/expired, paid expiring). Also
+  // exposed as a cron endpoint; running it here keeps a live instance nudging
+  // on its own. Idempotent, so overlapping triggers do no harm.
+  const REMINDER_INTERVAL_MS = 12 * 60 * 60 * 1000;
+  const sweep = () =>
+    runSubscriptionReminders().catch((e) => console.error("Reminder sweep failed:", e));
+  setTimeout(sweep, 60_000).unref();
+  setInterval(sweep, REMINDER_INTERVAL_MS).unref();
 
   // The in-memory database is rebuilt per process, so a separately-run seed
   // would be invisible here. Seed at boot instead, but only in that mode —

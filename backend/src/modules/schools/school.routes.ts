@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requireAuth, requireRole } from "../../middleware/auth.js";
 import { validate } from "../../middleware/validate.js";
 import { ApiError } from "../../utils/ApiError.js";
-import { School, evaluateAccess, toPublicSchool, type SchoolDoc } from "./school.model.js";
+import { School, evaluateAccess, toPublicSchool, resetReminders, type SchoolDoc } from "./school.model.js";
 
 const router = Router();
 const DAY = 86_400_000;
@@ -96,6 +96,7 @@ router.post("/:schoolId/extend", validate(extendSchema), async (req, res, next) 
       sub.status = "trial";
     }
     school.status = "active";
+    resetReminders(sub);
     await school.save();
     res.json({ data: toPublicSchool(school) });
   } catch (err) {
@@ -140,6 +141,7 @@ router.post("/:schoolId/activate-paid", validate(activatePaidSchema), async (req
     sub.paymentStatus = "paid";
     sub.freeAccess = false;
     school.status = "active";
+    resetReminders(sub);
     await school.save();
     res.json({ data: toPublicSchool(school) });
   } catch (err) {
@@ -157,6 +159,7 @@ router.patch("/:schoolId/trial", validate(trialEndSchema), async (req, res, next
     school.subscription.trialEndDate = trialEndDate;
     school.subscription.status = "trial";
     school.status = "active";
+    resetReminders(school.subscription);
     await school.save();
     res.json({ data: toPublicSchool(school) });
   } catch (err) {

@@ -58,6 +58,13 @@ const envSchema = z.object({
   /** Plan prices in paise (₹1 = 100 paise). */
   PLAN_MONTHLY_PRICE: z.coerce.number<number>().min(100).default(199900),
   PLAN_YEARLY_PRICE: z.coerce.number<number>().min(100).default(1999900),
+
+  /**
+   * Shared secret for the reminder cron endpoint. Set it and point an external
+   * scheduler (Render Cron, cron-job.org) at POST /api/subscription/run-reminders
+   * with header `x-cron-secret`. Unset = that endpoint is disabled.
+   */
+  CRON_SECRET: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);
