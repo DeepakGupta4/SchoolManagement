@@ -31,4 +31,10 @@ export default createCrudRouter({
   createSchema: teacherSchema,
   searchFields: ["firstName", "lastName", "employeeId", "email", "department"],
   filterFields: ["department", "status", "employmentType"],
+  notifyOnCreate: (t) => ({
+    type: "teacher",
+    title: "New staff member added",
+    body: `${t.firstName} ${t.lastName} · ${t.department}`,
+    link: "/teachers",
+  }),
 });

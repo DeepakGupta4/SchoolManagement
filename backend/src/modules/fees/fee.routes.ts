@@ -14,6 +14,7 @@ import { requireAuth, requireRole } from "../../middleware/auth.js";
 import { validate, parsed } from "../../middleware/validate.js";
 import { ApiError } from "../../utils/ApiError.js";
 import { toPublic } from "../../utils/crudRouter.js";
+import { notifySchool } from "../notifications/notification.model.js";
 
 const router = Router();
 router.use(requireAuth);
@@ -178,6 +179,16 @@ router.post("/collect", canCollect, validate(collectBody), async (req, res, next
 
       receipt = created as PaymentDoc;
     });
+
+    if (receipt) {
+      const r: PaymentDoc = receipt;
+      void notifySchool(req.user!.schoolId, {
+        type: "fee",
+        title: "Fee payment received",
+        body: `₹${r.amount.toLocaleString("en-IN")} from ${r.studentName} · ${r.receiptNo}`,
+        link: "/fees/receipts",
+      });
+    }
 
     res.status(201).json({ data: toPublic(receipt!) });
   } catch (err) {

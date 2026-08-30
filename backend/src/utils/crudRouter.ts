@@ -5,6 +5,7 @@ import { requireAuth, requireRole } from "../middleware/auth.js";
 import { validate, parsed } from "../middleware/validate.js";
 import { ApiError } from "../utils/ApiError.js";
 import type { UserRole } from "../modules/auth/user.model.js";
+import { notifySchool } from "../modules/notifications/notification.model.js";
 
 /**
  * Builds the standard list/get/create/update/delete routes for a resource.
@@ -32,6 +33,8 @@ export interface CrudOptions<T> {
   sort?: Record<string, 1 | -1>;
   /** Extra routes mounted before the generic ones (so they can shadow `/:id`). */
   extend?: (router: Router) => void;
+  /** Fires a school notification after a successful create, if provided. */
+  notifyOnCreate?: (doc: HydratedDocument<T>) => { type: string; title: string; body?: string; link?: string };
 }
 
 /** Strips internals and exposes `id` — the shape every client expects. */
@@ -62,6 +65,7 @@ export function createCrudRouter<T>(options: CrudOptions<T>): Router {
     writeRoles = DEFAULT_WRITE_ROLES,
     sort = { createdAt: -1 },
     extend,
+    notifyOnCreate,
   } = options;
 
   const router = Router();
@@ -125,6 +129,9 @@ export function createCrudRouter<T>(options: CrudOptions<T>): Router {
   router.post("/", canWrite, validate(createSchema), async (req, res, next) => {
     try {
       const doc = await model.create({ ...req.body, schoolId: req.user!.schoolId });
+      if (notifyOnCreate) {
+        void notifySchool(req.user!.schoolId, notifyOnCreate(doc as HydratedDocument<T>));
+      }
       res.status(201).json({ data: toPublic(doc as HydratedDocument<T>) });
     } catch (err) {
       next(err);

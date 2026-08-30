@@ -37,4 +37,10 @@ export default createCrudRouter({
   createSchema: studentSchema,
   searchFields: ["firstName", "lastName", "admissionNo", "email", "rollNo"],
   filterFields: ["className", "status", "section"],
+  notifyOnCreate: (s) => ({
+    type: "student",
+    title: "New student admitted",
+    body: `${s.firstName} ${s.lastName} · ${s.className}-${s.section}`,
+    link: "/students",
+  }),
 });
