@@ -29,6 +29,19 @@ const TRIAL_POINTS = [
   { icon: Lock, title: 'Nothing is deleted', body: 'After the trial your data stays safe — activate a plan whenever you are ready.' },
 ]
 
+// Keeps the address clean: nothing may follow ".com".
+function capAfterCom(v: string): string {
+  const i = v.toLowerCase().indexOf('.com')
+  return i >= 0 ? v.slice(0, i + 4) : v
+}
+
+// If someone types just a name (no "@"), assume Gmail on blur.
+function normalizeEmail(v: string): string {
+  const t = v.trim()
+  if (!t || t.includes('@')) return t
+  return `${t}@gmail.com`
+}
+
 export function RegisterPage() {
   const [form, setForm] = useState<SchoolRegistration>(EMPTY)
   const [submitting, setSubmitting] = useState(false)
@@ -132,11 +145,30 @@ export function RegisterPage() {
 
                 <div className="grid gap-4 sm:grid-cols-2">
                   <Field label="Owner / Principal" required value={form.ownerName} onChange={(v) => set('ownerName', v)} placeholder="Rajesh Kumar" />
-                  <Field label="Email" type="email" required value={form.email} onChange={(v) => set('email', v)} placeholder="you@school.edu.in" />
+                  <Field
+                    label="Email"
+                    type="email"
+                    required
+                    value={form.email}
+                    onChange={(v) => set('email', capAfterCom(v))}
+                    onBlur={() => set('email', normalizeEmail(form.email))}
+                    placeholder="you@gmail.com"
+                  />
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <Field label="Phone" type="tel" required value={form.phone} onChange={(v) => set('phone', v)} placeholder="+91 98765 43210" />
+                  <Field
+                    label="Phone"
+                    type="tel"
+                    required
+                    value={form.phone}
+                    onChange={(v) => set('phone', v.replace(/\D/g, '').slice(0, 10))}
+                    inputMode="numeric"
+                    maxLength={10}
+                    pattern="[0-9]{10}"
+                    title="Enter a 10-digit mobile number"
+                    placeholder="9876543210"
+                  />
                   <SelectField label="School type" value={form.schoolType} onChange={(v) => set('schoolType', v)} options={SCHOOL_TYPES} />
                 </div>
 
@@ -239,6 +271,11 @@ function Field({
   required,
   type = 'text',
   placeholder,
+  onBlur,
+  inputMode,
+  maxLength,
+  pattern,
+  title,
 }: {
   label: string
   value: string
@@ -246,6 +283,11 @@ function Field({
   required?: boolean
   type?: string
   placeholder?: string
+  onBlur?: () => void
+  inputMode?: 'text' | 'numeric' | 'tel' | 'email'
+  maxLength?: number
+  pattern?: string
+  title?: string
 }) {
   return (
     <label className="block">
@@ -256,9 +298,14 @@ function Field({
       <input
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        onBlur={onBlur}
         required={required}
         type={type}
         placeholder={placeholder}
+        inputMode={inputMode}
+        maxLength={maxLength}
+        pattern={pattern}
+        title={title}
         className="h-11 w-full rounded-xl border border-[rgb(var(--glass-border)/0.1)] bg-[rgb(var(--surface-muted))] px-3.5 text-[14px] text-strong transition-colors duration-300 placeholder:text-subtle focus:border-brand-400/50 focus:outline-none"
       />
     </label>
