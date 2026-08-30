@@ -12,6 +12,11 @@ import { env } from "../config/env.js";
  * in the admin UI as a fallback.
  */
 
+/** Whether real email delivery is configured (SMTP credentials present). */
+export function isEmailConfigured(): boolean {
+  return Boolean(env.SMTP_USER && env.SMTP_PASS);
+}
+
 let transporter: Transporter | null = null;
 
 function getTransporter(): Transporter | null {

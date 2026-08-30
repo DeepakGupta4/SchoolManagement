@@ -349,7 +349,15 @@ export default function SchoolRequestsPage() {
                   disabled={busyId === r.id}
                   onClick={() => handleApprove(r)}
                 >
-                  <CheckCircle2 className="size-4" /> Approve
+                  {busyId === r.id ? (
+                    <>
+                      <Loader2 className="size-4 animate-spin" /> Approving…
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="size-4" /> Approve
+                    </>
+                  )}
                 </Button>
                 <Button
                   size="sm"
@@ -466,7 +474,15 @@ export default function SchoolRequestsPage() {
                 disabled={busyId === viewing?.id}
                 onClick={() => viewing && handleApprove(viewing)}
               >
-                <CheckCircle2 className="size-4" /> Approve & start trial
+                {busyId === viewing?.id ? (
+                  <>
+                    <Loader2 className="size-4 animate-spin" /> Approving…
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="size-4" /> Approve &amp; start trial
+                  </>
+                )}
               </Button>
             </div>
           ) : undefined

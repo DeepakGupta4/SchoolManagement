@@ -6,7 +6,7 @@ import { ApiError } from "../../utils/ApiError.js";
 import { env } from "../../config/env.js";
 import { User, hashPassword } from "../auth/user.model.js";
 import { generateTempPassword, slugify, shortId } from "../../utils/password.js";
-import { sendEmail } from "../../utils/email.js";
+import { sendEmail, isEmailConfigured } from "../../utils/email.js";
 import { SchoolRequest, toPublicRequest, REQUEST_STATUSES } from "./schoolRequest.model.js";
 import { School, evaluateAccess } from "./school.model.js";
 import { requestReceivedEmail, approvalEmail, rejectionEmail } from "./emails.js";
@@ -249,7 +249,8 @@ router.post("/:id/approve", async (req, res, next) => {
     request.schoolId = schoolId;
     await request.save();
 
-    const mail = await sendEmail(
+    // Fire-and-forget: don't make the admin wait on the SMTP handshake.
+    void sendEmail(
       approvalEmail({
         to: email,
         schoolName: school.name,
@@ -267,7 +268,7 @@ router.post("/:id/approve", async (req, res, next) => {
         email,
         // Shown once so the admin can pass it on if email delivery is off.
         temporaryPassword: tempPassword,
-        emailDelivered: mail.delivered,
+        emailDelivered: isEmailConfigured(),
         trialStartDate: now,
         trialEndDate: trialEnd,
         userId: String(adminUser._id),

@@ -6,7 +6,7 @@ import { ApiError } from "../../utils/ApiError.js";
 import { env } from "../../config/env.js";
 import { User, hashPassword } from "../auth/user.model.js";
 import { generateTempPassword } from "../../utils/password.js";
-import { sendEmail } from "../../utils/email.js";
+import { sendEmail, isEmailConfigured } from "../../utils/email.js";
 import { passwordResetEmail } from "./emails.js";
 import { School, evaluateAccess, toPublicSchool, resetReminders, type SchoolDoc } from "./school.model.js";
 
@@ -187,7 +187,7 @@ router.post("/:schoolId/reset-password", async (req, res, next) => {
     user.passwordHash = await hashPassword(tempPassword);
     await user.save();
 
-    const mail = await sendEmail(
+    void sendEmail(
       passwordResetEmail({
         to: school.email,
         schoolName: school.name,
@@ -198,7 +198,7 @@ router.post("/:schoolId/reset-password", async (req, res, next) => {
     );
 
     res.json({
-      data: { email: school.email, temporaryPassword: tempPassword, emailDelivered: mail.delivered },
+      data: { email: school.email, temporaryPassword: tempPassword, emailDelivered: isEmailConfigured() },
     });
   } catch (err) {
     next(err);
