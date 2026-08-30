@@ -34,11 +34,20 @@ const envSchema = z.object({
   TRIAL_DAYS: z.coerce.number<number>().min(1).default(7),
 
   /**
-   * SMTP (Gmail app-password). Optional: when unset, emails are logged to the
-   * console instead of sent, so the approval flow works before mail is set up.
+   * SMTP (Gmail app-password). Works locally, but many hosts (Render included)
+   * block outbound SMTP — prefer BREVO_API_KEY in production.
    */
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
+
+  /**
+   * Brevo HTTP email API — sends over HTTPS, so it works where SMTP is blocked.
+   * Get a key at brevo.com (Transactional → API keys) and verify a sender.
+   */
+  BREVO_API_KEY: z.string().optional(),
+  /** Verified sender address; defaults to SMTP_USER. */
+  MAIL_FROM_EMAIL: z.string().optional(),
+  MAIL_FROM_NAME: z.string().optional(),
 
   /**
    * A Super Admin is upserted at boot from these, so a fresh deployment always

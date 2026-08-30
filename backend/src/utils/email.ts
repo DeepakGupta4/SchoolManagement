@@ -12,9 +12,43 @@ import { env } from "../config/env.js";
  * in the admin UI as a fallback.
  */
 
-/** Whether real email delivery is configured (SMTP credentials present). */
+/** Whether real email delivery is configured (Brevo HTTP API or SMTP). */
 export function isEmailConfigured(): boolean {
-  return Boolean(env.SMTP_USER && env.SMTP_PASS);
+  return Boolean((env.BREVO_API_KEY && senderEmail()) || (env.SMTP_USER && env.SMTP_PASS));
+}
+
+/** The verified "from" address. */
+function senderEmail(): string | undefined {
+  return env.MAIL_FROM_EMAIL || env.SMTP_USER;
+}
+
+/**
+ * Send via Brevo's HTTPS API. Preferred in production because it needs no SMTP
+ * ports (which hosts like Render block outright).
+ */
+async function sendViaBrevo(email: OutgoingEmail): Promise<{ delivered: boolean; error?: string }> {
+  try {
+    const res = await fetch("https://api.brevo.com/v3/smtp/email", {
+      method: "POST",
+      headers: {
+        "api-key": env.BREVO_API_KEY!,
+        "content-type": "application/json",
+        accept: "application/json",
+      },
+      body: JSON.stringify({
+        sender: { name: env.MAIL_FROM_NAME || env.SOFTWARE_NAME, email: senderEmail() },
+        to: [{ email: email.to }],
+        subject: email.subject,
+        htmlContent: email.html,
+        textContent: email.text,
+      }),
+    });
+    if (res.ok) return { delivered: true };
+    const body = await res.text().catch(() => "");
+    return { delivered: false, error: `Brevo ${res.status}: ${body.slice(0, 300)}` };
+  } catch (err) {
+    return { delivered: false, error: err instanceof Error ? err.message : String(err) };
+  }
 }
 
 let transporter: Transporter | null = null;
@@ -49,6 +83,9 @@ export interface OutgoingEmail {
 export async function sendEmail(
   email: OutgoingEmail
 ): Promise<{ delivered: boolean; error?: string }> {
+  // Prefer the HTTP API — it works where SMTP ports are blocked.
+  if (env.BREVO_API_KEY && senderEmail()) return sendViaBrevo(email);
+
   const t = getTransporter();
 
   if (!t) {
