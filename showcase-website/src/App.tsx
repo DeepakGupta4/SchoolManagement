@@ -52,7 +52,7 @@ function SectionFallback() {
 function Site() {
   useLenis()
   const navigate = useNavigate()
-  // Every "Book Demo / Start Free Demo" CTA now leads to the registration page.
+  // Every "Start free trial" CTA leads to the school registration page.
   const openDemo = useCallback(() => navigate('/school/register'), [navigate])
 
   return (

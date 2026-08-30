@@ -8,6 +8,11 @@ import { MagneticButton } from '@/components/ui/MagneticButton'
 import { useTheme } from '@/hooks/useTheme'
 import { scrollToId } from '@/hooks/useLenis'
 
+// Existing schools sign in to the admin app. Set VITE_ADMIN_URL to that app's
+// URL on the showcase deployment; until then "Log in" falls back to sign-up.
+const ADMIN_URL = (import.meta.env.VITE_ADMIN_URL ?? '').replace(/\/$/, '')
+export const LOGIN_HREF = ADMIN_URL ? `${ADMIN_URL}/login` : '/school/register'
+
 export function Logo({ className }: { className?: string }) {
   return (
     <a
@@ -178,13 +183,19 @@ export function Navbar({ onBookDemo }: { onBookDemo: () => void }) {
 
             <div className="flex items-center gap-2">
               <ThemeToggle />
+              <a
+                href={LOGIN_HREF}
+                className="hidden items-center rounded-lg px-3.5 py-2 text-[13.5px] font-medium text-body transition-colors duration-300 hover:text-strong sm:inline-flex"
+              >
+                Log in
+              </a>
               <MagneticButton
                 size="sm"
                 variant="primary"
                 className="hidden sm:inline-flex"
                 onClick={onBookDemo}
               >
-                Book Demo
+                Start free trial
               </MagneticButton>
               <button
                 type="button"
@@ -227,15 +238,21 @@ export function Navbar({ onBookDemo }: { onBookDemo: () => void }) {
                   </button>
                 </motion.div>
               ))}
+              <a
+                href={LOGIN_HREF}
+                className="mt-8 flex w-full items-center justify-center rounded-xl border border-[rgb(var(--glass-border)/0.14)] py-3.5 text-[15px] font-semibold text-body"
+              >
+                Log in
+              </a>
               <MagneticButton
                 size="lg"
-                className="mt-8 w-full"
+                className="mt-3 w-full"
                 onClick={() => {
                   setMobileOpen(false)
                   onBookDemo()
                 }}
               >
-                Book Live Demo
+                Start free trial
               </MagneticButton>
             </div>
           </motion.div>
