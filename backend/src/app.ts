@@ -10,6 +10,9 @@ import studentRoutes from "./modules/students/student.routes.js";
 import teacherRoutes from "./modules/teachers/teacher.routes.js";
 import feeRoutes from "./modules/fees/fee.routes.js";
 import schoolRequestRoutes from "./modules/schools/schoolRequest.routes.js";
+import schoolRoutes from "./modules/schools/school.routes.js";
+import { requireAuth } from "./middleware/auth.js";
+import { checkSubscription } from "./middleware/subscription.js";
 
 export function createApp() {
   const app = express();
@@ -41,9 +44,17 @@ export function createApp() {
   });
 
   app.use("/api/auth", authRoutes);
-  app.use("/api/students", studentRoutes);
-  app.use("/api/teachers", teacherRoutes);
-  app.use("/api/fees", feeRoutes);
+
+  // Tenant data is gated by the subscription: an expired or suspended school is
+  // blocked at the server, not just in the UI. `checkSubscription` runs after
+  // auth and lets the platform owner and legacy tenants through.
+  const tenantGuard = [requireAuth, checkSubscription];
+  app.use("/api/students", tenantGuard, studentRoutes);
+  app.use("/api/teachers", tenantGuard, teacherRoutes);
+  app.use("/api/fees", tenantGuard, feeRoutes);
+
+  // Not gated: schools can read their own subscription state while locked.
+  app.use("/api/schools", schoolRoutes);
   app.use("/api/school-requests", schoolRequestRoutes);
 
   app.use(notFoundHandler);

@@ -4,6 +4,9 @@ import React from "react";
 import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
 import { useSidebarStore } from "@/store";
+import { useSubscription } from "@/hooks/useSubscription";
+import { TrialBanner } from "@/components/subscription/TrialBanner";
+import { SubscriptionLock } from "@/components/subscription/SubscriptionLock";
 
 /**
  * The authenticated app chrome: sidebar + topbar + content well.
@@ -18,6 +21,7 @@ import { useSidebarStore } from "@/store";
  */
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { isCollapsed } = useSidebarStore();
+  const { sub } = useSubscription();
 
   return (
     <div className="min-h-screen bg-bg">
@@ -30,8 +34,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           transition: "margin-left 0.3s cubic-bezier(0.4,0,0.2,1)",
         }}
       >
-        <div className="px-4 pb-12 pt-6 sm:px-7 sm:pt-7">{children}</div>
+        <div className="px-4 pb-12 pt-6 sm:px-7 sm:pt-7">
+          {sub && <TrialBanner sub={sub} />}
+          {children}
+        </div>
       </main>
+
+      {/* Full-screen wall when the server says access is not allowed. Covers
+          the chrome too, so an expired/suspended school cannot interact. */}
+      {sub && !sub.allowed && <SubscriptionLock sub={sub} />}
     </div>
   );
 }
