@@ -8,10 +8,10 @@ import { MagneticButton } from '@/components/ui/MagneticButton'
 import { useTheme } from '@/hooks/useTheme'
 import { scrollToId } from '@/hooks/useLenis'
 
-// Existing schools sign in to the admin app. Set VITE_ADMIN_URL to that app's
-// URL on the showcase deployment; until then "Log in" falls back to sign-up.
-const ADMIN_URL = (import.meta.env.VITE_ADMIN_URL ?? '').replace(/\/$/, '')
-export const LOGIN_HREF = ADMIN_URL ? `${ADMIN_URL}/login` : '/school/register'
+// Existing schools sign in to the admin app. Defaults to the deployed admin
+// URL; override with VITE_ADMIN_URL if it changes (e.g. a custom domain).
+const ADMIN_URL = (import.meta.env.VITE_ADMIN_URL ?? 'https://school-management-omega-lemon.vercel.app').replace(/\/$/, '')
+export const LOGIN_HREF = `${ADMIN_URL}/login`
 
 export function Logo({ className }: { className?: string }) {
   return (
