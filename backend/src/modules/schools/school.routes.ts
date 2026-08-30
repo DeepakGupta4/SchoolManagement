@@ -73,6 +73,26 @@ router.get("/", async (_req, res, next) => {
   }
 });
 
+/**
+ * Diagnostic: sends a test email (to the caller by default) and returns the
+ * real result — including the SMTP error message on failure — so email config
+ * can be verified without digging through server logs.
+ */
+router.post("/test-email", async (req, res, next) => {
+  try {
+    const to = (typeof req.body?.to === "string" && req.body.to.trim()) || req.user!.email;
+    const result = await sendEmail({
+      to,
+      subject: `${env.SOFTWARE_NAME} test email`,
+      text: `This is a test email from ${env.SOFTWARE_NAME}. If you can read this, SMTP is working.`,
+      html: `<p>This is a test email from <b>${env.SOFTWARE_NAME}</b>. If you can read this, SMTP is working.</p>`,
+    });
+    res.json({ data: { to, configured: isEmailConfigured(), ...result } });
+  } catch (err) {
+    next(err);
+  }
+});
+
 /** Loads the target school or throws a clean 404. */
 async function findSchool(schoolId: string): Promise<SchoolDoc & { save: () => Promise<unknown> }> {
   const school = await School.findOne({ schoolId });

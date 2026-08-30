@@ -24,7 +24,9 @@ function getTransporter(): Transporter | null {
   if (!transporter) {
     transporter = nodemailer.createTransport({
       service: "gmail",
-      auth: { user: env.SMTP_USER, pass: env.SMTP_PASS },
+      // Gmail app passwords are shown with spaces ("abcd efgh …") but must be
+      // sent without them — strip whitespace so either form works.
+      auth: { user: env.SMTP_USER, pass: (env.SMTP_PASS ?? "").replace(/\s+/g, "") },
     });
   }
   return transporter;
@@ -37,7 +39,9 @@ export interface OutgoingEmail {
   text: string;
 }
 
-export async function sendEmail(email: OutgoingEmail): Promise<{ delivered: boolean }> {
+export async function sendEmail(
+  email: OutgoingEmail
+): Promise<{ delivered: boolean; error?: string }> {
   const t = getTransporter();
 
   if (!t) {
@@ -61,7 +65,8 @@ export async function sendEmail(email: OutgoingEmail): Promise<{ delivered: bool
     return { delivered: true };
   } catch (err) {
     // A mail failure must never break the surrounding action (e.g. approval).
-    console.error(`[email] failed to send to ${email.to}:`, err);
-    return { delivered: false };
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`[email] failed to send to ${email.to}:`, message);
+    return { delivered: false, error: message };
   }
 }
