@@ -59,7 +59,7 @@ export function FinalCTA({ onBookDemo }: { onBookDemo: () => void }) {
                     <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
                   }
                 >
-                  Book Live Demo
+                  Start free trial
                 </MagneticButton>
                 <MagneticButton size="lg" variant="outline" href="mailto:schooldeck.in@gmail.com">
                   Email the founders

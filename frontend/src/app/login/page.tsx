@@ -20,6 +20,11 @@ const DEMO_ACCOUNTS = [
 
 const DEMO_PASSWORD = "springdale123";
 
+// New schools sign up on the marketing site. Set NEXT_PUBLIC_SHOWCASE_URL to
+// that site's URL; falls back to a relative path in local dev.
+const SHOWCASE_URL = (process.env.NEXT_PUBLIC_SHOWCASE_URL ?? "").replace(/\/$/, "");
+const REGISTER_HREF = SHOWCASE_URL ? `${SHOWCASE_URL}/school/register` : "/school/register";
+
 export default function LoginPage() {
   const router = useRouter();
   const signIn = useAuthStore((s) => s.signIn);
@@ -58,7 +63,7 @@ export default function LoginPage() {
             <Image src="/logo-icon.png" alt="SchoolDeck" width={44} height={44} className="size-full object-contain" />
           </div>
           <h1 className="text-lg font-semibold text-text">Sign in to SchoolDeck</h1>
-          <p className="mt-1 text-sm text-muted">Springdale School · New Delhi</p>
+          <p className="mt-1 text-sm text-muted">Your school management account</p>
         </div>
 
         <Card>
@@ -119,12 +124,15 @@ export default function LoginPage() {
               </Button>
             </form>
 
-            <p className="rounded-md bg-warning-soft px-3 py-2 text-xs text-warning-text">
-              Demo build — accounts are seeded by the backend. Password for all:{" "}
-              <span className="font-mono font-semibold">{DEMO_PASSWORD}</span>
-            </p>
           </CardContent>
         </Card>
+
+        <p className="mt-5 text-center text-sm text-muted">
+          New school?{" "}
+          <a href={REGISTER_HREF} className="font-medium text-primary hover:underline">
+            Start your 7-day free trial →
+          </a>
+        </p>
       </div>
     </main>
   );
