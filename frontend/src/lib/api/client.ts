@@ -6,7 +6,10 @@
  * site can rely on try/catch instead of checking status codes.
  */
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+// Falls back to the deployed backend so the hosted frontend works even without
+// a NEXT_PUBLIC_API_URL env var set on Vercel. For local dev, set
+// NEXT_PUBLIC_API_URL=http://localhost:4000 in .env.local to override.
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "https://schoolmanagement-j8fn.onrender.com";
 
 const TOKEN_KEY = "schooldeck.token";
 

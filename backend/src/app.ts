@@ -24,7 +24,20 @@ export function createApp() {
   app.use(helmet());
   app.use(
     cors({
-      origin: env.corsOrigins,
+      // Allow the configured origins, plus any Vercel deployment and localhost,
+      // so preview/production frontend URLs work without listing each one.
+      origin: (origin, cb) => {
+        if (
+          !origin ||
+          env.corsOrigins.includes(origin) ||
+          origin.endsWith(".vercel.app") ||
+          /^https?:\/\/localhost(:\d+)?$/.test(origin)
+        ) {
+          cb(null, true);
+        } else {
+          cb(null, false);
+        }
+      },
       credentials: true,
     })
   );
