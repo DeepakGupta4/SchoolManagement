@@ -1,5 +1,6 @@
 import { Router } from "express";
 import net from "node:net";
+import dns from "node:dns/promises";
 import { z } from "zod";
 import { requireAuth, requireRole } from "../../middleware/auth.js";
 import { validate } from "../../middleware/validate.js";
@@ -102,31 +103,37 @@ router.get("/", async (_req, res, next) => {
  */
 router.get("/net-test", async (_req, res, next) => {
   try {
-    const probe = (host: string, port: number, timeout = 8000) =>
-      new Promise<{ host: string; port: number; ok: boolean; ms: number; error?: string }>((resolve) => {
+    const probe = (label: string, host: string, port: number, family: 0 | 4 | 6 = 0, timeout = 8000) =>
+      new Promise<{ label: string; ok: boolean; ms: number; code?: string; error?: string }>((resolve) => {
         const start = Date.now();
         const socket = new net.Socket();
         let done = false;
-        const finish = (ok: boolean, error?: string) => {
+        const finish = (ok: boolean, code?: string, error?: string) => {
           if (done) return;
           done = true;
           socket.destroy();
-          resolve({ host, port, ok, ms: Date.now() - start, error });
+          resolve({ label, ok, ms: Date.now() - start, code, error });
         };
         socket.setTimeout(timeout);
         socket.once("connect", () => finish(true));
-        socket.once("timeout", () => finish(false, "timeout"));
-        socket.once("error", (e) => finish(false, e.message));
-        socket.connect(port, host);
+        socket.once("timeout", () => finish(false, "ETIMEDOUT", "timeout"));
+        socket.once("error", (e: NodeJS.ErrnoException) => finish(false, e.code, e.message));
+        socket.connect({ host, port, family });
       });
 
-    const results = await Promise.all([
-      probe("smtp.gmail.com", 465),
-      probe("smtp.gmail.com", 587),
-      probe("smtp.gmail.com", 25),
-      probe("google.com", 443),
+    // DNS: what does smtp.gmail.com resolve to over IPv4 vs IPv6?
+    const a = await dns.resolve4("smtp.gmail.com").catch((e) => [`err:${e.code}`]);
+    const aaaa = await dns.resolve6("smtp.gmail.com").catch((e) => [`err:${e.code}`]);
+
+    const probes = await Promise.all([
+      probe("gmail:465 (default)", "smtp.gmail.com", 465, 0),
+      probe("gmail:465 (IPv4)", "smtp.gmail.com", 465, 4),
+      probe("gmail:465 (IPv6)", "smtp.gmail.com", 465, 6),
+      probe("gmail:587 (IPv4)", "smtp.gmail.com", 587, 4),
+      probe("google:443 (IPv4)", "google.com", 443, 4),
     ]);
-    res.json({ data: results });
+
+    res.json({ data: { dns: { A: a, AAAA: aaaa }, probes } });
   } catch (err) {
     next(err);
   }
