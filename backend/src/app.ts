@@ -13,6 +13,7 @@ import schoolRequestRoutes from "./modules/schools/schoolRequest.routes.js";
 import schoolRoutes from "./modules/schools/school.routes.js";
 import subscriptionRoutes from "./modules/schools/subscription.routes.js";
 import notificationRoutes from "./modules/notifications/notification.routes.js";
+import { crudModules } from "./modules/crudModules.js";
 import { requireAuth } from "./middleware/auth.js";
 import { checkSubscription } from "./middleware/subscription.js";
 
@@ -54,6 +55,9 @@ export function createApp() {
   app.use("/api/students", tenantGuard, studentRoutes);
   app.use("/api/teachers", tenantGuard, teacherRoutes);
   app.use("/api/fees", tenantGuard, feeRoutes);
+
+  // All uniform tenant CRUD modules (classes, exams, library, …).
+  for (const mod of crudModules) app.use(mod.path, tenantGuard, mod.router);
 
   // Not gated: schools can read their own subscription state and pay while locked.
   app.use("/api/schools", schoolRoutes);
