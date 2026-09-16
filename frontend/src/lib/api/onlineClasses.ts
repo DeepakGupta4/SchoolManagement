@@ -1,4 +1,4 @@
-import { createResource, textMatch } from "./createResource";
+import { createApiResource } from "./createApiResource";
 
 export interface OnlineClass {
   id: string;

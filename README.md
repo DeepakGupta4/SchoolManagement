@@ -57,7 +57,7 @@ npm run seed
 ```bash
 cd frontend
 npm install
-cp .env.example .env.local
+# create .env.local with: NEXT_API_URL=http://localhost:4000
 npm run dev                 # http://localhost:3000
 ```
 
@@ -93,7 +93,7 @@ Required environment variables:
 | `CORS_ORIGINS` | Comma-separated. Must include the deployed frontend URL. |
 | `NODE_ENV` | `production` |
 
-**Frontend** (Vercel or any Next host): set `NEXT_PUBLIC_API_URL` to the
+**Frontend** (Vercel or any Next host): set `NEXT_API_URL` to the
 deployed API URL. Note this value is baked in at build time — changing it needs
 a rebuild, not just a restart.
 

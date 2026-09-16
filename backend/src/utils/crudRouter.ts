@@ -35,6 +35,12 @@ export interface CrudOptions<T> {
   extend?: (router: Router) => void;
   /** Fires a school notification after a successful create, if provided. */
   notifyOnCreate?: (doc: HydratedDocument<T>) => { type: string; title: string; body?: string; link?: string };
+  /**
+   * Server-stamped fields at insert time (reference numbers, codes, gate
+   * passes). Receives the current per-school record count as a sequence.
+   * Anything the client sends still wins over generated values.
+   */
+  generate?: (seq: number) => Record<string, unknown>;
 }
 
 /** Strips internals and exposes `id` — the shape every client expects. */
@@ -66,6 +72,7 @@ export function createCrudRouter<T>(options: CrudOptions<T>): Router {
     sort = { createdAt: -1 },
     extend,
     notifyOnCreate,
+    generate,
   } = options;
 
   const router = Router();
@@ -128,7 +135,10 @@ export function createCrudRouter<T>(options: CrudOptions<T>): Router {
 
   router.post("/", canWrite, validate(createSchema), async (req, res, next) => {
     try {
-      const doc = await model.create({ ...req.body, schoolId: req.user!.schoolId });
+      const generated = generate
+        ? generate(await model.countDocuments({ schoolId: req.user!.schoolId }))
+        : {};
+      const doc = await model.create({ ...generated, ...req.body, schoolId: req.user!.schoolId });
       if (notifyOnCreate) {
         void notifySchool(req.user!.schoolId, notifyOnCreate(doc as HydratedDocument<T>));
       }

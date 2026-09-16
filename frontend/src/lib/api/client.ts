@@ -6,7 +6,7 @@
  * site can rely on try/catch instead of checking status codes.
  */
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const BASE_URL = process.env.NEXT_API_URL ?? "http://localhost:4000";
 
 const TOKEN_KEY = "schooldeck.token";
 
