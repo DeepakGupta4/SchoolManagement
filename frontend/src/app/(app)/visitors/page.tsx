@@ -7,6 +7,7 @@ import {
   LogIn,
   Pencil,
   QrCode,
+  Printer,
   Search,
   ShieldCheck,
   Trash2,
@@ -21,6 +22,7 @@ import {
   CardContent,
   ConfirmDialog,
   Input,
+  Modal,
   PageHeader,
   Pagination,
   Select,
@@ -29,6 +31,7 @@ import {
   Tooltip,
   type Column,
 } from "@/components/ui";
+import { QrCode as QrCodeSvg } from "@/components/cards/QrCode";
 import { useResource } from "@/hooks/useResource";
 import {
   VISITOR_PURPOSE_OPTIONS,
@@ -77,6 +80,7 @@ export default function VisitorsPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Visitor | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Visitor | null>(null);
+  const [passVisitor, setPassVisitor] = useState<Visitor | null>(null);
 
   // A narrowed filter can strand you past the last page, so every filter
   // change resets to page 1.
@@ -230,6 +234,14 @@ export default function VisitorsPage() {
             </Button>
           )}
           <button
+            onClick={() => setPassVisitor(v)}
+            aria-label={`Gate pass for ${v.name}`}
+            title="View / print gate pass"
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-primary"
+          >
+            <QrCode className="size-4" />
+          </button>
+          <button
             onClick={() => openEdit(v)}
             aria-label={`Edit ${v.name}`}
             className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
@@ -369,6 +381,51 @@ export default function VisitorsPage() {
         loading={deleting}
         onConfirm={handleDelete}
       />
+
+      <Modal
+        open={Boolean(passVisitor)}
+        onOpenChange={(open) => !open && setPassVisitor(null)}
+        title="Gate Pass"
+        description="Show or print this pass — the gate scans the QR on entry and exit."
+        size="sm"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setPassVisitor(null)}>Close</Button>
+            <Button onClick={() => window.print()}>
+              <Printer className="size-4" /> Print
+            </Button>
+          </>
+        }
+      >
+        {passVisitor && (
+          <div className="print-sheet mx-auto w-full max-w-xs rounded-xl border border-slate-200 bg-white p-5 text-center text-slate-900">
+            <p className="text-sm font-bold tracking-wide">SPRINGDALE SCHOOL</p>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+              Visitor Gate Pass
+            </p>
+            <div className="my-4 flex justify-center">
+              <QrCodeSvg value={passVisitor.passCode} className="h-40 w-40" />
+            </div>
+            <p className="font-mono text-base font-bold">{passVisitor.passCode}</p>
+            <div className="mt-4 space-y-1.5 text-left text-[13px]">
+              {[
+                ["Visitor", passVisitor.name],
+                ["Phone", passVisitor.phone],
+                ["Purpose", passVisitor.purpose],
+                ["Whom to meet", passVisitor.whomToMeet],
+              ].map(([label, val]) => (
+                <div key={label} className="flex justify-between gap-3 border-b border-slate-100 pb-1">
+                  <span className="text-slate-500">{label}</span>
+                  <span className="font-medium text-slate-900">{val}</span>
+                </div>
+              ))}
+            </div>
+            <p className="mt-4 text-[10px] leading-relaxed text-slate-500">
+              Carry this pass. The gate scans the QR on entry and exit.
+            </p>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }
