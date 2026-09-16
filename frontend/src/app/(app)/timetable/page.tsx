@@ -1,10 +1,12 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Plus, Download, Clock } from "lucide-react";
 import { Button, Card, CardContent, PageHeader, useToast } from "@/components/ui";
 import { exportToCsv } from "@/lib/exportCsv";
 import { cn } from "@/lib/utils";
+import { useResource } from "@/hooks/useResource";
+import { timetableApi } from "@/lib/api/timetable";
 
 const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const periods = [
@@ -50,76 +52,8 @@ type SlotRow = {
   teacher: string;
 };
 
-/** Whoever owns a subject across the school — keeps a subject's teacher stable. */
-const subjectTeacher: Record<string, string> = {
-  Mathematics: "Dr. Priya",
-  Physics: "Mr. Rahul",
-  Chemistry: "Ms. Kavita",
-  Biology: "Ms. Deepa",
-  English: "Ms. Anita",
-  History: "Mr. Suresh",
-  Geography: "Mr. Suresh",
-  "Computer Science": "Mr. Amit",
-  "Physical Education": "Mr. Vikram",
-  Hindi: "Mrs. Latha",
-  "Free Period": "",
-};
-
-/** Teaching slots — the break rows (4 and 7) carry no subject. */
-const teachingPeriods = periods.filter((p) => !p.isBreak).map((p) => p.id);
-
 /** The label shown in the Time column: breaks don't consume a period number. */
 const periodLabel = (id: number) => `P${id > 4 ? id - 1 : id}`;
-
-/**
- * Each class has its own weekly subject load. Slot order is the Monday
- * running order; later days rotate it so no two days repeat, which is how a
- * real rotating school timetable is built.
- */
-const classPlans: Record<string, string[]> = {
-  "6-A": ["Mathematics", "English", "Hindi", "Biology", "Geography", "History", "Physical Education", "Computer Science"],
-  "6-B": ["English", "Mathematics", "Biology", "Hindi", "History", "Physical Education", "Geography", "Free Period"],
-  "7-A": ["Mathematics", "Biology", "English", "History", "Hindi", "Geography", "Computer Science", "Physical Education"],
-  "8-A": ["Biology", "Mathematics", "English", "Physics", "Hindi", "Geography", "Computer Science", "History"],
-  "9-A": ["Mathematics", "Physics", "Chemistry", "English", "Biology", "Hindi", "Computer Science", "Physical Education"],
-  "9-B": ["Physics", "Mathematics", "English", "Chemistry", "Hindi", "Biology", "History", "Computer Science"],
-  "10-A": ["Mathematics", "Physics", "English", "Chemistry", "History", "Computer Science", "Physical Education", "Free Period"],
-  "10-B": ["English", "Chemistry", "Mathematics", "Physics", "Biology", "Hindi", "Geography", "Computer Science"],
-  "11-A": ["Physics", "Chemistry", "Mathematics", "Biology", "English", "Computer Science", "Free Period", "Physical Education"],
-  "12-A": ["Mathematics", "Chemistry", "Physics", "Computer Science", "Biology", "English", "Free Period", "Free Period"],
-};
-
-const classes = Object.keys(classPlans);
-
-/** Saturday is a half day — only the first four teaching slots run. */
-const SATURDAY_SLOTS = 4;
-
-function buildWeek(plan: string[]): Record<string, Record<number, TimetableEntry>> {
-  const week: Record<string, Record<number, TimetableEntry>> = {};
-
-  days.forEach((day, dayIndex) => {
-    const isSaturday = dayIndex === days.length - 1;
-    const row: Record<number, TimetableEntry> = {};
-
-    teachingPeriods.forEach((periodId, slot) => {
-      if (isSaturday && slot >= SATURDAY_SLOTS) {
-        row[periodId] = null;
-        return;
-      }
-      // Offset of 3 is coprime with an 8-slot plan, so every weekday is a
-      // different running order rather than the same list shifted by one.
-      const subject = plan[(slot + dayIndex * 3) % plan.length];
-      row[periodId] = { subject, teacher: subjectTeacher[subject] ?? "" };
-    });
-
-    week[day] = row;
-  });
-
-  return week;
-}
-
-const timetableByClass: Record<string, Record<string, Record<number, TimetableEntry>>> =
-  Object.fromEntries(Object.entries(classPlans).map(([cls, plan]) => [cls, buildWeek(plan)]));
 
 const todayIndex = Math.min(new Date().getDay() - 1, 5);
 
@@ -145,7 +79,35 @@ export default function TimetablePage() {
   const [highlightDay, setHighlightDay] = useState<string | null>(days[todayIndex] ?? "Monday");
   const [weekOffset, setWeekOffset] = useState(0);
 
-  const timetableData = timetableByClass[selectedClass] ?? {};
+  // All timetable rows for the school are loaded once; the class selector and
+  // the weekly grid below are derived from them client-side.
+  const filters = useMemo(() => ({}), []);
+  const { items, loading, error, refetch } = useResource(timetableApi, filters, {
+    label: "period",
+    describe: (r) => `${r.className} ${r.day} P${r.period}`,
+  });
+
+  // Distinct classes in natural order (numeric-aware, so "9-A" precedes "10-A").
+  const classes = useMemo(
+    () =>
+      [...new Set(items.map((r) => r.className))].sort((a, b) =>
+        a.localeCompare(b, undefined, { numeric: true })
+      ),
+    [items]
+  );
+
+  // A class that isn't in the loaded data falls back to the first available one.
+  const activeClass = classes.includes(selectedClass) ? selectedClass : classes[0] ?? selectedClass;
+
+  // Grid for the active class: day -> period -> { subject, teacher }.
+  const timetableData = useMemo(() => {
+    const grid: Record<string, Record<number, TimetableEntry>> = {};
+    for (const row of items) {
+      if (row.className !== activeClass) continue;
+      (grid[row.day] ??= {})[row.period] = { subject: row.subject, teacher: row.teacher };
+    }
+    return grid;
+  }, [items, activeClass]);
 
   const weekStart = mondayOf(new Date(), weekOffset);
   const weekEnd = addDays(weekStart, days.length - 1);
@@ -183,14 +145,14 @@ export default function TimetablePage() {
     if (rows.length === 0) {
       toast({
         title: "Nothing to export",
-        description: `Class ${selectedClass} has no scheduled periods.`,
+        description: `Class ${activeClass} has no scheduled periods.`,
         variant: "warning",
       });
       return;
     }
 
     exportToCsv<SlotRow>(
-      `timetable-class-${selectedClass}`,
+      `timetable-class-${activeClass}`,
       [
         { header: "Day", value: (r) => r.day },
         { header: "Period", value: (r) => r.period },
@@ -202,7 +164,7 @@ export default function TimetablePage() {
     );
     toast({
       title: "Export ready",
-      description: `${rows.length} period${rows.length === 1 ? "" : "s"} for class ${selectedClass} exported to CSV.`,
+      description: `${rows.length} period${rows.length === 1 ? "" : "s"} for class ${activeClass} exported to CSV.`,
     });
   };
 
@@ -234,13 +196,14 @@ export default function TimetablePage() {
                 <Button
                   key={c}
                   size="sm"
-                  variant={selectedClass === c ? "primary" : "secondary"}
+                  variant={activeClass === c ? "primary" : "secondary"}
                   onClick={() => setSelectedClass(c)}
                 >
                   {c}
                 </Button>
               ))}
             </div>
+            {loading && <span className="text-xs text-muted">Loading…</span>}
           </div>
 
           <div className="ml-auto flex items-center gap-2">
@@ -272,6 +235,16 @@ export default function TimetablePage() {
         </CardContent>
       </Card>
 
+      {error ? (
+        <Card>
+          <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+            <p className="text-sm font-medium text-danger">{error}</p>
+            <Button variant="outline" onClick={refetch}>
+              Try again
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[900px] border-collapse text-sm">
@@ -385,6 +358,7 @@ export default function TimetablePage() {
           </table>
         </div>
       </Card>
+      )}
 
       <Card>
         <CardContent>

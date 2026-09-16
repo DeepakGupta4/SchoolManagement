@@ -29,6 +29,11 @@ import jobPostingRoutes from "./jobPostings/jobPosting.routes.js";
 import announcementRoutes from "./announcements/announcement.routes.js";
 import noticeRoutes from "./notices/notice.routes.js";
 import leaveRequestRoutes from "./leaveRequests/leaveRequest.routes.js";
+import payrollRoutes from "./payroll/payroll.routes.js";
+import studentDocumentRoutes from "./studentDocuments/studentDocument.routes.js";
+import timetableRoutes from "./timetable/timetable.routes.js";
+import syllabusRoutes from "./syllabus/syllabus.routes.js";
+import messageRoutes from "./messages/message.routes.js";
 
 /**
  * Tenant CRUD modules mounted uniformly under the subscription guard. Each is a
@@ -66,4 +71,9 @@ export const crudModules: { path: string; router: Router }[] = [
   { path: "/api/announcements", router: announcementRoutes },
   { path: "/api/notices", router: noticeRoutes },
   { path: "/api/leave-requests", router: leaveRequestRoutes },
+  { path: "/api/payroll", router: payrollRoutes },
+  { path: "/api/student-documents", router: studentDocumentRoutes },
+  { path: "/api/timetable", router: timetableRoutes },
+  { path: "/api/syllabus", router: syllabusRoutes },
+  { path: "/api/messages", router: messageRoutes },
 ];

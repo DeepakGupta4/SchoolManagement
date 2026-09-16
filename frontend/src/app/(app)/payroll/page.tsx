@@ -40,23 +40,10 @@ import { useChartTheme } from "@/hooks/useChartTheme";
 import { cn } from "@/lib/utils";
 import { exportToCsv } from "@/lib/exportCsv";
 import { PayslipModal, type PayrollEmployee } from "./PayslipModal";
+import { useResource } from "@/hooks/useResource";
+import { payrollApi, type PayrollRecord } from "@/lib/api/payroll";
 
-const payrollData = [
-  { id: "EMP001", name: "Dr. Priya Sharma",    role: "Teacher",       dept: "Mathematics",       basic: 55000, hra: 22000, ta: 5000, deductions: 8250,  net: 73750, status: "paid",    bank: "SBI ****4521"   },
-  { id: "EMP002", name: "Mr. Rahul Verma",     role: "Teacher",       dept: "Physics",           basic: 48000, hra: 19200, ta: 5000, deductions: 7200,  net: 65000, status: "paid",    bank: "HDFC ****7832"  },
-  { id: "EMP003", name: "Ms. Anita Patel",     role: "Teacher",       dept: "English",           basic: 45000, hra: 18000, ta: 5000, deductions: 6750,  net: 61250, status: "paid",    bank: "ICICI ****2341" },
-  { id: "EMP004", name: "Mr. Suresh Kumar",    role: "Teacher",       dept: "History",           basic: 52000, hra: 20800, ta: 5000, deductions: 7800,  net: 70000, status: "pending", bank: "SBI ****9012"   },
-  { id: "EMP005", name: "Ms. Kavita Singh",    role: "Teacher",       dept: "Chemistry",         basic: 50000, hra: 20000, ta: 5000, deductions: 7500,  net: 67500, status: "paid",    bank: "Axis ****5678"  },
-  { id: "EMP006", name: "Mr. Amit Joshi",      role: "Teacher",       dept: "Computer Science",  basic: 42000, hra: 16800, ta: 5000, deductions: 6300,  net: 57500, status: "paid",    bank: "HDFC ****3344"  },
-  { id: "EMP007", name: "Ms. Deepa Nair",      role: "Teacher",       dept: "Biology",           basic: 49000, hra: 19600, ta: 5000, deductions: 7350,  net: 66250, status: "pending", bank: "SBI ****8821"   },
-  { id: "EMP008", name: "Mr. Vikram Gupta",    role: "Teacher",       dept: "Physical Education",basic: 38000, hra: 15200, ta: 5000, deductions: 5700,  net: 52500, status: "paid",    bank: "PNB ****1122"   },
-  { id: "EMP009", name: "Mrs. Sunita Rao",     role: "Admin Staff",   dept: "Administration",    basic: 32000, hra: 12800, ta: 3000, deductions: 4800,  net: 43000, status: "paid",    bank: "SBI ****6677"   },
-  { id: "EMP010", name: "Mr. Rajan Mehta",     role: "Accountant",    dept: "Finance",           basic: 40000, hra: 16000, ta: 3000, deductions: 6000,  net: 53000, status: "paid",    bank: "ICICI ****9900" },
-  { id: "EMP011", name: "Ms. Pooja Iyer",      role: "Librarian",     dept: "Library",           basic: 30000, hra: 12000, ta: 3000, deductions: 4500,  net: 40500, status: "paid",    bank: "Axis ****4455"  },
-  { id: "EMP012", name: "Mr. Dinesh Yadav",    role: "Security",      dept: "Operations",        basic: 22000, hra: 8800,  ta: 2000, deductions: 3300,  net: 29500, status: "on-hold", bank: "SBI ****7788"   },
-];
-
-type Employee = (typeof payrollData)[number];
+type Employee = PayrollRecord;
 
 type BadgeVariant = "default" | "success" | "warning" | "danger" | "info";
 
@@ -108,13 +95,14 @@ export default function PayrollPage() {
   const [roleFilter, setRoleFilter] = useState("All");
   const [payslipFor, setPayslipFor] = useState<PayrollEmployee | null>(null);
   const { toast } = useToast();
+  const { items, loading } = useResource(payrollApi, {}, { label: "employee" });
 
   /** One employee's row exported as their payslip line. */
   const downloadSlip = (emp: PayrollEmployee) => {
     exportToCsv<PayrollEmployee>(
       `payslip-${emp.id}`,
       [
-        { header: "Employee ID", value: (e) => e.id },
+        { header: "Employee ID", value: (e) => e.employeeId },
         { header: "Name", value: (e) => e.name },
         { header: "Designation", value: (e) => e.role },
         { header: "Department", value: (e) => e.dept },
@@ -131,23 +119,23 @@ export default function PayrollPage() {
     toast({ title: "Payslip downloaded", description: `${emp.name}'s salary slip exported.` });
   };
 
-  const filtered = payrollData.filter((e) => {
+  const filtered = items.filter((e) => {
     const tabVal = activeTab === "On Hold" ? "on-hold" : activeTab.toLowerCase();
     const matchTab = activeTab === "All" || e.status === tabVal;
     const matchRole = roleFilter === "All" || e.role === roleFilter;
     const matchSearch =
       e.name.toLowerCase().includes(search.toLowerCase()) ||
       e.dept.toLowerCase().includes(search.toLowerCase()) ||
-      e.id.toLowerCase().includes(search.toLowerCase());
+      e.employeeId.toLowerCase().includes(search.toLowerCase());
     return matchTab && matchRole && matchSearch;
   });
 
-  const totalNet = payrollData.reduce((s, e) => s + e.net, 0);
-  const totalPaid = payrollData.filter((e) => e.status === "paid").reduce((s, e) => s + e.net, 0);
-  const totalPending = payrollData
+  const totalNet = items.reduce((s, e) => s + e.net, 0);
+  const totalPaid = items.filter((e) => e.status === "paid").reduce((s, e) => s + e.net, 0);
+  const totalPending = items
     .filter((e) => e.status === "pending")
     .reduce((s, e) => s + e.net, 0);
-  const roles = ["All", ...Array.from(new Set(payrollData.map((e) => e.role)))];
+  const roles = ["All", ...Array.from(new Set(items.map((e) => e.role)))];
 
   const handleExport = () => {
     if (filtered.length === 0) {
@@ -161,7 +149,7 @@ export default function PayrollPage() {
     exportToCsv<Employee>(
       "payroll",
       [
-        { header: "Employee ID", value: (e) => e.id },
+        { header: "Employee ID", value: (e) => e.employeeId },
         { header: "Name", value: (e) => e.name },
         { header: "Role", value: (e) => e.role },
         { header: "Department", value: (e) => e.dept },
@@ -191,7 +179,7 @@ export default function PayrollPage() {
           <Avatar name={emp.name} size="sm" />
           <div className="min-w-0">
             <p className="truncate font-medium text-text">{emp.name}</p>
-            <p className="truncate text-xs text-subtle">{emp.id}</p>
+            <p className="truncate text-xs text-subtle">{emp.employeeId}</p>
           </div>
         </div>
       ),
@@ -259,7 +247,7 @@ export default function PayrollPage() {
       header: "Status",
       sortable: true,
       render: (emp) => {
-        const sc = statusConfig[emp.status];
+        const sc = statusConfig[emp.status] ?? statusConfig.pending;
         const StatusIcon = sc.icon;
         return (
           <Badge variant={sc.variant} className="gap-1.5">
@@ -321,7 +309,7 @@ export default function PayrollPage() {
         <StatCard label="Total Payroll (Jul)" value={inr.format(totalNet)} icon={Wallet} tone="indigo" />
         <StatCard label="Disbursed" value={inr.format(totalPaid)} icon={CheckCircle} tone="emerald" />
         <StatCard label="Pending" value={inr.format(totalPending)} icon={Clock} tone="amber" />
-        <StatCard label="Total Staff" value={payrollData.length} icon={Users} tone="violet" />
+        <StatCard label="Total Staff" value={items.length} icon={Users} tone="violet" />
       </div>
 
       {/* Monthly Chart */}
@@ -405,6 +393,7 @@ export default function PayrollPage() {
         columns={columns}
         rows={filtered}
         rowKey={(emp) => emp.id}
+        loading={loading}
         emptyTitle="No records found"
         emptyDescription="Try adjusting your filters."
       />
@@ -412,7 +401,7 @@ export default function PayrollPage() {
       <div className="flex flex-wrap items-center justify-between gap-3 px-1">
         <p className="text-xs text-muted">
           Showing <span className="font-medium text-text">{filtered.length}</span> of{" "}
-          <span className="font-medium text-text">{payrollData.length}</span> employees
+          <span className="font-medium text-text">{items.length}</span> employees
         </p>
         <p className="text-sm font-semibold text-text">
           Net Payable:{" "}

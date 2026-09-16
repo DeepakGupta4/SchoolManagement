@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   CheckCircle2,
   Clock,
@@ -27,32 +27,13 @@ import {
 } from "@/components/ui";
 import { exportToCsv } from "@/lib/exportCsv";
 import { cn } from "@/lib/utils";
+import { useResource } from "@/hooks/useResource";
+import { studentDocumentsApi, type StudentDocument } from "@/lib/api/studentDocuments";
 
 const PAGE_SIZE = 10;
 
 /** Each document is one of: verified | pending (uploaded, awaiting check) | missing. */
-const records = [
-  { id: "STU-0901", name: "Aarav Sharma",    className: "9-A",  guardian: "Rohit Sharma",     birthCert: "verified", aadhaar: "verified", tc: "verified", marksheets: "verified", photo: "verified" },
-  { id: "STU-0902", name: "Diya Nair",       className: "6-B",  guardian: "Suresh Nair",      birthCert: "verified", aadhaar: "pending",  tc: "verified", marksheets: "verified", photo: "verified" },
-  { id: "STU-0903", name: "Kabir Malhotra",  className: "11-A", guardian: "Vikas Malhotra",   birthCert: "verified", aadhaar: "verified", tc: "missing",  marksheets: "pending",  photo: "verified" },
-  { id: "STU-0904", name: "Ananya Iyer",     className: "4-A",  guardian: "Ganesh Iyer",      birthCert: "verified", aadhaar: "verified", tc: "verified", marksheets: "verified", photo: "verified" },
-  { id: "STU-0905", name: "Vivaan Reddy",    className: "8-C",  guardian: "Prasad Reddy",     birthCert: "missing",  aadhaar: "missing",  tc: "missing",  marksheets: "missing",  photo: "pending"  },
-  { id: "STU-0906", name: "Ishita Banerjee", className: "10-A", guardian: "Arindam Banerjee", birthCert: "verified", aadhaar: "verified", tc: "verified", marksheets: "pending",  photo: "verified" },
-  { id: "STU-0907", name: "Reyansh Gupta",   className: "2-B",  guardian: "Deepak Gupta",     birthCert: "verified", aadhaar: "pending",  tc: "missing",  marksheets: "missing",  photo: "verified" },
-  { id: "STU-0908", name: "Saanvi Patil",    className: "12-A", guardian: "Mahesh Patil",     birthCert: "verified", aadhaar: "verified", tc: "verified", marksheets: "verified", photo: "verified" },
-  { id: "STU-0909", name: "Arjun Chauhan",   className: "7-A",  guardian: "Bhupendra Chauhan",birthCert: "verified", aadhaar: "verified", tc: "pending",  marksheets: "verified", photo: "pending"  },
-  { id: "STU-0910", name: "Myra Joshi",      className: "5-B",  guardian: "Nitin Joshi",      birthCert: "pending",  aadhaar: "verified", tc: "verified", marksheets: "verified", photo: "verified" },
-  { id: "STU-0911", name: "Advik Deshmukh",  className: "9-B",  guardian: "Sameer Deshmukh",  birthCert: "verified", aadhaar: "verified", tc: "verified", marksheets: "verified", photo: "verified" },
-  { id: "STU-0912", name: "Kiara Menon",     className: "3-A",  guardian: "Ravi Menon",       birthCert: "verified", aadhaar: "missing",  tc: "missing",  marksheets: "pending",  photo: "verified" },
-  { id: "STU-0913", name: "Atharv Rathore",  className: "11-B", guardian: "Jitendra Rathore", birthCert: "verified", aadhaar: "verified", tc: "verified", marksheets: "verified", photo: "missing"  },
-  { id: "STU-0914", name: "Aadhya Kulkarni", className: "6-A",  guardian: "Shirish Kulkarni", birthCert: "verified", aadhaar: "verified", tc: "verified", marksheets: "verified", photo: "verified" },
-  { id: "STU-0915", name: "Vihaan Saxena",   className: "8-A",  guardian: "Alok Saxena",      birthCert: "pending",  aadhaar: "pending",  tc: "missing",  marksheets: "missing",  photo: "pending"  },
-  { id: "STU-0916", name: "Anika Bhatt",     className: "10-B", guardian: "Manoj Bhatt",      birthCert: "verified", aadhaar: "verified", tc: "verified", marksheets: "pending",  photo: "verified" },
-  { id: "STU-0917", name: "Shaurya Pillai",  className: "1-A",  guardian: "Anand Pillai",     birthCert: "verified", aadhaar: "pending",  tc: "verified", marksheets: "verified", photo: "verified" },
-  { id: "STU-0918", name: "Navya Choudhary", className: "9-C",  guardian: "Rakesh Choudhary", birthCert: "verified", aadhaar: "verified", tc: "verified", marksheets: "verified", photo: "verified" },
-];
-
-type DocRecord = (typeof records)[number];
+type DocRecord = StudentDocument;
 
 const DOC_TYPES = [
   { key: "birthCert", label: "Birth Certificate" },
@@ -77,10 +58,6 @@ const STATE_OPTIONS = Object.entries(DOC_STATE).map(([value, m]) => ({ label: m.
 
 const DOC_OPTIONS = DOC_TYPES.map((d) => ({ label: d.label, value: d.key }));
 
-const CLASS_OPTIONS = [...new Set(records.map((r) => r.className))]
-  .sort()
-  .map((c) => ({ label: `Class ${c}`, value: c }));
-
 function statesOf(r: DocRecord) {
   return DOC_TYPES.map((d) => r[d.key]);
 }
@@ -97,6 +74,15 @@ export default function StudentDocumentsPage() {
   const [docState, setDocState] = useState("");
   const [page, setPage] = useState(1);
   const { toast } = useToast();
+  const { items, loading } = useResource(studentDocumentsApi, {}, { label: "student file" });
+
+  const CLASS_OPTIONS = useMemo(
+    () =>
+      [...new Set(items.map((r) => r.className))]
+        .sort()
+        .map((c) => ({ label: `Class ${c}`, value: c })),
+    [items]
+  );
 
   const applyFilter = (setter: (value: string) => void) => (value: string) => {
     setter(value);
@@ -104,11 +90,11 @@ export default function StudentDocumentsPage() {
   };
 
   const query = search.trim().toLowerCase();
-  const filtered = records.filter((r) => {
+  const filtered = items.filter((r) => {
     const matchSearch =
       !query ||
       r.name.toLowerCase().includes(query) ||
-      r.id.toLowerCase().includes(query) ||
+      r.studentId.toLowerCase().includes(query) ||
       r.guardian.toLowerCase().includes(query);
 
     // "Show me students whose <docType> is <docState>" — either half works alone.
@@ -123,17 +109,17 @@ export default function StudentDocumentsPage() {
 
   const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-  const totalSlots = records.length * DOC_TYPES.length;
-  const verifiedCount = records.reduce(
+  const totalSlots = items.length * DOC_TYPES.length;
+  const verifiedCount = items.reduce(
     (sum, r) => sum + statesOf(r).filter((s) => s === "verified").length,
     0
   );
-  const pendingCount = records.reduce(
+  const pendingCount = items.reduce(
     (sum, r) => sum + statesOf(r).filter((s) => s === "pending").length,
     0
   );
   const missingCount = totalSlots - verifiedCount - pendingCount;
-  const fullyComplete = records.filter((r) => completion(r) === 100).length;
+  const fullyComplete = items.filter((r) => completion(r) === 100).length;
 
   /** One row per student in the filtered set, one column per document type. */
   const handleExport = () => {
@@ -148,7 +134,7 @@ export default function StudentDocumentsPage() {
     exportToCsv<DocRecord>(
       "student-documents",
       [
-        { header: "Student ID", value: (r) => r.id },
+        { header: "Student ID", value: (r) => r.studentId },
         { header: "Student", value: (r) => r.name },
         { header: "Class", value: (r) => r.className },
         { header: "Guardian", value: (r) => r.guardian },
@@ -172,7 +158,7 @@ export default function StudentDocumentsPage() {
     sortable: true,
     align: "center" as const,
     render: (r: DocRecord) => {
-      const meta = DOC_STATE[r[d.key]];
+      const meta = DOC_STATE[r[d.key]] ?? DOC_STATE.missing;
       return (
         <span
           title={`${d.label}: ${meta.label}`}
@@ -196,7 +182,7 @@ export default function StudentDocumentsPage() {
           <div className="min-w-0">
             <p className="truncate font-medium text-text">{r.name}</p>
             <p className="truncate text-xs text-subtle">
-              {r.id} · {r.guardian}
+              {r.studentId} · {r.guardian}
             </p>
           </div>
         </div>
@@ -291,7 +277,7 @@ export default function StudentDocumentsPage() {
         <StatCard
           label="Files Complete"
           value={fullyComplete}
-          suffix={` / ${records.length}`}
+          suffix={` / ${items.length}`}
           icon={CheckCircle2}
           tone="indigo"
         />
@@ -355,6 +341,7 @@ export default function StudentDocumentsPage() {
         columns={columns}
         rows={paged}
         rowKey={(r) => r.id}
+        loading={loading}
         rowClassName={(r) => (completion(r) < 60 ? "bg-danger-soft" : undefined)}
         emptyTitle="No student files found"
         emptyDescription="Try clearing your filters to see more results."

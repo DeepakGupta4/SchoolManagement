@@ -5,6 +5,7 @@ import { Button, Modal } from "@/components/ui";
 
 export interface PayrollEmployee {
   id: string;
+  employeeId: string;
   name: string;
   role: string;
   dept: string;
@@ -79,7 +80,7 @@ export function PayslipModal({
             <dl className="grid grid-cols-2 gap-x-6 gap-y-2 px-5 py-4 text-xs sm:grid-cols-4">
               {[
                 ["Employee", employee.name],
-                ["Employee ID", employee.id],
+                ["Employee ID", employee.employeeId],
                 ["Designation", employee.role],
                 ["Department", employee.dept],
                 ["Bank A/C", employee.bank],

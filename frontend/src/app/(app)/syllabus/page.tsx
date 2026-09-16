@@ -1,10 +1,12 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { ChevronDown, ChevronRight, CheckCircle, Circle, Clock, BookOpen, Download, Plus } from "lucide-react";
 import { Badge, Button, Card, CardContent, PageHeader, Select, useToast } from "@/components/ui";
 import { exportToCsv } from "@/lib/exportCsv";
 import { cn } from "@/lib/utils";
+import { useResource } from "@/hooks/useResource";
+import { syllabusApi, type SyllabusChapter } from "@/lib/api/syllabus";
 
 type ChapterStatus = "completed" | "in-progress" | "pending";
 
@@ -34,182 +36,52 @@ type ChapterRow = {
   chapter: Chapter;
 };
 
-/** A blueprint is the printed syllabus: unit titles and their chapters. */
-type UnitPlan = { unit: string; chapters: [name: string, topics: number][] };
-
-const TEACHERS: Record<string, string> = {
-  Mathematics: "Dr. Priya Sharma",
-  Physics: "Mr. Rahul Verma",
-  Chemistry: "Ms. Kavita Singh",
-  Biology: "Ms. Deepa Nair",
-  Science: "Ms. Deepa Nair",
-  English: "Ms. Anita Desai",
-  "Social Studies": "Mr. Suresh Rao",
-  "Computer Science": "Mr. Amit Khanna",
-};
-
-/** Dates are handed out in teaching order to whatever has been covered. */
-const TEACHING_DATES = [
-  "Apr 5", "Apr 18", "Apr 29", "May 10", "May 22",
-  "Jun 2", "Jun 14", "Jun 26", "Jul 8", "Jul 19",
-];
-
-const MATH_JUNIOR: UnitPlan[] = [
-  { unit: "Unit 1 — Number System", chapters: [["Knowing Our Numbers", 5], ["Whole Numbers", 4], ["Playing with Numbers", 6]] },
-  { unit: "Unit 2 — Algebra & Geometry", chapters: [["Basic Geometrical Ideas", 5], ["Introduction to Algebra", 6], ["Ratio and Proportion", 4]] },
-  { unit: "Unit 3 — Mensuration", chapters: [["Perimeter and Area", 5], ["Data Handling", 4]] },
-];
-
-const MATH_SENIOR: UnitPlan[] = [
-  { unit: "Unit 1 — Number Systems", chapters: [["Real Numbers", 6], ["Polynomials", 5]] },
-  { unit: "Unit 2 — Algebra", chapters: [["Linear Equations", 7], ["Quadratic Equations", 8], ["Arithmetic Progressions", 6]] },
-  { unit: "Unit 3 — Geometry", chapters: [["Triangles", 5], ["Circles", 6], ["Constructions", 4]] },
-  { unit: "Unit 4 — Trigonometry", chapters: [["Intro to Trigonometry", 5], ["Applications of Trigonometry", 4]] },
-];
-
-const MATH_HIGHER: UnitPlan[] = [
-  { unit: "Unit 1 — Calculus", chapters: [["Relations and Functions", 6], ["Continuity & Differentiability", 8], ["Applications of Derivatives", 7]] },
-  { unit: "Unit 2 — Integrals", chapters: [["Integrals", 9], ["Applications of Integrals", 5], ["Differential Equations", 6]] },
-  { unit: "Unit 3 — Vectors & 3D", chapters: [["Vector Algebra", 6], ["Three Dimensional Geometry", 6]] },
-];
-
-const SCIENCE_JUNIOR: UnitPlan[] = [
-  { unit: "Unit 1 — Food & Materials", chapters: [["Components of Food", 5], ["Fibre to Fabric", 4], ["Separation of Substances", 5]] },
-  { unit: "Unit 2 — The Living World", chapters: [["Getting to Know Plants", 6], ["Body Movements", 5], ["Living Organisms & Habitat", 5]] },
-  { unit: "Unit 3 — Motion & Light", chapters: [["Motion and Measurement", 5], ["Light, Shadows & Reflections", 4]] },
-];
-
-const SOCIAL_JUNIOR: UnitPlan[] = [
-  { unit: "Unit 1 — History", chapters: [["What, Where, How and When?", 4], ["From Hunting to Growing Food", 5], ["In the Earliest Cities", 5]] },
-  { unit: "Unit 2 — Geography", chapters: [["The Earth in the Solar System", 5], ["Globe: Latitudes & Longitudes", 4], ["Motions of the Earth", 4]] },
-  { unit: "Unit 3 — Civics", chapters: [["Understanding Diversity", 4], ["Local Government", 5]] },
-];
-
-const ENGLISH_PLAN: UnitPlan[] = [
-  { unit: "Unit 1 — Prose", chapters: [["A Letter to God", 4], ["Nelson Mandela: Long Walk to Freedom", 5], ["Two Stories about Flying", 4]] },
-  { unit: "Unit 2 — Poetry", chapters: [["Dust of Snow", 3], ["Fire and Ice", 3], ["The Ball Poem", 4]] },
-  { unit: "Unit 3 — Writing & Grammar", chapters: [["Formal Letter Writing", 5], ["Tenses and Voice", 6]] },
-];
-
-const PHYSICS_SENIOR: UnitPlan[] = [
-  { unit: "Unit 1 — Mechanics", chapters: [["Motion in a Straight Line", 8], ["Laws of Motion", 7], ["Work, Energy & Power", 6]] },
-  { unit: "Unit 2 — Thermodynamics", chapters: [["Thermal Properties", 5], ["Thermodynamics", 7], ["Kinetic Theory", 5]] },
-  { unit: "Unit 3 — Waves & Optics", chapters: [["Oscillations", 6], ["Waves", 5], ["Light: Reflection & Refraction", 6]] },
-];
-
-const PHYSICS_HIGHER: UnitPlan[] = [
-  { unit: "Unit 1 — Electrostatics", chapters: [["Electric Charges & Fields", 7], ["Electrostatic Potential", 6], ["Current Electricity", 8]] },
-  { unit: "Unit 2 — Magnetism", chapters: [["Moving Charges & Magnetism", 7], ["Magnetism and Matter", 5], ["Electromagnetic Induction", 6]] },
-  { unit: "Unit 3 — Modern Physics", chapters: [["Dual Nature of Radiation", 5], ["Atoms and Nuclei", 6], ["Semiconductor Devices", 6]] },
-];
-
-const CHEMISTRY_SENIOR: UnitPlan[] = [
-  { unit: "Unit 1 — Basic Concepts", chapters: [["Some Basic Concepts of Chemistry", 6], ["Structure of Atom", 8]] },
-  { unit: "Unit 2 — Chemical Bonding", chapters: [["Chemical Bonding", 9], ["States of Matter", 6], ["Thermodynamics", 7]] },
-  { unit: "Unit 3 — Reactions", chapters: [["Chemical Reactions & Equations", 6], ["Acids, Bases and Salts", 5], ["Metals and Non-metals", 6]] },
-];
-
-const CHEMISTRY_HIGHER: UnitPlan[] = [
-  { unit: "Unit 1 — Physical Chemistry", chapters: [["Solutions", 6], ["Electrochemistry", 7], ["Chemical Kinetics", 6]] },
-  { unit: "Unit 2 — Inorganic Chemistry", chapters: [["The d- and f-Block Elements", 6], ["Coordination Compounds", 7]] },
-  { unit: "Unit 3 — Organic Chemistry", chapters: [["Haloalkanes & Haloarenes", 5], ["Alcohols, Phenols & Ethers", 6], ["Biomolecules", 5]] },
-];
-
-const BIOLOGY_SENIOR: UnitPlan[] = [
-  { unit: "Unit 1 — Cell Biology", chapters: [["The Fundamental Unit of Life", 6], ["Tissues", 5]] },
-  { unit: "Unit 2 — Life Processes", chapters: [["Life Processes", 8], ["Control and Coordination", 6], ["How do Organisms Reproduce?", 6]] },
-  { unit: "Unit 3 — Heredity & Environment", chapters: [["Heredity and Evolution", 6], ["Our Environment", 4]] },
-];
-
-const CS_HIGHER: UnitPlan[] = [
-  { unit: "Unit 1 — Programming", chapters: [["Python Revision Tour", 6], ["Functions", 6], ["File Handling", 7]] },
-  { unit: "Unit 2 — Data Structures", chapters: [["Stacks", 5], ["Queues", 4], ["Searching & Sorting", 6]] },
-  { unit: "Unit 3 — Databases & Networks", chapters: [["Database Concepts", 6], ["SQL Queries", 7], ["Computer Networks", 6]] },
-];
-
 /**
- * Turns a blueprint into tracked chapters: the first `completed` chapters are
- * done, the next is in progress, and the rest are still pending. Every counter
- * on the page is then derived from these statuses — nothing is hardcoded.
+ * Rebuilds the per-subject syllabus tree from flat chapter rows: chapters are
+ * grouped under their unit (in first-seen order) and units under their subject.
+ * Every counter on the page is derived from the chapter statuses that come back.
  */
-function buildSubject(subject: string, plans: UnitPlan[], completed: number): SubjectSyllabus {
-  let index = 0;
+function buildSyllabus(rows: SyllabusChapter[]): SubjectSyllabus[] {
+  const subjects: SubjectSyllabus[] = [];
+  const subjectIndex = new Map<string, SubjectSyllabus>();
+  const unitIndex = new Map<string, Unit>();
 
-  const units = plans.map(({ unit, chapters }) => ({
-    unit,
-    chapters: chapters.map(([name, topics]): Chapter => {
-      const position = index++;
-      const status: ChapterStatus =
-        position < completed ? "completed" : position === completed ? "in-progress" : "pending";
-      return {
-        name,
-        status,
-        topics,
-        completedTopics:
-          status === "completed" ? topics : status === "in-progress" ? Math.ceil(topics / 2) : 0,
-        date: status === "completed" ? TEACHING_DATES[position % TEACHING_DATES.length] : "—",
+  for (const row of rows) {
+    let subject = subjectIndex.get(row.subject);
+    if (!subject) {
+      subject = {
+        subject: row.subject,
+        teacher: row.teacher,
+        units: [],
+        totalChapters: 0,
+        completedChapters: 0,
       };
-    }),
-  }));
+      subjectIndex.set(row.subject, subject);
+      subjects.push(subject);
+    }
 
-  const all = units.flatMap((u) => u.chapters);
+    const unitKey = `${row.subject}::${row.unit}`;
+    let unit = unitIndex.get(unitKey);
+    if (!unit) {
+      unit = { unit: row.unit, chapters: [] };
+      unitIndex.set(unitKey, unit);
+      subject.units.push(unit);
+    }
 
-  return {
-    subject,
-    teacher: TEACHERS[subject] ?? "Unassigned",
-    units,
-    totalChapters: all.length,
-    completedChapters: all.filter((c) => c.status === "completed").length,
-  };
+    const status = row.status as ChapterStatus;
+    unit.chapters.push({
+      name: row.chapter,
+      status,
+      topics: row.topics,
+      completedTopics: row.completedTopics,
+      date: row.date,
+    });
+    subject.totalChapters += 1;
+    if (status === "completed") subject.completedChapters += 1;
+  }
+
+  return subjects;
 }
-
-/** Every class carries its own syllabus and its own progress through it. */
-const syllabusByClass: Record<string, SubjectSyllabus[]> = {
-  "6-A": [
-    buildSubject("Mathematics", MATH_JUNIOR, 5),
-    buildSubject("Science", SCIENCE_JUNIOR, 4),
-    buildSubject("Social Studies", SOCIAL_JUNIOR, 3),
-    buildSubject("English", ENGLISH_PLAN, 6),
-  ],
-  "7-A": [
-    buildSubject("Mathematics", MATH_JUNIOR, 6),
-    buildSubject("Science", SCIENCE_JUNIOR, 6),
-    buildSubject("Social Studies", SOCIAL_JUNIOR, 5),
-    buildSubject("English", ENGLISH_PLAN, 4),
-  ],
-  "8-A": [
-    buildSubject("Mathematics", MATH_JUNIOR, 7),
-    buildSubject("Science", SCIENCE_JUNIOR, 7),
-    buildSubject("Social Studies", SOCIAL_JUNIOR, 6),
-    buildSubject("English", ENGLISH_PLAN, 7),
-  ],
-  "9-A": [
-    buildSubject("Mathematics", MATH_SENIOR, 6),
-    buildSubject("Physics", PHYSICS_SENIOR, 5),
-    buildSubject("Chemistry", CHEMISTRY_SENIOR, 4),
-    buildSubject("Biology", BIOLOGY_SENIOR, 3),
-    buildSubject("English", ENGLISH_PLAN, 5),
-  ],
-  "10-A": [
-    buildSubject("Mathematics", MATH_SENIOR, 9),
-    buildSubject("Physics", PHYSICS_SENIOR, 7),
-    buildSubject("Chemistry", CHEMISTRY_SENIOR, 8),
-    buildSubject("Biology", BIOLOGY_SENIOR, 5),
-    buildSubject("English", ENGLISH_PLAN, 6),
-  ],
-  "11-A": [
-    buildSubject("Mathematics", MATH_HIGHER, 4),
-    buildSubject("Physics", PHYSICS_HIGHER, 3),
-    buildSubject("Chemistry", CHEMISTRY_HIGHER, 5),
-    buildSubject("Computer Science", CS_HIGHER, 4),
-  ],
-  "12-A": [
-    buildSubject("Mathematics", MATH_HIGHER, 7),
-    buildSubject("Physics", PHYSICS_HIGHER, 6),
-    buildSubject("Chemistry", CHEMISTRY_HIGHER, 6),
-    buildSubject("Computer Science", CS_HIGHER, 8),
-  ],
-};
 
 type BadgeVariant = "default" | "success" | "warning";
 
@@ -234,7 +106,6 @@ const subjectTone: Record<string, { tile: string; bar: string; text: string }> =
 const FALLBACK_TONE = { tile: "gradient-indigo", bar: "bg-primary", text: "text-primary" };
 
 const ALL_SUBJECTS = "All Subjects";
-const classes = Object.keys(syllabusByClass);
 
 function StatusIcon({ status, className }: { status: string; className?: string }) {
   if (status === "completed") return <CheckCircle className={cn("text-success", className)} />;
@@ -251,7 +122,28 @@ export default function SyllabusPage() {
 
   const toggleUnit = (key: string) => setOpenUnits(p => ({ ...p, [key]: !p[key] }));
 
-  const syllabusData = syllabusByClass[selClass] ?? [];
+  // All syllabus rows for the school load once; the class dropdown and the
+  // per-subject tree below are derived from them client-side.
+  const filters = useMemo(() => ({}), []);
+  const { items, loading, error, refetch } = useResource(syllabusApi, filters, {
+    label: "chapter",
+    describe: (r) => r.chapter,
+  });
+
+  const classes = useMemo(
+    () =>
+      [...new Set(items.map((r) => r.className))].sort((a, b) =>
+        a.localeCompare(b, undefined, { numeric: true })
+      ),
+    [items]
+  );
+
+  const activeClass = classes.includes(selClass) ? selClass : classes[0] ?? selClass;
+
+  const syllabusData = useMemo(
+    () => buildSyllabus(items.filter((r) => r.className === activeClass)),
+    [items, activeClass]
+  );
   // The subject tabs come from the data, so a class never offers a subject it
   // has no syllabus for. A subject that vanishes on a class switch falls back
   // to "All Subjects" — derived here rather than reset from an effect.
@@ -296,9 +188,9 @@ export default function SyllabusPage() {
     }
 
     exportToCsv<ChapterRow>(
-      `syllabus-class-${selClass}`,
+      `syllabus-class-${activeClass}`,
       [
-        { header: "Class", value: () => selClass },
+        { header: "Class", value: () => activeClass },
         { header: "Subject", value: (r) => r.subject },
         { header: "Teacher", value: (r) => r.teacher },
         { header: "Unit", value: (r) => r.unit },
@@ -343,11 +235,12 @@ export default function SyllabusPage() {
         <CardContent className="flex flex-wrap items-center gap-3">
           <div className="w-40">
             <Select
-              value={selClass}
+              value={activeClass}
               onChange={(e) => setSelClass(e.target.value)}
               options={classes.map((c) => ({ label: `Class ${c}`, value: c }))}
               aria-label="Select class"
             />
+            {loading && <span className="text-xs text-muted">Loading…</span>}
           </div>
           <div className="flex flex-wrap gap-1 rounded-md bg-surface-sunken p-1">
             {subjects.map((s) => (
@@ -365,11 +258,22 @@ export default function SyllabusPage() {
         </CardContent>
       </Card>
 
+      {error && (
+        <Card>
+          <CardContent className="flex flex-col items-center gap-3 py-6 text-center">
+            <p className="text-sm font-medium text-danger">{error}</p>
+            <Button variant="outline" onClick={refetch}>
+              Try again
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardContent>
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <p className="text-sm font-semibold text-text">
-              Syllabus Completion — Class {selClass}
+              Syllabus Completion — Class {activeClass}
               {activeSubject !== ALL_SUBJECTS && ` · ${activeSubject}`}
             </p>
             <span className={cn("text-xl font-semibold", overallText)}>{overallPct}%</span>
@@ -437,7 +341,7 @@ export default function SyllabusPage() {
       <div className="flex flex-col gap-3">
         {filtered.map((subj, si) => {
           // First subject of the list starts expanded until the user says otherwise.
-          const isSubjOpen = openSubjects[`${selClass}-${subj.subject}`] ?? si === 0;
+          const isSubjOpen = openSubjects[`${activeClass}-${subj.subject}`] ?? si === 0;
           const pct = Math.round((subj.completedChapters / subj.totalChapters) * 100);
           const tone = subjectTone[subj.subject] ?? FALLBACK_TONE;
 
@@ -447,7 +351,7 @@ export default function SyllabusPage() {
                 onClick={() =>
                   setOpenSubjects((p) => ({
                     ...p,
-                    [`${selClass}-${subj.subject}`]: !isSubjOpen,
+                    [`${activeClass}-${subj.subject}`]: !isSubjOpen,
                   }))
                 }
                 aria-expanded={isSubjOpen}
@@ -485,7 +389,7 @@ export default function SyllabusPage() {
               {isSubjOpen && (
                 <div className="border-t border-border">
                   {subj.units.map((unit, ui) => {
-                    const unitKey = `${selClass}-${subj.subject}-${ui}`;
+                    const unitKey = `${activeClass}-${subj.subject}-${ui}`;
                     const isUnitOpen = openUnits[unitKey] !== false;
                     const unitCompleted = unit.chapters.every((c) => c.status === "completed");
                     const unitInProgress = unit.chapters.some((c) => c.status === "in-progress");

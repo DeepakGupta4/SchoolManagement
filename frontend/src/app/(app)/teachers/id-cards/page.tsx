@@ -1,46 +1,32 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { CheckSquare, IdCard as IdCardIcon, Printer, Search, Square, Users } from "lucide-react";
 import {
-  Button, Card, EmptyState, Input, PageHeader, Select, StatCard, useToast,
+  Button, Card, EmptyState, Input, PageHeader, Select, Skeleton, StatCard, useToast,
 } from "@/components/ui";
 import { IdCard, type IdCardHolder } from "@/components/cards/IdCard";
+import { useAsyncList } from "@/hooks/useAsyncList";
+import { listTeachers, DEPARTMENT_OPTIONS } from "@/lib/api/teachers";
+import { teacherName, type Teacher } from "@/types/teacher";
 
-const DEPARTMENTS = ["Science", "Mathematics", "Languages", "Social Studies", "Computer Science", "Sports"];
-const DESIGNATIONS = ["PGT", "TGT", "PRT", "HOD", "Lab Assistant"];
-const BLOOD = ["A+", "B+", "O+", "AB+", "A-", "O-"];
-const FIRST = ["Priya", "Rahul", "Anita", "Suresh", "Kavita", "Amit", "Deepa", "Vikram", "Sunita", "Manoj", "Rekha", "Sanjay", "Nisha", "Alok"];
-const LAST = ["Sharma", "Verma", "Patel", "Kumar", "Singh", "Joshi", "Nair", "Gupta", "Iyer", "Mehta"];
-
-function pick<T>(arr: T[], seed: number) {
-  return arr[seed % arr.length];
+/** Maps a teacher record onto the ID-card holder shape, photo included. */
+function toHolder(t: Teacher): IdCardHolder {
+  return {
+    id: t.id,
+    name: teacherName(t),
+    role: "Teacher",
+    identifier: t.employeeId,
+    identifierLabel: "Emp. ID",
+    affiliation: t.department,
+    phone: t.phone,
+    guardianOrDesignation: t.qualification,
+    guardianLabel: "Qualification",
+    validTill: "31 Mar 2027",
+    photo: t.avatar || undefined,
+    address: t.address,
+  };
 }
-
-const teachers: (IdCardHolder & { department: string; printed: boolean })[] = Array.from(
-  { length: 14 },
-  (_, i) => {
-    const first = FIRST[i % FIRST.length];
-    const last = pick(LAST, i * 3 + 2);
-    const department = pick(DEPARTMENTS, i * 5 + 1);
-
-    return {
-      id: `tch_${String(i + 1).padStart(3, "0")}`,
-      name: `${first} ${last}`,
-      role: "Teacher",
-      identifier: `EMP${1001 + i}`,
-      identifierLabel: "Emp. ID",
-      affiliation: department,
-      bloodGroup: pick(BLOOD, i * 2 + 1),
-      phone: `9${820000000 + i * 219731}`,
-      guardianOrDesignation: pick(DESIGNATIONS, i * 3 + 1),
-      guardianLabel: "Designation",
-      validTill: "31 Mar 2027",
-      department,
-      printed: i % 4 !== 0,
-    };
-  }
-);
 
 export default function TeacherIdCardsPage() {
   const { toast } = useToast();
@@ -49,14 +35,19 @@ export default function TeacherIdCardsPage() {
   const [department, setDepartment] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return teachers.filter((t) => {
-      if (department && t.department !== department) return false;
-      if (!q) return true;
-      return t.name.toLowerCase().includes(q) || t.identifier.toLowerCase().includes(q);
-    });
-  }, [search, department]);
+  // Sourced from the real teachers API, so a photo added on the teacher form
+  // appears here on the card without any extra wiring.
+  const fetcher = useCallback(() => listTeachers({ search }), [search]);
+  const { items: allTeachers, loading } = useAsyncList<Teacher>(fetcher);
+
+  // `department` isn't a listTeachers query param, so narrow it client-side.
+  const teachers = useMemo(
+    () => (department ? allTeachers.filter((t) => t.department === department) : allTeachers),
+    [allTeachers, department]
+  );
+
+  const cards = useMemo(() => teachers.map(toHolder), [teachers]);
+  const withPhoto = useMemo(() => teachers.filter((t) => t.avatar).length, [teachers]);
 
   const toggle = (id: string) =>
     setSelected((prev) => {
@@ -67,17 +58,17 @@ export default function TeacherIdCardsPage() {
       return next;
     });
 
-  const allVisibleSelected = filtered.length > 0 && filtered.every((t) => selected.has(t.id));
+  const allVisibleSelected = cards.length > 0 && cards.every((c) => selected.has(c.id));
 
   const toggleAll = () =>
     setSelected((prev) => {
       const next = new Set(prev);
-      if (allVisibleSelected) filtered.forEach((t) => next.delete(t.id));
-      else filtered.forEach((t) => next.add(t.id));
+      if (allVisibleSelected) cards.forEach((c) => next.delete(c.id));
+      else cards.forEach((c) => next.add(c.id));
       return next;
     });
 
-  const printCount = selected.size > 0 ? selected.size : filtered.length;
+  const printCount = selected.size > 0 ? selected.size : cards.length;
 
   const handlePrint = () => {
     if (printCount === 0) {
@@ -90,8 +81,6 @@ export default function TeacherIdCardsPage() {
     });
     setTimeout(() => window.print(), 250);
   };
-
-  const printedCount = teachers.filter((t) => t.printed).length;
 
   return (
     <div className="flex flex-col gap-5">
@@ -109,8 +98,8 @@ export default function TeacherIdCardsPage() {
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard label="Total staff" value={teachers.length} icon={Users} tone="indigo" />
-          <StatCard label="Cards printed" value={printedCount} icon={IdCardIcon} tone="emerald" />
-          <StatCard label="Pending print" value={teachers.length - printedCount} icon={Printer} tone="amber" />
+          <StatCard label="With photo" value={withPhoto} icon={IdCardIcon} tone="emerald" />
+          <StatCard label="Photo pending" value={teachers.length - withPhoto} icon={Printer} tone="amber" />
           <StatCard label="Selected" value={selected.size} icon={CheckSquare} tone="violet" />
         </div>
 
@@ -130,18 +119,24 @@ export default function TeacherIdCardsPage() {
               value={department}
               onChange={(e) => setDepartment(e.target.value)}
               placeholder="All departments"
-              options={DEPARTMENTS.map((d) => ({ label: d, value: d }))}
+              options={DEPARTMENT_OPTIONS.map((d) => ({ label: d, value: d }))}
               aria-label="Filter by department"
             />
           </div>
-          <Button variant="outline" onClick={toggleAll} disabled={filtered.length === 0}>
+          <Button variant="outline" onClick={toggleAll} disabled={cards.length === 0}>
             {allVisibleSelected ? <Square className="size-4" /> : <CheckSquare className="size-4" />}
             {allVisibleSelected ? "Clear selection" : "Select all"}
           </Button>
         </div>
       </div>
 
-      {filtered.length === 0 ? (
+      {loading ? (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="aspect-[0.631/1] w-full" />
+          ))}
+        </div>
+      ) : cards.length === 0 ? (
         <Card className="print-hide">
           <EmptyState
             icon={<IdCardIcon className="size-5" />}
@@ -151,15 +146,16 @@ export default function TeacherIdCardsPage() {
         </Card>
       ) : (
         <div className="print-sheet grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {filtered.map((t) => {
-            const isSelected = selected.has(t.id);
+          {cards.map((holder) => {
+            const isSelected = selected.has(holder.id);
             const dimmed = selected.size > 0 && !isSelected;
+            const hasPhoto = teachers.find((t) => t.id === holder.id)?.avatar;
             return (
-              <div key={t.id} className={dimmed ? "print-hide" : undefined}>
+              <div key={holder.id} className={dimmed ? "print-hide" : undefined}>
                 <button
-                  onClick={() => toggle(t.id)}
+                  onClick={() => toggle(holder.id)}
                   aria-pressed={isSelected}
-                  aria-label={`Select ID card for ${t.name}`}
+                  aria-label={`Select ID card for ${holder.name}`}
                   className="focus-ring print-hide mb-2 flex w-full items-center gap-2 rounded-md px-1 text-left text-xs text-muted transition-colors hover:text-text"
                 >
                   {isSelected ? (
@@ -167,14 +163,14 @@ export default function TeacherIdCardsPage() {
                   ) : (
                     <Square className="size-4" />
                   )}
-                  <span className="truncate">{t.name}</span>
-                  {t.printed && (
+                  <span className="truncate">{holder.name}</span>
+                  {hasPhoto && (
                     <span className="ml-auto shrink-0 rounded-full bg-success-soft px-1.5 py-0.5 text-[10px] font-medium text-success-text">
-                      Printed
+                      Photo
                     </span>
                   )}
                 </button>
-                <IdCard holder={t} />
+                <IdCard holder={holder} />
               </div>
             );
           })}
