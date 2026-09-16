@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   BadgeCheck,
   DoorOpen,
@@ -29,6 +29,7 @@ import {
   StatCard,
   Table,
   Tooltip,
+  useToast,
   type Column,
 } from "@/components/ui";
 import { QrCode as QrCodeSvg } from "@/components/cards/QrCode";
@@ -45,6 +46,7 @@ import {
 } from "@/lib/api/visitors";
 import type { VisitorSchema } from "@/lib/schemas/visitor";
 import { VisitorFormModal } from "./VisitorFormModal";
+import { ScannerModal } from "./ScannerModal";
 
 const PAGE_SIZE = 8;
 
@@ -81,6 +83,28 @@ export default function VisitorsPage() {
   const [editing, setEditing] = useState<Visitor | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Visitor | null>(null);
   const [passVisitor, setPassVisitor] = useState<Visitor | null>(null);
+  const [scanOpen, setScanOpen] = useState(false);
+  const { toast } = useToast();
+
+  // A scanned gate pass toggles the visitor in/out automatically.
+  const handleScan = useCallback(
+    (code: string) => {
+      setScanOpen(false);
+      const match = items.find(
+        (v) => v.passCode?.toLowerCase() === code.trim().toLowerCase()
+      );
+      if (!match) {
+        toast({ title: "Pass not recognised", description: `No visitor for "${code}".`, variant: "error" });
+        return;
+      }
+      if (match.status === "inside") {
+        save({ ...match, status: "checked-out", outTime: currentTime() }, match);
+      } else {
+        save({ ...match, status: "inside", inTime: currentTime(), outTime: null }, match);
+      }
+    },
+    [items, save, toast]
+  );
 
   // A narrowed filter can strand you past the last page, so every filter
   // change resets to page 1.
@@ -267,7 +291,7 @@ export default function VisitorsPage() {
         description="Log every visitor, issue QR gate passes and authorise student pickups."
         actions={
           <>
-            <Button variant="outline">
+            <Button variant="outline" onClick={() => setScanOpen(true)}>
               <QrCode className="size-4" />
               Scan pass
             </Button>
@@ -426,6 +450,8 @@ export default function VisitorsPage() {
           </div>
         )}
       </Modal>
+
+      <ScannerModal open={scanOpen} onClose={() => setScanOpen(false)} onScan={handleScan} />
     </div>
   );
 }
