@@ -1,4 +1,5 @@
 import { Router } from "express";
+import net from "node:net";
 import { z } from "zod";
 import { requireAuth, requireRole } from "../../middleware/auth.js";
 import { validate } from "../../middleware/validate.js";
@@ -89,6 +90,43 @@ router.get("/", async (_req, res, next) => {
     }));
 
     res.json({ data, meta: { total: schools.length } });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * Diagnostic: raw TCP reachability from THIS server. Proves whether SMTP ports
+ * are actually open outbound (vs a config problem). google.com:443 is a control
+ * that should always connect.
+ */
+router.get("/net-test", async (_req, res, next) => {
+  try {
+    const probe = (host: string, port: number, timeout = 8000) =>
+      new Promise<{ host: string; port: number; ok: boolean; ms: number; error?: string }>((resolve) => {
+        const start = Date.now();
+        const socket = new net.Socket();
+        let done = false;
+        const finish = (ok: boolean, error?: string) => {
+          if (done) return;
+          done = true;
+          socket.destroy();
+          resolve({ host, port, ok, ms: Date.now() - start, error });
+        };
+        socket.setTimeout(timeout);
+        socket.once("connect", () => finish(true));
+        socket.once("timeout", () => finish(false, "timeout"));
+        socket.once("error", (e) => finish(false, e.message));
+        socket.connect(port, host);
+      });
+
+    const results = await Promise.all([
+      probe("smtp.gmail.com", 465),
+      probe("smtp.gmail.com", 587),
+      probe("smtp.gmail.com", 25),
+      probe("google.com", 443),
+    ]);
+    res.json({ data: results });
   } catch (err) {
     next(err);
   }
