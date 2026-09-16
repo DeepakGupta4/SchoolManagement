@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import { getMySchool, updateMySchool } from "@/lib/api/schools";
 import {
   Bell,
   Building2,
@@ -159,11 +160,59 @@ export default function SettingsPage() {
   ]);
 
   const activeTab = TABS.find((t) => t.id === tab) ?? TABS[0];
+  const [saving, setSaving] = useState(false);
+
+  // Load the real school profile (skips the platform owner / no-tenant case).
+  useEffect(() => {
+    let cancelled = false;
+    const t = setTimeout(() => {
+      getMySchool()
+        .then((s) => {
+          if (cancelled || !s) return;
+          setProfile((prev) => ({
+            ...prev,
+            name: s.name || prev.name,
+            principal: s.ownerName || prev.principal,
+            email: s.email || prev.email,
+            phone: s.phone || prev.phone,
+            address: s.address || prev.address,
+          }));
+        })
+        .catch(() => {});
+    }, 0);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, []);
 
   const toggleIntegration = (id: string) =>
     setEnabled((prev) => (prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]));
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    // Only the School Profile tab persists to the server; other tabs are
+    // client-side preferences for now.
+    if (tab === "profile") {
+      setSaving(true);
+      try {
+        await updateMySchool({
+          name: profile.name,
+          ownerName: profile.principal,
+          phone: profile.phone,
+          address: profile.address,
+        });
+        toast({ title: "School profile saved", description: "Your changes are live.", variant: "success" });
+      } catch (e) {
+        toast({
+          title: "Could not save",
+          description: e instanceof Error ? e.message : "Please try again.",
+          variant: "error",
+        });
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
     toast({
       title: `${activeTab.label} saved`,
       description: "Your changes are live for every user of this school.",
@@ -195,9 +244,9 @@ export default function SettingsPage() {
               <RotateCcw className="size-4" />
               Reset
             </Button>
-            <Button onClick={handleSave}>
+            <Button onClick={handleSave} disabled={saving}>
               <Save className="size-4" />
-              Save changes
+              {saving ? "Saving…" : "Save changes"}
             </Button>
           </>
         }

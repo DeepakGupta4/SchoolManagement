@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
-import { Download, Eye, QrCode, Search } from "lucide-react";
+import React, { useEffect, useMemo, useState } from "react";
+import { Download, Eye, Loader2, QrCode, Search } from "lucide-react";
 import {
   Avatar,
   Badge,
@@ -10,6 +10,7 @@ import {
   CardContent,
   Input,
   PageHeader,
+  Select,
   Table,
   useToast,
   type Column,
@@ -18,22 +19,33 @@ import { cn } from "@/lib/utils";
 import { exportToCsv } from "@/lib/exportCsv";
 import type { ReportCardData } from "@/components/cards/ReportCard";
 import { ReportCardModal } from "./ReportCardModal";
+import { listStudents, CLASS_OPTIONS, SECTION_OPTIONS } from "@/lib/api/students";
+import { getMarks } from "@/lib/api/marks";
+import type { Student as ApiStudent } from "@/types/student";
 
-const EXAM_NAME = "Mid-Term Examination 2025-26";
 const SESSION = "2025-26";
+const exams = ["Unit Test 1", "Mid-Term Exam", "Final Exam"];
 
-const reportCards = [
-  { id: "S001", name: "Aarav Sharma",  class: "10-A", roll: 1,  subjects: { Mathematics: 92, Physics: 88, Chemistry: 85, English: 90, Biology: 87, History: 82 }, attendance: 94, rank: 2  },
-  { id: "S002", name: "Priya Patel",   class: "10-A", roll: 2,  subjects: { Mathematics: 98, Physics: 95, Chemistry: 92, English: 96, Biology: 94, History: 90 }, attendance: 98, rank: 1  },
-  { id: "S003", name: "Rohan Verma",   class: "10-A", roll: 3,  subjects: { Mathematics: 65, Physics: 58, Chemistry: 62, English: 70, Biology: 60, History: 68 }, attendance: 72, rank: 18 },
-  { id: "S004", name: "Sneha Gupta",   class: "10-A", roll: 4,  subjects: { Mathematics: 78, Physics: 82, Chemistry: 75, English: 85, Biology: 80, History: 77 }, attendance: 88, rank: 8  },
-  { id: "S005", name: "Karan Singh",   class: "10-A", roll: 5,  subjects: { Mathematics: 45, Physics: 50, Chemistry: 48, English: 55, Biology: 42, History: 52 }, attendance: 65, rank: 38 },
-  { id: "S006", name: "Ananya Joshi",  class: "10-A", roll: 6,  subjects: { Mathematics: 95, Physics: 90, Chemistry: 88, English: 92, Biology: 91, History: 89 }, attendance: 96, rank: 3  },
-];
+// Preferred display order for subjects; anything else falls in after these.
+const SUBJECT_ORDER = ["Mathematics", "Physics", "Chemistry", "English", "Biology", "History"];
 
-type ReportCard = (typeof reportCards)[number];
+type ReportSubject = { subject: string; maxMarks: number; obtained: number };
 
-const subjectList = ["Mathematics", "Physics", "Chemistry", "English", "Biology", "History"];
+type Report = {
+  id: string;
+  name: string;
+  roll: number;
+  className: string;
+  section: string;
+  admissionNo: string;
+  fatherName: string;
+  attendance: number;
+  subjects: ReportSubject[];
+  total: number;
+  maxTotal: number;
+  pct: number;
+  rank: number;
+};
 
 /** Grade chip + progress-bar tones, expressed only in semantic tokens. */
 const gradeStyle: Record<string, { chip: string; bar: string; text: string }> = {
@@ -54,60 +66,137 @@ function getGrade(pct: number) {
   return "F";
 }
 
-const MAX_TOTAL = subjectList.length * 100;
+const toOptions = (values: string[]) => values.map((v) => ({ label: v, value: v }));
 
-const totalOf = (s: ReportCard) => Object.values(s.subjects).reduce((a, b) => a + b, 0);
-const pctOf = (s: ReportCard) => Math.round((totalOf(s) / MAX_TOTAL) * 100);
-
-/** Maps the page's row shape onto the printable ReportCard document. */
-function toReportData(s: ReportCard): ReportCardData {
-  const [className, section] = s.class.split("-");
-  return {
-    studentName: s.name,
-    admissionNo: s.id,
-    rollNo: s.roll,
-    className: `Class ${className}`,
-    section: section ?? "A",
-    fatherName: `Mr. ${s.name.split(" ").slice(-1)[0]}`,
-    session: SESSION,
-    examName: EXAM_NAME,
-    subjects: subjectList.map((sub) => ({
-      subject: sub,
-      maxMarks: 100,
-      obtained: s.subjects[sub as keyof typeof s.subjects],
-    })),
-    attendancePercent: s.attendance,
-    rank: s.rank,
-    classSize: 40,
-  };
-}
+const subjectRank = (name: string) => {
+  const i = SUBJECT_ORDER.indexOf(name);
+  return i === -1 ? SUBJECT_ORDER.length : i;
+};
 
 export default function ReportCardsPage() {
   const { toast } = useToast();
+
+  const [selectedClass, setSelectedClass] = useState(CLASS_OPTIONS[CLASS_OPTIONS.length - 1]);
+  const [selectedSection, setSelectedSection] = useState(SECTION_OPTIONS[0]);
+  const [selectedExam, setSelectedExam] = useState("Mid-Term Exam");
+
+  const [reports, setReports] = useState<Report[]>([]);
+  const [loading, setLoading] = useState(true);
+
   const [search, setSearch] = useState("");
-  const [selected, setSelected] = useState<ReportCard | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [preview, setPreview] = useState<ReportCardData | null>(null);
 
-  const filtered = reportCards.filter(
-    (s) => s.name.toLowerCase().includes(search.toLowerCase()) || s.id.includes(search)
+  // Build each student's report from real students + saved marks.
+  useEffect(() => {
+    let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLoading(true);
+    Promise.all([
+      listStudents({ className: selectedClass }),
+      getMarks(selectedExam, selectedClass, selectedSection),
+    ])
+      .then(([students, marks]) => {
+        if (cancelled) return;
+        const cohort = (students as ApiStudent[]).filter((s) => s.section === selectedSection);
+
+        const built: Report[] = cohort
+          .map((s) => {
+            const own = marks
+              .filter((m) => m.studentId === s.id)
+              .map<ReportSubject>((m) => ({
+                subject: m.subject,
+                maxMarks: m.maxMarks || 100,
+                obtained: m.marks,
+              }))
+              .sort((a, b) => subjectRank(a.subject) - subjectRank(b.subject));
+
+            const total = own.reduce((a, x) => a + x.obtained, 0);
+            const maxTotal = own.reduce((a, x) => a + x.maxMarks, 0);
+            const pct = maxTotal > 0 ? Math.round((total / maxTotal) * 100) : 0;
+
+            return {
+              id: s.id,
+              name: `${s.firstName} ${s.lastName}`.trim(),
+              roll: Number(s.rollNo) || 0,
+              className: s.className,
+              section: s.section,
+              admissionNo: s.admissionNo,
+              fatherName: s.guardian?.name || "—",
+              attendance: Math.round(s.attendancePercent ?? 0),
+              subjects: own,
+              total,
+              maxTotal,
+              pct,
+              rank: 0,
+            };
+          })
+          .sort((a, b) => b.total - a.total)
+          .map((r, i) => ({ ...r, rank: i + 1 }))
+          .sort((a, b) => a.roll - b.roll);
+
+        setReports(built);
+        setSelectedId(null);
+      })
+      .catch(() => {
+        if (!cancelled) toast({ title: "Could not load report cards", variant: "error" });
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedClass, selectedSection, selectedExam, toast]);
+
+  const classSize = reports.length;
+
+  const filtered = reports.filter(
+    (s) =>
+      s.name.toLowerCase().includes(search.toLowerCase()) || s.admissionNo.includes(search)
   );
 
-  const downloadCard = (s: ReportCard) => {
-    exportToCsv<{ subject: string }>(
-      `report-${s.id}`,
+  const selected = useMemo(
+    () => reports.find((r) => r.id === selectedId) ?? null,
+    [reports, selectedId]
+  );
+
+  /** Maps a computed report onto the printable ReportCard document. */
+  const toReportData = (s: Report): ReportCardData => ({
+    studentName: s.name,
+    admissionNo: s.admissionNo,
+    rollNo: s.roll,
+    className: s.className,
+    section: s.section,
+    fatherName: s.fatherName,
+    session: SESSION,
+    examName: selectedExam,
+    subjects: s.subjects.map((sub) => ({
+      subject: sub.subject,
+      maxMarks: sub.maxMarks,
+      obtained: sub.obtained,
+    })),
+    attendancePercent: s.attendance,
+    rank: s.rank,
+    classSize,
+  });
+
+  const downloadCard = (s: Report) => {
+    exportToCsv<ReportSubject>(
+      `report-${s.admissionNo}`,
       [
         { header: "Student", value: () => s.name },
-        { header: "Class", value: () => s.class },
+        { header: "Class", value: () => `${s.className} ${s.section}` },
         { header: "Subject", value: (r) => r.subject },
-        { header: "Marks", value: (r) => s.subjects[r.subject as keyof typeof s.subjects] },
-        { header: "Max", value: () => 100 },
+        { header: "Marks", value: (r) => r.obtained },
+        { header: "Max", value: (r) => r.maxMarks },
       ],
-      subjectList.map((subject) => ({ subject }))
+      s.subjects
     );
     toast({ title: "Report card exported", description: `${s.name}'s marks downloaded as CSV.` });
   };
 
-  const columns: Column<ReportCard>[] = [
+  const columns: Column<Report>[] = [
     {
       key: "name",
       header: "Student",
@@ -126,10 +215,10 @@ export default function ReportCardsPage() {
       key: "total",
       header: "Total",
       sortable: true,
-      sortValue: totalOf,
+      sortValue: (s) => s.total,
       render: (s) => (
         <span className="whitespace-nowrap font-semibold text-text">
-          {totalOf(s)}/{MAX_TOTAL}
+          {s.total}/{s.maxTotal || 0}
         </span>
       ),
     },
@@ -137,16 +226,15 @@ export default function ReportCardsPage() {
       key: "percentage",
       header: "Percentage",
       sortable: true,
-      sortValue: pctOf,
+      sortValue: (s) => s.pct,
       render: (s) => {
-        const pct = pctOf(s);
-        const g = gradeStyle[getGrade(pct)];
+        const g = gradeStyle[getGrade(s.pct)];
         return (
           <div className="flex items-center gap-2">
             <div className="h-1.5 w-14 overflow-hidden rounded-full bg-surface-hover">
-              <div className={cn("h-full rounded-full", g.bar)} style={{ width: `${pct}%` }} />
+              <div className={cn("h-full rounded-full", g.bar)} style={{ width: `${s.pct}%` }} />
             </div>
-            <span className={cn("text-xs font-semibold", g.text)}>{pct}%</span>
+            <span className={cn("text-xs font-semibold", g.text)}>{s.pct}%</span>
           </div>
         );
       },
@@ -155,7 +243,7 @@ export default function ReportCardsPage() {
       key: "grade",
       header: "Grade",
       render: (s) => {
-        const grade = getGrade(pctOf(s));
+        const grade = getGrade(s.pct);
         return <Badge className={cn("font-semibold", gradeStyle[grade].chip)}>{grade}</Badge>;
       },
     },
@@ -164,6 +252,7 @@ export default function ReportCardsPage() {
       header: "Rank",
       sortable: true,
       align: "right",
+      sortValue: (s) => s.rank,
       render: (s) => <span className="font-semibold text-text">#{s.rank}</span>,
     },
     {
@@ -205,16 +294,16 @@ export default function ReportCardsPage() {
           <Button
             variant="outline"
             onClick={() => {
-              exportToCsv<ReportCard>(
+              exportToCsv<Report>(
                 "report-cards",
                 [
                   { header: "Student", value: (s) => s.name },
-                  { header: "Class", value: (s) => s.class },
+                  { header: "Class", value: (s) => `${s.className} ${s.section}` },
                   { header: "Roll", value: (s) => s.roll },
-                  { header: "Total", value: (s) => totalOf(s) },
-                  { header: "Max", value: () => MAX_TOTAL },
-                  { header: "Percentage", value: (s) => pctOf(s) },
-                  { header: "Grade", value: (s) => getGrade(pctOf(s)) },
+                  { header: "Total", value: (s) => s.total },
+                  { header: "Max", value: (s) => s.maxTotal },
+                  { header: "Percentage", value: (s) => s.pct },
+                  { header: "Grade", value: (s) => getGrade(s.pct) },
                   { header: "Rank", value: (s) => s.rank },
                   { header: "Attendance", value: (s) => s.attendance },
                 ],
@@ -229,112 +318,156 @@ export default function ReportCardsPage() {
         }
       />
 
-      <div className={cn("grid grid-cols-1 gap-5", selected && "xl:grid-cols-2")}>
-        <div className="flex min-w-0 flex-col gap-3">
-          <Input
-            type="search"
-            placeholder="Search student…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            icon={<Search className="size-4" />}
-            aria-label="Search students"
-          />
-          <Table
-            columns={columns}
-            rows={filtered}
-            rowKey={(s) => s.id}
-            onRowClick={(s) => setSelected(selected?.id === s.id ? null : s)}
-            emptyTitle="No students found"
-            emptyDescription="Try a different search term."
-          />
+      <Card>
+        <CardContent className="flex flex-wrap items-end gap-3">
+          <div className="w-40">
+            <Select
+              label="Class"
+              value={selectedClass}
+              onChange={(e) => setSelectedClass(e.target.value)}
+              options={toOptions(CLASS_OPTIONS)}
+            />
+          </div>
+          <div className="w-32">
+            <Select
+              label="Section"
+              value={selectedSection}
+              onChange={(e) => setSelectedSection(e.target.value)}
+              options={SECTION_OPTIONS.map((s) => ({ label: `Section ${s}`, value: s }))}
+            />
+          </div>
+          <div className="w-48">
+            <Select
+              label="Exam"
+              value={selectedExam}
+              onChange={(e) => setSelectedExam(e.target.value)}
+              options={toOptions(exams)}
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      {loading ? (
+        <div className="grid place-items-center py-16 text-muted">
+          <Loader2 className="size-6 animate-spin" />
         </div>
+      ) : reports.length === 0 ? (
+        <div className="py-16 text-center text-sm text-muted">
+          No students in {selectedClass} · Section {selectedSection}. Add students first.
+        </div>
+      ) : (
+        <div className={cn("grid grid-cols-1 gap-5", selected && "xl:grid-cols-2")}>
+          <div className="flex min-w-0 flex-col gap-3">
+            <Input
+              type="search"
+              placeholder="Search student…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              icon={<Search className="size-4" />}
+              aria-label="Search students"
+            />
+            <Table
+              columns={columns}
+              rows={filtered}
+              rowKey={(s) => s.id}
+              onRowClick={(s) => setSelectedId(selectedId === s.id ? null : s.id)}
+              emptyTitle="No students found"
+              emptyDescription="Try a different search term."
+            />
+          </div>
 
-        {selected && (() => {
-          const total = totalOf(selected);
-          const pct = pctOf(selected);
-          const grade = getGrade(pct);
-          const summary = [
-            { label: "Total", value: `${total}/${MAX_TOTAL}` },
-            { label: "Percentage", value: `${pct}%` },
-            { label: "Grade", value: grade },
-            { label: "Rank", value: `#${selected.rank}` },
-          ];
+          {selected && (() => {
+            const pct = selected.pct;
+            const grade = getGrade(pct);
+            const summary = [
+              { label: "Total", value: `${selected.total}/${selected.maxTotal || 0}` },
+              { label: "Percentage", value: `${pct}%` },
+              { label: "Grade", value: grade },
+              { label: "Rank", value: `#${selected.rank}` },
+            ];
 
-          return (
-            <Card className="min-w-0 overflow-hidden border-primary">
-              <div className="bg-primary-soft px-6 py-6 text-center">
-                <Avatar name={selected.name} size="lg" className="mx-auto rounded-lg" />
-                <p className="mt-3 text-lg font-semibold text-primary-text">{selected.name}</p>
-                <p className="mt-1 text-xs text-primary-text">
-                  Class {selected.class} · Roll #{selected.roll} · {selected.id}
-                </p>
-                <div className="mt-4 flex flex-wrap justify-center gap-x-8 gap-y-3">
-                  {summary.map((info) => (
-                    <div key={info.label} className="text-center">
-                      <p className="text-lg font-semibold text-primary-text">{info.value}</p>
-                      <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-widest text-primary-text">
-                        {info.label}
+            return (
+              <Card className="min-w-0 overflow-hidden border-primary">
+                <div className="bg-primary-soft px-6 py-6 text-center">
+                  <Avatar name={selected.name} size="lg" className="mx-auto rounded-lg" />
+                  <p className="mt-3 text-lg font-semibold text-primary-text">{selected.name}</p>
+                  <p className="mt-1 text-xs text-primary-text">
+                    {selected.className} · {selected.section} · Roll #{selected.roll} ·{" "}
+                    {selected.admissionNo}
+                  </p>
+                  <div className="mt-4 flex flex-wrap justify-center gap-x-8 gap-y-3">
+                    {summary.map((info) => (
+                      <div key={info.label} className="text-center">
+                        <p className="text-lg font-semibold text-primary-text">{info.value}</p>
+                        <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-widest text-primary-text">
+                          {info.label}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <CardContent>
+                  <p className="mb-3 text-[10px] font-semibold uppercase tracking-widest text-subtle">
+                    Subject-wise Performance
+                  </p>
+                  {selected.subjects.length === 0 ? (
+                    <p className="text-sm text-muted">No marks entered for this exam yet.</p>
+                  ) : (
+                    <div className="flex flex-col gap-2.5">
+                      {selected.subjects.map((sub) => {
+                        const sp =
+                          sub.maxMarks > 0 ? Math.round((sub.obtained / sub.maxMarks) * 100) : 0;
+                        const sg = gradeStyle[getGrade(sp)];
+                        return (
+                          <div key={sub.subject} className="flex items-center gap-3">
+                            <p className="w-28 shrink-0 truncate text-sm text-text">{sub.subject}</p>
+                            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-hover">
+                              <div
+                                className={cn("h-full rounded-full transition-all", sg.bar)}
+                                style={{ width: `${sp}%` }}
+                              />
+                            </div>
+                            <span className={cn("w-9 text-right text-sm font-semibold", sg.text)}>
+                              {sub.obtained}
+                            </span>
+                            <Badge className={cn("w-10 justify-center font-semibold", sg.chip)}>
+                              {getGrade(sp)}
+                            </Badge>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  <div className="mt-4 flex gap-3 border-t border-border pt-4">
+                    <div className="flex-1 rounded-md bg-surface-sunken px-4 py-3">
+                      <p className="text-xs font-medium text-muted">Attendance</p>
+                      <p
+                        className={cn(
+                          "mt-0.5 text-xl font-semibold",
+                          selected.attendance >= 75 ? "text-success-text" : "text-danger-text"
+                        )}
+                      >
+                        {selected.attendance}%
                       </p>
                     </div>
-                  ))}
-                </div>
-              </div>
-
-              <CardContent>
-                <p className="mb-3 text-[10px] font-semibold uppercase tracking-widest text-subtle">
-                  Subject-wise Performance
-                </p>
-                <div className="flex flex-col gap-2.5">
-                  {subjectList.map((sub) => {
-                    const mark = selected.subjects[sub as keyof typeof selected.subjects];
-                    const sg = gradeStyle[getGrade(mark)];
-                    return (
-                      <div key={sub} className="flex items-center gap-3">
-                        <p className="w-28 shrink-0 truncate text-sm text-text">{sub}</p>
-                        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-hover">
-                          <div
-                            className={cn("h-full rounded-full transition-all", sg.bar)}
-                            style={{ width: `${mark}%` }}
-                          />
-                        </div>
-                        <span className={cn("w-9 text-right text-sm font-semibold", sg.text)}>
-                          {mark}
-                        </span>
-                        <Badge className={cn("w-10 justify-center font-semibold", sg.chip)}>
-                          {getGrade(mark)}
-                        </Badge>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                <div className="mt-4 flex gap-3 border-t border-border pt-4">
-                  <div className="flex-1 rounded-md bg-surface-sunken px-4 py-3">
-                    <p className="text-xs font-medium text-muted">Attendance</p>
-                    <p
-                      className={cn(
-                        "mt-0.5 text-xl font-semibold",
-                        selected.attendance >= 75 ? "text-success-text" : "text-danger-text"
-                      )}
-                    >
-                      {selected.attendance}%
-                    </p>
+                    <div className="flex flex-col items-center justify-center gap-1 rounded-md bg-surface-sunken px-4 py-3">
+                      <QrCode className="size-8 text-primary" />
+                      <p className="text-[10px] font-medium text-muted">Verify</p>
+                    </div>
                   </div>
-                  <div className="flex flex-col items-center justify-center gap-1 rounded-md bg-surface-sunken px-4 py-3">
-                    <QrCode className="size-8 text-primary" />
-                    <p className="text-[10px] font-medium text-muted">Verify</p>
-                  </div>
-                </div>
 
-                <Button className="mt-4 w-full" onClick={() => setPreview(toReportData(selected))}>
-                  <Eye className="size-4" />
-                  Open full report card
-                </Button>
-              </CardContent>
-            </Card>
-          );
-        })()}
-      </div>
+                  <Button className="mt-4 w-full" onClick={() => setPreview(toReportData(selected))}>
+                    <Eye className="size-4" />
+                    Open full report card
+                  </Button>
+                </CardContent>
+              </Card>
+            );
+          })()}
+        </div>
+      )}
 
       <ReportCardModal data={preview} onOpenChange={(open) => !open && setPreview(null)} />
     </div>

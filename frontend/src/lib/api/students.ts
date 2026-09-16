@@ -53,3 +53,27 @@ export async function updateStudent(id: string, values: StudentFormValues): Prom
 export async function deleteStudent(id: string): Promise<void> {
   await apiRequest<void>(`/api/students/${id}`, { method: "DELETE" });
 }
+
+export type PromotionAction = "promote" | "retain" | "graduate";
+
+export interface PromotionDecision {
+  studentId: string;
+  action: PromotionAction;
+  /** Required when action === "promote": the class to move the student into. */
+  toClass?: string;
+}
+
+export interface PromotionResult {
+  promoted: number;
+  retained: number;
+  graduated: number;
+}
+
+export async function promoteStudents(
+  promotions: PromotionDecision[]
+): Promise<PromotionResult> {
+  return apiRequest<PromotionResult>("/api/students/promote", {
+    method: "POST",
+    body: { promotions },
+  });
+}

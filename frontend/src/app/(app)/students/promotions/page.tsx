@@ -1,15 +1,14 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   ArrowUpCircle,
   CheckCircle2,
   GraduationCap,
-  PauseCircle,
+  Loader2,
   RotateCcw,
   Search,
   Users,
-  XCircle,
 } from "lucide-react";
 import {
   Avatar,
@@ -28,55 +27,34 @@ import {
   type Column,
 } from "@/components/ui";
 import { cn } from "@/lib/utils";
+import {
+  CLASS_OPTIONS,
+  listStudents,
+  promoteStudents,
+  type PromotionDecision,
+} from "@/lib/api/students";
+import type { Student } from "@/types/student";
 
 const PAGE_SIZE = 10;
 
-const students = [
-  { id: "STU-0901", roll: 1,  name: "Aarav Sharma",      currentClass: "9-A",  section: "A", attendance: 94, average: 82, result: "pass", session: "2026-27" },
-  { id: "STU-0902", roll: 2,  name: "Diya Nair",         currentClass: "9-A",  section: "A", attendance: 91, average: 88, result: "pass", session: "2026-27" },
-  { id: "STU-0903", roll: 3,  name: "Kabir Malhotra",    currentClass: "9-A",  section: "A", attendance: 68, average: 41, result: "fail", session: "2026-27" },
-  { id: "STU-0904", roll: 4,  name: "Ananya Iyer",       currentClass: "9-A",  section: "A", attendance: 97, average: 91, result: "pass", session: "2026-27" },
-  { id: "STU-0905", roll: 5,  name: "Vivaan Reddy",      currentClass: "9-A",  section: "A", attendance: 72, average: 55, result: "pass", session: "2026-27" },
-  { id: "STU-0906", roll: 6,  name: "Ishita Banerjee",   currentClass: "9-A",  section: "A", attendance: 88, average: 76, result: "pass", session: "2026-27" },
-  { id: "STU-0907", roll: 7,  name: "Reyansh Gupta",     currentClass: "9-A",  section: "A", attendance: 61, average: 38, result: "fail", session: "2026-27" },
-  { id: "STU-0908", roll: 8,  name: "Saanvi Patil",      currentClass: "9-A",  section: "A", attendance: 93, average: 84, result: "pass", session: "2026-27" },
-  { id: "STU-0909", roll: 9,  name: "Arjun Chauhan",     currentClass: "9-A",  section: "A", attendance: 79, average: 63, result: "pass", session: "2026-27" },
-  { id: "STU-0910", roll: 10, name: "Myra Joshi",        currentClass: "9-A",  section: "A", attendance: 96, average: 89, result: "pass", session: "2026-27" },
-  { id: "STU-0911", roll: 11, name: "Advik Deshmukh",    currentClass: "9-B",  section: "B", attendance: 84, average: 71, result: "pass", session: "2026-27" },
-  { id: "STU-0912", roll: 12, name: "Kiara Menon",       currentClass: "9-B",  section: "B", attendance: 58, average: 34, result: "fail", session: "2026-27" },
-  { id: "STU-0913", roll: 13, name: "Atharv Rathore",    currentClass: "9-B",  section: "B", attendance: 90, average: 79, result: "pass", session: "2026-27" },
-  { id: "STU-0914", roll: 14, name: "Aadhya Kulkarni",   currentClass: "9-B",  section: "B", attendance: 95, average: 93, result: "pass", session: "2026-27" },
-  { id: "STU-0915", roll: 15, name: "Vihaan Saxena",     currentClass: "9-B",  section: "B", attendance: 74, average: 58, result: "pass", session: "2026-27" },
-  { id: "STU-0916", roll: 16, name: "Anika Bhatt",       currentClass: "9-B",  section: "B", attendance: 87, average: 80, result: "pass", session: "2026-27" },
-  { id: "STU-0917", roll: 17, name: "Shaurya Pillai",    currentClass: "9-B",  section: "B", attendance: 66, average: 45, result: "fail", session: "2026-27" },
-  { id: "STU-0918", roll: 18, name: "Navya Choudhary",   currentClass: "9-B",  section: "B", attendance: 92, average: 86, result: "pass", session: "2026-27" },
+/** A promotion row projected from a real student record. */
+type Row = {
+  id: string;
+  roll: number;
+  name: string;
+  currentClass: string;
+  section: string;
+  attendance: number;
+  average: number;
+  result: "pass" | "fail";
+};
 
-  { id: "STU-0801", roll: 1,  name: "Rudra Jain",        currentClass: "9-A",  section: "A", attendance: 89, average: 77, result: "pass", session: "2025-26" },
-  { id: "STU-0802", roll: 2,  name: "Isha Chandra",      currentClass: "9-A",  section: "A", attendance: 94, average: 90, result: "pass", session: "2025-26" },
-  { id: "STU-0803", roll: 3,  name: "Veer Solanki",      currentClass: "9-A",  section: "A", attendance: 63, average: 39, result: "fail", session: "2025-26" },
-  { id: "STU-0804", roll: 4,  name: "Tanvi Shetty",      currentClass: "9-A",  section: "A", attendance: 91, average: 83, result: "pass", session: "2025-26" },
-  { id: "STU-0805", roll: 5,  name: "Aryan Mehta",       currentClass: "9-A",  section: "A", attendance: 76, average: 61, result: "pass", session: "2025-26" },
-  { id: "STU-0806", roll: 6,  name: "Shruti Bansal",     currentClass: "9-B",  section: "B", attendance: 97, average: 92, result: "pass", session: "2025-26" },
-  { id: "STU-0807", roll: 7,  name: "Harsh Vyas",        currentClass: "9-B",  section: "B", attendance: 59, average: 36, result: "fail", session: "2025-26" },
-  { id: "STU-0808", roll: 8,  name: "Zoya Ansari",       currentClass: "9-B",  section: "B", attendance: 85, average: 74, result: "pass", session: "2025-26" },
-  { id: "STU-0809", roll: 9,  name: "Naveen Kumar",      currentClass: "9-B",  section: "B", attendance: 71, average: 52, result: "pass", session: "2025-26" },
-  { id: "STU-0810", roll: 10, name: "Pallavi Ghosh",     currentClass: "9-B",  section: "B", attendance: 93, average: 87, result: "pass", session: "2025-26" },
-
-  { id: "STU-0701", roll: 1,  name: "Ishaan Kapoor",     currentClass: "9-A",  section: "A", attendance: 82, average: 69, result: "pass", session: "2024-25" },
-  { id: "STU-0702", roll: 2,  name: "Nisha Rao",         currentClass: "9-A",  section: "A", attendance: 96, average: 94, result: "pass", session: "2024-25" },
-  { id: "STU-0703", roll: 3,  name: "Aditya Bose",       currentClass: "9-A",  section: "A", attendance: 64, average: 43, result: "fail", session: "2024-25" },
-  { id: "STU-0704", roll: 4,  name: "Tara Sethi",        currentClass: "9-B",  section: "B", attendance: 90, average: 81, result: "pass", session: "2024-25" },
-  { id: "STU-0705", roll: 5,  name: "Yash Chauhan",      currentClass: "9-B",  section: "B", attendance: 73, average: 57, result: "pass", session: "2024-25" },
-  { id: "STU-0706", roll: 6,  name: "Riya Malhotra",     currentClass: "9-B",  section: "B", attendance: 88, average: 79, result: "pass", session: "2024-25" },
-];
-
-type Student = (typeof students)[number];
-type Decision = "promote" | "hold" | "detain";
+type Decision = "promote" | "retain" | "graduate";
 
 const DECISIONS: { value: Decision; label: string; icon: typeof ArrowUpCircle }[] = [
   { value: "promote", label: "Promote", icon: ArrowUpCircle },
-  { value: "hold", label: "Hold", icon: PauseCircle },
-  { value: "detain", label: "Detain", icon: XCircle },
+  { value: "retain", label: "Retain", icon: RotateCcw },
+  { value: "graduate", label: "Graduate", icon: GraduationCap },
 ];
 
 const SESSION_OPTIONS = [
@@ -85,19 +63,44 @@ const SESSION_OPTIONS = [
   { label: "2023-24 → 2024-25", value: "2024-25" },
 ];
 
-const CLASS_OPTIONS = [
-  { label: "Class 9 - A", value: "9-A" },
-  { label: "Class 9 - B", value: "9-B" },
-];
+const CLASS_FILTER_OPTIONS = CLASS_OPTIONS.map((c) => ({ label: c, value: c }));
 
-/** Default decision follows the exam result — failures start on Detain. */
-function defaultDecision(s: Student): Decision {
-  return s.result === "fail" ? "detain" : "promote";
+/** The class a student promotes into, or null for the final class. */
+function nextClassOf(className: string): string | null {
+  const i = CLASS_OPTIONS.indexOf(className);
+  return i >= 0 && i < CLASS_OPTIONS.length - 1 ? CLASS_OPTIONS[i + 1] : null;
 }
 
-const initialDecisions: Record<string, Decision> = Object.fromEntries(
-  students.map((s) => [s.id, defaultDecision(s)])
-);
+/** A passing average is the derived exam outcome — real records carry marks, not a verdict. */
+function resultOf(performancePercent: number): "pass" | "fail" {
+  return performancePercent >= 40 ? "pass" : "fail";
+}
+
+function toRow(s: Student): Row {
+  return {
+    id: s.id,
+    roll: Number(s.rollNo) || 0,
+    name: `${s.firstName} ${s.lastName}`.trim(),
+    currentClass: s.className,
+    section: s.section,
+    attendance: Math.round(s.attendancePercent ?? 0),
+    average: Math.round(s.performancePercent ?? 0),
+    result: resultOf(s.performancePercent ?? 0),
+  };
+}
+
+/**
+ * Default decision: students in the final class graduate, failures are held
+ * back, everyone else is promoted to the next class.
+ */
+function defaultDecision(r: Row): Decision {
+  if (nextClassOf(r.currentClass) === null) return "graduate";
+  return r.result === "fail" ? "retain" : "promote";
+}
+
+function computeDefaults(rows: Row[]): Record<string, Decision> {
+  return Object.fromEntries(rows.map((r) => [r.id, defaultDecision(r)]));
+}
 
 export default function PromotionsPage() {
   const { toast } = useToast();
@@ -106,10 +109,38 @@ export default function PromotionsPage() {
   const [currentClass, setCurrentClass] = useState("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
-  const [decisions, setDecisions] = useState<Record<string, Decision>>(initialDecisions);
+
+  const [rows, setRows] = useState<Row[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [applying, setApplying] = useState(false);
+  const [decisions, setDecisions] = useState<Record<string, Decision>>({});
   // Which session was last committed — compared during render rather than
   // cleared from an effect when the session changes.
   const [appliedSession, setAppliedSession] = useState<string | null>(null);
+
+  // Load the real roster for the selected class (all classes when unfiltered).
+  useEffect(() => {
+    let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLoading(true);
+    listStudents({ className: currentClass || undefined })
+      .then((students) => {
+        if (cancelled) return;
+        const next = students.map(toRow).sort((a, b) => a.roll - b.roll);
+        setRows(next);
+        setDecisions(computeDefaults(next));
+        setAppliedSession(null);
+      })
+      .catch(() => {
+        if (!cancelled) toast({ title: "Could not load students", variant: "error" });
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [currentClass, toast]);
 
   const applyFilter = (setter: (value: string) => void) => (value: string) => {
     setter(value);
@@ -122,64 +153,98 @@ export default function PromotionsPage() {
   };
 
   const query = search.trim().toLowerCase();
-  // The session is the batch being processed — every count and every action on
-  // this page is scoped to it, not to the whole student body.
-  const batch = students.filter((s) => s.session === session);
   const sessionLabel =
     SESSION_OPTIONS.find((o) => o.value === session)?.label ?? session;
 
-  const filtered = batch.filter((s) => {
-    const matchSearch =
-      !query || s.name.toLowerCase().includes(query) || s.id.toLowerCase().includes(query);
-    return matchSearch && (!currentClass || s.currentClass === currentClass);
-  });
+  // The loaded roster is the batch being processed — every count and every
+  // action on this page is scoped to it.
+  const batch = rows;
+
+  const filtered = useMemo(
+    () =>
+      batch.filter(
+        (s) =>
+          !query ||
+          s.name.toLowerCase().includes(query) ||
+          s.id.toLowerCase().includes(query)
+      ),
+    [batch, query]
+  );
 
   const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   const countOf = (d: Decision) => batch.filter((s) => decisions[s.id] === d).length;
   const promoting = countOf("promote");
-  const holding = countOf("hold");
-  const detaining = countOf("detain");
+  const retaining = countOf("retain");
+  const graduating = countOf("graduate");
 
   const bulkPromote = () => {
     // Only the rows currently in view are affected — that is what the operator sees.
     setDecisions((prev) => {
       const next = { ...prev };
       filtered.forEach((s) => {
-        next[s.id] = "promote";
+        next[s.id] = nextClassOf(s.currentClass) === null ? "graduate" : "promote";
       });
       return next;
     });
     setAppliedSession(null);
     toast({
       title: "Marked for promotion",
-      description: `${filtered.length} student(s) set to Promote.`,
+      description: `${filtered.length} student(s) set to Promote/Graduate.`,
     });
   };
 
   const resetDecisions = () => {
-    setDecisions(initialDecisions);
+    setDecisions(computeDefaults(rows));
     setAppliedSession(null);
-    toast({ title: "Decisions reset", description: "Every row is back to its result default." });
+    toast({ title: "Decisions reset", description: "Every row is back to its default." });
   };
 
-  const applyPromotions = () => {
+  const applyPromotions = async () => {
     if (batch.length === 0) {
       toast({
         title: "Nothing to apply",
-        description: `No students are listed for ${sessionLabel}.`,
+        description: "No students are listed for this batch.",
         variant: "warning",
       });
       return;
     }
-    setAppliedSession(session);
-    toast({
-      title: `Promotions applied — ${sessionLabel}`,
-      description: `${promoting} promoted, ${holding} held back, ${detaining} detained across ${batch.length} student(s).`,
+
+    const promotions: PromotionDecision[] = batch.map((s) => {
+      const action = decisions[s.id] ?? defaultDecision(s);
+      if (action === "promote") {
+        const toClass = nextClassOf(s.currentClass);
+        // A "promote" on the final class has nowhere to go — graduate instead.
+        return toClass ? { studentId: s.id, action, toClass } : { studentId: s.id, action: "graduate" };
+      }
+      return { studentId: s.id, action };
     });
+
+    setApplying(true);
+    try {
+      const result = await promoteStudents(promotions);
+      setAppliedSession(session);
+      toast({
+        title: `Promotions applied — ${sessionLabel}`,
+        description: `${result.promoted} promoted, ${result.retained} retained, ${result.graduated} graduated.`,
+      });
+      // Refetch so the roster reflects the new classes / statuses.
+      const students = await listStudents({ className: currentClass || undefined });
+      const next = students.map(toRow).sort((a, b) => a.roll - b.roll);
+      setRows(next);
+      setDecisions(computeDefaults(next));
+    } catch (e) {
+      toast({
+        title: "Could not apply promotions",
+        description: e instanceof Error ? e.message : "Please try again.",
+        variant: "error",
+      });
+    } finally {
+      setApplying(false);
+    }
   };
 
-  const columns: Column<Student>[] = [
+  const columns: Column<Row>[] = [
     {
       key: "roll",
       header: "Roll",
@@ -266,9 +331,9 @@ export default function PromotionsPage() {
                   active
                     ? value === "promote"
                       ? "bg-success-soft text-success-text shadow-sm"
-                      : value === "hold"
+                      : value === "retain"
                         ? "bg-warning-soft text-warning-text shadow-sm"
-                        : "bg-danger-soft text-danger-text shadow-sm"
+                        : "bg-info-soft text-info-text shadow-sm"
                     : "text-muted hover:text-text"
                 )}
               >
@@ -286,19 +351,19 @@ export default function PromotionsPage() {
     <div className="flex flex-col gap-5">
       <PageHeader
         title="Class Promotion"
-        description="Review results and promote, hold or detain students for the next session."
+        description="Review results and promote, retain or graduate students for the next session."
         actions={
           <>
-            <Button variant="outline" onClick={resetDecisions}>
+            <Button variant="outline" onClick={resetDecisions} disabled={loading || applying}>
               <RotateCcw className="size-4" />
               Reset
             </Button>
-            <Button variant="secondary" onClick={bulkPromote}>
+            <Button variant="secondary" onClick={bulkPromote} disabled={loading || applying}>
               <ArrowUpCircle className="size-4" />
               Promote All Listed
             </Button>
-            <Button onClick={applyPromotions}>
-              <CheckCircle2 className="size-4" />
+            <Button onClick={applyPromotions} disabled={loading || applying}>
+              {applying ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
               Apply promotions
             </Button>
           </>
@@ -307,9 +372,9 @@ export default function PromotionsPage() {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Students in Batch" value={batch.length} icon={Users} tone="indigo" />
-        <StatCard label="Marked Promote" value={promoting} icon={CheckCircle2} tone="emerald" />
-        <StatCard label="Marked Hold" value={holding} icon={PauseCircle} tone="amber" />
-        <StatCard label="Marked Detain" value={detaining} icon={XCircle} tone="rose" />
+        <StatCard label="Marked Promote" value={promoting} icon={ArrowUpCircle} tone="emerald" />
+        <StatCard label="Marked Retain" value={retaining} icon={RotateCcw} tone="amber" />
+        <StatCard label="Marked Graduate" value={graduating} icon={GraduationCap} tone="violet" />
       </div>
 
       <Card>
@@ -337,7 +402,7 @@ export default function PromotionsPage() {
             value={currentClass}
             onChange={(e) => applyFilter(setCurrentClass)(e.target.value)}
             placeholder="All classes"
-            options={CLASS_OPTIONS}
+            options={CLASS_FILTER_OPTIONS}
           />
           <Input
             label="Search"
@@ -351,28 +416,36 @@ export default function PromotionsPage() {
             <p className="text-xs font-medium text-muted">Summary</p>
             <div className="flex flex-wrap items-center gap-1.5">
               <Badge variant="success">{promoting} promote</Badge>
-              <Badge variant="warning">{holding} hold</Badge>
-              <Badge variant="danger">{detaining} detain</Badge>
+              <Badge variant="warning">{retaining} retain</Badge>
+              <Badge variant="info">{graduating} graduate</Badge>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      <Table
-        columns={columns}
-        rows={paged}
-        rowKey={(s) => s.id}
-        rowClassName={(s) => (decisions[s.id] === "detain" ? "bg-danger-soft" : undefined)}
-        emptyTitle="No students found"
-        emptyDescription="Try clearing your filters to see more results."
-      />
+      {loading ? (
+        <div className="grid place-items-center py-16 text-muted">
+          <Loader2 className="size-6 animate-spin" />
+        </div>
+      ) : (
+        <>
+          <Table
+            columns={columns}
+            rows={paged}
+            rowKey={(s) => s.id}
+            rowClassName={(s) => (decisions[s.id] === "retain" ? "bg-warning-soft" : undefined)}
+            emptyTitle="No students found"
+            emptyDescription="Try clearing your filters to see more results."
+          />
 
-      <Pagination
-        page={page}
-        pageSize={PAGE_SIZE}
-        totalItems={filtered.length}
-        onPageChange={setPage}
-      />
+          <Pagination
+            page={page}
+            pageSize={PAGE_SIZE}
+            totalItems={filtered.length}
+            onPageChange={setPage}
+          />
+        </>
+      )}
     </div>
   );
 }

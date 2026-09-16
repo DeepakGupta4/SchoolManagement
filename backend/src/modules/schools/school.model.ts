@@ -65,6 +65,7 @@ const schoolSchema = new Schema(
     teacherCount: { type: Number, default: 0 },
     schoolType: { type: String, default: "" },
     website: { type: String, default: "" },
+    logo: { type: String, default: "" },
     // Suspension is separate from subscription state: an admin can freeze an
     // account regardless of whether its trial or plan is otherwise valid.
     status: { type: String, enum: ["active", "suspended"], default: "active" },
@@ -174,6 +175,7 @@ export function toPublicSchool(school: SchoolDoc) {
     teacherCount: school.teacherCount,
     schoolType: school.schoolType,
     website: school.website,
+    logo: school.logo,
     status: school.status,
     subscription: {
       plan: school.subscription.plan,

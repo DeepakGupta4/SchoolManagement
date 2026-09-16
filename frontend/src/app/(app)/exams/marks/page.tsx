@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
-import { CheckCircle, ClipboardList, Percent, Save, Search, Users } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { CheckCircle, ClipboardList, Loader2, Percent, Save, Search, Users } from "lucide-react";
 import {
   Avatar,
   Badge,
@@ -13,41 +13,18 @@ import {
   Select,
   StatCard,
   Table,
+  useToast,
   type Column,
 } from "@/components/ui";
 import { cn } from "@/lib/utils";
+import { listStudents, CLASS_OPTIONS, SECTION_OPTIONS } from "@/lib/api/students";
+import { getMarks, saveMarks, type MarkRecord } from "@/lib/api/marks";
+import type { Student as ApiStudent } from "@/types/student";
 
 const subjects = ["Mathematics", "Physics", "Chemistry", "English", "Biology", "History"];
-const classes  = ["6-A", "7-A", "8-A", "9-A", "9-B", "10-A", "10-B", "11-A", "12-A"];
 const exams    = ["Unit Test 1", "Mid-Term Exam", "Final Exam"];
 
-const NAME_POOL = [
-  "Aarav Sharma", "Priya Patel", "Rohan Verma", "Sneha Gupta", "Karan Singh",
-  "Ananya Joshi", "Vikram Nair", "Meera Iyer", "Arjun Reddy", "Pooja Mishra",
-  "Rahul Das", "Divya Menon", "Ishaan Kapoor", "Nisha Rao", "Aditya Bose",
-  "Tara Sethi", "Yash Chauhan", "Riya Malhotra", "Kabir Anand", "Sara Qureshi",
-  "Manav Trivedi", "Lakshmi Pillai", "Dev Bhatia", "Anjali Saxena", "Nikhil Rane",
-  "Farah Khan", "Sameer Dutta", "Kavya Hegde", "Om Prakash", "Neha Kulkarni",
-];
-
-type Student = { id: string; name: string; roll: number; className: string };
-
-/** Each class has its own roster — marks are always entered against one class. */
-function rosterFor(className: string, classIndex: number): Student[] {
-  const size = 9 + (classIndex % 3);
-  const nameOffset = (classIndex * 5) % NAME_POOL.length;
-
-  return Array.from({ length: size }, (_, i) => ({
-    id: `${className}-${String(i + 1).padStart(2, "0")}`,
-    name: NAME_POOL[(nameOffset + i) % NAME_POOL.length],
-    roll: i + 1,
-    className,
-  }));
-}
-
-const studentsByClass: Record<string, Student[]> = Object.fromEntries(
-  classes.map((c, i) => [c, rosterFor(c, i)])
-);
+type Row = { id: string; name: string; roll: number };
 
 /** Grade chip tones, expressed only in semantic tokens. */
 const gradeClass: Record<string, string> = {
@@ -72,22 +49,76 @@ function getGrade(mark: number, total: number) {
 const toOptions = (values: string[]) => values.map((v) => ({ label: v, value: v }));
 
 export default function MarkEntryPage() {
-  const [selectedClass,   setSelectedClass]   = useState("10-A");
+  const { toast } = useToast();
+
+  const [selectedClass,   setSelectedClass]   = useState(CLASS_OPTIONS[CLASS_OPTIONS.length - 1]);
+  const [selectedSection, setSelectedSection] = useState(SECTION_OPTIONS[0]);
   const [selectedSubject, setSelectedSubject] = useState("Mathematics");
   const [selectedExam,    setSelectedExam]    = useState("Mid-Term Exam");
   const [totalMarks,      setTotalMarks]      = useState(100);
-  // Marks are keyed by (exam, subject, student). Switching exam or subject
-  // therefore reveals a different sheet instead of carrying figures across.
+
+  const [roster, setRoster] = useState<Row[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  // Marks are keyed by (exam, class, section, subject, student). Switching any of
+  // those reveals a different sheet instead of carrying figures across.
   const [marks, setMarks] = useState<Record<string, string>>({});
   const [savedSheet, setSavedSheet] = useState<string | null>(null);
   const [search, setSearch] = useState("");
 
-  const sheetKey = `${selectedClass}|${selectedSubject}|${selectedExam}`;
-  const markKey = (studentId: string) => `${sheetKey}|${studentId}`;
-  const markOf = (studentId: string) => marks[markKey(studentId)] ?? "";
+  const sheetKey = `${selectedClass}|${selectedSection}|${selectedSubject}|${selectedExam}`;
+  const markKey = (studentId: string, subject: string) =>
+    `${selectedClass}|${selectedSection}|${subject}|${selectedExam}|${studentId}`;
+  const markOf = (studentId: string) => marks[markKey(studentId, selectedSubject)] ?? "";
   const saved = savedSheet === sheetKey;
 
-  const roster = studentsByClass[selectedClass] ?? [];
+  // Load the class roster (real students) + any saved marks for the exam-class.
+  useEffect(() => {
+    let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLoading(true);
+    Promise.all([
+      listStudents({ className: selectedClass }),
+      getMarks(selectedExam, selectedClass, selectedSection),
+    ])
+      .then(([students, savedMarks]) => {
+        if (cancelled) return;
+        const rows: Row[] = (students as ApiStudent[])
+          .filter((s) => s.section === selectedSection)
+          .map((s) => ({
+            id: s.id,
+            name: `${s.firstName} ${s.lastName}`.trim(),
+            roll: Number(s.rollNo) || 0,
+          }))
+          .sort((a, b) => a.roll - b.roll);
+
+        // Populate the sheet for every subject that has saved marks, so switching
+        // subject after load reveals the persisted figures.
+        setMarks((prev) => {
+          const next = { ...prev };
+          for (const m of savedMarks) {
+            next[
+              `${selectedClass}|${selectedSection}|${m.subject}|${selectedExam}|${m.studentId}`
+            ] = String(m.marks);
+          }
+          return next;
+        });
+
+        setRoster(rows);
+        setSavedSheet(null);
+      })
+      .catch(() => {
+        if (!cancelled) toast({ title: "Could not load marks", variant: "error" });
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedClass, selectedSection, selectedExam, toast]);
+
   const filtered = roster.filter((s) =>
     s.name.toLowerCase().includes(search.toLowerCase())
   );
@@ -95,8 +126,48 @@ export default function MarkEntryPage() {
   const handleMark = (id: string, val: string) => {
     const num = parseInt(val);
     if (val === "" || (!isNaN(num) && num >= 0 && num <= totalMarks)) {
-      setMarks((prev) => ({ ...prev, [markKey(id)]: val }));
+      setMarks((prev) => ({ ...prev, [markKey(id, selectedSubject)]: val }));
       setSavedSheet(null);
+    }
+  };
+
+  const handleSave = async () => {
+    if (roster.length === 0) return;
+    const records: MarkRecord[] = roster
+      .filter((s) => markOf(s.id) !== "")
+      .map((s) => ({
+        studentId: s.id,
+        studentName: s.name,
+        roll: s.roll,
+        subject: selectedSubject,
+        marks: parseInt(markOf(s.id)) || 0,
+        maxMarks: totalMarks,
+      }));
+    if (records.length === 0) {
+      toast({ title: "Nothing to save", description: "Enter at least one mark.", variant: "warning" });
+      return;
+    }
+    setSaving(true);
+    try {
+      await saveMarks({
+        examName: selectedExam,
+        className: selectedClass,
+        section: selectedSection,
+        records,
+      });
+      setSavedSheet(sheetKey);
+      toast({
+        title: "Marks saved",
+        description: `${selectedClass} · ${selectedSection} · ${selectedSubject} · ${selectedExam}`,
+      });
+    } catch (e) {
+      toast({
+        title: "Could not save",
+        description: e instanceof Error ? e.message : "Please try again.",
+        variant: "error",
+      });
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -110,7 +181,7 @@ export default function MarkEntryPage() {
     (v) => (parseInt(v) / totalMarks) * 100 >= 33
   ).length;
 
-  const columns: Column<Student>[] = [
+  const columns: Column<Row>[] = [
     {
       key: "roll",
       header: "Roll",
@@ -219,8 +290,8 @@ export default function MarkEntryPage() {
         title="Mark Entry"
         description="Enter and manage student marks"
         actions={
-          <Button onClick={() => setSavedSheet(sheetKey)}>
-            <Save className="size-4" />
+          <Button onClick={handleSave} disabled={saving || loading || roster.length === 0}>
+            {saving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
             Save Marks
           </Button>
         }
@@ -232,7 +303,13 @@ export default function MarkEntryPage() {
             label="Class"
             value={selectedClass}
             onChange={(e) => setSelectedClass(e.target.value)}
-            options={toOptions(classes)}
+            options={toOptions(CLASS_OPTIONS)}
+          />
+          <Select
+            label="Section"
+            value={selectedSection}
+            onChange={(e) => setSelectedSection(e.target.value)}
+            options={SECTION_OPTIONS.map((s) => ({ label: `Section ${s}`, value: s }))}
           />
           <Select
             label="Subject"
@@ -279,7 +356,7 @@ export default function MarkEntryPage() {
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm font-semibold text-text">
-          {selectedClass} — {selectedSubject} — {selectedExam}
+          {selectedClass} · {selectedSection} — {selectedSubject} — {selectedExam}
         </p>
         <div className="flex flex-wrap items-center gap-3">
           {saved && (
@@ -301,13 +378,23 @@ export default function MarkEntryPage() {
         </div>
       </div>
 
-      <Table
-        columns={columns}
-        rows={filtered}
-        rowKey={(s) => s.id}
-        emptyTitle="No students found"
-        emptyDescription="Try a different search term."
-      />
+      {loading ? (
+        <div className="grid place-items-center py-16 text-muted">
+          <Loader2 className="size-6 animate-spin" />
+        </div>
+      ) : roster.length === 0 ? (
+        <div className="py-16 text-center text-sm text-muted">
+          No students in {selectedClass} · Section {selectedSection}. Add students first.
+        </div>
+      ) : (
+        <Table
+          columns={columns}
+          rows={filtered}
+          rowKey={(s) => s.id}
+          emptyTitle="No students found"
+          emptyDescription="Try a different search term."
+        />
+      )}
     </div>
   );
 }

@@ -81,6 +81,31 @@ export async function setTrialEnd(schoolId: string, trialEndDate: string): Promi
   });
 }
 
+export interface SchoolProfile {
+  id: string;
+  schoolId: string;
+  name: string;
+  ownerName: string;
+  email: string;
+  phone: string;
+  address: string;
+  city: string;
+  state: string;
+  country: string;
+  website: string;
+  schoolType: string;
+  logo: string;
+}
+
+/** The signed-in school's own profile (null for platform owner / no tenant). */
+export async function getMySchool(): Promise<SchoolProfile | null> {
+  return apiRequest<SchoolProfile | null>("/api/schools/mine");
+}
+
+export async function updateMySchool(updates: Partial<SchoolProfile>): Promise<SchoolProfile> {
+  return apiRequest<SchoolProfile>("/api/schools/mine", { method: "PATCH", body: updates });
+}
+
 export interface ResetPasswordResult {
   email: string;
   temporaryPassword: string;

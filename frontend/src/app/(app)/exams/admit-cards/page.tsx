@@ -1,78 +1,123 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { CheckSquare, FileText, Printer, Search, Square, TriangleAlert, Users } from "lucide-react";
 import {
-  Badge, Button, Card, EmptyState, Input, PageHeader, Select, StatCard, useToast,
+  Badge, Button, Card, EmptyState, Input, PageHeader, Select, Skeleton, StatCard, useToast,
 } from "@/components/ui";
 import { AdmitCard, type AdmitCardData, type AdmitCardSubject } from "@/components/cards/AdmitCard";
+import { useAsyncList } from "@/hooks/useAsyncList";
+import { listStudents, CLASS_OPTIONS } from "@/lib/api/students";
+import { examScheduleApi, type ScheduledExam } from "@/lib/api/examSchedule";
+import { fullName, type Student } from "@/types/student";
 
-const CLASSES = ["Class 9", "Class 10"];
-const SECTIONS = ["A", "B", "C"];
-const EXAMS = ["Mid-Term Examination 2025-26", "Final Examination 2025-26"];
-const FIRST = ["Aarav", "Ananya", "Vivaan", "Diya", "Ishaan", "Saanvi", "Kabir", "Myra", "Arjun", "Kiara", "Rohan", "Tara"];
-const LAST = ["Sharma", "Verma", "Patel", "Gupta", "Singh", "Reddy", "Nair", "Iyer"];
-const FATHER = ["Rajesh", "Manoj", "Sanjay", "Alok", "Naveen", "Vijay"];
+// School-level constants shown on every card — not per-student data.
+const SESSION = "2025-26";
+const CENTRE_CODE = "DL-0731";
+const CENTRE_NAME = "Springdale School, Mayur Vihar";
 
-const SCHEDULE: AdmitCardSubject[] = [
-  { subject: "English", date: "02 Mar 2026", day: "Monday", timing: "10:00 – 13:00", room: "A-101" },
-  { subject: "Hindi", date: "04 Mar 2026", day: "Wednesday", timing: "10:00 – 13:00", room: "A-101" },
-  { subject: "Mathematics", date: "06 Mar 2026", day: "Friday", timing: "10:00 – 13:00", room: "A-102" },
-  { subject: "Science", date: "09 Mar 2026", day: "Monday", timing: "10:00 – 13:00", room: "A-102" },
-  { subject: "Social Science", date: "11 Mar 2026", day: "Wednesday", timing: "10:00 – 13:00", room: "A-103" },
-  { subject: "Computer Applications", date: "13 Mar 2026", day: "Friday", timing: "10:00 – 12:00", room: "Lab-2" },
-];
-
-function pick<T>(arr: T[], seed: number) {
-  return arr[seed % arr.length];
+/** Maps a student's class + section onto the schedule's class code, e.g. "10-A". */
+function classCode(s: Student) {
+  return `${s.className.replace(/^Class\s+/i, "").trim()}-${s.section}`;
 }
 
-/** `feeCleared` gates eligibility — schools withhold admit cards over unpaid fees. */
-const candidates: (AdmitCardData & { feeCleared: boolean })[] = Array.from({ length: 15 }, (_, i) => {
-  const first = FIRST[i % FIRST.length];
-  const last = pick(LAST, i * 3 + 1);
-  const className = pick(CLASSES, i * 2 + 1);
-  const section = pick(SECTIONS, i * 5 + 2);
+/** Derives the weekday name from a schedule date string; "" if unparseable. */
+function weekday(date: string) {
+  const d = new Date(date);
+  return Number.isNaN(d.getTime()) ? "" : d.toLocaleDateString("en-GB", { weekday: "long" });
+}
 
+/** Turns a scheduled-exam row into an admit-card timetable line. */
+function toSubject(row: ScheduledExam): AdmitCardSubject {
   return {
-    id: `adm_${String(i + 1).padStart(3, "0")}`,
-    studentName: `${first} ${last}`,
-    rollNo: String(i + 1).padStart(2, "0"),
-    admissionNo: `ADM${2024001 + i}`,
-    className,
-    section,
-    examName: pick(EXAMS, i),
-    session: "2025-26",
-    centreCode: "DL-0731",
-    centreName: "Springdale School, Mayur Vihar",
-    fatherName: `${pick(FATHER, i * 4 + 1)} ${last}`,
-    subjects: SCHEDULE,
-    feeCleared: i % 5 !== 0,
+    subject: row.subject,
+    date: row.date,
+    day: weekday(row.date),
+    timing: row.duration ? `${row.time} · ${row.duration}` : row.time,
+    room: row.room,
   };
-});
+}
 
 export default function AdmitCardsPage() {
   const { toast } = useToast();
 
   const [search, setSearch] = useState("");
   const [className, setClassName] = useState("");
-  const [exam, setExam] = useState(EXAMS[0]);
+  const [exam, setExam] = useState("");
   const [onlyEligible, setOnlyEligible] = useState(true);
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return candidates.filter((c) => {
-      if (className && c.className !== className) return false;
-      if (onlyEligible && !c.feeCleared) return false;
-      if (!q) return true;
-      return (
-        c.studentName.toLowerCase().includes(q) ||
-        c.admissionNo.toLowerCase().includes(q) ||
-        c.rollNo.includes(q)
-      );
-    });
-  }, [search, className, onlyEligible]);
+  // Real students, filtered server-side by class + search — the same source the
+  // student ID-cards page uses, so photos flow through automatically.
+  const studentsFetcher = useCallback(
+    () => listStudents({ search, className }),
+    [search, className]
+  );
+  const { items: students, loading: studentsLoading } = useAsyncList<Student>(studentsFetcher);
+
+  // Real exam schedule, loaded in full so we can group papers by class + exam.
+  const scheduleFetcher = useCallback(() => examScheduleApi.list(), []);
+  const { items: schedule, loading: scheduleLoading } = useAsyncList<ScheduledExam>(scheduleFetcher);
+
+  const loading = studentsLoading || scheduleLoading;
+
+  // Distinct exam names present in the schedule power the exam selector.
+  const examOptions = useMemo(
+    () => Array.from(new Set(schedule.map((s) => s.exam).filter(Boolean))),
+    [schedule]
+  );
+
+  // Default to the first available exam once the schedule loads.
+  useEffect(() => {
+    if (examOptions.length > 0 && !examOptions.includes(exam)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setExam(examOptions[0]);
+    }
+  }, [examOptions, exam]);
+
+  // Papers scheduled for the selected exam, indexed by class code.
+  const subjectsByClass = useMemo(() => {
+    const map = new Map<string, AdmitCardSubject[]>();
+    for (const row of schedule) {
+      if (exam && row.exam !== exam) continue;
+      const list = map.get(row.class) ?? [];
+      list.push(toSubject(row));
+      map.set(row.class, list);
+    }
+    return map;
+  }, [schedule, exam]);
+
+  // A candidate is a student whose class has papers scheduled for this exam.
+  const candidates = useMemo(() => {
+    return students
+      .map((s) => {
+        const subjects = subjectsByClass.get(classCode(s)) ?? [];
+        const card: AdmitCardData & { feeCleared: boolean } = {
+          id: s.id,
+          studentName: fullName(s),
+          rollNo: s.rollNo,
+          admissionNo: s.admissionNo,
+          className: s.className,
+          section: s.section,
+          examName: exam,
+          session: SESSION,
+          centreCode: CENTRE_CODE,
+          centreName: CENTRE_NAME,
+          fatherName: s.guardian.name,
+          photo: s.avatar || undefined,
+          subjects,
+          // Schools withhold admit cards over unpaid fees.
+          feeCleared: (s.feeDue ?? 0) <= 0,
+        };
+        return card;
+      })
+      .filter((c) => c.subjects.length > 0);
+  }, [students, subjectsByClass, exam]);
+
+  const filtered = useMemo(
+    () => (onlyEligible ? candidates.filter((c) => c.feeCleared) : candidates),
+    [candidates, onlyEligible]
+  );
 
   const toggle = (id: string) =>
     setSelected((prev) => {
@@ -168,7 +213,8 @@ export default function AdmitCardsPage() {
             <Select
               value={exam}
               onChange={(e) => setExam(e.target.value)}
-              options={EXAMS.map((x) => ({ label: x, value: x }))}
+              placeholder="Select examination"
+              options={examOptions.map((x) => ({ label: x, value: x }))}
               aria-label="Select examination"
             />
           </div>
@@ -177,7 +223,7 @@ export default function AdmitCardsPage() {
               value={className}
               onChange={(e) => setClassName(e.target.value)}
               placeholder="All classes"
-              options={CLASSES.map((c) => ({ label: c, value: c }))}
+              options={CLASS_OPTIONS.map((c) => ({ label: c, value: c }))}
               aria-label="Filter by class"
             />
           </div>
@@ -195,7 +241,13 @@ export default function AdmitCardsPage() {
         </div>
       </div>
 
-      {filtered.length === 0 ? (
+      {loading ? (
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="aspect-[1/1.414] w-full" />
+          ))}
+        </div>
+      ) : filtered.length === 0 ? (
         <Card className="print-hide">
           <EmptyState
             icon={<FileText className="size-5" />}

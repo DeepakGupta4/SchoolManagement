@@ -63,6 +63,50 @@ router.get("/me", async (req, res, next) => {
   }
 });
 
+/** The caller's own school profile (full details), for the Settings page. */
+router.get("/mine", async (req, res, next) => {
+  try {
+    const school = await School.findOne({ schoolId: req.user!.schoolId });
+    res.json({ data: school ? toPublicSchool(school) : null });
+  } catch (err) {
+    next(err);
+  }
+});
+
+const profileSchema = z.object({
+  name: z.string().min(2).optional(),
+  ownerName: z.string().optional(),
+  phone: z.string().optional(),
+  address: z.string().optional(),
+  city: z.string().optional(),
+  state: z.string().optional(),
+  country: z.string().optional(),
+  website: z.string().optional(),
+  schoolType: z.string().optional(),
+  logo: z.string().optional(),
+});
+
+/** A school edits its own profile. Subscription/status/schoolId are off-limits. */
+router.patch(
+  "/mine",
+  requireRole("super_admin", "school_admin", "principal"),
+  validate(profileSchema),
+  async (req, res, next) => {
+    try {
+      const updates = req.body as z.infer<typeof profileSchema>;
+      const school = await School.findOneAndUpdate(
+        { schoolId: req.user!.schoolId },
+        { $set: updates },
+        { new: true, runValidators: true }
+      );
+      if (!school) throw ApiError.notFound("No school profile for this account.");
+      res.json({ data: toPublicSchool(school) });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
 /* --------------------------------------------- Super Admin: manage tenants */
 
 // Everything below is platform-owner only.
