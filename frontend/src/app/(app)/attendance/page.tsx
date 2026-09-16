@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
-import { Check, X, Clock, Download, ChevronLeft, ChevronRight, Users } from "lucide-react";
+import React, { useCallback, useEffect, useState } from "react";
+import { Check, X, Clock, Download, ChevronLeft, ChevronRight, Users, Loader2 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import {
   Badge,
@@ -16,47 +16,16 @@ import {
 import { useChartTheme } from "@/hooks/useChartTheme";
 import { cn } from "@/lib/utils";
 import { exportToCsv } from "@/lib/exportCsv";
+import { listStudents, CLASS_OPTIONS, SECTION_OPTIONS } from "@/lib/api/students";
+import {
+  getAttendance,
+  saveAttendance,
+  type AttendanceStatus,
+  type AttendanceMark,
+} from "@/lib/api/attendance";
+import type { Student } from "@/types/student";
 
-const classes = ["6-A", "6-B", "7-A", "7-B", "8-A", "9-A", "9-B", "10-A", "10-B", "11-A", "12-A", "12-B"];
-
-type AttendanceStatus = "present" | "absent" | "late";
-
-const NAME_POOL = [
-  "Aarav Sharma", "Priya Patel", "Rohan Verma", "Sneha Gupta", "Karan Singh",
-  "Ananya Joshi", "Vikram Nair", "Meera Iyer", "Arjun Reddy", "Pooja Mishra",
-  "Rahul Das", "Divya Menon", "Ishaan Kapoor", "Nisha Rao", "Aditya Bose",
-  "Tara Sethi", "Yash Chauhan", "Riya Malhotra", "Kabir Anand", "Sara Qureshi",
-  "Manav Trivedi", "Lakshmi Pillai", "Dev Bhatia", "Anjali Saxena", "Nikhil Rane",
-  "Farah Khan", "Sameer Dutta", "Kavya Hegde", "Om Prakash", "Neha Kulkarni",
-  "Rudra Jain", "Isha Chandra", "Veer Solanki", "Tanvi Shetty", "Aryan Mehta",
-  "Shruti Bansal", "Harsh Vyas", "Zoya Ansari", "Naveen Kumar", "Pallavi Ghosh",
-];
-
-/** Default roll-call pattern; each class starts from a different point in it. */
-const STATUS_CYCLE: AttendanceStatus[] = [
-  "present", "present", "absent", "present", "present", "late",
-  "present", "absent", "present", "present", "late", "present",
-];
-
-type Student = { id: string; name: string; roll: number; className: string; status: AttendanceStatus };
-
-/** Every class gets its own roster — 10 to 12 students, drawn from the pool. */
-function rosterFor(className: string, classIndex: number): Student[] {
-  const size = 10 + (classIndex % 3);
-  const nameOffset = (classIndex * 7) % NAME_POOL.length;
-
-  return Array.from({ length: size }, (_, i) => ({
-    id: `${className}-${String(i + 1).padStart(2, "0")}`,
-    name: NAME_POOL[(nameOffset + i) % NAME_POOL.length],
-    roll: i + 1,
-    className,
-    status: STATUS_CYCLE[(classIndex + i) % STATUS_CYCLE.length],
-  }));
-}
-
-const studentsByClass: Record<string, Student[]> = Object.fromEntries(
-  classes.map((c, i) => [c, rosterFor(c, i)])
-);
+type Row = { id: string; name: string; roll: number };
 
 const weeklyData = [
   { day: "Mon", present: 1180, absent: 60 },
@@ -64,87 +33,133 @@ const weeklyData = [
   { day: "Wed", present: 1150, absent: 90 },
   { day: "Thu", present: 1210, absent: 30 },
   { day: "Fri", present: 1100, absent: 140 },
-  { day: "Sat", present: 980,  absent: 60 },
+  { day: "Sat", present: 980, absent: 60 },
 ];
 
 const statusConfig: Record<AttendanceStatus, { tone: string; bar: string; label: string }> = {
   present: { tone: "bg-success-soft text-success-text", bar: "bg-success", label: "Present" },
-  absent:  { tone: "bg-danger-soft text-danger-text",   bar: "bg-danger",  label: "Absent"  },
-  late:    { tone: "bg-warning-soft text-warning-text", bar: "bg-warning", label: "Late"    },
+  absent: { tone: "bg-danger-soft text-danger-text", bar: "bg-danger", label: "Absent" },
+  late: { tone: "bg-warning-soft text-warning-text", bar: "bg-warning", label: "Late" },
 };
 
-const statusIcon: Record<AttendanceStatus, typeof Check> = {
-  present: Check,
-  absent: X,
-  late: Clock,
-};
+const statusIcon: Record<AttendanceStatus, typeof Check> = { present: Check, absent: X, late: Clock };
+
+const todayIso = () => new Date().toISOString().slice(0, 10);
 
 export default function AttendancePage() {
   const chart = useChartTheme();
   const { toast } = useToast();
 
-  const [selectedClass, setSelectedClass] = useState("10-A");
-  // Keyed by the globally unique student id, so each class keeps its own marks
-  // and a class switch can never show another class's roll call.
+  const [className, setClassName] = useState(CLASS_OPTIONS[0]);
+  const [section, setSection] = useState(SECTION_OPTIONS[0]);
+  const [date, setDate] = useState(todayIso());
+
+  const [roster, setRoster] = useState<Row[]>([]);
   const [attendance, setAttendance] = useState<Record<string, AttendanceStatus>>({});
-  // Which class was last saved — derived comparison beats resetting in an effect.
-  const [savedClass, setSavedClass] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [dirty, setDirty] = useState(false);
 
-  const roster = studentsByClass[selectedClass] ?? [];
-  const statusOf = (s: Student): AttendanceStatus => attendance[s.id] ?? s.status;
-  const statuses = roster.map(statusOf);
-  const saved = savedClass === selectedClass;
+  // Load the class roster (real students) + any saved roll-call for the date.
+  useEffect(() => {
+    let cancelled = false;
+    const t = setTimeout(() => {
+      setLoading(true);
+      Promise.all([listStudents({ className }), getAttendance(className, section, date)])
+        .then(([students, saved]) => {
+          if (cancelled) return;
+          const rows: Row[] = (students as Student[])
+            .filter((s) => s.section === section)
+            .map((s) => ({
+              id: s.id,
+              name: `${s.firstName} ${s.lastName}`.trim(),
+              roll: Number(s.rollNo) || 0,
+            }))
+            .sort((a, b) => a.roll - b.roll);
 
-  const present = statuses.filter(v => v === "present").length;
-  const absent  = statuses.filter(v => v === "absent").length;
-  const late    = statuses.filter(v => v === "late").length;
-  const pct     = roster.length > 0 ? Math.round((present / roster.length) * 100) : 0;
+          const savedMap = new Map(saved.map((m) => [m.studentId, m.status]));
+          const marks: Record<string, AttendanceStatus> = {};
+          for (const r of rows) marks[r.id] = savedMap.get(r.id) ?? "present";
+
+          setRoster(rows);
+          setAttendance(marks);
+          setDirty(false);
+        })
+        .catch(() => {
+          if (!cancelled) toast({ title: "Could not load attendance", variant: "error" });
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
+    }, 0);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [className, section, date, toast]);
+
+  const statusOf = (id: string): AttendanceStatus => attendance[id] ?? "present";
+  const statuses = roster.map((r) => statusOf(r.id));
+  const present = statuses.filter((v) => v === "present").length;
+  const absent = statuses.filter((v) => v === "absent").length;
+  const late = statuses.filter((v) => v === "late").length;
+  const pct = roster.length > 0 ? Math.round((present / roster.length) * 100) : 0;
 
   const mark = (id: string, status: AttendanceStatus) => {
-    setAttendance(prev => ({ ...prev, [id]: status }));
-    setSavedClass(null);
+    setAttendance((prev) => ({ ...prev, [id]: status }));
+    setDirty(true);
   };
 
   const markAll = (status: AttendanceStatus) => {
-    setAttendance(prev => ({
-      ...prev,
-      ...Object.fromEntries(roster.map(s => [s.id, status])),
-    }));
-    setSavedClass(null);
+    setAttendance((prev) => ({ ...prev, ...Object.fromEntries(roster.map((r) => [r.id, status])) }));
+    setDirty(true);
   };
+
+  const handleSave = useCallback(async () => {
+    if (roster.length === 0) return;
+    setSaving(true);
+    try {
+      const records: AttendanceMark[] = roster.map((r) => ({
+        studentId: r.id,
+        studentName: r.name,
+        roll: r.roll,
+        status: statusOf(r.id),
+      }));
+      await saveAttendance({ className, section, date, records });
+      setDirty(false);
+      toast({ title: "Attendance saved", description: `${className} · ${section} · ${date}` });
+    } catch (e) {
+      toast({
+        title: "Could not save",
+        description: e instanceof Error ? e.message : "Please try again.",
+        variant: "error",
+      });
+    } finally {
+      setSaving(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roster, attendance, className, section, date, toast]);
 
   const pctVariant = pct >= 90 ? "success" : pct >= 75 ? "warning" : "danger";
 
   const handleExport = () => {
     if (roster.length === 0) {
-      toast({
-        title: "Nothing to export",
-        description: `No students on the roll for ${selectedClass}.`,
-        variant: "warning",
-      });
+      toast({ title: "Nothing to export", variant: "warning" });
       return;
     }
-    const today = new Date().toLocaleDateString("en-IN", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    });
-    exportToCsv<Student>(
-      `attendance-${selectedClass}`,
+    exportToCsv<Row>(
+      `attendance-${className}-${section}-${date}`,
       [
-        { header: "Date", value: () => today },
-        { header: "Class", value: (s) => s.className },
-        { header: "Roll No", value: (s) => s.roll },
-        { header: "Student ID", value: (s) => s.id },
-        { header: "Name", value: (s) => s.name },
-        { header: "Status", value: (s) => statusConfig[statusOf(s)].label },
+        { header: "Date", value: () => date },
+        { header: "Class", value: () => `${className} ${section}` },
+        { header: "Roll No", value: (r) => r.roll },
+        { header: "Student ID", value: (r) => r.id },
+        { header: "Name", value: (r) => r.name },
+        { header: "Status", value: (r) => statusConfig[statusOf(r.id)].label },
       ],
       roster
     );
-    toast({
-      title: "Export ready",
-      description: `${roster.length} attendance record${roster.length === 1 ? "" : "s"} for ${selectedClass} exported to CSV.`,
-    });
+    toast({ title: "Export ready", description: `${roster.length} records exported.` });
   };
 
   const summary: { key: AttendanceStatus; label: string; value: number }[] = [
@@ -174,18 +189,12 @@ export default function AttendancePage() {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="flex flex-col gap-3">
           {summary.map((s) => {
-            const sharePct =
-              roster.length > 0 ? Math.round((s.value / roster.length) * 100) : 0;
+            const sharePct = roster.length > 0 ? Math.round((s.value / roster.length) * 100) : 0;
             return (
               <Card key={s.key}>
                 <CardContent className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
-                    <div
-                      className={cn(
-                        "flex size-10 shrink-0 items-center justify-center rounded-md",
-                        statusConfig[s.key].tone
-                      )}
-                    >
+                    <div className={cn("flex size-10 shrink-0 items-center justify-center rounded-md", statusConfig[s.key].tone)}>
                       <Users className="size-4.5" />
                     </div>
                     <div>
@@ -196,10 +205,7 @@ export default function AttendancePage() {
                   <div className="text-right">
                     <p className="text-base font-semibold text-text">{sharePct}%</p>
                     <div className="mt-1.5 h-1.5 w-16 overflow-hidden rounded-full bg-surface-hover">
-                      <div
-                        className={cn("h-full rounded-full", statusConfig[s.key].bar)}
-                        style={{ width: `${sharePct}%` }}
-                      />
+                      <div className={cn("h-full rounded-full", statusConfig[s.key].bar)} style={{ width: `${sharePct}%` }} />
                     </div>
                   </div>
                 </CardContent>
@@ -240,24 +246,29 @@ export default function AttendancePage() {
 
       <Card className="overflow-hidden">
         <div className="flex flex-wrap items-center gap-3 border-b border-border px-5 py-4">
-          <div className="w-44">
-            <Select
-              value={selectedClass}
-              onChange={(e) => setSelectedClass(e.target.value)}
-              options={classes.map((c) => ({ label: `Class ${c}`, value: c }))}
-              aria-label="Select class"
-            />
+          <div className="w-36">
+            <Select value={className} onChange={(e) => setClassName(e.target.value)} options={CLASS_OPTIONS.map((c) => ({ label: c, value: c }))} aria-label="Select class" />
           </div>
+          <div className="w-24">
+            <Select value={section} onChange={(e) => setSection(e.target.value)} options={SECTION_OPTIONS.map((s) => ({ label: `Sec ${s}`, value: s }))} aria-label="Select section" />
+          </div>
+          <input
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            className="focus-ring h-9 rounded-md border border-border bg-surface px-2.5 text-sm text-text"
+            aria-label="Attendance date"
+          />
           <p className="text-xs text-muted">{roster.length} students</p>
 
           <div className="ml-auto flex flex-wrap gap-2">
-            <Button size="sm" variant="secondary" onClick={() => markAll("present")}>
+            <Button size="sm" variant="secondary" disabled={loading || roster.length === 0} onClick={() => markAll("present")}>
               <Check className="size-3.5" />
-              Mark All Present
+              All Present
             </Button>
-            <Button size="sm" variant="secondary" onClick={() => markAll("absent")}>
+            <Button size="sm" variant="secondary" disabled={loading || roster.length === 0} onClick={() => markAll("absent")}>
               <X className="size-3.5" />
-              Mark All Absent
+              All Absent
             </Button>
           </div>
 
@@ -266,56 +277,64 @@ export default function AttendancePage() {
           </Badge>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3">
-          {roster.map((s) => {
-            const st = statusOf(s);
-            return (
-              <div
-                key={s.id}
-                className="flex items-center gap-3 border-b border-border px-5 py-3.5"
-              >
-                <div className="gradient-indigo flex size-9 shrink-0 items-center justify-center rounded-md text-sm font-semibold text-white">
-                  {s.name.charAt(0)}
+        {loading ? (
+          <div className="grid place-items-center py-16 text-muted">
+            <Loader2 className="size-6 animate-spin" />
+          </div>
+        ) : roster.length === 0 ? (
+          <div className="py-16 text-center text-sm text-muted">
+            No students in {className} · Section {section}. Add students first.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3">
+            {roster.map((s) => {
+              const st = statusOf(s.id);
+              return (
+                <div key={s.id} className="flex items-center gap-3 border-b border-border px-5 py-3.5">
+                  <div className="gradient-indigo flex size-9 shrink-0 items-center justify-center rounded-md text-sm font-semibold text-white">
+                    {s.name.charAt(0)}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-text">{s.name}</p>
+                    <p className="mt-0.5 text-[11px] text-subtle">Roll #{s.roll}</p>
+                  </div>
+                  <div className="flex gap-1">
+                    {(["present", "absent", "late"] as AttendanceStatus[]).map((status) => {
+                      const Icon = statusIcon[status];
+                      const isActive = st === status;
+                      return (
+                        <button
+                          key={status}
+                          onClick={() => mark(s.id, status)}
+                          aria-label={`Mark ${s.name} ${statusConfig[status].label}`}
+                          aria-pressed={isActive}
+                          className={cn(
+                            "focus-ring flex size-7 items-center justify-center rounded-sm transition-colors",
+                            isActive ? statusConfig[status].tone : "bg-surface-sunken text-subtle hover:bg-surface-hover hover:text-text"
+                          )}
+                        >
+                          <Icon className="size-3.5" />
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-text">{s.name}</p>
-                  <p className="mt-0.5 text-[11px] text-subtle">Roll #{s.roll}</p>
-                </div>
-                <div className="flex gap-1">
-                  {(["present", "absent", "late"] as AttendanceStatus[]).map((status) => {
-                    const Icon = statusIcon[status];
-                    const isActive = st === status;
-                    return (
-                      <button
-                        key={status}
-                        onClick={() => mark(s.id, status)}
-                        aria-label={`Mark ${s.name} ${statusConfig[status].label}`}
-                        aria-pressed={isActive}
-                        className={cn(
-                          "focus-ring flex size-7 items-center justify-center rounded-sm transition-colors",
-                          isActive
-                            ? statusConfig[status].tone
-                            : "bg-surface-sunken text-subtle hover:bg-surface-hover hover:text-text"
-                        )}
-                      >
-                        <Icon className="size-3.5" />
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
 
         <div className="flex items-center justify-end gap-3 px-5 py-4">
-          {saved && (
+          {!dirty && !loading && roster.length > 0 && (
             <p className="flex items-center gap-1.5 text-sm font-medium text-success-text">
               <Check className="size-4" />
-              Attendance saved for Class {selectedClass}!
+              Saved
             </p>
           )}
-          <Button onClick={() => setSavedClass(selectedClass)}>Save Attendance</Button>
+          <Button onClick={handleSave} disabled={saving || loading || roster.length === 0}>
+            {saving ? <Loader2 className="size-4 animate-spin" /> : null}
+            Save Attendance
+          </Button>
         </div>
       </Card>
     </div>

@@ -13,6 +13,7 @@ import schoolRequestRoutes from "./modules/schools/schoolRequest.routes.js";
 import schoolRoutes from "./modules/schools/school.routes.js";
 import subscriptionRoutes from "./modules/schools/subscription.routes.js";
 import notificationRoutes from "./modules/notifications/notification.routes.js";
+import attendanceRoutes from "./modules/attendance/attendance.routes.js";
 import { crudModules } from "./modules/crudModules.js";
 import { requireAuth } from "./middleware/auth.js";
 import { checkSubscription } from "./middleware/subscription.js";
@@ -55,6 +56,8 @@ export function createApp() {
   app.use("/api/students", tenantGuard, studentRoutes);
   app.use("/api/teachers", tenantGuard, teacherRoutes);
   app.use("/api/fees", tenantGuard, feeRoutes);
+
+  app.use("/api/attendance", tenantGuard, attendanceRoutes);
 
   // All uniform tenant CRUD modules (classes, exams, library, …).
   for (const mod of crudModules) app.use(mod.path, tenantGuard, mod.router);
