@@ -1,5 +1,6 @@
-import { apiRequest } from "./client";
+import { apiRequest, setToken } from "./client";
 import type { SubscriptionStatus } from "./subscription";
+import type { User } from "@/types";
 
 /**
  * Super Admin — manage a tenant school's subscription. All of these are
@@ -121,4 +122,23 @@ export async function resetSchoolPassword(schoolId: string): Promise<ResetPasswo
 /** Permanently delete a school, its logins and its registration request. */
 export async function deleteSchool(schoolId: string): Promise<void> {
   await apiRequest<void>(`/api/schools/${schoolId}`, { method: "DELETE" });
+}
+
+/**
+ * Sign in as a school (support/impersonation). Swaps the stored token to the
+ * school's session and returns its user, so the platform owner can open that
+ * school's own panel.
+ */
+export async function impersonateSchool(schoolId: string): Promise<{ user: User; schoolName: string }> {
+  const res = await apiRequest<{ token: string; user: User; schoolName: string }>(
+    `/api/schools/${schoolId}/impersonate`,
+    { method: "POST" }
+  );
+  setToken(res.token);
+  return { user: res.user, schoolName: res.schoolName };
+}
+
+/** Send one in-app notification to every school. */
+export async function broadcastToSchools(payload: { title: string; body: string }): Promise<{ sent: number }> {
+  return apiRequest<{ sent: number }>("/api/schools/broadcast", { method: "POST", body: payload });
 }

@@ -29,9 +29,9 @@ function fmtDate(v: string): string {
 
 const REQUEST_BADGE = { pending: "warning", approved: "success", rejected: "danger" } as const;
 
-function Stat({ label, value, icon: Icon, gradient }: { label: string; value: string | number; icon: typeof Building2; gradient: string }) {
-  return (
-    <Card>
+function Stat({ label, value, icon: Icon, gradient, href }: { label: string; value: string | number; icon: typeof Building2; gradient: string; href?: string }) {
+  const inner = (
+    <Card className={href ? "transition-colors hover:border-primary" : ""}>
       <CardContent className="flex items-center gap-3">
         <div className={`flex size-10 shrink-0 items-center justify-center rounded-md text-white ${gradient}`}>
           <Icon className="size-4.5" />
@@ -43,6 +43,7 @@ function Stat({ label, value, icon: Icon, gradient }: { label: string; value: st
       </CardContent>
     </Card>
   );
+  return href ? <Link href={href}>{inner}</Link> : inner;
 }
 
 export default function OverviewPage() {
@@ -104,16 +105,16 @@ export default function OverviewPage() {
       ) : (
         <>
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-            <Stat label="Total Schools" value={stats?.totalSchools ?? 0} icon={Building2} gradient="bg-gradient-to-br from-indigo-500 to-violet-500" />
-            <Stat label="Pending Requests" value={stats?.pendingRequests ?? 0} icon={Clock} gradient="bg-gradient-to-br from-amber-500 to-orange-500" />
-            <Stat label="Active Trials" value={stats?.activeTrials ?? 0} icon={GraduationCap} gradient="bg-gradient-to-br from-sky-500 to-blue-500" />
-            <Stat label="Paid Schools" value={stats?.paidSchools ?? 0} icon={CreditCard} gradient="bg-gradient-to-br from-emerald-500 to-green-500" />
-            <Stat label="Trials Expired" value={stats?.trialsExpired ?? 0} icon={XCircle} gradient="bg-gradient-to-br from-rose-500 to-red-500" />
-            <Stat label="Suspended" value={stats?.suspendedSchools ?? 0} icon={Ban} gradient="bg-gradient-to-br from-slate-500 to-slate-600" />
-            <Stat label="Monthly Revenue" value={inr.format(stats?.revenue ?? 0)} icon={IndianRupee} gradient="bg-gradient-to-br from-teal-500 to-emerald-600" />
-            <Stat label="Total Students" value={stats?.totalStudents ?? 0} icon={Users} gradient="bg-gradient-to-br from-fuchsia-500 to-pink-500" />
-            <Stat label="Total Staff" value={stats?.totalStaff ?? 0} icon={UserCheck} gradient="bg-gradient-to-br from-cyan-500 to-sky-500" />
-            <Stat label="Rejected" value={stats?.rejectedRequests ?? 0} icon={XCircle} gradient="bg-gradient-to-br from-slate-400 to-slate-500" />
+            <Stat label="Total Schools" value={stats?.totalSchools ?? 0} icon={Building2} gradient="bg-gradient-to-br from-indigo-500 to-violet-500" href="/schools" />
+            <Stat label="Pending Requests" value={stats?.pendingRequests ?? 0} icon={Clock} gradient="bg-gradient-to-br from-amber-500 to-orange-500" href="/school-requests" />
+            <Stat label="Active Trials" value={stats?.activeTrials ?? 0} icon={GraduationCap} gradient="bg-gradient-to-br from-sky-500 to-blue-500" href="/schools" />
+            <Stat label="Paid Schools" value={stats?.paidSchools ?? 0} icon={CreditCard} gradient="bg-gradient-to-br from-emerald-500 to-green-500" href="/schools" />
+            <Stat label="Trials Expired" value={stats?.trialsExpired ?? 0} icon={XCircle} gradient="bg-gradient-to-br from-rose-500 to-red-500" href="/schools" />
+            <Stat label="Suspended" value={stats?.suspendedSchools ?? 0} icon={Ban} gradient="bg-gradient-to-br from-slate-500 to-slate-600" href="/schools" />
+            <Stat label="Monthly Revenue" value={inr.format(stats?.revenue ?? 0)} icon={IndianRupee} gradient="bg-gradient-to-br from-teal-500 to-emerald-600" href="/schools" />
+            <Stat label="Total Students" value={stats?.totalStudents ?? 0} icon={Users} gradient="bg-gradient-to-br from-fuchsia-500 to-pink-500" href="/schools" />
+            <Stat label="Total Staff" value={stats?.totalStaff ?? 0} icon={UserCheck} gradient="bg-gradient-to-br from-cyan-500 to-sky-500" href="/schools" />
+            <Stat label="Rejected" value={stats?.rejectedRequests ?? 0} icon={XCircle} gradient="bg-gradient-to-br from-slate-400 to-slate-500" href="/school-requests" />
           </div>
 
           <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">

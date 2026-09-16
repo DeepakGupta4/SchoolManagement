@@ -2,11 +2,12 @@ import { Router } from "express";
 import net from "node:net";
 import dns from "node:dns/promises";
 import { z } from "zod";
-import { requireAuth, requireRole } from "../../middleware/auth.js";
+import { requireAuth, requireRole, signToken } from "../../middleware/auth.js";
 import { validate } from "../../middleware/validate.js";
 import { ApiError } from "../../utils/ApiError.js";
 import { env } from "../../config/env.js";
-import { User, hashPassword } from "../auth/user.model.js";
+import { User, hashPassword, toPublicUser } from "../auth/user.model.js";
+import { notifySchool } from "../notifications/notification.model.js";
 import { generateTempPassword } from "../../utils/password.js";
 import { sendEmail, isEmailConfigured } from "../../utils/email.js";
 import { passwordResetEmail } from "./emails.js";
@@ -111,6 +112,53 @@ router.patch(
 
 // Everything below is platform-owner only.
 router.use(requireRole("super_admin"));
+
+const broadcastSchema = z.object({
+  title: z.string().min(2),
+  body: z.string().default(""),
+});
+
+/** Send one in-app notification to every tenant school. */
+router.post("/broadcast", validate(broadcastSchema), async (req, res, next) => {
+  try {
+    const { title, body } = req.body as z.infer<typeof broadcastSchema>;
+    const schools = await School.find({}, "schoolId");
+    await Promise.all(
+      schools.map((s) =>
+        notifySchool(s.schoolId, { type: "broadcast", title, body, link: "/dashboard" })
+      )
+    );
+    res.json({ data: { sent: schools.length } });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * Sign in AS a school's admin (support/impersonation). Returns a token scoped
+ * to that school so the platform owner can see and manage the school's own
+ * panel. Super-admin only.
+ */
+router.post("/:schoolId/impersonate", async (req, res, next) => {
+  try {
+    const school = await findSchool(String(req.params.schoolId));
+    const user =
+      (await User.findOne({ schoolId: school.schoolId, role: "school_admin" })) ??
+      (await User.findOne({ email: school.email, schoolId: school.schoolId })) ??
+      (await User.findOne({ schoolId: school.schoolId }));
+    if (!user) throw ApiError.notFound("No user account found for this school.");
+
+    const token = signToken({
+      sub: user._id.toString(),
+      email: user.email,
+      role: user.role,
+      schoolId: user.schoolId,
+    });
+    res.json({ data: { token, user: toPublicUser(user), schoolName: school.name } });
+  } catch (err) {
+    next(err);
+  }
+});
 
 /**
  * Every tenant school with its live access state AND real usage — the actual

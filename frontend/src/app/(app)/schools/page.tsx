@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Building2,
   Search,
@@ -17,6 +18,8 @@ import {
   GraduationCap,
   XCircle,
   Trash2,
+  LogIn,
+  Megaphone,
 } from "lucide-react";
 import {
   Badge,
@@ -28,6 +31,7 @@ import {
   Modal,
   PageHeader,
   Table,
+  Textarea,
   useToast,
   type Column,
 } from "@/components/ui";
@@ -36,8 +40,10 @@ import { useAsyncList } from "@/hooks/useAsyncList";
 import {
   activateFree,
   activatePaid,
+  broadcastToSchools,
   deleteSchool,
   extendTrial,
+  impersonateSchool,
   listSchools,
   resetSchoolPassword,
   resumeSchool,
@@ -96,6 +102,45 @@ function StatCard({ label, value, icon: Icon, gradient }: { label: string; value
 export default function SchoolsPage() {
   const { toast } = useToast();
   const user = useAuthStore((s) => s.user);
+  const signIn = useAuthStore((s) => s.signIn);
+  const router = useRouter();
+
+  const [opening, setOpening] = useState<string | null>(null);
+  const [broadcastOpen, setBroadcastOpen] = useState(false);
+  const [bcTitle, setBcTitle] = useState("");
+  const [bcBody, setBcBody] = useState("");
+  const [bcSending, setBcSending] = useState(false);
+
+  const handleOpen = useCallback(
+    async (school: ManagedSchool) => {
+      setOpening(school.schoolId);
+      try {
+        const { user: schoolUser } = await impersonateSchool(school.schoolId);
+        signIn(schoolUser);
+        router.push("/dashboard");
+      } catch (e) {
+        toast({ title: "Could not open school", description: e instanceof Error ? e.message : "Please try again.", variant: "error" });
+        setOpening(null);
+      }
+    },
+    [signIn, router, toast]
+  );
+
+  const handleBroadcast = useCallback(async () => {
+    if (!bcTitle.trim()) return;
+    setBcSending(true);
+    try {
+      const r = await broadcastToSchools({ title: bcTitle.trim(), body: bcBody.trim() });
+      toast({ title: "Broadcast sent", description: `Delivered to ${r.sent} school(s).` });
+      setBroadcastOpen(false);
+      setBcTitle("");
+      setBcBody("");
+    } catch (e) {
+      toast({ title: "Broadcast failed", description: e instanceof Error ? e.message : "Please try again.", variant: "error" });
+    } finally {
+      setBcSending(false);
+    }
+  }, [bcTitle, bcBody, toast]);
 
   const [status, setStatus] = useState<SubscriptionStatus | "all">("all");
   const [search, setSearch] = useState("");
@@ -239,13 +284,19 @@ export default function SchoolsPage() {
         header: "",
         align: "right",
         render: (s) => (
-          <Button size="sm" variant="outline" onClick={() => setManaging(s)}>
-            <SlidersHorizontal className="size-4" /> Manage
-          </Button>
+          <div className="flex items-center justify-end gap-1.5">
+            <Button size="sm" variant="ghost" disabled={opening === s.schoolId} onClick={() => handleOpen(s)} title="Open this school's panel">
+              {opening === s.schoolId ? <Loader2 className="size-4 animate-spin" /> : <LogIn className="size-4" />}
+              Open
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => setManaging(s)}>
+              <SlidersHorizontal className="size-4" /> Manage
+            </Button>
+          </div>
         ),
       },
     ],
-    []
+    [opening, handleOpen]
   );
 
   if (user && user.role !== "super_admin") {
@@ -262,7 +313,15 @@ export default function SchoolsPage() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="Schools" description="Every school on the platform — manage subscriptions and access." />
+      <PageHeader
+        title="Schools"
+        description="Every school on the platform — manage subscriptions and access."
+        actions={
+          <Button variant="outline" onClick={() => setBroadcastOpen(true)}>
+            <Megaphone className="size-4" /> Broadcast
+          </Button>
+        }
+      />
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
         <StatCard label="Total" value={stats.total} icon={Building2} gradient="bg-gradient-to-br from-indigo-500 to-violet-500" />
@@ -377,6 +436,29 @@ export default function SchoolsPage() {
         destructive
         onConfirm={handleDelete}
       />
+
+      {/* Broadcast to all schools */}
+      <Modal
+        open={broadcastOpen}
+        onOpenChange={(o) => !o && setBroadcastOpen(false)}
+        title="Broadcast to all schools"
+        description="Sends an in-app notification to every school on the platform."
+        size="md"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setBroadcastOpen(false)}>Cancel</Button>
+            <Button onClick={handleBroadcast} disabled={bcSending || !bcTitle.trim()}>
+              {bcSending ? <Loader2 className="size-4 animate-spin" /> : <Megaphone className="size-4" />}
+              Send to all
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <Input label="Title" value={bcTitle} onChange={(e) => setBcTitle(e.target.value)} placeholder="e.g. Scheduled maintenance tonight" />
+          <Textarea label="Message" value={bcBody} onChange={(e) => setBcBody(e.target.value)} placeholder="Details for the schools…" rows={4} />
+        </div>
+      </Modal>
 
       {/* Credentials after reset */}
       <Modal
