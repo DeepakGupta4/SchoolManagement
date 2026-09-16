@@ -56,18 +56,14 @@ let transporter: Transporter | null = null;
 function getTransporter(): Transporter | null {
   if (!env.SMTP_USER || !env.SMTP_PASS) return null;
   if (!transporter) {
+    // Simple Gmail preset — this is what reliably works on hosts like Render.
+    // No custom connection timeout: the default is generous, and a short one
+    // wrongly aborts Render's slower-than-local outbound connection.
     transporter = nodemailer.createTransport({
-      // Explicit host/port 587 (STARTTLS): many cloud hosts time out on the
-      // default secure port 465, but allow 587.
-      host: "smtp.gmail.com",
-      port: 587,
-      secure: false,
+      service: "gmail",
       // Gmail app passwords are shown with spaces ("abcd efgh …") but must be
       // sent without them — strip whitespace so either form works.
       auth: { user: env.SMTP_USER, pass: (env.SMTP_PASS ?? "").replace(/\s+/g, "") },
-      connectionTimeout: 10_000,
-      greetingTimeout: 10_000,
-      socketTimeout: 20_000,
     });
   }
   return transporter;
