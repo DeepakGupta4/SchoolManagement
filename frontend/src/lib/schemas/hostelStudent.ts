@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { PHONE_REGEX, PHONE_MESSAGE } from "@/lib/phone";
 
 export const hostelStudentSchema = z.object({
   studentId: z.string().min(2, "Student ID is required"),
@@ -9,7 +10,7 @@ export const hostelStudentSchema = z.object({
   type: z.string().min(1, "Type is required"),
   fees: z.string().min(1, "Fee status is required"),
   joinDate: z.string().min(3, "Join date is required"),
-  contact: z.string().min(5, "Contact is required"),
+  contact: z.string().regex(PHONE_REGEX, PHONE_MESSAGE),
 });
 
 export type HostelStudentSchema = z.infer<typeof hostelStudentSchema>;

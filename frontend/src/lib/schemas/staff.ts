@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { PHONE_REGEX, PHONE_MESSAGE } from "@/lib/phone";
 
 export const staffSchema = z.object({
   employeeId: z.string().min(2, "Employee ID is required"),
@@ -7,7 +8,7 @@ export const staffSchema = z.object({
   dept: z.string().min(1, "Department is required"),
   type: z.string().min(1, "Employment type is required"),
   status: z.string().min(1, "Status is required"),
-  phone: z.string().min(6, "Phone number is required"),
+  phone: z.string().regex(PHONE_REGEX, PHONE_MESSAGE),
   email: z.email("Enter a valid email address"),
   join: z.string().min(3, "Join date is required"),
   salary: z.coerce.number<number>().min(0, "Cannot be negative"),

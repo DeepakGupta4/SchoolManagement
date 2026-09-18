@@ -4,7 +4,7 @@ import { validate } from "../../middleware/validate.js";
 import { Student } from "./student.model.js";
 import { createCrudRouter } from "../../utils/crudRouter.js";
 
-const PHONE = /^[6-9]\d{9}$/;
+const PHONE = /^\d{10}$/;
 
 const guardianSchema = z.object({
   name: z.string().min(2, "Guardian name is required"),

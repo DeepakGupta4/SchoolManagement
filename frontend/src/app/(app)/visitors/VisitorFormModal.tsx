@@ -6,6 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { UserPlus } from "lucide-react";
 import { Modal, Button, Input, Select, Textarea } from "@/components/ui";
 import { visitorSchema, type VisitorSchema } from "@/lib/schemas/visitor";
+import { digitsOnly10 } from "@/lib/phone";
 import {
   VISITOR_PURPOSE_OPTIONS,
   VISITOR_STATUS_OPTIONS,
@@ -109,9 +110,10 @@ export function VisitorFormModal({
         <Input
           label="Phone number"
           required
-          type="tel"
-          placeholder="+91 98220 41277"
-          {...register("phone")}
+          inputMode="numeric"
+          maxLength={10}
+          placeholder="9876543210"
+          {...register("phone", { onChange: digitsOnly10 })}
           error={errors.phone?.message}
         />
         <Select

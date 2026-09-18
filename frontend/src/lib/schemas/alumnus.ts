@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { PHONE_REGEX, PHONE_MESSAGE } from "@/lib/phone";
 
 export const alumnusSchema = z.object({
   name: z.string().min(2, "Name is required"),
@@ -8,7 +9,7 @@ export const alumnusSchema = z.object({
   employer: z.string().min(2, "Employer is required"),
   city: z.string().min(2, "City is required"),
   email: z.email("Enter a valid email address"),
-  phone: z.string().min(8, "Phone number is required"),
+  phone: z.string().regex(PHONE_REGEX, PHONE_MESSAGE),
   mentor: z.enum(["yes", "no"]),
   interests: z.array(z.string()),
 });

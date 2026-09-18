@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Modal, Button, Input, Select, Textarea } from "@/components/ui";
 import { admissionSchema, type AdmissionSchema } from "@/lib/schemas/admission";
+import { digitsOnly10 } from "@/lib/phone";
 import {
   CLASS_APPLIED_OPTIONS,
   SOURCE_OPTIONS,
@@ -116,8 +117,10 @@ export function AdmissionFormModal({
           <Input
             label="Phone"
             required
-            placeholder="98765-43210"
-            {...register("phone")}
+            inputMode="numeric"
+            maxLength={10}
+            placeholder="9876543210"
+            {...register("phone", { onChange: digitsOnly10 })}
             error={errors.phone?.message}
           />
           <Select

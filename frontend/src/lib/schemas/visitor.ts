@@ -1,8 +1,9 @@
 import { z } from "zod";
+import { PHONE_REGEX, PHONE_MESSAGE } from "@/lib/phone";
 
 export const visitorSchema = z.object({
   name: z.string().min(2, "Visitor name is required."),
-  phone: z.string().min(6, "Phone number is required."),
+  phone: z.string().regex(PHONE_REGEX, PHONE_MESSAGE),
   purpose: z.enum(
     [
       "Parent meeting",

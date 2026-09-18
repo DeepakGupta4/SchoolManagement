@@ -2,7 +2,7 @@ import { z } from "zod";
 import { Teacher } from "./teacher.model.js";
 import { createCrudRouter } from "../../utils/crudRouter.js";
 
-const PHONE = /^[6-9]\d{9}$/;
+const PHONE = /^\d{10}$/;
 
 const teacherSchema = z.object({
   employeeId: z.string().min(1),

@@ -1,6 +1,5 @@
 import { z } from "zod";
-
-const PHONE = /^[6-9]\d{9}$/;
+import { PHONE_REGEX, PHONE_MESSAGE } from "@/lib/phone";
 
 export const studentSchema = z.object({
   admissionNo: z.string().min(1, "Admission number is required"),
@@ -8,7 +7,7 @@ export const studentSchema = z.object({
   firstName: z.string().min(2, "First name must be at least 2 characters"),
   lastName: z.string().min(1, "Last name is required"),
   email: z.email("Enter a valid email address"),
-  phone: z.string().regex(PHONE, "Enter a valid 10-digit Indian mobile number"),
+  phone: z.string().regex(PHONE_REGEX, PHONE_MESSAGE),
   dateOfBirth: z
     .string()
     .min(1, "Date of birth is required")
@@ -23,7 +22,7 @@ export const studentSchema = z.object({
   guardian: z.object({
     name: z.string().min(2, "Guardian name is required"),
     relation: z.string().min(1, "Relation is required"),
-    phone: z.string().regex(PHONE, "Enter a valid 10-digit Indian mobile number"),
+    phone: z.string().regex(PHONE_REGEX, PHONE_MESSAGE),
     email: z.union([z.email("Enter a valid email address"), z.literal("")]).optional(),
     occupation: z.string().optional(),
   }),

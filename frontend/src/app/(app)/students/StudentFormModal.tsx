@@ -7,6 +7,7 @@ import { Upload, X } from "lucide-react";
 import { Modal, Button, Input, Textarea, Select, useToast } from "@/components/ui";
 import { PhotoFrame } from "@/components/cards/PhotoFrame";
 import { studentSchema, type StudentSchema } from "@/lib/schemas/student";
+import { digitsOnly10 } from "@/lib/phone";
 import { CLASS_OPTIONS, SECTION_OPTIONS } from "@/lib/api/students";
 import { fileToDataUrl } from "@/lib/image";
 import type { Student, StudentFormValues } from "@/types/student";
@@ -212,7 +213,7 @@ export function StudentFormModal({
           <SectionTitle>Contact</SectionTitle>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Input label="Email" type="email" required {...register("email")} error={errors.email?.message} />
-            <Input label="Phone" required hint="10-digit mobile number" {...register("phone")} error={errors.phone?.message} />
+            <Input label="Phone" required hint="10-digit mobile number" inputMode="numeric" maxLength={10} placeholder="9876543210" {...register("phone", { onChange: digitsOnly10 })} error={errors.phone?.message} />
           </div>
           <div className="mt-4">
             <Textarea label="Address" required {...register("address")} error={errors.address?.message} />
@@ -234,7 +235,7 @@ export function StudentFormModal({
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Input label="Guardian name" required {...register("guardian.name")} error={errors.guardian?.name?.message} />
             <Input label="Relation" required {...register("guardian.relation")} error={errors.guardian?.relation?.message} />
-            <Input label="Guardian phone" required {...register("guardian.phone")} error={errors.guardian?.phone?.message} />
+            <Input label="Guardian phone" required inputMode="numeric" maxLength={10} placeholder="9876543210" {...register("guardian.phone", { onChange: digitsOnly10 })} error={errors.guardian?.phone?.message} />
             <Input label="Guardian email" type="email" {...register("guardian.email")} error={errors.guardian?.email?.message} />
             <Input label="Occupation" {...register("guardian.occupation")} error={errors.guardian?.occupation?.message} />
           </div>

@@ -5,6 +5,7 @@ import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Modal, Button, Input, Textarea, Select, MultiSelect } from "@/components/ui";
 import { teacherSchema, type TeacherSchema } from "@/lib/schemas/teacher";
+import { digitsOnly10 } from "@/lib/phone";
 import {
   SUBJECT_OPTIONS,
   DEPARTMENT_OPTIONS,
@@ -137,7 +138,7 @@ export function TeacherFormModal({
           <SectionTitle>Contact</SectionTitle>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Input label="Email" type="email" required {...register("email")} error={errors.email?.message} />
-            <Input label="Phone" required hint="10-digit mobile number" {...register("phone")} error={errors.phone?.message} />
+            <Input label="Phone" required hint="10-digit mobile number" inputMode="numeric" maxLength={10} placeholder="9876543210" {...register("phone", { onChange: digitsOnly10 })} error={errors.phone?.message} />
           </div>
           <div className="mt-4">
             <Textarea label="Address" required {...register("address")} error={errors.address?.message} />

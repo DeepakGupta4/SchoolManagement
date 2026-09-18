@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Modal, Button, Input, Select } from "@/components/ui";
 import { staffSchema, type StaffSchema } from "@/lib/schemas/staff";
+import { digitsOnly10 } from "@/lib/phone";
 import {
   STAFF_DEPT_OPTIONS,
   STAFF_TYPE_OPTIONS,
@@ -90,7 +91,7 @@ export function StaffFormModal({
           <Select label="Department" required options={STAFF_DEPT_OPTIONS.map((d) => ({ label: d, value: d }))} {...register("dept")} error={errors.dept?.message} />
           <Select label="Employment type" required options={STAFF_TYPE_OPTIONS.map((t) => ({ label: t, value: t }))} {...register("type")} error={errors.type?.message} />
           <Select label="Status" required options={STAFF_STATUS_OPTIONS} {...register("status")} error={errors.status?.message} />
-          <Input label="Phone" required placeholder="98765-11111" {...register("phone")} error={errors.phone?.message} />
+          <Input label="Phone" required inputMode="numeric" maxLength={10} placeholder="9876543210" {...register("phone", { onChange: digitsOnly10 })} error={errors.phone?.message} />
           <Input label="Email" required type="email" placeholder="name@school.edu" {...register("email")} error={errors.email?.message} />
           <Input label="Join date" required placeholder="Jan 2024" {...register("join")} error={errors.join?.message} />
           <Input label="Monthly salary (₹)" type="number" min={0} {...register("salary")} error={errors.salary?.message} />

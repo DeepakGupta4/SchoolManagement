@@ -5,6 +5,7 @@ import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Modal, Button, Input, MultiSelect, Select } from "@/components/ui";
 import { alumnusSchema, type AlumnusSchema } from "@/lib/schemas/alumnus";
+import { digitsOnly10 } from "@/lib/phone";
 import {
   BATCH_OPTIONS,
   CITY_OPTIONS,
@@ -141,8 +142,10 @@ export function AlumnusFormModal({
           <Input
             label="Phone"
             required
-            placeholder="98765-43210"
-            {...register("phone")}
+            inputMode="numeric"
+            maxLength={10}
+            placeholder="9876543210"
+            {...register("phone", { onChange: digitsOnly10 })}
             error={errors.phone?.message}
           />
           <Select

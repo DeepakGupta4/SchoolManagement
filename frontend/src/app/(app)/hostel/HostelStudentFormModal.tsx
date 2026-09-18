@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Modal, Button, Input, Select } from "@/components/ui";
 import { hostelStudentSchema, type HostelStudentSchema } from "@/lib/schemas/hostelStudent";
+import { digitsOnly10 } from "@/lib/phone";
 import {
   HOSTEL_OPTIONS,
   HOSTEL_TYPE_OPTIONS,
@@ -143,8 +144,10 @@ export function HostelStudentFormModal({
           <Input
             label="Contact"
             required
-            placeholder="98765-XXXXX"
-            {...register("contact")}
+            inputMode="numeric"
+            maxLength={10}
+            placeholder="9876543210"
+            {...register("contact", { onChange: digitsOnly10 })}
             error={errors.contact?.message}
           />
         </div>

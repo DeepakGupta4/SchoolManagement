@@ -1,13 +1,12 @@
 import { z } from "zod";
-
-const PHONE = /^[6-9]\d{9}$/;
+import { PHONE_REGEX, PHONE_MESSAGE } from "@/lib/phone";
 
 export const teacherSchema = z.object({
   employeeId: z.string().min(1, "Employee ID is required"),
   firstName: z.string().min(2, "First name must be at least 2 characters"),
   lastName: z.string().min(1, "Last name is required"),
   email: z.email("Enter a valid email address"),
-  phone: z.string().regex(PHONE, "Enter a valid 10-digit Indian mobile number"),
+  phone: z.string().regex(PHONE_REGEX, PHONE_MESSAGE),
   gender: z.enum(["male", "female", "other"]),
   dateOfBirth: z
     .string()
