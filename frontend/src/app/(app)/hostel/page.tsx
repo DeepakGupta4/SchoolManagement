@@ -19,6 +19,7 @@ import {
   Card,
   CardContent,
   ConfirmDialog,
+  EmptyState,
   Input,
   PageHeader,
   Select,
@@ -40,18 +41,6 @@ import {
 import type { HostelStudentSchema } from "@/lib/schemas/hostelStudent";
 import { HostelStudentFormModal } from "./HostelStudentFormModal";
 
-/**
- * Static building register: name, warden and capacity. Occupancy is NOT stored
- * here — it is counted from the live allocation records so that adding or
- * removing a resident moves the numbers.
- */
-const hostels = [
-  { id: "H001", name: "Boys Hostel A",   type: "Boys",  totalRooms: 30, warden: "Mr. Ramesh Gupta",   contact: "98765-11111", floors: 3, amenities: ["WiFi", "Mess", "Gym", "Laundry"] },
-  { id: "H002", name: "Boys Hostel B",   type: "Boys",  totalRooms: 25, warden: "Mr. Suresh Sharma",  contact: "98765-22222", floors: 2, amenities: ["WiFi", "Mess", "Study Room"] },
-  { id: "H003", name: "Girls Hostel A",  type: "Girls", totalRooms: 35, warden: "Ms. Priya Verma",    contact: "98765-33333", floors: 4, amenities: ["WiFi", "Mess", "Gym", "Salon"] },
-  { id: "H004", name: "Girls Hostel B",  type: "Girls", totalRooms: 20, warden: "Ms. Anita Patel",    contact: "98765-44444", floors: 2, amenities: ["WiFi", "Mess", "Library"] },
-];
-
 const feeVariant: Record<string, "success" | "warning" | "danger"> = {
   Paid: "success",
   Pending: "warning",
@@ -64,16 +53,7 @@ const feeDot: Record<string, string> = {
   Overdue: "bg-danger",
 };
 
-/** Per-hostel accent, drawn from the shared gradient tokens. */
-const hostelGradients = ["gradient-indigo", "gradient-cyan", "gradient-rose", "gradient-emerald"];
-
 const tabs = ["All", "Boys", "Girls"];
-
-function occupancyTone(pct: number) {
-  if (pct >= 90) return { bar: "bg-danger", text: "text-danger" };
-  if (pct >= 70) return { bar: "bg-warning", text: "text-warning" };
-  return { bar: "bg-success", text: "text-success" };
-}
 
 export default function HostelPage() {
   const [search, setSearch] = useState("");
@@ -139,14 +119,8 @@ export default function HostelPage() {
     });
   };
 
-  // One bed per room, so a resident record is an occupied room.
-  const occupiedBy = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const s of items) counts.set(s.hostel, (counts.get(s.hostel) ?? 0) + 1);
-    return counts;
-  }, [items]);
-
-  const totalRooms = hostels.reduce((s, h) => s + h.totalRooms, 0);
+  // No hostel blocks are registered yet, so capacity is unknown.
+  const totalRooms = 0;
   const totalOccupied = items.length;
   const totalVacant = Math.max(0, totalRooms - totalOccupied);
 
@@ -279,81 +253,19 @@ export default function HostelPage() {
       />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Total hostels" value={hostels.length} icon={Home} tone="indigo" />
+        <StatCard label="Total hostels" value={0} icon={Home} tone="indigo" />
         <StatCard label="Total rooms" value={totalRooms} icon={DoorOpen} tone="violet" />
         <StatCard label="Occupied" value={totalOccupied} icon={Users} tone="emerald" />
         <StatCard label="Vacant" value={totalVacant} icon={KeyRound} tone="amber" />
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {hostels.map((h, idx) => {
-          const gradient = hostelGradients[idx % hostelGradients.length];
-          const occupied = occupiedBy.get(h.name) ?? 0;
-          const occupancyPct = h.totalRooms
-            ? Math.min(100, Math.round((occupied / h.totalRooms) * 100))
-            : 0;
-          const tone = occupancyTone(occupancyPct);
-          return (
-            <Card key={h.id} className="overflow-hidden">
-              <div className={cn("h-1.5", gradient)} />
-              <CardContent>
-                <div className="mb-3.5 flex items-center gap-3">
-                  <div
-                    className={cn(
-                      "flex size-11 shrink-0 items-center justify-center rounded-md text-white",
-                      gradient
-                    )}
-                  >
-                    <Home className="size-5" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-text">{h.name}</p>
-                    <Badge variant={h.type === "Boys" ? "info" : "danger"} className="mt-1">
-                      {h.type}
-                    </Badge>
-                  </div>
-                </div>
-
-                <div className="mb-3.5">
-                  <div className="mb-1.5 flex items-center justify-between gap-2">
-                    <span className="text-xs text-muted">Occupancy</span>
-                    <span className={cn("text-xs font-semibold", tone.text)}>
-                      {occupied}/{h.totalRooms} ({occupancyPct}%)
-                    </span>
-                  </div>
-                  <div className="h-1.5 overflow-hidden rounded-full bg-surface-hover">
-                    <div
-                      className={cn("h-full rounded-full", tone.bar)}
-                      style={{ width: `${occupancyPct}%` }}
-                    />
-                  </div>
-                </div>
-
-                <div className="mb-3.5 flex flex-col gap-1.5">
-                  {[
-                    { label: "Warden", value: h.warden },
-                    { label: "Floors", value: String(h.floors) },
-                    { label: "Contact", value: h.contact },
-                  ].map((row) => (
-                    <div key={row.label} className="flex items-center justify-between gap-2">
-                      <span className="text-xs text-subtle">{row.label}</span>
-                      <span className="truncate text-xs font-medium text-text">{row.value}</span>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="flex flex-wrap gap-1.5">
-                  {h.amenities.map((a) => (
-                    <Badge key={a} variant="outline">
-                      {a}
-                    </Badge>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
+      <Card>
+        <EmptyState
+          icon={<Home className="size-5" />}
+          title="No hostel blocks added yet"
+          description="Register a hostel block to track its rooms, warden and occupancy."
+        />
+      </Card>
 
       <div className="flex flex-wrap items-center gap-3">
         <div className="inline-flex gap-1 rounded-md bg-surface-sunken p-1">

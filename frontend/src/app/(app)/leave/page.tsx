@@ -22,6 +22,7 @@ import {
   Card,
   CardContent,
   ConfirmDialog,
+  EmptyState,
   Input,
   PageHeader,
   Select,
@@ -41,17 +42,6 @@ import {
 import type { LeaveRequestSchema } from "@/lib/schemas/leaveRequest";
 import { LeaveFormModal } from "./LeaveFormModal";
 
-const leaveBalance = [
-  { name: "Dr. Priya Sharma",  dept: "Teaching",      sick: 12, casual: 12, earned: 15, used: 90, remaining: 0 },
-  { name: "Mr. Rahul Verma",   dept: "Teaching",      sick: 10, casual: 11, earned: 12, used: 3,  remaining: 30 },
-  { name: "Mr. Anil Kumar",    dept: "Finance",       sick: 12, casual: 12, earned: 10, used: 5,  remaining: 29 },
-  { name: "Ms. Pooja Mehta",   dept: "HR",            sick: 12, casual: 12, earned: 10, used: 5,  remaining: 29 },
-  { name: "Mr. Deepak Singh",  dept: "Security",      sick: 12, casual: 11, earned: 15, used: 1,  remaining: 37 },
-  { name: "Ms. Kavita Joshi",  dept: "Library",       sick: 12, casual: 11, earned: 15, used: 1,  remaining: 37 },
-];
-
-type LeaveBalance = (typeof leaveBalance)[number];
-
 type BadgeVariant = "default" | "success" | "warning" | "danger" | "info";
 
 const STATUS_META: Record<string, { variant: BadgeVariant; dot: string }> = {
@@ -68,13 +58,6 @@ const LEAVE_TYPE_VARIANT: Record<string, BadgeVariant> = {
 };
 
 const tabs = ["Requests", "Leave Balance"] as const;
-
-/** Usage bands share the status palette: green under half, amber, then red. */
-function usageTone(pct: number) {
-  if (pct >= 80) return { bar: "bg-danger", text: "text-danger" };
-  if (pct >= 50) return { bar: "bg-warning", text: "text-warning" };
-  return { bar: "bg-success", text: "text-success" };
-}
 
 export default function LeavePage() {
   const [tab, setTab] = useState<(typeof tabs)[number]>("Requests");
@@ -287,78 +270,6 @@ export default function LeavePage() {
     },
   ];
 
-  const balanceColumns: Column<LeaveBalance>[] = [
-    {
-      key: "name",
-      header: "Staff Member",
-      sortable: true,
-      render: (b) => (
-        <div className="flex items-center gap-3">
-          <Avatar name={b.name} size="sm" />
-          <p className="truncate font-medium text-text">{b.name}</p>
-        </div>
-      ),
-    },
-    {
-      key: "dept",
-      header: "Department",
-      sortable: true,
-      render: (b) => <Badge variant="info">{b.dept}</Badge>,
-    },
-    {
-      key: "sick",
-      header: "Sick Leave",
-      sortable: true,
-      align: "right",
-      render: (b) => <span className="font-medium text-danger">{b.sick}</span>,
-    },
-    {
-      key: "casual",
-      header: "Casual Leave",
-      sortable: true,
-      align: "right",
-      render: (b) => <span className="font-medium text-info">{b.casual}</span>,
-    },
-    {
-      key: "earned",
-      header: "Earned Leave",
-      sortable: true,
-      align: "right",
-      render: (b) => <span className="font-medium text-success">{b.earned}</span>,
-    },
-    {
-      key: "used",
-      header: "Used",
-      sortable: true,
-      align: "right",
-      render: (b) => <span className="font-semibold text-text">{b.used}</span>,
-    },
-    {
-      key: "remaining",
-      header: "Remaining",
-      sortable: true,
-      align: "right",
-      render: (b) => <span className="font-semibold text-primary">{b.remaining}</span>,
-    },
-    {
-      key: "usage",
-      header: "Usage",
-      render: (b) => {
-        const total = b.sick + b.casual + b.earned;
-        const pct = Math.min(Math.round((b.used / total) * 100), 100);
-        const tone = usageTone(pct);
-        return (
-          <div className="flex min-w-36 items-center gap-2">
-            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-hover">
-              <div className={`h-full rounded-full ${tone.bar}`} style={{ width: `${pct}%` }} />
-            </div>
-            <span className={`w-8 text-right text-xs font-semibold ${tone.text}`}>{pct}%</span>
-          </div>
-        );
-      },
-    },
-  ];
-
   const isRequests = tab === "Requests";
 
   return (
@@ -479,28 +390,20 @@ export default function LeavePage() {
           />
         )
       ) : (
-        <Table
-          columns={balanceColumns}
-          rows={leaveBalance}
-          rowKey={(b) => b.name}
-          emptyTitle="No leave balances found"
-        />
+        <Card>
+          <EmptyState
+            icon={<CalendarDays className="size-5" />}
+            title="No leave balances yet"
+            description="Staff leave balances will appear here once they are set up."
+          />
+        </Card>
       )}
 
-      <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted">
-        <p>
-          {isRequests ? (
-            <>
-              Showing <strong className="font-semibold text-text">{visible.length}</strong> requests
-            </>
-          ) : (
-            <>
-              <strong className="font-semibold text-text">{leaveBalance.length}</strong> staff
-              members
-            </>
-          )}
-        </p>
-        {isRequests && (
+      {isRequests && (
+        <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted">
+          <p>
+            Showing <strong className="font-semibold text-text">{visible.length}</strong> requests
+          </p>
           <div className="flex flex-wrap items-center gap-4">
             {LEAVE_STATUS_OPTIONS.map((st) => {
               const count = items.filter((l) => l.status === st).length;
@@ -512,8 +415,8 @@ export default function LeavePage() {
               );
             })}
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       <LeaveFormModal
         open={formOpen}

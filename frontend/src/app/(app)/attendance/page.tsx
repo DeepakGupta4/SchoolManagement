@@ -1,19 +1,18 @@
 "use client";
 
 import React, { useCallback, useEffect, useState } from "react";
-import { Check, X, Clock, Download, ChevronLeft, ChevronRight, Users, Loader2 } from "lucide-react";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { Check, X, Clock, Download, Users, Loader2 } from "lucide-react";
 import {
   Badge,
   Button,
   Card,
   CardContent,
   CardHeader,
+  EmptyState,
   PageHeader,
   Select,
   useToast,
 } from "@/components/ui";
-import { useChartTheme } from "@/hooks/useChartTheme";
 import { cn } from "@/lib/utils";
 import { exportToCsv } from "@/lib/exportCsv";
 import { useClassOptions } from "@/hooks/useClassOptions";
@@ -28,15 +27,6 @@ import type { Student } from "@/types/student";
 
 type Row = { id: string; name: string; roll: number };
 
-const weeklyData = [
-  { day: "Mon", present: 1180, absent: 60 },
-  { day: "Tue", present: 1200, absent: 40 },
-  { day: "Wed", present: 1150, absent: 90 },
-  { day: "Thu", present: 1210, absent: 30 },
-  { day: "Fri", present: 1100, absent: 140 },
-  { day: "Sat", present: 980, absent: 60 },
-];
-
 const statusConfig: Record<AttendanceStatus, { tone: string; bar: string; label: string }> = {
   present: { tone: "bg-success-soft text-success-text", bar: "bg-success", label: "Present" },
   absent: { tone: "bg-danger-soft text-danger-text", bar: "bg-danger", label: "Absent" },
@@ -48,7 +38,6 @@ const statusIcon: Record<AttendanceStatus, typeof Check> = { present: Check, abs
 const todayIso = () => new Date().toISOString().slice(0, 10);
 
 export default function AttendancePage() {
-  const chart = useChartTheme();
   const { toast } = useToast();
   const { classOptions, sectionOptions } = useClassOptions();
 
@@ -230,26 +219,14 @@ export default function AttendancePage() {
               <p className="text-sm font-semibold text-text">Weekly Overview</p>
               <p className="mt-0.5 text-xs text-muted">School-wide attendance this week</p>
             </div>
-            <div className="flex shrink-0 items-center gap-2">
-              <Button variant="outline" size="sm" aria-label="Previous week" className="px-2">
-                <ChevronLeft className="size-4" />
-              </Button>
-              <Button variant="outline" size="sm" aria-label="Next week" className="px-2">
-                <ChevronRight className="size-4" />
-              </Button>
-            </div>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={weeklyData} barSize={20} barGap={4}>
-                <CartesianGrid strokeDasharray="3 3" stroke={chart.grid} vertical={false} />
-                <XAxis dataKey="day" tick={{ fontSize: 12, fill: chart.axis }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: chart.axis }} axisLine={false} tickLine={false} />
-                <Tooltip contentStyle={chart.tooltip} cursor={{ fill: chart.cursor, radius: 6 }} />
-                <Bar dataKey="present" fill={chart.series.primary} radius={[6, 6, 0, 0]} name="Present" />
-                <Bar dataKey="absent" fill={chart.series.danger} radius={[6, 6, 0, 0]} name="Absent" />
-              </BarChart>
-            </ResponsiveContainer>
+            {/* No per-day attendance history is exposed, so a real weekly series
+                can't be derived — an empty state beats fabricated bars. */}
+            <EmptyState
+              title="Not enough data yet"
+              description="A weekly overview will appear once daily attendance is recorded."
+            />
           </CardContent>
         </Card>
       </div>

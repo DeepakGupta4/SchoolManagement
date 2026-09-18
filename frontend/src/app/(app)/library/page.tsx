@@ -10,11 +10,7 @@ import {
   BookOpen,
   BookCheck,
   BookMarked,
-  CheckCircle,
-  Clock,
   AlertCircle,
-  RotateCcw,
-  type LucideIcon,
 } from "lucide-react";
 import {
   Badge,
@@ -22,6 +18,7 @@ import {
   Card,
   CardContent,
   ConfirmDialog,
+  EmptyState,
   Input,
   PageHeader,
   Select,
@@ -37,18 +34,15 @@ import { booksApi, CATEGORY_OPTIONS, type Book } from "@/lib/api/books";
 import type { BookSchema } from "@/lib/schemas/book";
 import { BookFormModal } from "./BookFormModal";
 
-const issuedBooks = [
-  { id: "ISS001", book: "Wings of Fire",            student: "Aarav Sharma",  class: "10-A", issueDate: "Jul 10, 2025", dueDate: "Jul 24, 2025", status: "issued"  },
-  { id: "ISS002", book: "The Alchemist",            student: "Priya Patel",   class: "9-B",  issueDate: "Jul 08, 2025", dueDate: "Jul 22, 2025", status: "overdue" },
-  { id: "ISS003", book: "Rich Dad Poor Dad",        student: "Rohan Verma",   class: "11-A", issueDate: "Jul 12, 2025", dueDate: "Jul 26, 2025", status: "issued"  },
-  { id: "ISS004", book: "Atomic Habits",            student: "Sneha Gupta",   class: "10-B", issueDate: "Jul 05, 2025", dueDate: "Jul 19, 2025", status: "overdue" },
-  { id: "ISS005", book: "English Grammar in Use",   student: "Karan Singh",   class: "8-A",  issueDate: "Jul 14, 2025", dueDate: "Jul 28, 2025", status: "issued"  },
-  { id: "ISS006", book: "History of Modern India",  student: "Ananya Joshi",  class: "12-B", issueDate: "Jul 01, 2025", dueDate: "Jul 15, 2025", status: "returned"},
-  { id: "ISS007", book: "Physics Part I Class 11",  student: "Vikram Nair",   class: "11-A", issueDate: "Jul 13, 2025", dueDate: "Jul 27, 2025", status: "issued"  },
-  { id: "ISS008", book: "Mathematics NCERT Class 10",student: "Meera Iyer",   class: "10-A", issueDate: "Jun 28, 2025", dueDate: "Jul 12, 2025", status: "returned"},
-];
-
-type IssueRecord = (typeof issuedBooks)[number];
+type IssueRecord = {
+  id: string;
+  book: string;
+  student: string;
+  class: string;
+  issueDate: string;
+  dueDate: string;
+  status: "issued" | "overdue" | "returned";
+};
 
 /** Category colour coding: a badge tone plus a tile gradient, both tokenised. */
 const categoryStyles: Record<
@@ -64,16 +58,6 @@ const categoryStyles: Record<
   "Self-Help": { variant: "default", gradient: "gradient-violet" },
 };
 
-const statusConfig: Record<
-  string,
-  { variant: "info" | "danger" | "success"; icon: LucideIcon; label: string }
-> = {
-  issued:   { variant: "info",    icon: Clock,       label: "Issued"   },
-  overdue:  { variant: "danger",  icon: AlertCircle, label: "Overdue"  },
-  returned: { variant: "success", icon: CheckCircle, label: "Returned" },
-};
-
-const tabs = ["All", "Issued", "Overdue", "Returned"];
 const catalogTabs = ["All Books", "Available", "Issued Out"];
 
 function Segmented({
@@ -109,7 +93,6 @@ function Segmented({
 export default function LibraryPage() {
   const [activeSection, setActiveSection] = useState<"catalog" | "issued">("catalog");
   const [catalogTab, setCatalogTab] = useState("All Books");
-  const [issueTab, setIssueTab] = useState("All");
   const [search, setSearch] = useState("");
   const [catFilter, setCatFilter] = useState("All");
 
@@ -142,21 +125,14 @@ export default function LibraryPage() {
       total: items.reduce((s, b) => s + b.total, 0),
       available: items.reduce((s, b) => s + b.available, 0),
       issued: items.reduce((s, b) => s + (b.total - b.available), 0),
-      // Issue records are a static fixture, not a resource, so this figure
-      // cannot be derived from live data — it stays as-is until issuing is
-      // backed by its own API.
-      overdue: issuedBooks.filter((i) => i.status === "overdue").length,
+      // Issue records have no backend yet, so overdue cannot be derived.
+      overdue: 0,
     }),
     [items]
   );
 
-  const filteredIssued = issuedBooks.filter((i) => {
-    const matchTab = issueTab === "All" || i.status === issueTab.toLowerCase();
-    const matchSearch =
-      i.book.toLowerCase().includes(search.toLowerCase()) ||
-      i.student.toLowerCase().includes(search.toLowerCase());
-    return matchTab && matchSearch;
-  });
+  // Circulation has no backend yet — the issued list renders an empty state.
+  const filteredIssued: IssueRecord[] = [];
 
   /** Exports the catalogue or the issue register, whichever section is open. */
   const handleExport = () => {
@@ -327,87 +303,6 @@ export default function LibraryPage() {
     },
   ];
 
-  const issueColumns: Column<IssueRecord>[] = [
-    {
-      key: "id",
-      header: "Issue ID",
-      sortable: true,
-      render: (r) => <span className="text-xs font-semibold text-primary-text">{r.id}</span>,
-    },
-    {
-      key: "book",
-      header: "Book",
-      sortable: true,
-      render: (r) => (
-        <div className="flex items-center gap-2.5">
-          <div className="flex size-8 shrink-0 items-center justify-center rounded-sm bg-primary-soft text-primary-text">
-            <BookOpen className="size-3.5" />
-          </div>
-          <p className="min-w-0 max-w-44 truncate font-medium text-text">{r.book}</p>
-        </div>
-      ),
-    },
-    {
-      key: "student",
-      header: "Student",
-      sortable: true,
-      render: (r) => <span className="whitespace-nowrap font-medium text-text">{r.student}</span>,
-    },
-    {
-      key: "class",
-      header: "Class",
-      sortable: true,
-      render: (r) => <Badge variant="info">{r.class}</Badge>,
-    },
-    {
-      key: "issueDate",
-      header: "Issue date",
-      render: (r) => <span className="whitespace-nowrap text-muted">{r.issueDate}</span>,
-    },
-    {
-      key: "dueDate",
-      header: "Due date",
-      render: (r) => (
-        <span
-          className={cn(
-            "whitespace-nowrap font-medium",
-            r.status === "overdue" ? "text-danger" : "text-muted"
-          )}
-        >
-          {r.dueDate}
-        </span>
-      ),
-    },
-    {
-      key: "status",
-      header: "Status",
-      sortable: true,
-      render: (r) => {
-        const sc = statusConfig[r.status];
-        const StatusIcon = sc.icon;
-        return (
-          <Badge variant={sc.variant} className="gap-1">
-            <StatusIcon className="size-3" />
-            {sc.label}
-          </Badge>
-        );
-      },
-    },
-    {
-      key: "actions",
-      header: "",
-      align: "right",
-      render: (r) => (
-        <div className="flex justify-end">
-          <Button variant="outline" size="sm" title="Return book" aria-label={`Return ${r.book}`}>
-            <RotateCcw className="size-3.5" />
-            Return
-          </Button>
-        </div>
-      ),
-    },
-  ];
-
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
@@ -505,30 +400,13 @@ export default function LibraryPage() {
       )}
 
       {activeSection === "issued" && (
-        <>
-          <div className="flex flex-wrap items-center gap-3">
-            <Segmented options={tabs} value={issueTab} onChange={setIssueTab} />
-            <div className="min-w-60 flex-1">
-              <Input
-                type="search"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search by book or student…"
-                icon={<Search className="size-4" />}
-                aria-label="Search issue records"
-              />
-            </div>
-            <p className="text-xs text-muted">{filteredIssued.length} records</p>
-          </div>
-
-          <Table
-            columns={issueColumns}
-            rows={filteredIssued}
-            rowKey={(r) => r.id}
-            emptyTitle="No issue records found"
-            emptyDescription="Try a different tab or search term."
+        <Card>
+          <EmptyState
+            icon={<BookMarked className="size-5" />}
+            title="No issued books yet"
+            description="Books checked out to students will appear here."
           />
-        </>
+        </Card>
       )}
 
       <BookFormModal

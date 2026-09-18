@@ -24,6 +24,7 @@ import {
   CardContent,
   CardHeader,
   ConfirmDialog,
+  EmptyState,
   Input,
   PageHeader,
   Select,
@@ -39,13 +40,6 @@ import { busRoutesApi, type BusRoute } from "@/lib/api/busRoutes";
 import type { BusRouteSchema } from "@/lib/schemas/busRoute";
 import { BusRouteFormModal } from "./BusRouteFormModal";
 
-const recentAlerts = [
-  { route: "Route E — Laxmi Nagar", msg: "Bus delayed by 15 mins due to traffic", time: "8:05 AM", type: "warning" },
-  { route: "Route A — Dwarka",      msg: "Bus arrived on time",                   time: "8:15 AM", type: "success" },
-  { route: "Route G — Gurgaon",     msg: "Bus departed — 52 students on board",   time: "6:45 AM", type: "info"    },
-  { route: "Route D — Pitampura",   msg: "Minor breakdown — backup arranged",     time: "7:30 AM", type: "error"   },
-];
-
 const statusConfig: Record<
   string,
   { variant: "success" | "warning" | "default"; icon: LucideIcon; label: string }
@@ -56,14 +50,6 @@ const statusConfig: Record<
 };
 
 const fallbackStatus = { variant: "default" as const, icon: AlertCircle, label: "Unknown" };
-
-/** Alert feed dot colour, keyed by the feed item's semantic type. */
-const alertDot: Record<string, string> = {
-  success: "bg-success",
-  warning: "bg-warning",
-  info: "bg-primary",
-  error: "bg-danger",
-};
 
 /** Each route gets a stable tile/stripe gradient from the shared token set. */
 const routeGradients = [
@@ -533,23 +519,11 @@ export default function TransportPage() {
                 <p className="text-sm font-semibold text-text">Live alerts</p>
               </div>
             </CardHeader>
-            <div>
-              {recentAlerts.map((alert, i) => (
-                <div
-                  key={`${alert.route}-${i}`}
-                  className="flex items-start gap-2.5 border-b border-border px-5 py-3 last:border-0"
-                >
-                  <span
-                    className={cn("mt-1.5 size-2 shrink-0 rounded-full", alertDot[alert.type])}
-                  />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-xs font-semibold text-text">{alert.route}</p>
-                    <p className="mt-0.5 text-xs leading-relaxed text-muted">{alert.msg}</p>
-                    <p className="mt-1 text-[11px] text-subtle">{alert.time}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
+            <EmptyState
+              icon={<AlertCircle className="size-5" />}
+              title="No alerts"
+              description="Live route alerts will appear here as they come in."
+            />
           </Card>
 
           <Card>

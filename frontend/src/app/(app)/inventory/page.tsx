@@ -11,9 +11,6 @@ import {
   Package,
   PackageX,
   Wallet,
-  CheckCircle,
-  Clock,
-  type LucideIcon,
 } from "lucide-react";
 import {
   Badge,
@@ -21,6 +18,7 @@ import {
   Card,
   CardContent,
   ConfirmDialog,
+  EmptyState,
   Input,
   PageHeader,
   Select,
@@ -41,16 +39,6 @@ import {
 import type { InventoryItemSchema } from "@/lib/schemas/inventoryItem";
 import { InventoryFormModal } from "./InventoryFormModal";
 
-const purchases = [
-  { id: "PO001", item: "A4 Paper Reams",        qty: 100, amount: 28000,  date: "Jul 15, 2025", supplier: "Paper World",   status: "received" },
-  { id: "PO002", item: "Printer Ink Cartridges",qty: 10,  amount: 12000,  date: "Jul 18, 2025", supplier: "Tech Supplies", status: "ordered"  },
-  { id: "PO003", item: "Sports Balls",          qty: 10,  amount: 8000,   date: "Jul 20, 2025", supplier: "Sports World",  status: "ordered"  },
-  { id: "PO004", item: "First Aid Kits",        qty: 5,   amount: 9000,   date: "Jul 17, 2025", supplier: "MedSupply Co.", status: "received" },
-  { id: "PO005", item: "Whiteboard Markers",    qty: 20,  amount: 3000,   date: "Jul 12, 2025", supplier: "Office Mart",   status: "received" },
-];
-
-type Purchase = (typeof purchases)[number];
-
 type BadgeVariant = "default" | "success" | "warning" | "danger" | "info";
 
 const categoryStyles: Record<string, { variant: BadgeVariant; emoji: string }> = {
@@ -70,11 +58,6 @@ const statusConfig: Record<string, { variant: BadgeVariant; label: string; bar: 
 };
 
 const fallbackStatus = { variant: "default" as BadgeVariant, label: "Unknown", bar: "bg-primary" };
-
-const poStatus: Record<string, { variant: BadgeVariant; icon: LucideIcon }> = {
-  received: { variant: "success", icon: CheckCircle },
-  ordered:  { variant: "warning", icon: Clock },
-};
 
 const tabs = ["All", "In Stock", "Low Stock", "Out of Stock"];
 const sections = ["Inventory", "Purchase Orders"];
@@ -337,72 +320,6 @@ export default function InventoryPage() {
     },
   ];
 
-  const poColumns: Column<Purchase>[] = [
-    {
-      key: "id",
-      header: "PO ID",
-      sortable: true,
-      render: (po) => <span className="text-xs font-semibold text-primary-text">{po.id}</span>,
-    },
-    {
-      key: "item",
-      header: "Item",
-      sortable: true,
-      render: (po) => (
-        <div className="flex items-center gap-2.5">
-          <div className="flex size-8 shrink-0 items-center justify-center rounded-sm bg-primary-soft text-primary-text">
-            <Package className="size-3.5" />
-          </div>
-          <span className="font-medium text-text">{po.item}</span>
-        </div>
-      ),
-    },
-    {
-      key: "qty",
-      header: "Quantity",
-      sortable: true,
-      align: "right",
-      render: (po) => <span className="whitespace-nowrap font-medium text-muted">{po.qty} units</span>,
-    },
-    {
-      key: "amount",
-      header: "Amount",
-      sortable: true,
-      align: "right",
-      render: (po) => (
-        <span className="whitespace-nowrap font-semibold text-text">
-          ₹{po.amount.toLocaleString()}
-        </span>
-      ),
-    },
-    {
-      key: "supplier",
-      header: "Supplier",
-      sortable: true,
-      render: (po) => <span className="whitespace-nowrap text-muted">{po.supplier}</span>,
-    },
-    {
-      key: "date",
-      header: "Order date",
-      render: (po) => <span className="whitespace-nowrap text-muted">{po.date}</span>,
-    },
-    {
-      key: "status",
-      header: "Status",
-      sortable: true,
-      render: (po) => {
-        const ps = poStatus[po.status];
-        const StatusIcon = ps.icon;
-        return (
-          <Badge variant={ps.variant} className="gap-1 capitalize">
-            <StatusIcon className="size-3" />
-            {po.status}
-          </Badge>
-        );
-      },
-    },
-  ];
-
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
@@ -519,23 +436,13 @@ export default function InventoryPage() {
       )}
 
       {activeSection === "Purchase Orders" && (
-        <>
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-sm font-semibold text-text">Recent purchase orders</p>
-            <Button size="sm">
-              <Plus className="size-3.5" />
-              New order
-            </Button>
-          </div>
-
-          <Table
-            columns={poColumns}
-            rows={purchases}
-            rowKey={(p) => p.id}
-            emptyTitle="No purchase orders"
-            emptyDescription="Raise a new order to get started."
+        <Card>
+          <EmptyState
+            icon={<Package className="size-5" />}
+            title="No purchase orders yet"
+            description="Raised purchase orders will appear here."
           />
-        </>
+        </Card>
       )}
 
       <InventoryFormModal

@@ -5,7 +5,6 @@ import {
   Search,
   Plus,
   Download,
-  Eye,
   Pencil,
   Trash2,
   Briefcase,
@@ -15,12 +14,12 @@ import {
   Calendar,
 } from "lucide-react";
 import {
-  Avatar,
   Badge,
   Button,
   Card,
   CardContent,
   ConfirmDialog,
+  EmptyState,
   Input,
   PageHeader,
   Select,
@@ -39,29 +38,19 @@ import {
 import type { JobPostingSchema } from "@/lib/schemas/jobPosting";
 import { JobPostingFormModal } from "./JobPostingFormModal";
 
-const applicants = [
-  { id: "AP001", name: "Arjun Mehta",  job: "Mathematics Teacher", dept: "Teaching", exp: "5 yrs", applied: "03 Jul 2025", status: "Shortlisted",  phone: "98765-11111", email: "arjun@email.com" },
-  { id: "AP002", name: "Sneha Kapoor", job: "Mathematics Teacher", dept: "Teaching", exp: "3 yrs", applied: "04 Jul 2025", status: "Under Review", phone: "98765-22222", email: "sneha@email.com" },
-  { id: "AP003", name: "Rahul Desai",  job: "Physics Teacher",     dept: "Teaching", exp: "7 yrs", applied: "06 Jul 2025", status: "Shortlisted",  phone: "98765-33333", email: "rahul@email.com" },
-  { id: "AP004", name: "Pooja Nair",   job: "IT Administrator",    dept: "IT",       exp: "4 yrs", applied: "22 Jun 2025", status: "Hired",        phone: "98765-44444", email: "pooja@email.com" },
-  { id: "AP005", name: "Vikram Joshi", job: "IT Administrator",    dept: "IT",       exp: "6 yrs", applied: "23 Jun 2025", status: "Rejected",     phone: "98765-55555", email: "vikram@email.com" },
-  { id: "AP006", name: "Ananya Singh", job: "Accountant",          dept: "Finance",  exp: "2 yrs", applied: "11 Jul 2025", status: "Under Review", phone: "98765-66666", email: "ananya@email.com" },
-  { id: "AP007", name: "Karan Sharma", job: "School Counselor",    dept: "HR",       exp: "3 yrs", applied: "13 Jul 2025", status: "Shortlisted",  phone: "98765-77777", email: "karan@email.com" },
-  { id: "AP008", name: "Meera Iyer",   job: "Security Guard",      dept: "Security", exp: "8 yrs", applied: "16 Jun 2025", status: "Hired",        phone: "98765-88888", email: "meera@email.com" },
-  { id: "AP009", name: "Rohit Verma",  job: "Physics Teacher",     dept: "Teaching", exp: "2 yrs", applied: "07 Jul 2025", status: "Under Review", phone: "98765-99999", email: "rohit@email.com" },
-  { id: "AP010", name: "Divya Patel",  job: "Accountant",          dept: "Finance",  exp: "5 yrs", applied: "12 Jul 2025", status: "Shortlisted",  phone: "98765-10101", email: "divya@email.com" },
-];
-
-type Applicant = (typeof applicants)[number];
+type Applicant = {
+  id: string;
+  name: string;
+  job: string;
+  dept: string;
+  exp: string;
+  applied: string;
+  status: string;
+  phone: string;
+  email: string;
+};
 
 type BadgeVariant = "default" | "success" | "warning" | "danger" | "info";
-
-const APPLICANT_STATUS: Record<string, { variant: BadgeVariant; dot: string }> = {
-  Shortlisted: { variant: "info", dot: "bg-info" },
-  "Under Review": { variant: "warning", dot: "bg-warning" },
-  Hired: { variant: "success", dot: "bg-success" },
-  Rejected: { variant: "danger", dot: "bg-danger" },
-};
 
 const JOB_STATUS: Record<string, BadgeVariant> = {
   Open: "success",
@@ -77,17 +66,6 @@ const DEPT_VARIANT: Record<string, BadgeVariant> = {
 };
 
 const tabs = ["Job Postings", "Applicants"] as const;
-
-/** Read-only actions for the applicant pipeline, which has no backend yet. */
-function ApplicantActions({ label }: { label: string }) {
-  return (
-    <div className="flex items-center justify-end gap-1">
-      <Button variant="ghost" size="sm" className="px-2" aria-label={`View ${label}`}>
-        <Eye className="size-4" />
-      </Button>
-    </div>
-  );
-}
 
 export default function RecruitmentPage() {
   const [tab, setTab] = useState<(typeof tabs)[number]>("Job Postings");
@@ -122,15 +100,8 @@ export default function RecruitmentPage() {
   const [pendingDelete, setPendingDelete] = useState<JobPosting | null>(null);
   const { toast } = useToast();
 
-  const filteredApplicants = applicants.filter((a) => {
-    const matchSearch =
-      a.name.toLowerCase().includes(search.toLowerCase()) ||
-      a.job.toLowerCase().includes(search.toLowerCase()) ||
-      a.id.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = statusFilter === "All" || a.status === statusFilter;
-    const matchDept = deptFilter === "All" || a.dept === deptFilter;
-    return matchSearch && matchStatus && matchDept;
-  });
+  // The applicant pipeline has no backend yet — it renders an empty state.
+  const filteredApplicants: Applicant[] = [];
 
   /** Exports the postings or the applicant pipeline, matching the active tab. */
   const handleExport = () => {
@@ -182,9 +153,10 @@ export default function RecruitmentPage() {
   };
 
   const openJobs = items.filter((j) => j.status === "Open").length;
-  const totalApps = applicants.length;
-  const shortlisted = applicants.filter((a) => a.status === "Shortlisted").length;
-  const hired = applicants.filter((a) => a.status === "Hired").length;
+  // Derived from the real job postings; the applicant pipeline has no backend yet.
+  const totalApps = items.reduce((sum, j) => sum + j.applicants, 0);
+  const shortlisted = 0;
+  const hired = 0;
 
   const openCreate = () => {
     setEditing(null);
@@ -302,70 +274,6 @@ export default function RecruitmentPage() {
     },
   ];
 
-  const applicantColumns: Column<Applicant>[] = [
-    {
-      key: "name",
-      header: "Applicant",
-      sortable: true,
-      render: (a) => (
-        <div className="flex items-center gap-3">
-          <Avatar name={a.name} size="sm" />
-          <div className="min-w-0">
-            <p className="truncate font-medium text-text">{a.name}</p>
-            <p className="truncate text-xs text-subtle">{a.id}</p>
-          </div>
-        </div>
-      ),
-    },
-    {
-      key: "job",
-      header: "Applied For",
-      sortable: true,
-      render: (a) => <span className="whitespace-nowrap text-muted">{a.job}</span>,
-    },
-    {
-      key: "dept",
-      header: "Department",
-      sortable: true,
-      render: (a) => <Badge variant={DEPT_VARIANT[a.dept] ?? "default"}>{a.dept}</Badge>,
-    },
-    {
-      key: "exp",
-      header: "Experience",
-      sortable: true,
-      align: "right",
-      render: (a) => <span className="whitespace-nowrap text-muted">{a.exp}</span>,
-    },
-    {
-      key: "applied",
-      header: "Applied On",
-      render: (a) => <span className="whitespace-nowrap text-muted">{a.applied}</span>,
-    },
-    {
-      key: "contact",
-      header: "Contact",
-      render: (a) => (
-        <div className="flex flex-col gap-0.5 text-xs text-muted">
-          <span>{a.phone}</span>
-          <span>{a.email}</span>
-        </div>
-      ),
-    },
-    {
-      key: "status",
-      header: "Status",
-      sortable: true,
-      render: (a) => (
-        <Badge variant={APPLICANT_STATUS[a.status]?.variant ?? "default"}>{a.status}</Badge>
-      ),
-    },
-    {
-      key: "actions",
-      header: "",
-      align: "right",
-      render: (a) => <ApplicantActions label={a.name} />,
-    },
-  ];
 
   return (
     <div className="flex flex-col gap-5">
@@ -491,37 +399,23 @@ export default function RecruitmentPage() {
           />
         )
       ) : (
-        <Table
-          columns={applicantColumns}
-          rows={filteredApplicants}
-          rowKey={(a) => a.id}
-          emptyTitle="No applicants found"
-          emptyDescription="Try adjusting your filters"
-        />
+        <Card>
+          <EmptyState
+            icon={<Users className="size-5" />}
+            title="No applicants yet"
+            description="Applications will appear here once candidates apply to your job postings."
+          />
+        </Card>
       )}
 
-      <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted">
-        <p>
-          Showing{" "}
-          <strong className="font-semibold text-text">
-            {isJobs ? items.length : filteredApplicants.length}
-          </strong>{" "}
-          {isJobs ? "jobs" : `of ${applicants.length} applicants`}
-        </p>
-        {!isJobs && (
-          <div className="flex flex-wrap items-center gap-4">
-            {["Under Review", "Shortlisted", "Hired", "Rejected"].map((st) => {
-              const count = filteredApplicants.filter((a) => a.status === st).length;
-              return (
-                <span key={st} className="flex items-center gap-1.5">
-                  <span className={`size-2 rounded-full ${APPLICANT_STATUS[st].dot}`} />
-                  {st}: <strong className="font-semibold text-text">{count}</strong>
-                </span>
-              );
-            })}
-          </div>
-        )}
-      </div>
+      {isJobs && (
+        <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted">
+          <p>
+            Showing{" "}
+            <strong className="font-semibold text-text">{items.length}</strong> jobs
+          </p>
+        </div>
+      )}
 
       <JobPostingFormModal
         open={formOpen}

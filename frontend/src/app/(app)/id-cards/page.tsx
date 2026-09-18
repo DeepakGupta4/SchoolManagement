@@ -5,27 +5,12 @@ import { useCallback, useMemo } from "react";
 import {
   ArrowRight, FileText, GraduationCap, IdCard as IdCardIcon, Users,
 } from "lucide-react";
-import { Badge, Card, CardContent, CardHeader, PageHeader, StatCard } from "@/components/ui";
-import { IdCard } from "@/components/cards/IdCard";
+import { Badge, Card, CardContent, CardHeader, EmptyState, PageHeader, StatCard } from "@/components/ui";
 import { useAsyncList } from "@/hooks/useAsyncList";
 import { listStudents } from "@/lib/api/students";
 import { listTeachers } from "@/lib/api/teachers";
 import type { Student } from "@/types/student";
 import type { Teacher } from "@/types/teacher";
-
-const sampleHolder = {
-  id: "sample",
-  name: "Aarav Sharma",
-  role: "Student",
-  identifier: "ADM2024001",
-  identifierLabel: "Adm. No.",
-  affiliation: "Class 10 · Section A",
-  bloodGroup: "B+",
-  phone: "9810012345",
-  guardianOrDesignation: "Rajesh Sharma",
-  guardianLabel: "Guardian",
-  validTill: "31 Mar 2026",
-};
 
 export default function IdCardsOverviewPage() {
   const fetchStudents = useCallback(() => listStudents({ status: "active" }), []);
@@ -58,7 +43,7 @@ export default function IdCardsOverviewPage() {
         href: "/exams/admit-cards",
         icon: FileText,
         gradient: "gradient-amber",
-        count: "Mid-Term 2025-26",
+        count: "By exam",
       },
     ],
     [students.length, teachers.length]
@@ -134,7 +119,11 @@ export default function IdCardsOverviewPage() {
             <Badge variant="info">CR80</Badge>
           </CardHeader>
           <CardContent>
-            <IdCard holder={sampleHolder} />
+            <EmptyState
+              title="No card to preview"
+              description="Open Student ID Cards or Teacher ID Cards above to generate and preview cards."
+              icon={<IdCardIcon className="size-5" />}
+            />
           </CardContent>
         </Card>
 

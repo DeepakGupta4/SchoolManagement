@@ -6,7 +6,6 @@ import {
   Bell,
   Building2,
   CalendarRange,
-  CheckCircle2,
   Palette,
   Plug,
   RotateCcw,
@@ -19,6 +18,7 @@ import {
   Card,
   CardContent,
   CardHeader,
+  EmptyState,
   Field,
   Input,
   Select,
@@ -40,31 +40,29 @@ const TABS = [
 type TabId = (typeof TABS)[number]["id"];
 
 const PROFILE_DEFAULTS = {
-  name: "Delhi Public School, Sector 45",
-  code: "DPS-GGN-45",
-  affiliation: "CBSE — Affiliation No. 530412",
-  principal: "Dr. Priya Sharma",
-  email: "office@dpssector45.edu.in",
-  phone: "+91 124 428 6600",
+  name: "",
+  code: "",
+  affiliation: "",
+  principal: "",
+  email: "",
+  phone: "",
   board: "cbse",
   medium: "english",
-  address:
-    "Plot No. 12, Sector 45, Sushant Lok Phase II, Gurugram, Haryana 122003",
+  address: "",
 };
 
 const BRANDING_DEFAULTS = {
-  displayName: "DPS Sector 45",
-  tagline: "Service Before Self",
+  displayName: "",
+  tagline: "",
   theme: "indigo",
   density: "comfortable",
-  receiptFooter:
-    "This is a computer generated receipt and does not require a signature. For queries contact the Accounts Office (Mon–Fri, 9 AM – 3 PM).",
+  receiptFooter: "",
 };
 
 const SESSION_DEFAULTS = {
-  session: "2026-27",
-  startDate: "2026-04-01",
-  endDate: "2027-03-31",
+  session: "",
+  startDate: "",
+  endDate: "",
   terms: "3",
   weekOff: "sunday",
   attendanceMode: "period",
@@ -74,9 +72,8 @@ const NOTIFICATION_DEFAULTS = {
   channel: "whatsapp",
   feeReminderDays: "3",
   absentAlert: "immediate",
-  senderId: "DPSG45",
-  digest:
-    "Send the principal a daily 6 PM digest covering attendance below 85%, pending fee dues and unresolved leave requests.",
+  senderId: "",
+  digest: "",
 };
 
 const THEME_OPTIONS = [
@@ -86,62 +83,17 @@ const THEME_OPTIONS = [
   { label: "Cyan", value: "cyan" },
 ];
 
-const INTEGRATIONS = [
-  {
-    id: "razorpay",
-    name: "Razorpay",
-    category: "Fee payments",
-    detail: "UPI, netbanking and card collection for term fees.",
-    status: "Connected",
-    variant: "success" as const,
-    account: "acct_DPS45_live",
-  },
-  {
-    id: "whatsapp",
-    name: "WhatsApp Business API",
-    category: "Messaging",
-    detail: "Attendance and fee reminders to parent numbers.",
-    status: "Connected",
-    variant: "success" as const,
-    account: "+91 90000 45045",
-  },
-  {
-    id: "msg91",
-    name: "MSG91 SMS",
-    category: "Messaging",
-    detail: "Fallback transactional SMS on DLT-approved templates.",
-    status: "Connected",
-    variant: "success" as const,
-    account: "Sender ID DPSG45",
-  },
-  {
-    id: "gsuite",
-    name: "Google Workspace",
-    category: "Identity",
-    detail: "Staff single sign-on with @dpssector45.edu.in accounts.",
-    status: "Connected",
-    variant: "success" as const,
-    account: "dpssector45.edu.in",
-  },
-  {
-    id: "tally",
-    name: "Tally Prime",
-    category: "Accounting",
-    detail: "Nightly export of fee and expense vouchers.",
-    status: "Action needed",
-    variant: "warning" as const,
-    account: "Token expires in 6 days",
-  },
-  {
-    id: "biometric",
-    name: "eSSL Biometric",
-    category: "Attendance",
-    detail: "Staff punch-in sync from the gate device.",
-    status: "Not connected",
-    variant: "default" as const,
-    account: "—",
-  },
-];
+type Integration = {
+  id: string;
+  name: string;
+  category: string;
+  detail: string;
+  status: string;
+  variant: "default" | "success" | "warning";
+  account: string;
+};
+
+const INTEGRATIONS: Integration[] = [];
 
 export default function SettingsPage() {
   const { toast } = useToast();
@@ -151,13 +103,7 @@ export default function SettingsPage() {
   const [branding, setBranding] = useState(BRANDING_DEFAULTS);
   const [session, setSession] = useState(SESSION_DEFAULTS);
   const [notifications, setNotifications] = useState(NOTIFICATION_DEFAULTS);
-  const [enabled, setEnabled] = useState<string[]>([
-    "razorpay",
-    "whatsapp",
-    "msg91",
-    "gsuite",
-    "tally",
-  ]);
+  const [enabled, setEnabled] = useState<string[]>([]);
 
   const activeTab = TABS.find((t) => t.id === tab) ?? TABS[0];
   const [saving, setSaving] = useState(false);
@@ -225,7 +171,7 @@ export default function SettingsPage() {
     setBranding(BRANDING_DEFAULTS);
     setSession(SESSION_DEFAULTS);
     setNotifications(NOTIFICATION_DEFAULTS);
-    setEnabled(["razorpay", "whatsapp", "msg91", "gsuite", "tally"]);
+    setEnabled([]);
     toast({
       title: "Settings reset",
       description: "All sections were restored to their saved values.",
@@ -561,7 +507,17 @@ export default function SettingsPage() {
         </Card>
       )}
 
-      {tab === "integrations" && (
+      {tab === "integrations" && INTEGRATIONS.length === 0 && (
+        <Card>
+          <EmptyState
+            title="No integrations connected"
+            description="Connect payment, messaging and identity apps to see them here."
+            icon={<Plug className="size-5" />}
+          />
+        </Card>
+      )}
+
+      {tab === "integrations" && INTEGRATIONS.length > 0 && (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {INTEGRATIONS.map((app) => {
             const on = enabled.includes(app.id);
@@ -599,11 +555,7 @@ export default function SettingsPage() {
       )}
 
       <Card>
-        <CardContent className="flex flex-wrap items-center justify-between gap-3">
-          <p className="inline-flex items-center gap-2 text-xs text-muted">
-            <CheckCircle2 className="size-4 text-success" />
-            Last saved by Dr. Priya Sharma on 21 Jul 2026, 10:42 AM
-          </p>
+        <CardContent className="flex flex-wrap items-center justify-end gap-3">
           <Button onClick={handleSave}>
             <Save className="size-4" />
             Save {activeTab.label}

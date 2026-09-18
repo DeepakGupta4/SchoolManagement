@@ -1,30 +1,22 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, BarChart, Bar,
+  XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, BarChart, Bar, Cell,
 } from "recharts";
-import { Card, CardContent, CardHeader } from "@/components/ui";
+import { Card, CardContent, CardHeader, Skeleton, EmptyState } from "@/components/ui";
 import { useChartTheme, toneClass, type ChartTone } from "@/hooks/useChartTheme";
 import { cn } from "@/lib/utils";
+import { listStudents } from "@/lib/api/students";
+import { getFeeSummary, type FeeSummary } from "@/lib/api/feeLedger";
 
-const attendanceData = [
-  { day: "Mon", present: 1180, absent: 60 },
-  { day: "Tue", present: 1200, absent: 40 },
-  { day: "Wed", present: 1150, absent: 90 },
-  { day: "Thu", present: 1210, absent: 30 },
-  { day: "Fri", present: 1100, absent: 140 },
-  { day: "Sat", present: 980, absent: 60 },
-];
-
-const feeData = [
-  { month: "Apr", collected: 420000, pending: 80000 },
-  { month: "May", collected: 380000, pending: 120000 },
-  { month: "Jun", collected: 450000, pending: 50000 },
-  { month: "Jul", collected: 510000, pending: 90000 },
-  { month: "Aug", collected: 490000, pending: 110000 },
-  { month: "Sep", collected: 530000, pending: 70000 },
+/** Attendance bands used to bucket students by their attendancePercent. */
+const ATTENDANCE_BANDS: { band: string; min: number; max: number }[] = [
+  { band: "<75%", min: -Infinity, max: 75 },
+  { band: "75–85%", min: 75, max: 85 },
+  { band: "85–95%", min: 85, max: 95 },
+  { band: "95%+", min: 95, max: Infinity },
 ];
 
 function ChartHeader({
@@ -55,95 +47,153 @@ function ChartHeader({
   );
 }
 
+/**
+ * The backend does not expose a per-day attendance history, so a real "present
+ * vs absent this week" series can't be derived. Instead we chart the live
+ * distribution of students across attendance bands — genuinely computed from
+ * each student's attendancePercent.
+ */
 export function AttendanceChart() {
   const t = useChartTheme();
-  const absent = t.series.danger;
+  const [data, setData] = useState<{ band: string; students: number }[] | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    listStudents()
+      .then((students) => {
+        if (cancelled) return;
+        const active = students.filter((s) => s.status === "active");
+        setData(
+          ATTENDANCE_BANDS.map((b) => ({
+            band: b.band,
+            students: active.filter(
+              (s) => s.attendancePercent >= b.min && s.attendancePercent < b.max
+            ).length,
+          }))
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setData([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const hasData = !!data && data.some((d) => d.students > 0);
 
   return (
     <Card>
       <ChartHeader
-        title="Weekly Attendance"
-        subtitle="Present vs Absent — this week"
-        legend={[
-          { tone: "primary", label: "Present" },
-          { tone: "danger", label: "Absent" },
-        ]}
+        title="Attendance Distribution"
+        subtitle="Active students by attendance band"
+        legend={[{ tone: "primary", label: "Students" }]}
       />
       <CardContent>
-        <ResponsiveContainer width="100%" height={210}>
-          <BarChart data={attendanceData} barSize={20} barGap={4}>
-            <CartesianGrid strokeDasharray="3 3" stroke={t.grid} vertical={false} />
-            <XAxis dataKey="day" tick={{ fontSize: 12, fill: t.axis }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fontSize: 11, fill: t.axis }} axisLine={false} tickLine={false} />
-            <Tooltip contentStyle={t.tooltip} cursor={{ fill: t.cursor, radius: 6 }} />
-            <Bar dataKey="present" fill={t.series.primary} radius={[6, 6, 0, 0]} name="Present" />
-            <Bar dataKey="absent" fill={absent} radius={[6, 6, 0, 0]} name="Absent" />
-          </BarChart>
-        </ResponsiveContainer>
+        {loading ? (
+          <Skeleton className="h-[210px] w-full" />
+        ) : !hasData ? (
+          <EmptyState
+            title="Not enough data yet"
+            description="Attendance figures will appear once students are enrolled."
+          />
+        ) : (
+          <ResponsiveContainer width="100%" height={210}>
+            <BarChart data={data!} barSize={28} barGap={4}>
+              <CartesianGrid strokeDasharray="3 3" stroke={t.grid} vertical={false} />
+              <XAxis dataKey="band" tick={{ fontSize: 12, fill: t.axis }} axisLine={false} tickLine={false} />
+              <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: t.axis }} axisLine={false} tickLine={false} />
+              <Tooltip contentStyle={t.tooltip} cursor={{ fill: t.cursor, radius: 6 }} />
+              <Bar dataKey="students" fill={t.series.primary} radius={[6, 6, 0, 0]} name="Students" />
+            </BarChart>
+          </ResponsiveContainer>
+        )}
       </CardContent>
     </Card>
   );
 }
 
+/**
+ * A per-month collection trend isn't stored, so rather than invent one we chart
+ * the live collected-vs-outstanding split from the fee summary — both figures
+ * are derived server-side.
+ */
 export function FeeCollectionChart() {
   const t = useChartTheme();
+  const [summary, setSummary] = useState<FeeSummary | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    getFeeSummary()
+      .then((s) => {
+        if (!cancelled) setSummary(s);
+      })
+      .catch(() => {
+        if (!cancelled) setSummary(null);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const feeData: { label: string; value: number; tone: ChartTone }[] = summary
+    ? [
+        { label: "Collected", value: summary.totalCollected, tone: "primary" },
+        { label: "Outstanding", value: summary.outstanding, tone: "warning" },
+      ]
+    : [];
+  const hasData = !!summary && (summary.totalCollected > 0 || summary.outstanding > 0);
 
   return (
     <Card>
       <ChartHeader
         title="Fee Collection"
-        subtitle="Monthly collection trend"
+        subtitle="Collected vs outstanding"
         legend={[
           { tone: "primary", label: "Collected" },
-          { tone: "warning", label: "Pending" },
+          { tone: "warning", label: "Outstanding" },
         ]}
       />
       <CardContent>
-        <ResponsiveContainer width="100%" height={210}>
-          <AreaChart data={feeData}>
-            <defs>
-              <linearGradient id="gradCollected" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor={t.series.primary} stopOpacity={0.15} />
-                <stop offset="95%" stopColor={t.series.primary} stopOpacity={0} />
-              </linearGradient>
-              <linearGradient id="gradPending" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor={t.series.warning} stopOpacity={0.1} />
-                <stop offset="95%" stopColor={t.series.warning} stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke={t.grid} vertical={false} />
-            <XAxis dataKey="month" tick={{ fontSize: 12, fill: t.axis }} axisLine={false} tickLine={false} />
-            <YAxis
-              tick={{ fontSize: 11, fill: t.axis }}
-              axisLine={false}
-              tickLine={false}
-              tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`}
-            />
-            <Tooltip
-              formatter={(v) => [`₹${Number(v).toLocaleString("en-IN")}`, ""]}
-              contentStyle={t.tooltip}
-            />
-            <Area
-              type="monotone"
-              dataKey="collected"
-              stroke={t.series.primary}
-              strokeWidth={2.5}
-              fill="url(#gradCollected)"
-              name="Collected"
-              dot={false}
-            />
-            <Area
-              type="monotone"
-              dataKey="pending"
-              stroke={t.series.warning}
-              strokeWidth={2}
-              fill="url(#gradPending)"
-              name="Pending"
-              strokeDasharray="5 4"
-              dot={false}
-            />
-          </AreaChart>
-        </ResponsiveContainer>
+        {loading ? (
+          <Skeleton className="h-[210px] w-full" />
+        ) : !hasData ? (
+          <EmptyState
+            title="Not enough data yet"
+            description="Collection figures will appear once fees are billed."
+          />
+        ) : (
+          <ResponsiveContainer width="100%" height={210}>
+            <BarChart data={feeData} barSize={56}>
+              <CartesianGrid strokeDasharray="3 3" stroke={t.grid} vertical={false} />
+              <XAxis dataKey="label" tick={{ fontSize: 12, fill: t.axis }} axisLine={false} tickLine={false} />
+              <YAxis
+                tick={{ fontSize: 11, fill: t.axis }}
+                axisLine={false}
+                tickLine={false}
+                tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`}
+              />
+              <Tooltip
+                formatter={(v) => [`₹${Number(v).toLocaleString("en-IN")}`, ""]}
+                contentStyle={t.tooltip}
+                cursor={{ fill: t.cursor, radius: 6 }}
+              />
+              <Bar dataKey="value" radius={[6, 6, 0, 0]} name="Amount">
+                {feeData.map((d) => (
+                  <Cell key={d.label} fill={t.series[d.tone]} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        )}
       </CardContent>
     </Card>
   );

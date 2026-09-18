@@ -1,9 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
-  AreaChart,
-  Area,
   BarChart,
   Bar,
   PieChart,
@@ -15,82 +13,40 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import { Users, DollarSign, GraduationCap, Bus } from "lucide-react";
+import { Users, DollarSign, GraduationCap, Wallet } from "lucide-react";
 import {
   Card,
   CardContent,
   CardHeader,
+  EmptyState,
   PageHeader,
+  Skeleton,
   StatCard,
   type StatTone,
 } from "@/components/ui";
 import { useChartTheme, toneClass, type ChartTone } from "@/hooks/useChartTheme";
 import { cn } from "@/lib/utils";
-
-const monthlyAdmissions = [
-  { month: "Apr", admissions: 45, withdrawals: 5 },
-  { month: "May", admissions: 62, withdrawals: 8 },
-  { month: "Jun", admissions: 38, withdrawals: 3 },
-  { month: "Jul", admissions: 80, withdrawals: 6 },
-  { month: "Aug", admissions: 95, withdrawals: 10 },
-  { month: "Sep", admissions: 55, withdrawals: 4 },
-  { month: "Oct", admissions: 40, withdrawals: 7 },
-  { month: "Nov", admissions: 30, withdrawals: 2 },
-];
-
-const feeMonthly = [
-  { month: "Apr", collected: 420000, target: 500000 },
-  { month: "May", collected: 380000, target: 500000 },
-  { month: "Jun", collected: 450000, target: 500000 },
-  { month: "Jul", collected: 510000, target: 500000 },
-  { month: "Aug", collected: 490000, target: 500000 },
-  { month: "Sep", collected: 530000, target: 500000 },
-];
-
-const classStrength = [
-  { class: "6th", students: 180 },
-  { class: "7th", students: 165 },
-  { class: "8th", students: 172 },
-  { class: "9th", students: 190 },
-  { class: "10th", students: 185 },
-  { class: "11th", students: 148 },
-  { class: "12th", students: 140 },
-];
-
-/** `tone` indexes useChartTheme().series — no chart colour is hardcoded here. */
-const genderData = [
-  { name: "Boys", value: 680, tone: "primary" as const },
-  { name: "Girls", value: 560, tone: "danger" as const },
-];
-
-const feeStatusData = [
-  { name: "Paid", value: 1050, tone: "success" as const },
-  { name: "Pending", value: 130, tone: "warning" as const },
-  { name: "Overdue", value: 60, tone: "danger" as const },
-];
-
-const topMetrics: {
-  label: string;
-  value: string;
-  trend: number;
-  icon: typeof DollarSign;
-  tone: StatTone;
-}[] = [
-  { label: "Total Revenue (YTD)", value: "₹62.4L", trend: 12.5, icon: DollarSign, tone: "indigo" },
-  { label: "New Admissions (YTD)", value: "445", trend: 8.2, icon: GraduationCap, tone: "emerald" },
-  { label: "Avg Attendance", value: "91.4%", trend: -1.2, icon: Users, tone: "amber" },
-  { label: "Transport Usage", value: "68%", trend: 3.4, icon: Bus, tone: "violet" },
-];
-
-const kpis = [
-  { label: "Total Enrolled Students", value: "1,240", target: "1,300", pct: 95 },
-  { label: "Fee Collection Rate", value: "84.7%", target: "95%", pct: 85 },
-  { label: "Average Attendance", value: "91.4%", target: "95%", pct: 91 },
-  { label: "Teacher-Student Ratio", value: "1:14", target: "1:12", pct: 78 },
-  { label: "Pass Percentage (Last Exam)", value: "96.2%", target: "98%", pct: 96 },
-];
+import { listStudents } from "@/lib/api/students";
+import { listTeachers } from "@/lib/api/teachers";
+import {
+  feeAccountsApi,
+  getFeeSummary,
+  totalBilled,
+  totalPaid,
+  balanceOf,
+  type StudentFeeAccount,
+  type FeeSummary,
+} from "@/lib/api/feeLedger";
+import type { Student } from "@/types/student";
+import type { Teacher } from "@/types/teacher";
 
 const periods = ["week", "month", "year"] as const;
+
+const inr = new Intl.NumberFormat("en-IN", {
+  style: "currency",
+  currency: "INR",
+  maximumFractionDigits: 0,
+});
 
 function ChartTitle({
   title,
@@ -126,9 +82,126 @@ export default function AnalyticsPage() {
   const [period, setPeriod] = useState<(typeof periods)[number]>("month");
   const t = useChartTheme();
 
-  const withdrawals = t.series.danger;
+  const [loading, setLoading] = useState(true);
+  const [students, setStudents] = useState<Student[]>([]);
+  const [teachers, setTeachers] = useState<Teacher[]>([]);
+  const [accounts, setAccounts] = useState<StudentFeeAccount[]>([]);
+  const [feeSummary, setFeeSummary] = useState<FeeSummary | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([listStudents(), listTeachers(), feeAccountsApi.list(), getFeeSummary()])
+      .then(([s, te, ac, fs]) => {
+        if (cancelled) return;
+        setStudents(s);
+        setTeachers(te);
+        setAccounts(ac);
+        setFeeSummary(fs);
+      })
+      .catch(() => {
+        /* leaves the empty states in place */
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  /* ---- Derived, real figures ------------------------------------------- */
+
+  const activeStudents = useMemo(
+    () => students.filter((s) => s.status === "active"),
+    [students]
+  );
+
+  const classStrength = useMemo(() => {
+    const byClass = new Map<string, number>();
+    for (const s of students) byClass.set(s.className, (byClass.get(s.className) ?? 0) + 1);
+    return [...byClass.entries()]
+      .map(([cls, count]) => ({ class: cls, students: count }))
+      .sort((a, b) => a.class.localeCompare(b.class, undefined, { numeric: true }));
+  }, [students]);
+
+  const genderData = useMemo(() => {
+    const counts = { male: 0, female: 0, other: 0 };
+    for (const s of students) counts[s.gender] += 1;
+    const rows: { name: string; value: number; tone: ChartTone }[] = [
+      { name: "Boys", value: counts.male, tone: "primary" },
+      { name: "Girls", value: counts.female, tone: "danger" },
+    ];
+    if (counts.other > 0) rows.push({ name: "Other", value: counts.other, tone: "violet" });
+    return rows;
+  }, [students]);
+
+  const feeStatusData = useMemo(() => {
+    let paid = 0;
+    let partial = 0;
+    let unpaid = 0;
+    for (const a of accounts) {
+      if (totalBilled(a) <= 0) continue;
+      if (balanceOf(a) === 0) paid += 1;
+      else if (totalPaid(a) > 0) partial += 1;
+      else unpaid += 1;
+    }
+    return [
+      { name: "Paid", value: paid, tone: "success" as ChartTone },
+      { name: "Partial", value: partial, tone: "warning" as ChartTone },
+      { name: "Unpaid", value: unpaid, tone: "danger" as ChartTone },
+    ];
+  }, [accounts]);
+
+  const kpis = useMemo(() => {
+    const avg = (arr: Student[], f: (s: Student) => number) =>
+      arr.length ? Math.round(arr.reduce((sum, s) => sum + f(s), 0) / arr.length) : 0;
+    const avgAttendance = avg(activeStudents, (s) => s.attendancePercent);
+    const avgPerformance = avg(activeStudents, (s) => s.performancePercent);
+    const collected = feeSummary?.totalCollected ?? 0;
+    const outstanding = feeSummary?.outstanding ?? 0;
+    const collectionRate =
+      collected + outstanding > 0 ? Math.round((collected / (collected + outstanding)) * 100) : 0;
+    const activeRate = students.length
+      ? Math.round((activeStudents.length / students.length) * 100)
+      : 0;
+    return [
+      { label: "Average Attendance", value: `${avgAttendance}%`, pct: avgAttendance },
+      { label: "Average Performance", value: `${avgPerformance}%`, pct: avgPerformance },
+      { label: "Fee Collection Rate", value: `${collectionRate}%`, pct: collectionRate },
+      {
+        label: "Active Students",
+        value: `${activeStudents.length} of ${students.length}`,
+        pct: activeRate,
+      },
+    ];
+  }, [activeStudents, students, feeSummary]);
+
+  const topMetrics: {
+    label: string;
+    value: string | number;
+    icon: typeof DollarSign;
+    tone: StatTone;
+  }[] = [
+    { label: "Total Students", value: students.length, icon: Users, tone: "indigo" },
+    { label: "Total Teachers", value: teachers.length, icon: GraduationCap, tone: "emerald" },
+    {
+      label: "Fees Collected",
+      value: inr.format(feeSummary?.totalCollected ?? 0),
+      icon: DollarSign,
+      tone: "amber",
+    },
+    {
+      label: "Fees Outstanding",
+      value: inr.format(feeSummary?.outstanding ?? 0),
+      icon: Wallet,
+      tone: "violet",
+    },
+  ];
+
   const genderColors = genderData.map((g) => t.series[g.tone]);
   const feeStatusColors = feeStatusData.map((f) => t.series[f.tone]);
+  const hasGender = genderData.some((g) => g.value > 0);
+  const hasFeeStatus = feeStatusData.some((f) => f.value > 0);
 
   return (
     <div className="flex flex-col gap-5">
@@ -162,82 +235,67 @@ export default function AnalyticsPage() {
       />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {topMetrics.map((m) => (
-          <StatCard key={m.label} variant="stacked" {...m} />
-        ))}
+        {loading
+          ? Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-28 w-full" />)
+          : topMetrics.map((m) => <StatCard key={m.label} variant="stacked" {...m} />)}
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
         <Card className="xl:col-span-2">
-          <ChartTitle
-            title="Admissions Trend"
-            subtitle="Monthly admissions vs withdrawals"
-            legend={[
-              { tone: "primary", label: "Admissions" },
-              { tone: "danger", label: "Withdrawals" },
-            ]}
-          />
+          <ChartTitle title="Admissions Trend" subtitle="Monthly admissions over time" />
           <CardContent>
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={monthlyAdmissions} barSize={18} barGap={4}>
-                <CartesianGrid strokeDasharray="3 3" stroke={t.grid} vertical={false} />
-                <XAxis
-                  dataKey="month"
-                  tick={{ fontSize: 12, fill: t.axis }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis tick={{ fontSize: 11, fill: t.axis }} axisLine={false} tickLine={false} />
-                <Tooltip contentStyle={t.tooltip} cursor={{ fill: t.cursor, radius: 6 }} />
-                <Bar
-                  dataKey="admissions"
-                  fill={t.series.primary}
-                  radius={[6, 6, 0, 0]}
-                  name="Admissions"
-                />
-                <Bar
-                  dataKey="withdrawals"
-                  fill={withdrawals}
-                  radius={[6, 6, 0, 0]}
-                  name="Withdrawals"
-                />
-              </BarChart>
-            </ResponsiveContainer>
+            {/* No per-month admission history is exposed by the backend, so a
+                real trend can't be derived — an empty state beats fake bars. */}
+            <EmptyState
+              title="Historical trend needs more data"
+              description="Monthly admission trends will appear once history is recorded."
+            />
           </CardContent>
         </Card>
 
         <Card>
-          <ChartTitle title="Gender Distribution" subtitle="Total 1,240 students" />
+          <ChartTitle
+            title="Gender Distribution"
+            subtitle={`Total ${students.length} students`}
+          />
           <CardContent className="flex flex-col items-center">
-            <ResponsiveContainer width="100%" height={180}>
-              <PieChart>
-                <Pie
-                  data={genderData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={55}
-                  outerRadius={80}
-                  paddingAngle={4}
-                  dataKey="value"
-                >
-                  {genderData.map((entry, i) => (
-                    <Cell key={entry.name} fill={genderColors[i]} />
+            {loading ? (
+              <Skeleton className="h-[180px] w-full" />
+            ) : !hasGender ? (
+              <EmptyState title="No students yet" />
+            ) : (
+              <>
+                <ResponsiveContainer width="100%" height={180}>
+                  <PieChart>
+                    <Pie
+                      data={genderData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={55}
+                      outerRadius={80}
+                      paddingAngle={4}
+                      dataKey="value"
+                    >
+                      {genderData.map((entry, i) => (
+                        <Cell key={entry.name} fill={genderColors[i]} />
+                      ))}
+                    </Pie>
+                    <Tooltip contentStyle={t.tooltip} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="mt-1 flex items-center gap-6">
+                  {genderData.map((g) => (
+                    <div key={g.name} className="text-center">
+                      <div className="flex items-center justify-center gap-1.5">
+                        <span className={cn("size-2.5 rounded-full", toneClass[g.tone])} />
+                        <span className="text-xs text-muted">{g.name}</span>
+                      </div>
+                      <p className="mt-0.5 text-lg font-semibold text-text">{g.value}</p>
+                    </div>
                   ))}
-                </Pie>
-                <Tooltip contentStyle={t.tooltip} />
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="mt-1 flex items-center gap-6">
-              {genderData.map((g) => (
-                <div key={g.name} className="text-center">
-                  <div className="flex items-center justify-center gap-1.5">
-                    <span className={cn("size-2.5 rounded-full", toneClass[g.tone])} />
-                    <span className="text-xs text-muted">{g.name}</span>
-                  </div>
-                  <p className="mt-0.5 text-lg font-semibold text-text">{g.value}</p>
                 </div>
-              ))}
-            </div>
+              </>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -246,84 +304,51 @@ export default function AnalyticsPage() {
         <Card>
           <ChartTitle title="Fee Collection vs Target" subtitle="Monthly performance" />
           <CardContent>
-            <ResponsiveContainer width="100%" height={210}>
-              <AreaChart data={feeMonthly}>
-                <defs>
-                  <linearGradient id="analyticsCollected" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor={t.series.primary} stopOpacity={0.15} />
-                    <stop offset="95%" stopColor={t.series.primary} stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke={t.grid} vertical={false} />
-                <XAxis
-                  dataKey="month"
-                  tick={{ fontSize: 12, fill: t.axis }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis
-                  tick={{ fontSize: 11, fill: t.axis }}
-                  axisLine={false}
-                  tickLine={false}
-                  tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`}
-                />
-                <Tooltip
-                  formatter={(v) => [`₹${Number(v).toLocaleString("en-IN")}`, ""]}
-                  contentStyle={t.tooltip}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="collected"
-                  stroke={t.series.primary}
-                  strokeWidth={2.5}
-                  fill="url(#analyticsCollected)"
-                  name="Collected"
-                  dot={false}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="target"
-                  stroke={t.grid}
-                  strokeWidth={2}
-                  fill="none"
-                  name="Target"
-                  strokeDasharray="5 4"
-                  dot={false}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
+            {/* Monthly collection history / targets aren't stored, so this stays
+                an empty state rather than a fabricated series. */}
+            <EmptyState
+              title="Historical trend needs more data"
+              description="Monthly collection trends will appear once history is recorded."
+            />
           </CardContent>
         </Card>
 
         <Card>
           <ChartTitle title="Class-wise Strength" subtitle="Students per class" />
           <CardContent>
-            <ResponsiveContainer width="100%" height={210}>
-              <BarChart data={classStrength} barSize={28} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" stroke={t.grid} horizontal={false} />
-                <XAxis
-                  type="number"
-                  tick={{ fontSize: 11, fill: t.axis }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis
-                  dataKey="class"
-                  type="category"
-                  tick={{ fontSize: 12, fill: t.axis }}
-                  axisLine={false}
-                  tickLine={false}
-                  width={36}
-                />
-                <Tooltip contentStyle={t.tooltip} cursor={{ fill: t.cursor, radius: 6 }} />
-                <Bar
-                  dataKey="students"
-                  fill={t.series.primary}
-                  radius={[0, 6, 6, 0]}
-                  name="Students"
-                />
-              </BarChart>
-            </ResponsiveContainer>
+            {loading ? (
+              <Skeleton className="h-[210px] w-full" />
+            ) : classStrength.length === 0 ? (
+              <EmptyState title="No students yet" />
+            ) : (
+              <ResponsiveContainer width="100%" height={210}>
+                <BarChart data={classStrength} barSize={28} layout="vertical">
+                  <CartesianGrid strokeDasharray="3 3" stroke={t.grid} horizontal={false} />
+                  <XAxis
+                    type="number"
+                    allowDecimals={false}
+                    tick={{ fontSize: 11, fill: t.axis }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    dataKey="class"
+                    type="category"
+                    tick={{ fontSize: 12, fill: t.axis }}
+                    axisLine={false}
+                    tickLine={false}
+                    width={64}
+                  />
+                  <Tooltip contentStyle={t.tooltip} cursor={{ fill: t.cursor, radius: 6 }} />
+                  <Bar
+                    dataKey="students"
+                    fill={t.series.primary}
+                    radius={[0, 6, 6, 0]}
+                    name="Students"
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -332,67 +357,80 @@ export default function AnalyticsPage() {
         <Card>
           <ChartTitle title="Fee Status" subtitle="Current session" />
           <CardContent className="flex flex-col items-center gap-4">
-            <ResponsiveContainer width="100%" height={160}>
-              <PieChart>
-                <Pie
-                  data={feeStatusData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={45}
-                  outerRadius={70}
-                  paddingAngle={3}
-                  dataKey="value"
-                >
-                  {feeStatusData.map((entry, i) => (
-                    <Cell key={entry.name} fill={feeStatusColors[i]} />
+            {loading ? (
+              <Skeleton className="h-[160px] w-full" />
+            ) : !hasFeeStatus ? (
+              <EmptyState title="No fee accounts yet" />
+            ) : (
+              <>
+                <ResponsiveContainer width="100%" height={160}>
+                  <PieChart>
+                    <Pie
+                      data={feeStatusData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={45}
+                      outerRadius={70}
+                      paddingAngle={3}
+                      dataKey="value"
+                    >
+                      {feeStatusData.map((entry, i) => (
+                        <Cell key={entry.name} fill={feeStatusColors[i]} />
+                      ))}
+                    </Pie>
+                    <Tooltip contentStyle={t.tooltip} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="flex w-full flex-col gap-2">
+                  {feeStatusData.map((f) => (
+                    <div key={f.name} className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className={cn("size-2.5 rounded-sm", toneClass[f.tone])} />
+                        <span className="text-sm text-muted">{f.name}</span>
+                      </div>
+                      <span className="text-sm font-semibold text-text">{f.value}</span>
+                    </div>
                   ))}
-                </Pie>
-                <Tooltip contentStyle={t.tooltip} />
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="flex w-full flex-col gap-2">
-              {feeStatusData.map((f) => (
-                <div key={f.name} className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className={cn("size-2.5 rounded-sm", toneClass[f.tone])} />
-                    <span className="text-sm text-muted">{f.name}</span>
-                  </div>
-                  <span className="text-sm font-semibold text-text">{f.value}</span>
                 </div>
-              ))}
-            </div>
+              </>
+            )}
           </CardContent>
         </Card>
 
         <Card className="xl:col-span-2">
           <ChartTitle
             title="Key Performance Indicators"
-            subtitle="Current academic year summary"
+            subtitle="Live figures derived from current records"
           />
           <CardContent className="px-0 py-2">
-            {kpis.map((row) => (
-              <div
-                key={row.label}
-                className="border-b border-border px-5 py-3 last:border-0"
-              >
-                <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-sm font-medium text-text">{row.label}</span>
-                  <div className="flex items-center gap-3">
+            {loading ? (
+              <div className="flex flex-col gap-3 px-5 py-3">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <Skeleton key={i} className="h-10 w-full" />
+                ))}
+              </div>
+            ) : (
+              kpis.map((row) => (
+                <div
+                  key={row.label}
+                  className="border-b border-border px-5 py-3 last:border-0"
+                >
+                  <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-sm font-medium text-text">{row.label}</span>
                     <span className="text-sm font-semibold text-text">{row.value}</span>
-                    <span className="text-xs text-subtle">Target: {row.target}</span>
+                  </div>
+                  <div className="h-1.5 overflow-hidden rounded-full bg-surface-hover">
+                    <div
+                      className={cn(
+                        "h-full rounded-full transition-[width] duration-500",
+                        row.pct >= 90 ? "bg-success" : row.pct >= 75 ? "bg-warning" : "bg-danger"
+                      )}
+                      style={{ width: `${row.pct}%` }}
+                    />
                   </div>
                 </div>
-                <div className="h-1.5 overflow-hidden rounded-full bg-surface-hover">
-                  <div
-                    className={cn(
-                      "h-full rounded-full transition-[width] duration-500",
-                      row.pct >= 90 ? "bg-success" : row.pct >= 75 ? "bg-warning" : "bg-danger"
-                    )}
-                    style={{ width: `${row.pct}%` }}
-                  />
-                </div>
-              </div>
-            ))}
+              ))
+            )}
           </CardContent>
         </Card>
       </div>
