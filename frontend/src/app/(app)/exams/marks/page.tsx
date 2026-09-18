@@ -17,7 +17,8 @@ import {
   type Column,
 } from "@/components/ui";
 import { cn } from "@/lib/utils";
-import { listStudents, CLASS_OPTIONS, SECTION_OPTIONS } from "@/lib/api/students";
+import { useClassOptions } from "@/hooks/useClassOptions";
+import { listStudents } from "@/lib/api/students";
 import { getMarks, saveMarks, type MarkRecord } from "@/lib/api/marks";
 import type { Student as ApiStudent } from "@/types/student";
 
@@ -50,9 +51,10 @@ const toOptions = (values: string[]) => values.map((v) => ({ label: v, value: v 
 
 export default function MarkEntryPage() {
   const { toast } = useToast();
+  const { classOptions, sectionOptions } = useClassOptions();
 
-  const [selectedClass,   setSelectedClass]   = useState(CLASS_OPTIONS[CLASS_OPTIONS.length - 1]);
-  const [selectedSection, setSelectedSection] = useState(SECTION_OPTIONS[0]);
+  const [selectedClass,   setSelectedClass]   = useState("");
+  const [selectedSection, setSelectedSection] = useState("");
   const [selectedSubject, setSelectedSubject] = useState("Mathematics");
   const [selectedExam,    setSelectedExam]    = useState("Mid-Term Exam");
   const [totalMarks,      setTotalMarks]      = useState(100);
@@ -303,13 +305,15 @@ export default function MarkEntryPage() {
             label="Class"
             value={selectedClass}
             onChange={(e) => setSelectedClass(e.target.value)}
-            options={toOptions(CLASS_OPTIONS)}
+            placeholder="All classes"
+            options={classOptions}
           />
           <Select
             label="Section"
             value={selectedSection}
             onChange={(e) => setSelectedSection(e.target.value)}
-            options={SECTION_OPTIONS.map((s) => ({ label: `Section ${s}`, value: s }))}
+            placeholder="All sections"
+            options={sectionOptions}
           />
           <Select
             label="Subject"

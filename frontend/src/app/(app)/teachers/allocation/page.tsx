@@ -31,11 +31,11 @@ import {
 } from "@/components/ui";
 import { exportToCsv } from "@/lib/exportCsv";
 import { useResource } from "@/hooks/useResource";
+import { useClassOptions } from "@/hooks/useClassOptions";
 import {
   allocationsApi,
   loadBandLabel,
   loadPercent,
-  ALLOCATION_CLASS_OPTIONS,
   ALLOCATION_DEPT_OPTIONS,
   LOAD_BAND_OPTIONS,
   MAX_PERIODS,
@@ -48,8 +48,6 @@ import { AllocationFormModal } from "./AllocationFormModal";
 const PAGE_SIZE = 10;
 
 const DEPT_OPTIONS = ALLOCATION_DEPT_OPTIONS.map((d) => ({ label: d, value: d }));
-
-const CLASS_OPTIONS = ALLOCATION_CLASS_OPTIONS.map((c) => ({ label: `Class ${c}`, value: c }));
 
 /** Workload bands share the status palette — no per-band hexes. */
 const BAND_META: Record<LoadBand, { variant: "danger" | "success" | "info" | "warning"; fill: string }> = {
@@ -80,6 +78,7 @@ function WorkloadBar({ periods }: { periods: number }) {
 }
 
 export default function AllocationPage() {
+  const { classOptions } = useClassOptions();
   const [search, setSearch] = useState("");
   const [dept, setDept] = useState("");
   const [klass, setKlass] = useState("");
@@ -336,7 +335,7 @@ export default function AllocationPage() {
             value={klass}
             onChange={(e) => applyFilter(setKlass)(e.target.value)}
             placeholder="All classes"
-            options={CLASS_OPTIONS}
+            options={classOptions}
             aria-label="Filter by class"
           />
         </div>

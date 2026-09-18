@@ -4,9 +4,9 @@ import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Modal, Button, Input, Select } from "@/components/ui";
+import { useClassOptions } from "@/hooks/useClassOptions";
 import { scholarshipSchema, type ScholarshipSchema } from "@/lib/schemas/scholarship";
 import {
-  SCHOLARSHIP_CLASS_OPTIONS,
   SCHOLARSHIP_STATUS_OPTIONS,
   SCHOLARSHIP_TYPE_OPTIONS,
   type Scholarship,
@@ -15,7 +15,7 @@ import {
 const emptyValues: ScholarshipSchema = {
   code: "",
   student: "",
-  class: SCHOLARSHIP_CLASS_OPTIONS[0],
+  class: "",
   type: SCHOLARSHIP_TYPE_OPTIONS[0],
   percentage: 25,
   amount: 0,
@@ -41,6 +41,7 @@ export function ScholarshipFormModal({
   onSubmit,
 }: ScholarshipFormModalProps) {
   const isEdit = Boolean(record);
+  const { classOptions } = useClassOptions();
 
   const {
     register,
@@ -101,7 +102,8 @@ export function ScholarshipFormModal({
           <Select
             label="Class"
             required
-            options={SCHOLARSHIP_CLASS_OPTIONS.map((c) => ({ label: c, value: c }))}
+            placeholder="Select class"
+            options={classOptions}
             {...register("class")}
             error={errors.class?.message}
           />

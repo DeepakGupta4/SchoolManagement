@@ -4,9 +4,9 @@ import { useEffect } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Modal, Button, Input, Select, MultiSelect } from "@/components/ui";
+import { useClassOptions } from "@/hooks/useClassOptions";
 import { examSchema, type ExamSchema } from "@/lib/schemas/exam";
 import {
-  EXAM_CLASS_OPTIONS,
   EXAM_STATUS_OPTIONS,
   EXAM_SUBJECT_OPTIONS,
   EXAM_TYPE_OPTIONS,
@@ -17,7 +17,7 @@ const emptyValues: ExamSchema = {
   code: "",
   name: "",
   type: EXAM_TYPE_OPTIONS[0],
-  classes: ["10-A"],
+  classes: [],
   subject: EXAM_SUBJECT_OPTIONS[0],
   date: "",
   time: "",
@@ -44,6 +44,7 @@ export function ExamFormModal({
   onSubmit,
 }: ExamFormModalProps) {
   const isEdit = Boolean(record);
+  const { classNames } = useClassOptions();
 
   const {
     register,
@@ -167,7 +168,7 @@ export function ExamFormModal({
             <MultiSelect
               label="Classes"
               required
-              options={EXAM_CLASS_OPTIONS}
+              options={classNames}
               value={field.value}
               onChange={field.onChange}
               error={errors.classes?.message}

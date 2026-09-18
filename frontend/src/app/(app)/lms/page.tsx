@@ -26,6 +26,7 @@ import {
   Select,
   StatCard,
 } from "@/components/ui";
+import { useClassOptions } from "@/hooks/useClassOptions";
 
 const courses = [
   { id: "C01", title: "Mathematics — Class X",        subject: "Mathematics",      teacher: "Dr. Priya Sharma",   klass: "X",   enrolled: 124, capacity: 130, completion: 78, lessons: 42, status: "published" },
@@ -63,11 +64,6 @@ const SUBJECT_OPTIONS = [...new Set(courses.map((c) => c.subject))]
   .sort()
   .map((s) => ({ label: s, value: s }));
 
-const CLASS_OPTIONS = [...new Set(courses.map((c) => c.klass))].map((c) => ({
-  label: `Class ${c}`,
-  value: c,
-}));
-
 /** Completion ring colour tracks how far the cohort has got. */
 function completionFill(pct: number) {
   if (pct >= 75) return "bg-success";
@@ -77,6 +73,7 @@ function completionFill(pct: number) {
 }
 
 export default function LmsOverviewPage() {
+  const { classOptions } = useClassOptions();
   const [search, setSearch] = useState("");
   const [subject, setSubject] = useState("");
   const [klass, setKlass] = useState("");
@@ -171,7 +168,7 @@ export default function LmsOverviewPage() {
             value={klass}
             onChange={(e) => setKlass(e.target.value)}
             placeholder="All classes"
-            options={CLASS_OPTIONS}
+            options={classOptions}
             aria-label="Filter by class"
           />
         </div>

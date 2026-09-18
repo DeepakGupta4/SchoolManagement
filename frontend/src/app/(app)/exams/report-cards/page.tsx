@@ -19,7 +19,8 @@ import { cn } from "@/lib/utils";
 import { exportToCsv } from "@/lib/exportCsv";
 import type { ReportCardData } from "@/components/cards/ReportCard";
 import { ReportCardModal } from "./ReportCardModal";
-import { listStudents, CLASS_OPTIONS, SECTION_OPTIONS } from "@/lib/api/students";
+import { useClassOptions } from "@/hooks/useClassOptions";
+import { listStudents } from "@/lib/api/students";
 import { getMarks } from "@/lib/api/marks";
 import type { Student as ApiStudent } from "@/types/student";
 
@@ -75,9 +76,10 @@ const subjectRank = (name: string) => {
 
 export default function ReportCardsPage() {
   const { toast } = useToast();
+  const { classOptions, sectionOptions } = useClassOptions();
 
-  const [selectedClass, setSelectedClass] = useState(CLASS_OPTIONS[CLASS_OPTIONS.length - 1]);
-  const [selectedSection, setSelectedSection] = useState(SECTION_OPTIONS[0]);
+  const [selectedClass, setSelectedClass] = useState("");
+  const [selectedSection, setSelectedSection] = useState("");
   const [selectedExam, setSelectedExam] = useState("Mid-Term Exam");
 
   const [reports, setReports] = useState<Report[]>([]);
@@ -325,7 +327,8 @@ export default function ReportCardsPage() {
               label="Class"
               value={selectedClass}
               onChange={(e) => setSelectedClass(e.target.value)}
-              options={toOptions(CLASS_OPTIONS)}
+              placeholder="All classes"
+              options={classOptions}
             />
           </div>
           <div className="w-32">
@@ -333,7 +336,8 @@ export default function ReportCardsPage() {
               label="Section"
               value={selectedSection}
               onChange={(e) => setSelectedSection(e.target.value)}
-              options={SECTION_OPTIONS.map((s) => ({ label: `Section ${s}`, value: s }))}
+              placeholder="All sections"
+              options={sectionOptions}
             />
           </div>
           <div className="w-48">

@@ -8,19 +8,19 @@ import { Modal, Button, Input, Select, Textarea } from "@/components/ui";
 import { Field, controlClasses } from "@/components/ui/Input";
 import { transferSchema, type TransferSchema } from "@/lib/schemas/transfer";
 import {
-  CLASS_OPTIONS,
   STATUS_OPTIONS,
   TYPE_OPTIONS,
   type TransferRequest,
 } from "@/lib/api/transfers";
 import { listStudents } from "@/lib/api/students";
+import { useClassOptions } from "@/hooks/useClassOptions";
 import { fullName, type Student } from "@/types/student";
 import { cn } from "@/lib/utils";
 
 const emptyValues: TransferSchema = {
   name: "",
   studentId: "",
-  className: CLASS_OPTIONS[0],
+  className: "",
   type: TYPE_OPTIONS[0].value,
   reason: "",
   requestedOn: new Date().toISOString().slice(0, 10),
@@ -47,6 +47,7 @@ export function TransferFormModal({
   onSubmit,
 }: TransferFormModalProps) {
   const isEdit = Boolean(record);
+  const { classOptions } = useClassOptions();
 
   const {
     register,
@@ -145,7 +146,8 @@ export function TransferFormModal({
           <Select
             label="Class"
             required
-            options={CLASS_OPTIONS.map((c) => ({ label: c, value: c }))}
+            placeholder="Select class"
+            options={classOptions}
             {...register("className")}
             error={errors.className?.message}
           />

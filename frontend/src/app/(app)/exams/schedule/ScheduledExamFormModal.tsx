@@ -4,9 +4,9 @@ import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Modal, Button, Input, Select } from "@/components/ui";
+import { useClassOptions } from "@/hooks/useClassOptions";
 import { scheduledExamSchema, type ScheduledExamSchema } from "@/lib/schemas/examSchedule";
 import {
-  SCHEDULE_CLASS_OPTIONS,
   SCHEDULE_EXAM_OPTIONS,
   SCHEDULE_INVIGILATOR_OPTIONS,
   SCHEDULE_ROOM_OPTIONS,
@@ -19,7 +19,7 @@ const emptyValues: ScheduledExamSchema = {
   code: "",
   exam: SCHEDULE_EXAM_OPTIONS[0],
   subject: SCHEDULE_SUBJECT_OPTIONS[0],
-  class: SCHEDULE_CLASS_OPTIONS[0],
+  class: "",
   date: "",
   time: "",
   duration: "1 hr",
@@ -46,6 +46,7 @@ export function ScheduledExamFormModal({
   onSubmit,
 }: ScheduledExamFormModalProps) {
   const isEdit = Boolean(record);
+  const { classOptions } = useClassOptions();
 
   const {
     register,
@@ -113,7 +114,8 @@ export function ScheduledExamFormModal({
           <Select
             label="Class"
             required
-            options={SCHEDULE_CLASS_OPTIONS.map((c) => ({ label: c, value: c }))}
+            placeholder="Select class"
+            options={classOptions}
             {...register("class")}
             error={errors.class?.message}
           />

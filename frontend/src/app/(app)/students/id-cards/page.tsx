@@ -7,7 +7,8 @@ import {
 } from "@/components/ui";
 import { IdCard, type IdCardHolder } from "@/components/cards/IdCard";
 import { useAsyncList } from "@/hooks/useAsyncList";
-import { listStudents, CLASS_OPTIONS } from "@/lib/api/students";
+import { useClassOptions } from "@/hooks/useClassOptions";
+import { listStudents } from "@/lib/api/students";
 import { fullName, type Student } from "@/types/student";
 
 /** Maps a student record onto the ID-card holder shape, photo included. */
@@ -31,6 +32,7 @@ function toHolder(s: Student): IdCardHolder {
 
 export default function StudentIdCardsPage() {
   const { toast } = useToast();
+  const { classOptions } = useClassOptions();
 
   const [search, setSearch] = useState("");
   const [className, setClassName] = useState("");
@@ -115,7 +117,7 @@ export default function StudentIdCardsPage() {
               value={className}
               onChange={(e) => setClassName(e.target.value)}
               placeholder="All classes"
-              options={CLASS_OPTIONS.map((c) => ({ label: c, value: c }))}
+              options={classOptions}
               aria-label="Filter by class"
             />
           </div>

@@ -27,8 +27,8 @@ import {
   type Column,
 } from "@/components/ui";
 import { cn } from "@/lib/utils";
+import { useClassOptions } from "@/hooks/useClassOptions";
 import {
-  CLASS_OPTIONS,
   listStudents,
   promoteStudents,
   type PromotionDecision,
@@ -63,12 +63,29 @@ const SESSION_OPTIONS = [
   { label: "2023-24 → 2024-25", value: "2024-25" },
 ];
 
-const CLASS_FILTER_OPTIONS = CLASS_OPTIONS.map((c) => ({ label: c, value: c }));
+// Pre-primary grades rank below Class 1; everything else is ordered by its
+// grade number so "next class" follows the real academic ladder regardless of
+// the order classes were created in.
+const GRADE_PREFIX: Record<string, number> = { nursery: -3, lkg: -2, ukg: -1, kg: -1, prep: -1 };
+
+function classRank(name: string): number {
+  const lower = name.toLowerCase().trim();
+  for (const key of Object.keys(GRADE_PREFIX)) {
+    if (lower.includes(key)) return GRADE_PREFIX[key];
+  }
+  const m = name.match(/(\d+)/);
+  return m ? parseInt(m[1], 10) : 999;
+}
+
+/** Class names sorted into academic order (Nursery → Class 12). */
+function sortClasses(names: string[]): string[] {
+  return [...names].sort((a, b) => classRank(a) - classRank(b));
+}
 
 /** The class a student promotes into, or null for the final class. */
-function nextClassOf(className: string): string | null {
-  const i = CLASS_OPTIONS.indexOf(className);
-  return i >= 0 && i < CLASS_OPTIONS.length - 1 ? CLASS_OPTIONS[i + 1] : null;
+function nextClassOf(className: string, ordered: string[]): string | null {
+  const i = ordered.indexOf(className);
+  return i >= 0 && i < ordered.length - 1 ? ordered[i + 1] : null;
 }
 
 /** A passing average is the derived exam outcome — real records carry marks, not a verdict. */
@@ -93,17 +110,19 @@ function toRow(s: Student): Row {
  * Default decision: students in the final class graduate, failures are held
  * back, everyone else is promoted to the next class.
  */
-function defaultDecision(r: Row): Decision {
-  if (nextClassOf(r.currentClass) === null) return "graduate";
+function defaultDecision(r: Row, ordered: string[]): Decision {
+  if (nextClassOf(r.currentClass, ordered) === null) return "graduate";
   return r.result === "fail" ? "retain" : "promote";
 }
 
-function computeDefaults(rows: Row[]): Record<string, Decision> {
-  return Object.fromEntries(rows.map((r) => [r.id, defaultDecision(r)]));
+function computeDefaults(rows: Row[], ordered: string[]): Record<string, Decision> {
+  return Object.fromEntries(rows.map((r) => [r.id, defaultDecision(r, ordered)]));
 }
 
 export default function PromotionsPage() {
   const { toast } = useToast();
+  const { classOptions, classNames } = useClassOptions();
+  const ordered = useMemo(() => sortClasses(classNames), [classNames]);
 
   const [session, setSession] = useState("2026-27");
   const [currentClass, setCurrentClass] = useState("");
@@ -128,7 +147,7 @@ export default function PromotionsPage() {
         if (cancelled) return;
         const next = students.map(toRow).sort((a, b) => a.roll - b.roll);
         setRows(next);
-        setDecisions(computeDefaults(next));
+        setDecisions(computeDefaults(next, ordered));
         setAppliedSession(null);
       })
       .catch(() => {
@@ -140,7 +159,7 @@ export default function PromotionsPage() {
     return () => {
       cancelled = true;
     };
-  }, [currentClass, toast]);
+  }, [currentClass, toast, ordered]);
 
   const applyFilter = (setter: (value: string) => void) => (value: string) => {
     setter(value);
@@ -183,7 +202,7 @@ export default function PromotionsPage() {
     setDecisions((prev) => {
       const next = { ...prev };
       filtered.forEach((s) => {
-        next[s.id] = nextClassOf(s.currentClass) === null ? "graduate" : "promote";
+        next[s.id] = nextClassOf(s.currentClass, ordered) === null ? "graduate" : "promote";
       });
       return next;
     });
@@ -195,7 +214,7 @@ export default function PromotionsPage() {
   };
 
   const resetDecisions = () => {
-    setDecisions(computeDefaults(rows));
+    setDecisions(computeDefaults(rows, ordered));
     setAppliedSession(null);
     toast({ title: "Decisions reset", description: "Every row is back to its default." });
   };
@@ -211,9 +230,9 @@ export default function PromotionsPage() {
     }
 
     const promotions: PromotionDecision[] = batch.map((s) => {
-      const action = decisions[s.id] ?? defaultDecision(s);
+      const action = decisions[s.id] ?? defaultDecision(s, ordered);
       if (action === "promote") {
-        const toClass = nextClassOf(s.currentClass);
+        const toClass = nextClassOf(s.currentClass, ordered);
         // A "promote" on the final class has nowhere to go — graduate instead.
         return toClass ? { studentId: s.id, action, toClass } : { studentId: s.id, action: "graduate" };
       }
@@ -232,7 +251,7 @@ export default function PromotionsPage() {
       const students = await listStudents({ className: currentClass || undefined });
       const next = students.map(toRow).sort((a, b) => a.roll - b.roll);
       setRows(next);
-      setDecisions(computeDefaults(next));
+      setDecisions(computeDefaults(next, ordered));
     } catch (e) {
       toast({
         title: "Could not apply promotions",
@@ -402,7 +421,7 @@ export default function PromotionsPage() {
             value={currentClass}
             onChange={(e) => applyFilter(setCurrentClass)(e.target.value)}
             placeholder="All classes"
-            options={CLASS_FILTER_OPTIONS}
+            options={classOptions}
           />
           <Input
             label="Search"

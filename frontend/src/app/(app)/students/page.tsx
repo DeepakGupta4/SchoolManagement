@@ -17,7 +17,8 @@ import {
   type Column,
 } from "@/components/ui";
 import { useStudents } from "@/hooks/useStudents";
-import { createStudent, deleteStudent, updateStudent, CLASS_OPTIONS } from "@/lib/api/students";
+import { useClassOptions } from "@/hooks/useClassOptions";
+import { createStudent, deleteStudent, updateStudent } from "@/lib/api/students";
 import { fullName, type Student, type StudentFormValues, type StudentStatus } from "@/types/student";
 import { StudentFormModal } from "./StudentFormModal";
 
@@ -62,6 +63,7 @@ function StatCard({
 
 export default function StudentsPage() {
   const { toast } = useToast();
+  const { classOptions } = useClassOptions();
 
   const [search, setSearch] = useState("");
   const [className, setClassName] = useState("");
@@ -274,7 +276,7 @@ export default function StudentsPage() {
             value={className}
             onChange={(e) => setClassName(e.target.value)}
             placeholder="All classes"
-            options={CLASS_OPTIONS.map((c) => ({ label: c, value: c }))}
+            options={classOptions}
             aria-label="Filter by class"
           />
         </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useState } from "react";
 import {
   CheckCircle2,
   Clock,
@@ -28,6 +28,7 @@ import {
 import { exportToCsv } from "@/lib/exportCsv";
 import { cn } from "@/lib/utils";
 import { useResource } from "@/hooks/useResource";
+import { useClassOptions } from "@/hooks/useClassOptions";
 import { studentDocumentsApi, type StudentDocument } from "@/lib/api/studentDocuments";
 
 const PAGE_SIZE = 10;
@@ -74,15 +75,8 @@ export default function StudentDocumentsPage() {
   const [docState, setDocState] = useState("");
   const [page, setPage] = useState(1);
   const { toast } = useToast();
+  const { classOptions } = useClassOptions();
   const { items, loading } = useResource(studentDocumentsApi, {}, { label: "student file" });
-
-  const CLASS_OPTIONS = useMemo(
-    () =>
-      [...new Set(items.map((r) => r.className))]
-        .sort()
-        .map((c) => ({ label: `Class ${c}`, value: c })),
-    [items]
-  );
 
   const applyFilter = (setter: (value: string) => void) => (value: string) => {
     setter(value);
@@ -299,7 +293,7 @@ export default function StudentDocumentsPage() {
             value={className}
             onChange={(e) => applyFilter(setClassName)(e.target.value)}
             placeholder="All classes"
-            options={CLASS_OPTIONS}
+            options={classOptions}
             aria-label="Filter by class"
           />
         </div>

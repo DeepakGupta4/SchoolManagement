@@ -32,8 +32,8 @@ import {
 } from "@/components/ui";
 import { exportToCsv } from "@/lib/exportCsv";
 import { useResource } from "@/hooks/useResource";
+import { useClassOptions } from "@/hooks/useClassOptions";
 import {
-  CLASS_OPTIONS,
   studyMaterialApi,
   SUBJECT_OPTIONS,
   TYPE_OPTIONS,
@@ -63,6 +63,7 @@ const FALLBACK_TYPE = {
 const formatSize = (mb: number) => (mb >= 1024 ? `${(mb / 1024).toFixed(1)} GB` : `${mb} MB`);
 
 export default function StudyMaterialPage() {
+  const { classOptions } = useClassOptions();
   const [search, setSearch] = useState("");
   const [type, setType] = useState("");
   const [subject, setSubject] = useState("");
@@ -350,7 +351,7 @@ export default function StudyMaterialPage() {
             value={klass}
             onChange={(e) => applyFilter(setKlass)(e.target.value)}
             placeholder="All classes"
-            options={CLASS_OPTIONS.map((c) => ({ label: `Class ${c}`, value: c }))}
+            options={classOptions}
             aria-label="Filter by class"
           />
         </div>

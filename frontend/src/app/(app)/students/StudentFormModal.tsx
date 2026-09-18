@@ -8,7 +8,8 @@ import { Modal, Button, Input, Textarea, Select, useToast } from "@/components/u
 import { PhotoFrame } from "@/components/cards/PhotoFrame";
 import { studentSchema, type StudentSchema } from "@/lib/schemas/student";
 import { digitsOnly10 } from "@/lib/phone";
-import { CLASS_OPTIONS, SECTION_OPTIONS, listStudents } from "@/lib/api/students";
+import { listStudents } from "@/lib/api/students";
+import { useClassOptions } from "@/hooks/useClassOptions";
 import { fileToDataUrl } from "@/lib/image";
 import type { Student, StudentFormValues } from "@/types/student";
 
@@ -69,8 +70,8 @@ const emptyValues: StudentSchema = {
   dateOfBirth: "",
   gender: "male",
   bloodGroup: undefined,
-  className: CLASS_OPTIONS[0],
-  section: SECTION_OPTIONS[0],
+  className: "",
+  section: "",
   status: "active",
   admissionDate: new Date().toISOString().slice(0, 10),
   address: "",
@@ -107,6 +108,9 @@ export function StudentFormModal({
   const [uploading, setUploading] = useState(false);
   // Existing students, used to auto-derive the next admission & roll numbers.
   const [existing, setExisting] = useState<Student[]>([]);
+  // Classes/sections come from the Classes & Sections module — a single source
+  // of truth, so a class added there shows up here automatically.
+  const { classOptions, sectionOptions } = useClassOptions();
 
   const {
     register,
@@ -281,8 +285,8 @@ export function StudentFormModal({
         <section>
           <SectionTitle>Academics</SectionTitle>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Select label="Class" required options={toOptions(CLASS_OPTIONS)} {...register("className")} error={errors.className?.message} />
-            <Select label="Section" required options={toOptions(SECTION_OPTIONS)} {...register("section")} error={errors.section?.message} />
+            <Select label="Class" required placeholder="Select class" options={classOptions} {...register("className")} error={errors.className?.message} />
+            <Select label="Section" required placeholder="Select section" options={sectionOptions} {...register("section")} error={errors.section?.message} />
             <Input label="Admission date" type="date" required {...register("admissionDate")} error={errors.admissionDate?.message} />
             <Select label="Status" required options={STATUS_OPTIONS} {...register("status")} error={errors.status?.message} />
           </div>

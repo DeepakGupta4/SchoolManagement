@@ -7,8 +7,8 @@ import { GraduationCap, Users, ClipboardList } from "lucide-react";
 import { Modal, Button, Input, Select, Textarea } from "@/components/ui";
 import { admissionSchema, type AdmissionSchema } from "@/lib/schemas/admission";
 import { digitsOnly10 } from "@/lib/phone";
+import { useClassOptions } from "@/hooks/useClassOptions";
 import {
-  CLASS_APPLIED_OPTIONS,
   SOURCE_OPTIONS,
   STAGE_OPTIONS,
   GENDER_OPTIONS,
@@ -83,6 +83,7 @@ export function AdmissionFormModal({
   onSubmit,
 }: AdmissionFormModalProps) {
   const isEdit = Boolean(record);
+  const { classOptions } = useClassOptions();
 
   const {
     register,
@@ -154,7 +155,7 @@ export function AdmissionFormModal({
             label="Class applied"
             required
             placeholder="Select class"
-            options={CLASS_APPLIED_OPTIONS.map((c) => ({ label: c, value: c }))}
+            options={classOptions}
             {...register("classApplied")}
             error={errors.classApplied?.message}
           />

@@ -25,12 +25,12 @@ import {
   useToast,
 } from "@/components/ui";
 import { useAsyncList } from "@/hooks/useAsyncList";
+import { useClassOptions } from "@/hooks/useClassOptions";
 import { useAuthStore } from "@/store";
 import { cn } from "@/lib/utils";
 import {
   autoAllocate,
   balanceOf,
-  CLASS_OPTIONS,
   CLEARS_LATER,
   collectPayment,
   feeAccountsApi,
@@ -60,6 +60,7 @@ const QUICK_PRESETS = [
 
 export default function CollectFeePage() {
   const { toast } = useToast();
+  const { classOptions } = useClassOptions();
   const collector = useAuthStore((s) => s.user?.name ?? "Front Desk");
 
   const [search, setSearch] = useState("");
@@ -181,7 +182,7 @@ export default function CollectFeePage() {
                 value={className}
                 onChange={(e) => setClassName(e.target.value)}
                 placeholder="All classes"
-                options={CLASS_OPTIONS.map((c) => ({ label: c, value: c }))}
+                options={classOptions}
                 aria-label="Filter by class"
               />
               <Select

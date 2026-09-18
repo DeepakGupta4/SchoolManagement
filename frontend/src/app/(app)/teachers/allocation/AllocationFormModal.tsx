@@ -5,8 +5,8 @@ import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Modal, Button, Input, MultiSelect, Select } from "@/components/ui";
 import { allocationSchema, type AllocationSchema } from "@/lib/schemas/allocation";
+import { useClassOptions } from "@/hooks/useClassOptions";
 import {
-  ALLOCATION_CLASS_OPTIONS,
   ALLOCATION_DEPT_OPTIONS,
   MAX_PERIODS,
   type Allocation,
@@ -40,6 +40,7 @@ export function AllocationFormModal({
   onSubmit,
 }: AllocationFormModalProps) {
   const isEdit = Boolean(record);
+  const { classNames } = useClassOptions();
 
   const {
     register,
@@ -99,7 +100,7 @@ export function AllocationFormModal({
             <MultiSelect
               label="Classes"
               required
-              options={ALLOCATION_CLASS_OPTIONS}
+              options={classNames}
               value={field.value}
               onChange={field.onChange}
               error={errors.classes?.message}

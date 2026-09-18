@@ -4,9 +4,9 @@ import { useEffect } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Modal, Button, Input, MultiSelect, Select, Textarea } from "@/components/ui";
+import { useClassOptions } from "@/hooks/useClassOptions";
 import { materialSchema, type MaterialSchema } from "@/lib/schemas/material";
 import {
-  CLASS_OPTIONS,
   SUBJECT_OPTIONS,
   TAG_OPTIONS,
   TYPE_OPTIONS,
@@ -22,7 +22,7 @@ const emptyValues: MaterialSchema = {
   title: "",
   type: TYPE_OPTIONS[0].value,
   subject: SUBJECT_OPTIONS[0],
-  klass: CLASS_OPTIONS[0],
+  klass: "",
   uploader: UPLOADER_OPTIONS[0],
   uploaded: today(),
   sizeMb: 1,
@@ -49,6 +49,7 @@ export function MaterialFormModal({
   onSubmit,
 }: MaterialFormModalProps) {
   const isEdit = Boolean(record);
+  const { classOptions } = useClassOptions();
 
   const {
     register,
@@ -117,7 +118,8 @@ export function MaterialFormModal({
           <Select
             label="Class"
             required
-            options={CLASS_OPTIONS.map((c) => ({ label: `Class ${c}`, value: c }))}
+            placeholder="Select class"
+            options={classOptions}
             {...register("klass")}
             error={errors.klass?.message}
           />

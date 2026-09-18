@@ -29,7 +29,8 @@ import {
 } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import { exportToCsv } from "@/lib/exportCsv";
-import { listStudents, CLASS_OPTIONS, SECTION_OPTIONS } from "@/lib/api/students";
+import { useClassOptions } from "@/hooks/useClassOptions";
+import { listStudents } from "@/lib/api/students";
 import { getMarks } from "@/lib/api/marks";
 import type { Student as ApiStudent } from "@/types/student";
 
@@ -78,10 +79,11 @@ const toOptions = (values: string[]) => values.map((v) => ({ label: v, value: v 
 
 export default function MeritListPage() {
   const { toast } = useToast();
+  const { classOptions, sectionOptions } = useClassOptions();
 
   const [search, setSearch] = useState("");
-  const [selClass, setSelClass] = useState(CLASS_OPTIONS[CLASS_OPTIONS.length - 1]);
-  const [selSection, setSelSection] = useState(SECTION_OPTIONS[0]);
+  const [selClass, setSelClass] = useState("");
+  const [selSection, setSelSection] = useState("");
   const [selExam, setSelExam] = useState("Mid-Term Exam");
 
   const [cohort, setCohort] = useState<MeritStudent[]>([]);
@@ -386,7 +388,8 @@ export default function MeritListPage() {
           <Select
             value={selClass}
             onChange={(e) => setSelClass(e.target.value)}
-            options={toOptions(CLASS_OPTIONS)}
+            placeholder="All classes"
+            options={classOptions}
             aria-label="Filter by class"
           />
         </div>
@@ -394,7 +397,8 @@ export default function MeritListPage() {
           <Select
             value={selSection}
             onChange={(e) => setSelSection(e.target.value)}
-            options={SECTION_OPTIONS.map((s) => ({ label: `Section ${s}`, value: s }))}
+            placeholder="All sections"
+            options={sectionOptions}
             aria-label="Filter by section"
           />
         </div>

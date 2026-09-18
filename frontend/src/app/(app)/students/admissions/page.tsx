@@ -35,7 +35,6 @@ import { exportToCsv } from "@/lib/exportCsv";
 import { useResource } from "@/hooks/useResource";
 import {
   admissionsApi,
-  CLASS_APPLIED_OPTIONS,
   nextStage,
   PIPELINE,
   SOURCE_OPTIONS,
@@ -44,6 +43,7 @@ import {
   type Application,
 } from "@/lib/api/admissions";
 import type { AdmissionSchema } from "@/lib/schemas/admission";
+import { useClassOptions } from "@/hooks/useClassOptions";
 import { cn } from "@/lib/utils";
 import { AdmissionFormModal } from "./AdmissionFormModal";
 
@@ -55,6 +55,7 @@ export default function AdmissionsPage() {
   const [classApplied, setClassApplied] = useState("");
   const [source, setSource] = useState("");
   const [page, setPage] = useState(1);
+  const { classOptions } = useClassOptions();
 
   // `stage` is deliberately left out of the server filters: the funnel needs
   // per-stage counts across the whole (otherwise filtered) set, so the stage
@@ -372,7 +373,7 @@ export default function AdmissionsPage() {
             value={classApplied}
             onChange={(e) => applyFilter(setClassApplied)(e.target.value)}
             placeholder="All classes"
-            options={CLASS_APPLIED_OPTIONS.map((c) => ({ label: c, value: c }))}
+            options={classOptions}
             aria-label="Filter by class applied"
           />
         </div>

@@ -16,7 +16,8 @@ import {
 import { useChartTheme } from "@/hooks/useChartTheme";
 import { cn } from "@/lib/utils";
 import { exportToCsv } from "@/lib/exportCsv";
-import { listStudents, CLASS_OPTIONS, SECTION_OPTIONS } from "@/lib/api/students";
+import { useClassOptions } from "@/hooks/useClassOptions";
+import { listStudents } from "@/lib/api/students";
 import {
   getAttendance,
   saveAttendance,
@@ -49,14 +50,15 @@ const todayIso = () => new Date().toISOString().slice(0, 10);
 export default function AttendancePage() {
   const chart = useChartTheme();
   const { toast } = useToast();
+  const { classOptions, sectionOptions } = useClassOptions();
 
-  const [className, setClassName] = useState(CLASS_OPTIONS[0]);
-  const [section, setSection] = useState(SECTION_OPTIONS[0]);
+  const [className, setClassName] = useState("");
+  const [section, setSection] = useState("");
   const [date, setDate] = useState(todayIso());
 
   const [roster, setRoster] = useState<Row[]>([]);
   const [attendance, setAttendance] = useState<Record<string, AttendanceStatus>>({});
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
 
@@ -64,6 +66,14 @@ export default function AttendancePage() {
   useEffect(() => {
     let cancelled = false;
     const t = setTimeout(() => {
+      // Nothing to load until both a class and a section are chosen.
+      if (!className || !section) {
+        setRoster([]);
+        setAttendance({});
+        setDirty(false);
+        setLoading(false);
+        return;
+      }
       setLoading(true);
       Promise.all([listStudents({ className }), getAttendance(className, section, date)])
         .then(([students, saved]) => {
@@ -247,10 +257,10 @@ export default function AttendancePage() {
       <Card className="overflow-hidden">
         <div className="flex flex-wrap items-center gap-3 border-b border-border px-5 py-4">
           <div className="w-36">
-            <Select value={className} onChange={(e) => setClassName(e.target.value)} options={CLASS_OPTIONS.map((c) => ({ label: c, value: c }))} aria-label="Select class" />
+            <Select value={className} onChange={(e) => setClassName(e.target.value)} placeholder="Select class" options={classOptions} aria-label="Select class" />
           </div>
           <div className="w-24">
-            <Select value={section} onChange={(e) => setSection(e.target.value)} options={SECTION_OPTIONS.map((s) => ({ label: `Sec ${s}`, value: s }))} aria-label="Select section" />
+            <Select value={section} onChange={(e) => setSection(e.target.value)} placeholder="Section" options={sectionOptions} aria-label="Select section" />
           </div>
           <input
             type="date"
@@ -280,6 +290,10 @@ export default function AttendancePage() {
         {loading ? (
           <div className="grid place-items-center py-16 text-muted">
             <Loader2 className="size-6 animate-spin" />
+          </div>
+        ) : !className || !section ? (
+          <div className="py-16 text-center text-sm text-muted">
+            Select a class and section to take attendance.
           </div>
         ) : roster.length === 0 ? (
           <div className="py-16 text-center text-sm text-muted">

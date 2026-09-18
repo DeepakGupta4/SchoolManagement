@@ -6,10 +6,10 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Modal, Button, Input, Textarea, Select, MultiSelect } from "@/components/ui";
 import { teacherSchema, type TeacherSchema } from "@/lib/schemas/teacher";
 import { digitsOnly10 } from "@/lib/phone";
+import { useClassOptions } from "@/hooks/useClassOptions";
 import {
   SUBJECT_OPTIONS,
   DEPARTMENT_OPTIONS,
-  TEACHER_CLASS_OPTIONS,
 } from "@/lib/api/teachers";
 import type { Teacher, TeacherFormValues } from "@/types/teacher";
 
@@ -77,6 +77,7 @@ export function TeacherFormModal({
   onSubmit,
 }: TeacherFormModalProps) {
   const isEdit = Boolean(teacher);
+  const { classNames } = useClassOptions();
 
   const {
     register,
@@ -174,7 +175,7 @@ export function TeacherFormModal({
                 <MultiSelect
                   label="Assigned classes"
                   hint="Leave empty if not yet assigned"
-                  options={TEACHER_CLASS_OPTIONS}
+                  options={classNames}
                   value={field.value}
                   onChange={field.onChange}
                   error={errors.classes?.message}
