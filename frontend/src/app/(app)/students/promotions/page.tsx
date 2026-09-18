@@ -27,6 +27,7 @@ import {
   type Column,
 } from "@/components/ui";
 import { cn } from "@/lib/utils";
+import { sortClasses } from "@/lib/classOrder";
 import { useClassOptions } from "@/hooks/useClassOptions";
 import {
   listStudents,
@@ -62,25 +63,6 @@ const SESSION_OPTIONS = [
   { label: "2024-25 → 2025-26", value: "2025-26" },
   { label: "2023-24 → 2024-25", value: "2024-25" },
 ];
-
-// Pre-primary grades rank below Class 1; everything else is ordered by its
-// grade number so "next class" follows the real academic ladder regardless of
-// the order classes were created in.
-const GRADE_PREFIX: Record<string, number> = { nursery: -3, lkg: -2, ukg: -1, kg: -1, prep: -1 };
-
-function classRank(name: string): number {
-  const lower = name.toLowerCase().trim();
-  for (const key of Object.keys(GRADE_PREFIX)) {
-    if (lower.includes(key)) return GRADE_PREFIX[key];
-  }
-  const m = name.match(/(\d+)/);
-  return m ? parseInt(m[1], 10) : 999;
-}
-
-/** Class names sorted into academic order (Nursery → Class 12). */
-function sortClasses(names: string[]): string[] {
-  return [...names].sort((a, b) => classRank(a) - classRank(b));
-}
 
 /** The class a student promotes into, or null for the final class. */
 function nextClassOf(className: string, ordered: string[]): string | null {

@@ -51,12 +51,9 @@ function Row({ label, value, accent }: { label: string; value: string; accent?: 
  */
 export function IdCard({ holder }: { holder: IdCardHolder }) {
   return (
-    <div
-      className="id-card relative flex w-full flex-col overflow-hidden rounded-2xl bg-white text-slate-900 shadow-lg ring-1 ring-slate-200"
-      style={{ aspectRatio: "0.631 / 1" }}
-    >
+    <div className="id-card relative mx-auto flex w-full max-w-75 flex-col overflow-hidden rounded-2xl bg-white text-slate-900 shadow-lg ring-1 ring-slate-200">
       {/* Header crest band */}
-      <div className="relative shrink-0 overflow-hidden bg-linear-to-br from-indigo-600 via-indigo-600 to-violet-600 px-3 pb-6 pt-3 text-white">
+      <div className="relative shrink-0 overflow-hidden bg-linear-to-br from-indigo-600 via-indigo-600 to-violet-600 px-3 pb-5 pt-3 text-white">
         {/* Decorative rings */}
         <div className="pointer-events-none absolute -right-6 -top-8 size-24 rounded-full bg-white/10" aria-hidden />
         <div className="pointer-events-none absolute -right-2 top-6 size-14 rounded-full bg-white/10" aria-hidden />
@@ -80,9 +77,9 @@ export function IdCard({ holder }: { holder: IdCardHolder }) {
       </div>
 
       {/* Photo + name */}
-      <div className="flex shrink-0 flex-col items-center gap-1.5 px-3 pt-3">
+      <div className="flex shrink-0 flex-col items-center gap-1 px-3 pt-2.5">
         <div className="rounded-xl bg-linear-to-br from-indigo-100 to-violet-100 p-[3px] shadow-sm ring-1 ring-indigo-200">
-          <PhotoFrame src={holder.photo} name={holder.name} className="w-[74px] rounded-lg" />
+          <PhotoFrame src={holder.photo} name={holder.name} className="w-[64px] rounded-lg" />
         </div>
         <div className="text-center leading-tight">
           <p className="text-[13px] font-bold text-slate-900">{holder.name}</p>
@@ -93,7 +90,7 @@ export function IdCard({ holder }: { holder: IdCardHolder }) {
       </div>
 
       {/* Details */}
-      <div className="min-h-0 flex-1 px-3 pt-2.5">
+      <div className="px-3 pt-2">
         <div className="rounded-lg bg-slate-50 px-2.5 py-1 ring-1 ring-slate-100">
           <Row label={holder.identifierLabel} value={holder.identifier} />
           {holder.guardianOrDesignation && (

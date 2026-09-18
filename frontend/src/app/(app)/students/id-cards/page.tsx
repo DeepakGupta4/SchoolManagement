@@ -3,12 +3,13 @@
 import { useCallback, useMemo, useState } from "react";
 import { CheckSquare, IdCard as IdCardIcon, Printer, Search, Square, Users } from "lucide-react";
 import {
-  Button, Card, CardContent, EmptyState, Input, PageHeader, Select, Skeleton, StatCard, useToast,
+  Badge, Button, Card, CardContent, EmptyState, Input, PageHeader, Select, Skeleton, StatCard, useToast,
 } from "@/components/ui";
 import { IdCard, type IdCardHolder } from "@/components/cards/IdCard";
 import { useAsyncList } from "@/hooks/useAsyncList";
 import { useClassOptions } from "@/hooks/useClassOptions";
 import { listStudents } from "@/lib/api/students";
+import { classRank } from "@/lib/classOrder";
 import { fullName, type Student } from "@/types/student";
 
 /** Maps a student record onto the ID-card holder shape, photo included. */
@@ -45,6 +46,24 @@ export default function StudentIdCardsPage() {
 
   const cards = useMemo(() => students.map(toHolder), [students]);
   const withPhoto = useMemo(() => students.filter((s) => s.avatar).length, [students]);
+
+  // Group students by class (academic order), each class's students sorted by
+  // section then roll number, so the sheet prints class-wise.
+  const groups = useMemo(() => {
+    const map = new Map<string, Student[]>();
+    for (const s of students) {
+      const key = s.className || "Unassigned";
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(s);
+    }
+    for (const arr of map.values()) {
+      arr.sort(
+        (a, b) =>
+          a.section.localeCompare(b.section) || (Number(a.rollNo) || 0) - (Number(b.rollNo) || 0)
+      );
+    }
+    return [...map.entries()].sort((a, b) => classRank(a[0]) - classRank(b[0]));
+  }, [students]);
 
   const toggle = (id: string) =>
     setSelected((prev) => {
@@ -131,7 +150,7 @@ export default function StudentIdCardsPage() {
       {loading ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className="aspect-[0.631/1] w-full" />
+            <Skeleton key={i} className="h-80 w-full max-w-75" />
           ))}
         </div>
       ) : cards.length === 0 ? (
@@ -139,39 +158,51 @@ export default function StudentIdCardsPage() {
           <EmptyState
             icon={<IdCardIcon className="size-5" />}
             title="No students found"
-            description="Try clearing the search or class filter."
+            description="Add students (and their class) to generate ID cards, or clear the current filter."
           />
         </Card>
       ) : (
-        <div className="print-sheet grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {cards.map((holder) => {
-            const isSelected = selected.has(holder.id);
-            const dimmed = selected.size > 0 && !isSelected;
-            const hasPhoto = students.find((s) => s.id === holder.id)?.avatar;
-            return (
-              <div key={holder.id} className={dimmed ? "print-hide" : undefined}>
-                <button
-                  onClick={() => toggle(holder.id)}
-                  aria-pressed={isSelected}
-                  aria-label={`Select ID card for ${holder.name}`}
-                  className="focus-ring print-hide mb-2 flex w-full items-center gap-2 rounded-md px-1 text-left text-xs text-muted transition-colors hover:text-text"
-                >
-                  {isSelected ? (
-                    <CheckSquare className="size-4 text-primary" />
-                  ) : (
-                    <Square className="size-4" />
-                  )}
-                  <span className="truncate">{holder.name}</span>
-                  {hasPhoto && (
-                    <span className="ml-auto shrink-0 rounded-full bg-success-soft px-1.5 py-0.5 text-[10px] font-medium text-success-text">
-                      Photo
-                    </span>
-                  )}
-                </button>
-                <IdCard holder={holder} />
+        <div className="print-sheet flex flex-col gap-8">
+          {groups.map(([cls, group]) => (
+            <section key={cls}>
+              {/* Class heading */}
+              <div className="mb-3 flex items-center gap-2 border-b border-border pb-2">
+                <h3 className="text-sm font-semibold text-text">{cls}</h3>
+                <Badge variant="info">{group.length} card{group.length === 1 ? "" : "s"}</Badge>
               </div>
-            );
-          })}
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                {group.map((s) => {
+                  const holder = toHolder(s);
+                  const isSelected = selected.has(holder.id);
+                  const dimmed = selected.size > 0 && !isSelected;
+                  return (
+                    <div key={holder.id} className={dimmed ? "print-hide" : undefined}>
+                      <button
+                        onClick={() => toggle(holder.id)}
+                        aria-pressed={isSelected}
+                        aria-label={`Select ID card for ${holder.name}`}
+                        className="focus-ring print-hide mx-auto mb-2 flex w-full max-w-75 items-center gap-2 rounded-md px-1 text-left text-xs text-muted transition-colors hover:text-text"
+                      >
+                        {isSelected ? (
+                          <CheckSquare className="size-4 text-primary" />
+                        ) : (
+                          <Square className="size-4" />
+                        )}
+                        <span className="truncate">{holder.name}</span>
+                        {s.avatar && (
+                          <span className="ml-auto shrink-0 rounded-full bg-success-soft px-1.5 py-0.5 text-[10px] font-medium text-success-text">
+                            Photo
+                          </span>
+                        )}
+                      </button>
+                      <IdCard holder={holder} />
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          ))}
         </div>
       )}
 
