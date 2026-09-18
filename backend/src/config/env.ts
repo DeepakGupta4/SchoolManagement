@@ -74,6 +74,15 @@ const envSchema = z.object({
    * with header `x-cron-secret`. Unset = that endpoint is disabled.
    */
   CRON_SECRET: z.string().optional(),
+
+  /**
+   * Google Gemini (Generative Language API). Optional: without a key the AI
+   * endpoints fall back to the deterministic rule-based engine, so the app
+   * keeps working. Get a free key at aistudio.google.com. Calls go over
+   * HTTPS/443, so they work on hosts that block SMTP (e.g. Render).
+   */
+  GEMINI_API_KEY: z.string().optional(),
+  GEMINI_MODEL: z.string().default("gemini-2.0-flash"),
 });
 
 const parsed = envSchema.safeParse(process.env);
