@@ -292,10 +292,42 @@ export default function StaffPage() {
       />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Total Staff" value={stats.total} icon={Users} tone="cyan" />
-        <StatCard label="Active" value={stats.active} icon={UserCheck} tone="emerald" />
-        <StatCard label="On Leave" value={stats.onLeave} icon={Clock} tone="amber" />
-        <StatCard label="Part-time" value={stats.partTime} icon={Briefcase} tone="violet" />
+        <StatCard
+          label="Total Staff"
+          value={stats.total}
+          icon={Users}
+          tone="cyan"
+          active={statusFilter === "All" && typeFilter === "All" && deptFilter === "All"}
+          onClick={() => {
+            setStatusFilter("All");
+            setTypeFilter("All");
+            setDeptFilter("All");
+          }}
+        />
+        <StatCard
+          label="Active"
+          value={stats.active}
+          icon={UserCheck}
+          tone="emerald"
+          active={statusFilter === "active"}
+          onClick={() => setStatusFilter(statusFilter === "active" ? "All" : "active")}
+        />
+        <StatCard
+          label="On Leave"
+          value={stats.onLeave}
+          icon={Clock}
+          tone="amber"
+          active={statusFilter === "on-leave"}
+          onClick={() => setStatusFilter(statusFilter === "on-leave" ? "All" : "on-leave")}
+        />
+        <StatCard
+          label="Part-time"
+          value={stats.partTime}
+          icon={Briefcase}
+          tone="violet"
+          active={typeFilter === "Part-time"}
+          onClick={() => setTypeFilter(typeFilter === "Part-time" ? "All" : "Part-time")}
+        />
       </div>
 
       {/* Department summary — each tile toggles the department filter */}

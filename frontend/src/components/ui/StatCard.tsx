@@ -27,6 +27,10 @@ interface StatCardProps {
   /** "stacked" puts the icon above the value with a trend badge (dashboard
    *  hero tiles); "inline" is the compact icon-beside-value row. */
   variant?: "inline" | "stacked";
+  /** Makes the whole card a clickable filter control. */
+  onClick?: () => void;
+  /** Highlights the card when its filter is the one currently applied. */
+  active?: boolean;
 }
 
 export function StatCard({
@@ -38,7 +42,28 @@ export function StatCard({
   suffix,
   sub,
   variant = "inline",
+  onClick,
+  active,
 }: StatCardProps) {
+  // A clickable card wraps its content in a button with hover/active affordance.
+  const interactive = Boolean(onClick);
+  const cardClass = cn(
+    interactive && "cursor-pointer transition-shadow hover:shadow-md",
+    active && "ring-2 ring-primary"
+  );
+  const wrap = (inner: React.ReactNode) =>
+    interactive ? (
+      <button
+        type="button"
+        onClick={onClick}
+        aria-pressed={active}
+        className="focus-ring block w-full rounded-2xl text-left"
+      >
+        {inner}
+      </button>
+    ) : (
+      inner
+    );
   const badge =
     trend === undefined ? null : (
       <span
@@ -53,8 +78,8 @@ export function StatCard({
     );
 
   if (variant === "stacked") {
-    return (
-      <Card className="card-hover">
+    return wrap(
+      <Card className={cn("card-hover", cardClass)}>
         <CardContent>
           <div className="mb-4 flex items-start justify-between gap-2">
             <div
@@ -78,8 +103,8 @@ export function StatCard({
     );
   }
 
-  return (
-    <Card>
+  return wrap(
+    <Card className={cardClass}>
       <CardContent className="flex items-center gap-3.5">
         <div
           className={cn(

@@ -57,14 +57,20 @@ function StatCard({
   value,
   icon: Icon,
   gradient,
+  onClick,
+  active,
 }: {
   label: string;
   value: string;
   icon: typeof Users;
   gradient: string;
+  onClick?: () => void;
+  active?: boolean;
 }) {
-  return (
-    <Card>
+  const card = (
+    <Card
+      className={`${active ? "ring-2 ring-primary " : ""}${onClick ? "cursor-pointer transition-shadow hover:shadow-md" : ""}`}
+    >
       <CardContent className="flex items-center gap-3.5">
         <div className={`flex size-10 shrink-0 items-center justify-center rounded-md text-white ${gradient}`}>
           <Icon className="size-4.5" />
@@ -76,6 +82,13 @@ function StatCard({
       </CardContent>
     </Card>
   );
+  return onClick ? (
+    <button type="button" onClick={onClick} aria-pressed={active} className="focus-ring block w-full rounded-2xl text-left">
+      {card}
+    </button>
+  ) : (
+    card
+  );
 }
 
 export default function TeachersPage() {
@@ -85,8 +98,22 @@ export default function TeachersPage() {
   const [subject, setSubject] = useState("");
   const [status, setStatus] = useState("");
   const [page, setPage] = useState(1);
+  // Quick client-side filter driven by the stat cards.
+  const [quick, setQuick] = useState<"all" | "active" | "fulltime" | "onleave">("all");
 
   const { teachers, loading, error, refetch } = useTeachers({ search, subject, status });
+
+  const filtered = useMemo(() => {
+    if (quick === "active") return teachers.filter((t) => t.status === "active");
+    if (quick === "onleave") return teachers.filter((t) => t.status === "on-leave");
+    if (quick === "fulltime") return teachers.filter((t) => t.employmentType === "full-time");
+    return teachers;
+  }, [teachers, quick]);
+
+  const setQuickFilter = (next: typeof quick) => {
+    setQuick((cur) => (cur === next ? "all" : next));
+    setPage(1);
+  };
 
   // A narrowed filter can strand you past the last page, so every filter
   // change resets to page 1.
@@ -110,12 +137,12 @@ export default function TeachersPage() {
   // Clamp during render — deleting the last row on the last page would
   // otherwise strand the user on an empty page. Correcting it from an effect
   // is not allowed (react-hooks/set-state-in-effect).
-  const totalPages = Math.max(1, Math.ceil(teachers.length / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
 
   const pagedTeachers = useMemo(
-    () => teachers.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
-    [teachers, safePage]
+    () => filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
+    [filtered, safePage]
   );
 
   const openCreate = () => {
@@ -303,10 +330,44 @@ export default function TeachersPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Total teachers" value={String(stats.total)} icon={Users} gradient="gradient-indigo" />
-        <StatCard label="Active" value={String(stats.active)} icon={UserCheck} gradient="gradient-emerald" />
-        <StatCard label="Full-time" value={String(stats.fullTime)} icon={BriefcaseBusiness} gradient="gradient-cyan" />
-        <StatCard label="On leave" value={String(stats.onLeave)} icon={CalendarOff} gradient="gradient-amber" />
+        <StatCard
+          label="Total teachers"
+          value={String(stats.total)}
+          icon={Users}
+          gradient="gradient-indigo"
+          active={quick === "all" && !search && !subject && !status}
+          onClick={() => {
+            setSearch("");
+            setSubject("");
+            setStatus("");
+            setQuick("all");
+            setPage(1);
+          }}
+        />
+        <StatCard
+          label="Active"
+          value={String(stats.active)}
+          icon={UserCheck}
+          gradient="gradient-emerald"
+          active={quick === "active"}
+          onClick={() => setQuickFilter("active")}
+        />
+        <StatCard
+          label="Full-time"
+          value={String(stats.fullTime)}
+          icon={BriefcaseBusiness}
+          gradient="gradient-cyan"
+          active={quick === "fulltime"}
+          onClick={() => setQuickFilter("fulltime")}
+        />
+        <StatCard
+          label="On leave"
+          value={String(stats.onLeave)}
+          icon={CalendarOff}
+          gradient="gradient-amber"
+          active={quick === "onleave"}
+          onClick={() => setQuickFilter("onleave")}
+        />
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -363,7 +424,7 @@ export default function TeachersPage() {
             loading={loading}
             emptyTitle="No teachers found"
             emptyDescription={
-              search || subject || status
+              search || subject || status || quick !== "all"
                 ? "Try clearing your filters to see more results."
                 : "Add your first teacher to get started."
             }
@@ -378,7 +439,7 @@ export default function TeachersPage() {
             <Pagination
               page={safePage}
               pageSize={PAGE_SIZE}
-              totalItems={teachers.length}
+              totalItems={filtered.length}
               onPageChange={setPage}
             />
           )}

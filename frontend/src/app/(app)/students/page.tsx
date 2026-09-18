@@ -40,14 +40,20 @@ function StatCard({
   value,
   icon: Icon,
   gradient,
+  onClick,
+  active,
 }: {
   label: string;
   value: string;
   icon: typeof Users;
   gradient: string;
+  onClick?: () => void;
+  active?: boolean;
 }) {
-  return (
-    <Card>
+  const card = (
+    <Card
+      className={`${active ? "ring-2 ring-primary " : ""}${onClick ? "cursor-pointer transition-shadow hover:shadow-md" : ""}`}
+    >
       <CardContent className="flex items-center gap-3.5">
         <div className={`flex size-10 shrink-0 items-center justify-center rounded-md text-white ${gradient}`}>
           <Icon className="size-4.5" />
@@ -59,6 +65,13 @@ function StatCard({
       </CardContent>
     </Card>
   );
+  return onClick ? (
+    <button type="button" onClick={onClick} aria-pressed={active} className="focus-ring block w-full rounded-2xl text-left">
+      {card}
+    </button>
+  ) : (
+    card
+  );
 }
 
 export default function StudentsPage() {
@@ -68,8 +81,17 @@ export default function StudentsPage() {
   const [search, setSearch] = useState("");
   const [className, setClassName] = useState("");
   const [status, setStatus] = useState("");
+  // Quick client-side filter driven by the stat cards (fees due / low attendance).
+  const [quick, setQuick] = useState<"all" | "fees" | "low">("all");
 
   const { students, loading, error, refetch } = useStudents({ search, className, status });
+
+  // Rows shown in the table, after the stat-card quick filter.
+  const displayed = useMemo(() => {
+    if (quick === "fees") return students.filter((s) => s.feeDue > 0);
+    if (quick === "low") return students.filter((s) => s.attendancePercent < 75);
+    return students;
+  }, [students, quick]);
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Student | null>(null);
@@ -254,10 +276,46 @@ export default function StudentsPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Total students" value={String(stats.total)} icon={Users} gradient="gradient-indigo" />
-        <StatCard label="Active" value={String(stats.active)} icon={UserCheck} gradient="gradient-emerald" />
-        <StatCard label="Fees pending" value={inr.format(stats.due)} icon={IndianRupee} gradient="gradient-amber" />
-        <StatCard label="Attendance < 75%" value={String(stats.lowAttendance)} icon={TrendingDown} gradient="gradient-rose" />
+        <StatCard
+          label="Total students"
+          value={String(stats.total)}
+          icon={Users}
+          gradient="gradient-indigo"
+          active={!search && !className && !status && quick === "all"}
+          onClick={() => {
+            setSearch("");
+            setClassName("");
+            setStatus("");
+            setQuick("all");
+          }}
+        />
+        <StatCard
+          label="Active"
+          value={String(stats.active)}
+          icon={UserCheck}
+          gradient="gradient-emerald"
+          active={status === "active"}
+          onClick={() => {
+            setStatus(status === "active" ? "" : "active");
+            setQuick("all");
+          }}
+        />
+        <StatCard
+          label="Fees pending"
+          value={inr.format(stats.due)}
+          icon={IndianRupee}
+          gradient="gradient-amber"
+          active={quick === "fees"}
+          onClick={() => setQuick(quick === "fees" ? "all" : "fees")}
+        />
+        <StatCard
+          label="Attendance < 75%"
+          value={String(stats.lowAttendance)}
+          icon={TrendingDown}
+          gradient="gradient-rose"
+          active={quick === "low"}
+          onClick={() => setQuick(quick === "low" ? "all" : "low")}
+        />
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -308,12 +366,12 @@ export default function StudentsPage() {
       ) : (
         <Table
           columns={columns}
-          rows={students}
+          rows={displayed}
           rowKey={(s) => s.id}
           loading={loading}
           emptyTitle="No students found"
           emptyDescription={
-            search || className || status
+            search || className || status || quick !== "all"
               ? "Try clearing your filters to see more results."
               : "Add your first student to get started."
           }
