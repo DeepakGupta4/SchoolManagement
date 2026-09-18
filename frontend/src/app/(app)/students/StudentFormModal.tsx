@@ -8,9 +8,38 @@ import { Modal, Button, Input, Textarea, Select, useToast } from "@/components/u
 import { PhotoFrame } from "@/components/cards/PhotoFrame";
 import { studentSchema, type StudentSchema } from "@/lib/schemas/student";
 import { digitsOnly10 } from "@/lib/phone";
-import { CLASS_OPTIONS, SECTION_OPTIONS } from "@/lib/api/students";
+import { CLASS_OPTIONS, SECTION_OPTIONS, listStudents } from "@/lib/api/students";
 import { fileToDataUrl } from "@/lib/image";
 import type { Student, StudentFormValues } from "@/types/student";
+
+/** Next school-wide admission number, e.g. ADM-2026-0007, unique vs. existing. */
+function nextAdmissionNo(students: Student[]): string {
+  const year = new Date().getFullYear();
+  const used = new Set(students.map((s) => s.admissionNo));
+  let max = 0;
+  for (const s of students) {
+    const m = String(s.admissionNo).match(/(\d+)\s*$/);
+    if (m) max = Math.max(max, parseInt(m[1], 10));
+  }
+  let n = Math.max(max, students.length) + 1;
+  let candidate = `ADM-${year}-${String(n).padStart(4, "0")}`;
+  while (used.has(candidate)) {
+    n += 1;
+    candidate = `ADM-${year}-${String(n).padStart(4, "0")}`;
+  }
+  return candidate;
+}
+
+/** Next roll number within a class + section (sequential per class). */
+function nextRollNo(students: Student[], className: string, section: string): number {
+  let max = 0;
+  for (const s of students) {
+    if (s.className !== className || s.section !== section) continue;
+    const n = parseInt(String(s.rollNo).replace(/\D/g, ""), 10);
+    if (!Number.isNaN(n)) max = Math.max(max, n);
+  }
+  return max + 1;
+}
 
 const toOptions = (values: readonly string[]) =>
   values.map((v) => ({ label: v, value: v }));
@@ -76,6 +105,8 @@ export function StudentFormModal({
 
   const { toast } = useToast();
   const [uploading, setUploading] = useState(false);
+  // Existing students, used to auto-derive the next admission & roll numbers.
+  const [existing, setExisting] = useState<Student[]>([]);
 
   const {
     register,
@@ -93,6 +124,8 @@ export function StudentFormModal({
   const avatar = useWatch({ control, name: "avatar" });
   const firstName = useWatch({ control, name: "firstName" });
   const lastName = useWatch({ control, name: "lastName" });
+  const className = useWatch({ control, name: "className" });
+  const section = useWatch({ control, name: "section" });
 
   const handlePhoto = async (file: File | undefined) => {
     if (!file) return;
@@ -125,6 +158,31 @@ export function StudentFormModal({
         : emptyValues
     );
   }, [open, student, reset]);
+
+  // On create, pull the roster once so the next admission & roll numbers can
+  // be derived. Skipped in edit mode — those numbers are fixed on a record.
+  useEffect(() => {
+    if (!open || isEdit) return;
+    let cancelled = false;
+    listStudents()
+      .then((all) => !cancelled && setExisting(all))
+      .catch(() => !cancelled && setExisting([]));
+    return () => {
+      cancelled = true;
+    };
+  }, [open, isEdit]);
+
+  // Auto admission number (school-wide) once the roster is known.
+  useEffect(() => {
+    if (!open || isEdit) return;
+    setValue("admissionNo", nextAdmissionNo(existing));
+  }, [open, isEdit, existing, setValue]);
+
+  // Auto roll number, recomputed whenever the class or section changes.
+  useEffect(() => {
+    if (!open || isEdit || !className || !section) return;
+    setValue("rollNo", String(nextRollNo(existing, className, section)));
+  }, [open, isEdit, existing, className, section, setValue]);
 
   const submit = handleSubmit(async (values) => {
     await onSubmit(values as StudentFormValues);
@@ -202,8 +260,8 @@ export function StudentFormModal({
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Input label="First name" required {...register("firstName")} error={errors.firstName?.message} />
             <Input label="Last name" required {...register("lastName")} error={errors.lastName?.message} />
-            <Input label="Admission no." required {...register("admissionNo")} error={errors.admissionNo?.message} />
-            <Input label="Roll no." required {...register("rollNo")} error={errors.rollNo?.message} />
+            <Input label="Admission no." required hint={!isEdit ? "Auto-generated — editable" : undefined} {...register("admissionNo")} error={errors.admissionNo?.message} />
+            <Input label="Roll no." required hint={!isEdit ? "Auto, class-wise — editable" : undefined} {...register("rollNo")} error={errors.rollNo?.message} />
             <Input label="Date of birth" type="date" required {...register("dateOfBirth")} error={errors.dateOfBirth?.message} />
             <Select label="Gender" required options={GENDER_OPTIONS} {...register("gender")} error={errors.gender?.message} />
           </div>

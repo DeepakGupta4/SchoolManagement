@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
 /* ------------------------------------------------------------------ */
 
 const itemBase =
-  "group relative flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] font-medium transition-colors duration-150";
+  "group relative flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] font-semibold transition-colors duration-150";
 
 function NavLeaf({
   item,
@@ -137,7 +137,7 @@ function NavBranch({
                 onClick={onNavigate}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "focus-ring group/child relative flex items-center gap-2.5 rounded-md py-1.5 pl-2 pr-2.5 text-xs font-medium transition-colors",
+                  "focus-ring group/child relative flex items-center gap-2.5 rounded-md py-1.5 pl-2 pr-2.5 text-xs font-semibold transition-colors",
                   active
                     ? "bg-primary-soft font-semibold text-primary-text"
                     : "text-muted hover:bg-surface-hover hover:text-text"

@@ -175,7 +175,7 @@ export default function StudentIdCardsPage() {
 
       <CardContent className="print-hide px-0 text-xs text-subtle">
         Cards render at portrait CR80 size (54 × 85.6 mm). Add a student photo from the student form and it
-        appears here automatically. The QR block is a visual placeholder — it is not yet scannable.
+        appears here automatically. Each card carries a scannable QR encoding the admission number and name.
       </CardContent>
     </div>
   );
