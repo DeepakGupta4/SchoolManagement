@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
 /* ------------------------------------------------------------------ */
 
 const itemBase =
-  "group relative flex items-center gap-2.5 rounded-md px-2.5 py-2 text-[13px] font-medium transition-colors";
+  "group relative flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] font-medium transition-colors duration-150";
 
 function NavLeaf({
   item,
@@ -60,15 +60,15 @@ function NavLeaf({
         "focus-ring",
         collapsed && "justify-center px-0",
         isActive
-          ? "bg-primary-soft text-primary-text"
+          ? "bg-primary-soft font-semibold text-primary-text shadow-sm ring-1 ring-primary/10"
           : "text-muted hover:bg-surface-hover hover:text-text"
       )}
     >
       {/* Active rail marker */}
       {isActive && !collapsed && (
-        <span className="absolute -left-2.5 top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-r-full bg-primary" />
+        <span className="absolute -left-2.5 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full bg-primary" />
       )}
-      <Icon className={cn("size-4 shrink-0", isActive && "text-primary")} />
+      <Icon className={cn("size-4 shrink-0 transition-colors", isActive ? "text-primary" : "text-subtle group-hover:text-text")} />
       {!collapsed && <span className="flex-1 truncate">{item.title}</span>}
     </Link>
   );
@@ -111,10 +111,10 @@ function NavBranch({
         className={cn(
           itemBase,
           "focus-ring w-full",
-          isActive ? "text-text" : "text-muted hover:bg-surface-hover hover:text-text"
+          isActive ? "font-semibold text-text" : "text-muted hover:bg-surface-hover hover:text-text"
         )}
       >
-        <Icon className="size-4 shrink-0" />
+        <Icon className={cn("size-4 shrink-0 transition-colors", isActive ? "text-primary" : "text-subtle group-hover:text-text")} />
         <span className="flex-1 truncate text-left">{item.title}</span>
         <ChevronDown
           className={cn(
@@ -139,8 +139,8 @@ function NavBranch({
                 className={cn(
                   "focus-ring group/child relative flex items-center gap-2.5 rounded-md py-1.5 pl-2 pr-2.5 text-xs font-medium transition-colors",
                   active
-                    ? "bg-primary-soft text-primary-text"
-                    : "text-subtle hover:bg-surface-hover hover:text-text"
+                    ? "bg-primary-soft font-semibold text-primary-text"
+                    : "text-muted hover:bg-surface-hover hover:text-text"
                 )}
               >
                 {/* Connector node */}
@@ -301,7 +301,7 @@ export function Sidebar() {
             return (
               <div key={group.label} className={cn(gi > 0 && "mt-5")}>
                 {showLabel ? (
-                  <p className="mb-1.5 px-2.5 text-[10px] font-bold uppercase tracking-[0.08em] text-muted">
+                  <p className="mb-2 px-2.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-subtle">
                     {group.label}
                   </p>
                 ) : (
