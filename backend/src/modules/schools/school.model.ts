@@ -70,6 +70,21 @@ const schoolSchema = new Schema(
     // account regardless of whether its trial or plan is otherwise valid.
     status: { type: String, enum: ["active", "suspended"], default: "active" },
     subscription: { type: subscriptionSchema, default: () => ({}) },
+    // Per-school bell schedule for the timetable. Admin-editable; empty means
+    // the app falls back to its built-in default period list.
+    bellSchedule: {
+      type: [
+        new Schema(
+          {
+            label: { type: String, default: "" },
+            time: { type: String, default: "" },
+            isBreak: { type: Boolean, default: false },
+          },
+          { _id: false }
+        ),
+      ],
+      default: [],
+    },
   },
   { timestamps: true }
 );
@@ -176,6 +191,11 @@ export function toPublicSchool(school: SchoolDoc) {
     schoolType: school.schoolType,
     website: school.website,
     logo: school.logo,
+    bellSchedule: (school.bellSchedule ?? []).map((p) => ({
+      label: p.label ?? "",
+      time: p.time ?? "",
+      isBreak: Boolean(p.isBreak),
+    })),
     status: school.status,
     subscription: {
       plan: school.subscription.plan,

@@ -21,9 +21,14 @@ import { useClassOptions } from "@/hooks/useClassOptions";
 import { useSubjectOptions } from "@/hooks/useSubjectOptions";
 import { listTeachers } from "@/lib/api/teachers";
 import { teacherName, type Teacher } from "@/types/teacher";
+import { getMySchool, updateMySchool } from "@/lib/api/schools";
 
 const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-const periods = [
+
+type Period = { id: number; time: string; isBreak?: boolean; label?: string };
+
+// Built-in fallback bell schedule, used when the school has no saved one.
+const DEFAULT_PERIODS: Period[] = [
   { id: 1, time: "8:00 - 8:45" },
   { id: 2, time: "8:45 - 9:30" },
   { id: 3, time: "9:30 - 10:15" },
@@ -51,7 +56,19 @@ function toneFor(subject: string) {
   return TONES[h % TONES.length];
 }
 
-const periodLabel = (id: number) => `P${id > 4 ? id - 1 : id}`;
+// Maps each non-break period id to its display label (P1, P2, …), skipping
+// breaks so the numbering stays sequential regardless of where breaks sit.
+function buildPeriodLabels(list: Period[]): Record<number, string> {
+  const labels: Record<number, string> = {};
+  let n = 0;
+  for (const p of list) {
+    if (p.isBreak) continue;
+    n += 1;
+    labels[p.id] = `P${n}`;
+  }
+  return labels;
+}
+
 const todayIndex = Math.min(new Date().getDay() - 1, 5);
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -75,6 +92,56 @@ export default function TimetablePage() {
   const [sectionSel, setSectionSel] = useState("");
   const [highlightDay, setHighlightDay] = useState<string | null>(days[todayIndex] ?? "Monday");
   const [weekOffset, setWeekOffset] = useState(0);
+
+  // Effective bell schedule: the school's saved one, or the built-in default.
+  const [periods, setPeriods] = useState<Period[]>(DEFAULT_PERIODS);
+  useEffect(() => {
+    let cancelled = false;
+    getMySchool()
+      .then((school) => {
+        if (cancelled || !school) return;
+        const bs = school.bellSchedule;
+        if (bs && bs.length > 0) {
+          setPeriods(bs.map((p, i) => ({ id: i + 1, time: p.time, isBreak: p.isBreak, label: p.label })));
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const periodLabels = useMemo(() => buildPeriodLabels(periods), [periods]);
+  const periodLabel = (id: number) => periodLabels[id] ?? `P${id}`;
+
+  // ---- Edit bell-schedule timings ----
+  const [timingsOpen, setTimingsOpen] = useState(false);
+  const [draftPeriods, setDraftPeriods] = useState<Period[]>([]);
+  const [savingTimings, setSavingTimings] = useState(false);
+
+  const openTimings = () => {
+    setDraftPeriods(periods.map((p) => ({ ...p, label: p.label ?? "", isBreak: Boolean(p.isBreak) })));
+    setTimingsOpen(true);
+  };
+
+  const saveTimings = async () => {
+    setSavingTimings(true);
+    try {
+      const bellSchedule = draftPeriods.map((p) => ({
+        label: p.label ?? "",
+        time: p.time ?? "",
+        isBreak: Boolean(p.isBreak),
+      }));
+      await updateMySchool({ bellSchedule });
+      setPeriods(bellSchedule.map((p, i) => ({ id: i + 1, time: p.time, isBreak: p.isBreak, label: p.label })));
+      toast({ title: "Period timings updated" });
+      setTimingsOpen(false);
+    } catch {
+      toast({ title: "Could not save timings", variant: "error" });
+    } finally {
+      setSavingTimings(false);
+    }
+  };
 
   const activeClass = classSel || classOptions[0]?.value || "";
   const activeSection = sectionSel || sectionOptions[0]?.value || "";
@@ -189,10 +256,16 @@ export default function TimetablePage() {
         title="Timetable"
         description="Weekly class schedule — pick a class, then tap any slot to assign a period."
         actions={
-          <Button variant="outline" onClick={handleExport} disabled={!classKey}>
-            <Download className="size-4" />
-            Export CSV
-          </Button>
+          <>
+            <Button variant="outline" onClick={openTimings}>
+              <Clock className="size-4" />
+              Edit timings
+            </Button>
+            <Button variant="outline" onClick={handleExport} disabled={!classKey}>
+              <Download className="size-4" />
+              Export CSV
+            </Button>
+          </>
         }
       />
 
@@ -405,6 +478,80 @@ export default function TimetablePage() {
               No subjects yet — add them in the Subjects section for the dropdown.
             </p>
           )}
+        </div>
+      </Modal>
+
+      {/* Edit period timings (bell schedule) */}
+      <Modal
+        open={timingsOpen}
+        onOpenChange={(o) => !o && setTimingsOpen(false)}
+        title="Edit period timings"
+        description="Set the label, time and breaks for your school's bell schedule."
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setTimingsOpen(false)} disabled={savingTimings}>
+              Cancel
+            </Button>
+            <Button onClick={saveTimings} disabled={savingTimings}>
+              {savingTimings ? "Saving…" : "Save"}
+            </Button>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-3">
+          {draftPeriods.map((p, i) => (
+            <div key={i} className="flex flex-wrap items-end gap-2 rounded-md border border-border p-2.5">
+              <div className="w-36 grow">
+                <Input
+                  label={i === 0 ? "Label" : undefined}
+                  placeholder={p.isBreak ? "e.g. Lunch Break" : "e.g. Period 1"}
+                  value={p.label ?? ""}
+                  onChange={(e) =>
+                    setDraftPeriods((rows) => rows.map((r, j) => (j === i ? { ...r, label: e.target.value } : r)))
+                  }
+                />
+              </div>
+              <div className="w-36 grow">
+                <Input
+                  label={i === 0 ? "Time" : undefined}
+                  placeholder="e.g. 8:00 - 8:45"
+                  value={p.time ?? ""}
+                  onChange={(e) =>
+                    setDraftPeriods((rows) => rows.map((r, j) => (j === i ? { ...r, time: e.target.value } : r)))
+                  }
+                />
+              </div>
+              <label className="flex items-center gap-1.5 pb-2.5 text-xs text-muted">
+                <input
+                  type="checkbox"
+                  className="size-4 accent-primary"
+                  checked={Boolean(p.isBreak)}
+                  onChange={(e) =>
+                    setDraftPeriods((rows) => rows.map((r, j) => (j === i ? { ...r, isBreak: e.target.checked } : r)))
+                  }
+                />
+                Break
+              </label>
+              <Button
+                variant="ghost"
+                size="sm"
+                aria-label="Remove row"
+                className="mb-1 px-2 text-danger"
+                onClick={() => setDraftPeriods((rows) => rows.filter((_, j) => j !== i))}
+              >
+                <Trash2 className="size-4" />
+              </Button>
+            </div>
+          ))}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() =>
+              setDraftPeriods((rows) => [...rows, { id: rows.length + 1, time: "", isBreak: false, label: "" }])
+            }
+          >
+            + Add row
+          </Button>
         </div>
       </Modal>
     </div>

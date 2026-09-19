@@ -4,7 +4,7 @@ import {
   Bell, Settings, School, UserCheck, Award,
   FileText, BarChart3, MessageSquare, ShieldCheck, Cpu, Globe,
   Smartphone, Package, Utensils, HeartPulse, Trophy, Workflow,
-  IdCard, Building2, BookMarked, type LucideIcon,
+  IdCard, Building2, BookMarked, CalendarX, type LucideIcon,
 } from "lucide-react";
 
 export interface NavChild {
@@ -92,6 +92,7 @@ export const navGroups: NavGroup[] = [
       { title: "Subjects", href: "/subjects", icon: BookMarked },
       { title: "Timetable", href: "/timetable", icon: Calendar },
       { title: "Attendance", href: "/attendance", icon: UserCheck },
+      { title: "Holidays", href: "/holidays", icon: CalendarX },
       {
         title: "Examinations", href: "/exams", icon: ClipboardList,
         children: [

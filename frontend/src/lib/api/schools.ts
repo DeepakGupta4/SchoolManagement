@@ -96,6 +96,7 @@ export interface SchoolProfile {
   website: string;
   schoolType: string;
   logo: string;
+  bellSchedule?: { label: string; time: string; isBreak: boolean }[];
 }
 
 /** The signed-in school's own profile (null for platform owner / no tenant). */

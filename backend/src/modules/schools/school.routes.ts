@@ -86,6 +86,9 @@ const profileSchema = z.object({
   website: z.string().optional(),
   schoolType: z.string().optional(),
   logo: z.string().optional(),
+  bellSchedule: z
+    .array(z.object({ label: z.string(), time: z.string(), isBreak: z.boolean() }))
+    .optional(),
 });
 
 /** A school edits its own profile. Subscription/status/schoolId are off-limits. */

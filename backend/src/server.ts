@@ -3,6 +3,7 @@ import { connectDatabase, disconnectDatabase } from "./config/db.js";
 import { ensureSuperAdmin } from "./utils/ensureSuperAdmin.js";
 import { runSubscriptionReminders } from "./modules/schools/reminders.js";
 import { runAllSchools } from "./modules/workflows/workflow.service.js";
+import { runAutoAbsentForAllSchools } from "./modules/attendance/autoAbsent.js";
 import { env } from "./config/env.js";
 
 async function start() {
@@ -22,6 +23,14 @@ async function start() {
   };
   setTimeout(sweep, 60_000).unref();
   setInterval(sweep, REMINDER_INTERVAL_MS).unref();
+
+  // Auto-absent runs hourly so the "unmarked by 11 AM → absent" rule fires
+  // reliably the same day (the function itself no-ops before 11 AM and on
+  // holidays, and is idempotent).
+  const autoAbsent = () =>
+    runAutoAbsentForAllSchools().catch((e) => console.error("Auto-absent sweep failed:", e));
+  setTimeout(autoAbsent, 90_000).unref();
+  setInterval(autoAbsent, 60 * 60 * 1000).unref();
 
   // The in-memory database is rebuilt per process, so a separately-run seed
   // would be invisible here. Seed at boot instead, but only in that mode —

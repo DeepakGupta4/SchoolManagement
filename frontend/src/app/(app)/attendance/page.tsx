@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
-import { Check, X, Clock, Download, Users, Loader2 } from "lucide-react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { Check, X, Clock, Download, Users, Loader2, UserX, PartyPopper } from "lucide-react";
 import {
   Badge,
   Button,
@@ -23,6 +23,7 @@ import {
   type AttendanceStatus,
   type AttendanceMark,
 } from "@/lib/api/attendance";
+import { holidaysApi, type Holiday } from "@/lib/api/holidays";
 import type { Student } from "@/types/student";
 
 type Row = { id: string; name: string; roll: number };
@@ -47,9 +48,29 @@ export default function AttendancePage() {
 
   const [roster, setRoster] = useState<Row[]>([]);
   const [attendance, setAttendance] = useState<Record<string, AttendanceStatus>>({});
+  // Students that already have a saved record for the date — used to know who is
+  // still "unmarked" (the ones the auto-absent rule targets).
+  const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
+
+  // School holidays — a matching date closes the marking UI entirely.
+  const [holidays, setHolidays] = useState<Holiday[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    holidaysApi
+      .list()
+      .then((rows) => !cancelled && setHolidays(rows))
+      .catch(() => {
+        /* Holidays are best-effort; marking still works without them. */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const holiday = useMemo(() => holidays.find((h) => h.date === date), [holidays, date]);
 
   // Load the class roster (real students) + any saved roll-call for the date.
   useEffect(() => {
@@ -82,6 +103,7 @@ export default function AttendancePage() {
 
           setRoster(rows);
           setAttendance(marks);
+          setSavedIds(new Set(savedMap.keys()));
           setDirty(false);
         })
         .catch(() => {
@@ -125,6 +147,7 @@ export default function AttendancePage() {
         status: statusOf(r.id),
       }));
       await saveAttendance({ className, section, date, records });
+      setSavedIds(new Set(roster.map((r) => r.id)));
       setDirty(false);
       toast({ title: "Attendance saved", description: `${className} · ${section} · ${date}` });
     } catch (e) {
@@ -138,6 +161,43 @@ export default function AttendancePage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roster, attendance, className, section, date, toast]);
+
+  // Students with no saved record yet — the ones the "by 11 AM → absent" rule
+  // targets. Everyone shows as "present" by default in the UI, so unmarked is
+  // tracked by the saved set, not the local toggle.
+  const unmarked = roster.filter((r) => !savedIds.has(r.id));
+
+  /** Admin control: mark every still-unmarked student absent, then save. */
+  const markRemainingAbsent = useCallback(async () => {
+    if (holiday || unmarked.length === 0) return;
+    setSaving(true);
+    try {
+      const next = { ...attendance };
+      for (const r of unmarked) next[r.id] = "absent";
+      const records: AttendanceMark[] = roster.map((r) => ({
+        studentId: r.id,
+        studentName: r.name,
+        roll: r.roll,
+        status: next[r.id] ?? "present",
+      }));
+      await saveAttendance({ className, section, date, records });
+      setAttendance(next);
+      setSavedIds(new Set(roster.map((r) => r.id)));
+      setDirty(false);
+      toast({
+        title: `${unmarked.length} marked absent`,
+        description: `${className} · ${section} · ${date}`,
+      });
+    } catch (e) {
+      toast({
+        title: "Could not save",
+        description: e instanceof Error ? e.message : "Please try again.",
+        variant: "error",
+      });
+    } finally {
+      setSaving(false);
+    }
+  }, [holiday, unmarked, attendance, roster, className, section, date, toast]);
 
   const pctVariant = pct >= 90 ? "success" : pct >= 75 ? "warning" : "danger";
 
@@ -231,6 +291,18 @@ export default function AttendancePage() {
         </Card>
       </div>
 
+      {holiday && (
+        <div className="flex items-center gap-3 rounded-lg border border-success/30 bg-success-soft px-5 py-4 text-success-text">
+          <PartyPopper className="size-5 shrink-0" />
+          <div className="min-w-0">
+            <p className="text-sm font-semibold">🎉 Holiday — {holiday.name}</p>
+            <p className="mt-0.5 text-xs">
+              {holiday.type} · School is closed on this date. Attendance is not taken and no one is marked absent.
+            </p>
+          </div>
+        </div>
+      )}
+
       <Card className="overflow-hidden">
         <div className="flex flex-wrap items-center gap-3 border-b border-border px-5 py-4">
           <div className="w-36">
@@ -249,13 +321,23 @@ export default function AttendancePage() {
           <p className="text-xs text-muted">{roster.length} students</p>
 
           <div className="ml-auto flex flex-wrap gap-2">
-            <Button size="sm" variant="secondary" disabled={loading || roster.length === 0} onClick={() => markAll("present")}>
+            <Button size="sm" variant="secondary" disabled={loading || roster.length === 0 || Boolean(holiday)} onClick={() => markAll("present")}>
               <Check className="size-3.5" />
               All Present
             </Button>
-            <Button size="sm" variant="secondary" disabled={loading || roster.length === 0} onClick={() => markAll("absent")}>
+            <Button size="sm" variant="secondary" disabled={loading || roster.length === 0 || Boolean(holiday)} onClick={() => markAll("absent")}>
               <X className="size-3.5" />
               All Absent
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={saving || loading || roster.length === 0 || Boolean(holiday) || unmarked.length === 0}
+              onClick={markRemainingAbsent}
+              title="Mark every student with no attendance yet as absent"
+            >
+              <UserX className="size-3.5" />
+              Mark remaining Absent{unmarked.length > 0 ? ` (${unmarked.length})` : ""}
             </Button>
           </div>
 
@@ -267,6 +349,12 @@ export default function AttendancePage() {
         {loading ? (
           <div className="grid place-items-center py-16 text-muted">
             <Loader2 className="size-6 animate-spin" />
+          </div>
+        ) : holiday ? (
+          <div className="flex flex-col items-center gap-2 py-16 text-center">
+            <PartyPopper className="size-8 text-success" />
+            <p className="text-sm font-semibold text-text">{holiday.name}</p>
+            <p className="text-sm text-muted">School is closed — attendance is not taken on a holiday.</p>
           </div>
         ) : !className || !section ? (
           <div className="py-16 text-center text-sm text-muted">
@@ -315,18 +403,20 @@ export default function AttendancePage() {
           </div>
         )}
 
-        <div className="flex items-center justify-end gap-3 px-5 py-4">
-          {!dirty && !loading && roster.length > 0 && (
-            <p className="flex items-center gap-1.5 text-sm font-medium text-success-text">
-              <Check className="size-4" />
-              Saved
-            </p>
-          )}
-          <Button onClick={handleSave} disabled={saving || loading || roster.length === 0}>
-            {saving ? <Loader2 className="size-4 animate-spin" /> : null}
-            Save Attendance
-          </Button>
-        </div>
+        {!holiday && (
+          <div className="flex items-center justify-end gap-3 px-5 py-4">
+            {!dirty && !loading && roster.length > 0 && (
+              <p className="flex items-center gap-1.5 text-sm font-medium text-success-text">
+                <Check className="size-4" />
+                Saved
+              </p>
+            )}
+            <Button onClick={handleSave} disabled={saving || loading || roster.length === 0}>
+              {saving ? <Loader2 className="size-4 animate-spin" /> : null}
+              Save Attendance
+            </Button>
+          </div>
+        )}
       </Card>
     </div>
   );
