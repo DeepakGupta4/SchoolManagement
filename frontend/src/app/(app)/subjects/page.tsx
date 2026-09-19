@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { BookOpen, Building2, Eye, Library, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { BookOpen, Building2, Check, Eye, Library, Pencil, Plus, Search, Sparkles, Trash2 } from "lucide-react";
 import {
   Badge,
   Button,
@@ -12,6 +12,7 @@ import {
   PageHeader,
   StatCard,
   Table,
+  useToast,
   type Column,
 } from "@/components/ui";
 import { useResource } from "@/hooks/useResource";
@@ -20,7 +21,27 @@ import type { SubjectSchema } from "@/lib/schemas/subject";
 import { DetailModal } from "@/components/DetailModal";
 import { SubjectFormModal } from "./SubjectFormModal";
 
+// Common subjects offered by most Indian schools — shown as a quick-pick strip
+// so an admin can add several at once instead of typing each one.
+const COMMON_SUBJECTS = [
+  "English", "Hindi", "Mathematics", "Science", "Social Science", "EVS",
+  "Physics", "Chemistry", "Biology", "Computer Science", "Physical Education",
+  "Sanskrit", "Art & Craft", "Music", "General Knowledge", "Moral Science",
+  "Economics", "Accountancy", "Business Studies", "Geography", "History",
+  "Political Science",
+];
+
+/** Chip styling for the quick-add strip: added (locked), picked, or default. */
+function cnChip(added: boolean, picked: boolean): string {
+  const base =
+    "inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium transition-colors focus-ring disabled:cursor-default";
+  if (added) return `${base} border-success/30 bg-success-soft text-success-text`;
+  if (picked) return `${base} border-primary bg-primary-soft text-primary-text`;
+  return `${base} border-border bg-surface text-muted hover:border-border-strong hover:text-text`;
+}
+
 export default function SubjectsPage() {
+  const { toast } = useToast();
   const [search, setSearch] = useState("");
 
   const filters = useMemo(() => ({ search }), [search]);
@@ -35,6 +56,47 @@ export default function SubjectsPage() {
   const [editing, setEditing] = useState<SchoolSubject | null>(null);
   const [viewing, setViewing] = useState<SchoolSubject | null>(null);
   const [pendingDelete, setPendingDelete] = useState<SchoolSubject | null>(null);
+
+  // Quick-add: which already-suggested subjects exist, and which are picked.
+  const present = useMemo(
+    () => new Set(items.map((s) => s.name.trim().toLowerCase())),
+    [items]
+  );
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [bulkSaving, setBulkSaving] = useState(false);
+
+  const togglePick = (name: string) =>
+    setPicked((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+
+  const addPicked = async () => {
+    const toAdd = [...picked].filter((n) => !present.has(n.toLowerCase()));
+    if (toAdd.length === 0) return;
+    setBulkSaving(true);
+    try {
+      for (const name of toAdd) {
+        await subjectsApi.create({ name, code: "", department: "" });
+      }
+      toast({
+        title: `${toAdd.length} subject${toAdd.length === 1 ? "" : "s"} added`,
+        description: toAdd.join(", "),
+      });
+      setPicked(new Set());
+      refetch();
+    } catch (e) {
+      toast({
+        title: "Could not add subjects",
+        description: e instanceof Error ? e.message : "Please try again.",
+        variant: "error",
+      });
+    } finally {
+      setBulkSaving(false);
+    }
+  };
 
   const stats = useMemo(
     () => ({
@@ -146,6 +208,45 @@ export default function SubjectsPage() {
         <StatCard label="Departments" value={stats.departments} icon={Building2} tone="violet" />
         <StatCard label="With codes" value={stats.coded} icon={Library} tone="emerald" />
       </div>
+
+      {/* Quick-add common subjects — a scrollable pick strip */}
+      <Card>
+        <CardContent className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Sparkles className="size-4 text-primary" />
+              <p className="text-sm font-semibold text-text">Quick add common subjects</p>
+            </div>
+            <Button size="sm" onClick={addPicked} disabled={bulkSaving || picked.size === 0}>
+              <Plus className="size-4" />
+              {bulkSaving ? "Adding…" : `Add ${picked.size || ""}`.trim()}
+            </Button>
+          </div>
+          <p className="text-xs text-muted">
+            Tap the ones your school offers, then Add. Need something else? Use{" "}
+            <span className="font-medium text-text">Add subject</span> for a custom one.
+          </p>
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {COMMON_SUBJECTS.map((name) => {
+              const added = present.has(name.toLowerCase());
+              const isPicked = picked.has(name);
+              return (
+                <button
+                  key={name}
+                  type="button"
+                  disabled={added}
+                  onClick={() => togglePick(name)}
+                  aria-pressed={isPicked}
+                  className={cnChip(added, isPicked)}
+                >
+                  {added ? <Check className="size-3.5" /> : isPicked ? <Check className="size-3.5" /> : null}
+                  {name}
+                </button>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="flex flex-wrap items-center gap-3">
         <div className="min-w-60 flex-1">
