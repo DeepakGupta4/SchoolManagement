@@ -155,30 +155,26 @@ export default function TeachersPage() {
     setFormOpen(true);
   };
 
-  const handleSubmit = async (values: TeacherFormValues) => {
+  const handleSubmit = async (values: TeacherFormValues): Promise<Teacher | null> => {
     try {
-      if (editing) {
-        await updateTeacher(editing.id, values);
-        toast({
-          title: "Teacher updated",
-          description: `${values.firstName} ${values.lastName}'s record was saved.`,
-        });
-      } else {
-        await createTeacher(values);
-        toast({
-          title: "Teacher added",
-          description: `${values.firstName} ${values.lastName} joined the staff.`,
-        });
-      }
-      setFormOpen(false);
-      setEditing(null);
+      const saved = editing
+        ? await updateTeacher(editing.id, values)
+        : await createTeacher(values);
+      toast({
+        title: editing ? "Teacher updated" : "Teacher added",
+        description: editing
+          ? `${values.firstName} ${values.lastName}'s record was saved.`
+          : `${values.firstName} ${values.lastName} joined the staff.`,
+      });
       refetch();
+      return saved;
     } catch (e) {
       toast({
         title: "Could not save teacher",
         description: e instanceof Error ? e.message : "Something went wrong.",
         variant: "error",
       });
+      return null;
     }
   };
 
@@ -448,7 +444,10 @@ export default function TeachersPage() {
 
       <TeacherFormModal
         open={formOpen}
-        onOpenChange={setFormOpen}
+        onOpenChange={(o) => {
+          setFormOpen(o);
+          if (!o) setEditing(null);
+        }}
         teacher={editing}
         onSubmit={handleSubmit}
       />

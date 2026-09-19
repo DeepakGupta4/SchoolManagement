@@ -11,6 +11,8 @@ import { digitsOnly10 } from "@/lib/phone";
 import { listStudents } from "@/lib/api/students";
 import { useClassOptions } from "@/hooks/useClassOptions";
 import { fileToDataUrl } from "@/lib/image";
+import { AttachmentsField } from "@/components/AttachmentsField";
+import { uploadDocumentFiles } from "@/lib/api/documents";
 import type { Student, StudentFormValues } from "@/types/student";
 
 /** Next school-wide admission number, e.g. ADM-2026-0007, unique vs. existing. */
@@ -85,7 +87,8 @@ interface StudentFormModalProps {
   onOpenChange: (open: boolean) => void;
   /** Present = edit mode, absent = create mode. */
   student?: Student | null;
-  onSubmit: (values: StudentFormValues) => Promise<void>;
+  /** Returns the saved student (so attachments can be uploaded), or null on error. */
+  onSubmit: (values: StudentFormValues) => Promise<Student | null | void>;
 }
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
@@ -106,6 +109,9 @@ export function StudentFormModal({
 
   const { toast } = useToast();
   const [uploading, setUploading] = useState(false);
+  // Files attached in the form, uploaded once the student record has an id.
+  const [attachments, setAttachments] = useState<File[]>([]);
+  const [savingDocs, setSavingDocs] = useState(false);
   // Existing students, used to auto-derive the next admission & roll numbers.
   const [existing, setExisting] = useState<Student[]>([]);
   // Classes/sections come from the Classes & Sections module — a single source
@@ -161,6 +167,8 @@ export function StudentFormModal({
           }
         : emptyValues
     );
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setAttachments([]);
   }, [open, student, reset]);
 
   // On create, pull the roster once so the next admission & roll numbers can
@@ -189,7 +197,22 @@ export function StudentFormModal({
   }, [open, isEdit, existing, className, section, setValue]);
 
   const submit = handleSubmit(async (values) => {
-    await onSubmit(values as StudentFormValues);
+    const saved = await onSubmit(values as StudentFormValues);
+    if (!saved) return; // save failed — keep the form open (error already shown)
+    if (attachments.length > 0) {
+      setSavingDocs(true);
+      const name = `${values.firstName} ${values.lastName}`.trim();
+      const { uploaded, failed } = await uploadDocumentFiles("student", saved.id, name, attachments);
+      setSavingDocs(false);
+      if (failed) {
+        toast({
+          title: `${uploaded} uploaded, ${failed} failed`,
+          description: "Some attachments could not be saved.",
+          variant: "warning",
+        });
+      }
+    }
+    onOpenChange(false);
   });
 
   return (
@@ -205,11 +228,11 @@ export function StudentFormModal({
       size="lg"
       footer={
         <>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting || savingDocs}>
             Cancel
           </Button>
-          <Button onClick={submit} disabled={isSubmitting}>
-            {isSubmitting ? "Saving…" : isEdit ? "Save changes" : "Create student"}
+          <Button onClick={submit} disabled={isSubmitting || savingDocs}>
+            {savingDocs ? "Uploading…" : isSubmitting ? "Saving…" : isEdit ? "Save changes" : "Create student"}
           </Button>
         </>
       }
@@ -311,6 +334,15 @@ export function StudentFormModal({
           <div className="mt-4">
             <Textarea label="Medical notes" hint="Allergies, conditions, medication" {...register("medicalNotes")} error={errors.medicalNotes?.message} />
           </div>
+        </section>
+
+        <section>
+          <SectionTitle>Documents</SectionTitle>
+          <AttachmentsField
+            files={attachments}
+            onChange={setAttachments}
+            hint="Optional — Aadhaar, birth certificate, TC, marksheets. You can also add these later from the profile."
+          />
         </section>
 
         {/* Enables Enter-to-submit without duplicating the footer button. */}

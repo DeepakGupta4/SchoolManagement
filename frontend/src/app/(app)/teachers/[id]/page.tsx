@@ -165,18 +165,19 @@ export default function TeacherDetailPage({ params }: { params: Promise<{ id: st
     };
   }, [id]);
 
-  const handleUpdate = async (values: TeacherFormValues) => {
+  const handleUpdate = async (values: TeacherFormValues): Promise<Teacher | null> => {
     try {
       const updated = await updateTeacher(id, values);
       setTeacher(updated);
-      setEditOpen(false);
       toast({ title: "Teacher updated", description: `${teacherName(updated)}'s record was saved.` });
+      return updated;
     } catch (e) {
       toast({
         title: "Could not save teacher",
         description: e instanceof Error ? e.message : "Something went wrong.",
         variant: "error",
       });
+      return null;
     }
   };
 

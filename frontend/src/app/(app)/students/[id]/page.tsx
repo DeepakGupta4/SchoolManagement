@@ -292,18 +292,19 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
     };
   }, [id]);
 
-  const handleUpdate = async (values: StudentFormValues) => {
+  const handleUpdate = async (values: StudentFormValues): Promise<Student | null> => {
     try {
       const updated = await updateStudent(id, values);
       setStudent(updated);
-      setEditOpen(false);
       toast({ title: "Student updated", description: `${fullName(updated)}'s record was saved.` });
+      return updated;
     } catch (e) {
       toast({
         title: "Could not save student",
         description: e instanceof Error ? e.message : "Something went wrong.",
         variant: "error",
       });
+      return null;
     }
   };
 

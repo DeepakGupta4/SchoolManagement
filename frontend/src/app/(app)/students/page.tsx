@@ -115,30 +115,24 @@ export default function StudentsPage() {
     setFormOpen(true);
   };
 
-  const handleSubmit = async (values: StudentFormValues) => {
+  const handleSubmit = async (values: StudentFormValues): Promise<Student | null> => {
     try {
-      if (editing) {
-        await updateStudent(editing.id, values);
-        toast({
-          title: "Student updated",
-          description: `${values.firstName} ${values.lastName}'s record was saved.`,
-        });
-      } else {
-        await createStudent(values);
-        toast({
-          title: "Student added",
-          description: `${values.firstName} ${values.lastName} was enrolled.`,
-        });
-      }
-      setFormOpen(false);
-      setEditing(null);
+      const saved = editing
+        ? await updateStudent(editing.id, values)
+        : await createStudent(values);
+      toast({
+        title: editing ? "Student updated" : "Student added",
+        description: `${values.firstName} ${values.lastName}${editing ? "'s record was saved." : " was enrolled."}`,
+      });
       refetch();
+      return saved;
     } catch (e) {
       toast({
         title: "Could not save student",
         description: e instanceof Error ? e.message : "Something went wrong.",
         variant: "error",
       });
+      return null;
     }
   };
 
@@ -386,7 +380,10 @@ export default function StudentsPage() {
 
       <StudentFormModal
         open={formOpen}
-        onOpenChange={setFormOpen}
+        onOpenChange={(o) => {
+          setFormOpen(o);
+          if (!o) setEditing(null);
+        }}
         student={editing}
         onSubmit={handleSubmit}
       />

@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Modal, Button, Input, Select } from "@/components/ui";
+import { Modal, Button, Input, Select, useToast } from "@/components/ui";
 import { staffSchema, type StaffSchema } from "@/lib/schemas/staff";
 import { digitsOnly10 } from "@/lib/phone";
+import { AttachmentsField } from "@/components/AttachmentsField";
+import { uploadDocumentFiles } from "@/lib/api/documents";
 import {
   STAFF_DEPT_OPTIONS,
   STAFF_TYPE_OPTIONS,
@@ -32,7 +34,8 @@ interface StaffFormModalProps {
   /** Present = edit mode, absent = create mode. */
   record?: StaffMember | null;
   saving?: boolean;
-  onSubmit: (values: StaffSchema) => Promise<void>;
+  /** Returns the saved staff member (so attachments can be uploaded), or null on error. */
+  onSubmit: (values: StaffSchema) => Promise<StaffMember | null | void>;
 }
 
 export function StaffFormModal({
@@ -43,6 +46,11 @@ export function StaffFormModal({
   onSubmit,
 }: StaffFormModalProps) {
   const isEdit = Boolean(record);
+
+  const { toast } = useToast();
+  // Files attached in the form, uploaded once the staff record has an id.
+  const [attachments, setAttachments] = useState<File[]>([]);
+  const [savingDocs, setSavingDocs] = useState(false);
 
   const {
     register,
@@ -58,9 +66,27 @@ export function StaffFormModal({
   useEffect(() => {
     if (!open) return;
     reset(record ? { ...record } : emptyValues);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setAttachments([]);
   }, [open, record, reset]);
 
-  const submit = handleSubmit(onSubmit);
+  const submit = handleSubmit(async (values) => {
+    const saved = await onSubmit(values);
+    if (!saved) return; // save failed — keep the form open (error already shown)
+    if (attachments.length > 0) {
+      setSavingDocs(true);
+      const { uploaded, failed } = await uploadDocumentFiles("staff", saved.id, saved.name, attachments);
+      setSavingDocs(false);
+      if (failed) {
+        toast({
+          title: `${uploaded} uploaded, ${failed} failed`,
+          description: "Some attachments could not be saved.",
+          variant: "warning",
+        });
+      }
+    }
+    onOpenChange(false);
+  });
 
   return (
     <Modal
@@ -74,11 +100,11 @@ export function StaffFormModal({
       }
       footer={
         <>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving || savingDocs}>
             Cancel
           </Button>
-          <Button onClick={submit} disabled={saving}>
-            {saving ? "Saving…" : isEdit ? "Save changes" : "Add staff"}
+          <Button onClick={submit} disabled={saving || savingDocs}>
+            {savingDocs ? "Uploading…" : saving ? "Saving…" : isEdit ? "Save changes" : "Add staff"}
           </Button>
         </>
       }
@@ -95,6 +121,15 @@ export function StaffFormModal({
           <Input label="Email" required type="email" placeholder="name@school.edu" {...register("email")} error={errors.email?.message} />
           <Input label="Join date" required placeholder="Jan 2024" {...register("join")} error={errors.join?.message} />
           <Input label="Monthly salary (₹)" type="number" min={0} {...register("salary")} error={errors.salary?.message} />
+        </div>
+
+        <div>
+          <p className="mb-3 mt-1 text-xs font-semibold uppercase tracking-wide text-subtle">Documents</p>
+          <AttachmentsField
+            files={attachments}
+            onChange={setAttachments}
+            hint="Optional — ID proofs, contracts, certificates. You can also add these later from the profile."
+          />
         </div>
 
         {/* Enables Enter-to-submit without duplicating the footer button. */}

@@ -12,6 +12,8 @@ import { fileToDataUrl } from "@/lib/image";
 import { useClassOptions } from "@/hooks/useClassOptions";
 import { useSubjectOptions } from "@/hooks/useSubjectOptions";
 import { DEPARTMENT_OPTIONS } from "@/lib/api/teachers";
+import { AttachmentsField } from "@/components/AttachmentsField";
+import { uploadDocumentFiles } from "@/lib/api/documents";
 import type { Teacher, TeacherFormValues } from "@/types/teacher";
 
 const toOptions = (values: readonly string[]) => values.map((v) => ({ label: v, value: v }));
@@ -69,7 +71,8 @@ interface TeacherFormModalProps {
   onOpenChange: (open: boolean) => void;
   /** Present = edit mode, absent = create mode. */
   teacher?: Teacher | null;
-  onSubmit: (values: TeacherFormValues) => Promise<void>;
+  /** Returns the saved teacher (so attachments can be uploaded), or null on error. */
+  onSubmit: (values: TeacherFormValues) => Promise<Teacher | null | void>;
 }
 
 export function TeacherFormModal({
@@ -81,6 +84,9 @@ export function TeacherFormModal({
   const isEdit = Boolean(teacher);
   const { toast } = useToast();
   const [uploading, setUploading] = useState(false);
+  // Files attached in the form, uploaded once the teacher record has an id.
+  const [attachments, setAttachments] = useState<File[]>([]);
+  const [savingDocs, setSavingDocs] = useState(false);
   const { classNames } = useClassOptions();
   const { subjectNames } = useSubjectOptions();
 
@@ -122,10 +128,27 @@ export function TeacherFormModal({
   useEffect(() => {
     if (!open) return;
     reset(teacher ? { ...teacher } : emptyValues);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setAttachments([]);
   }, [open, teacher, reset]);
 
   const submit = handleSubmit(async (values) => {
-    await onSubmit(values as TeacherFormValues);
+    const saved = await onSubmit(values as TeacherFormValues);
+    if (!saved) return; // save failed — keep the form open (error already shown)
+    if (attachments.length > 0) {
+      setSavingDocs(true);
+      const name = `${values.firstName} ${values.lastName}`.trim();
+      const { uploaded, failed } = await uploadDocumentFiles("teacher", saved.id, name, attachments);
+      setSavingDocs(false);
+      if (failed) {
+        toast({
+          title: `${uploaded} uploaded, ${failed} failed`,
+          description: "Some attachments could not be saved.",
+          variant: "warning",
+        });
+      }
+    }
+    onOpenChange(false);
   });
 
   return (
@@ -141,11 +164,11 @@ export function TeacherFormModal({
       size="lg"
       footer={
         <>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting || savingDocs}>
             Cancel
           </Button>
-          <Button onClick={submit} disabled={isSubmitting}>
-            {isSubmitting ? "Saving…" : isEdit ? "Save changes" : "Create teacher"}
+          <Button onClick={submit} disabled={isSubmitting || savingDocs}>
+            {savingDocs ? "Uploading…" : isSubmitting ? "Saving…" : isEdit ? "Save changes" : "Create teacher"}
           </Button>
         </>
       }
@@ -274,6 +297,15 @@ export function TeacherFormModal({
             />
             <span className="text-sm text-text">Assign as class teacher</span>
           </label>
+        </section>
+
+        <section>
+          <SectionTitle>Documents</SectionTitle>
+          <AttachmentsField
+            files={attachments}
+            onChange={setAttachments}
+            hint="Optional — qualifications, ID proofs, certificates. You can also add these later from the profile."
+          />
         </section>
 
         {/* Enables Enter-to-submit without duplicating the footer button. */}

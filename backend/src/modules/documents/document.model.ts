@@ -9,7 +9,7 @@ import mongoose, { Schema, type InferSchemaType } from "mongoose";
 const documentSchema = new Schema(
   {
     schoolId: { type: String, required: true, default: "school_1", index: true },
-    ownerType: { type: String, enum: ["student", "teacher"], required: true, index: true },
+    ownerType: { type: String, enum: ["student", "teacher", "staff"], required: true, index: true },
     ownerId: { type: String, required: true, index: true },
     ownerName: { type: String, default: "" },
     title: { type: String, required: true, trim: true },

@@ -1,10 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import {
   Search,
   Plus,
   Download,
+  Eye,
   Pencil,
   Trash2,
   Phone,
@@ -79,7 +81,7 @@ export default function StaffPage() {
   // every card that counts a value you just filtered away read zero.
   const filters = useMemo(() => ({ search, dept: "All", type: "All" }), [search]);
 
-  const { items, loading, error, refetch, save, remove, saving, deleting } = useResource(
+  const { items, loading, error, refetch, remove, deleting } = useResource(
     staffApi,
     filters,
     { label: "staff member", describe: (s) => s.name }
@@ -88,6 +90,7 @@ export default function StaffPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<StaffMember | null>(null);
   const [pendingDelete, setPendingDelete] = useState<StaffMember | null>(null);
+  const [saving, setSaving] = useState(false);
   const { toast } = useToast();
 
   // Rows for the table only — stat cards keep counting the full `items`.
@@ -158,11 +161,27 @@ export default function StaffPage() {
     setFormOpen(true);
   };
 
-  const handleSubmit = async (values: StaffSchema) => {
-    const ok = await save(values, editing);
-    if (ok) {
-      setFormOpen(false);
-      setEditing(null);
+  const handleSubmit = async (values: StaffSchema): Promise<StaffMember | null> => {
+    setSaving(true);
+    try {
+      const saved = editing
+        ? await staffApi.update(editing.id, values)
+        : await staffApi.create(values);
+      toast({
+        title: editing ? "Staff member updated" : "Staff member added",
+        description: `${saved.name} was ${editing ? "saved" : "created"}.`,
+      });
+      refetch();
+      return saved;
+    } catch (e) {
+      toast({
+        title: "Could not save staff member",
+        description: e instanceof Error ? e.message : "Something went wrong.",
+        variant: "error",
+      });
+      return null;
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -250,6 +269,13 @@ export default function StaffPage() {
       align: "right",
       render: (s) => (
         <div className="flex items-center justify-end gap-1">
+          <Link
+            href={`/staff/${s.id}`}
+            aria-label={`View ${s.name}`}
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+          >
+            <Eye className="size-4" />
+          </Link>
           <button
             onClick={() => {
               setEditing(s);
@@ -449,7 +475,10 @@ export default function StaffPage() {
 
       <StaffFormModal
         open={formOpen}
-        onOpenChange={setFormOpen}
+        onOpenChange={(o) => {
+          setFormOpen(o);
+          if (!o) setEditing(null);
+        }}
         record={editing}
         saving={saving}
         onSubmit={handleSubmit}

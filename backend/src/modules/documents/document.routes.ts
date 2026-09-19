@@ -11,7 +11,7 @@ import { StoredDocument, toPublicDocument } from "./document.model.js";
 const router = Router();
 
 const createSchema = z.object({
-  ownerType: z.enum(["student", "teacher"]),
+  ownerType: z.enum(["student", "teacher", "staff"]),
   ownerId: z.string().min(1),
   ownerName: z.string().default(""),
   title: z.string().min(1, "A document title is required"),
