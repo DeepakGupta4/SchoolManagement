@@ -5,6 +5,7 @@ import {
   Search,
   Plus,
   Download,
+  Eye,
   Pencil,
   Trash2,
   AlertTriangle,
@@ -37,6 +38,7 @@ import {
   type InventoryItem,
 } from "@/lib/api/inventory";
 import type { InventoryItemSchema } from "@/lib/schemas/inventoryItem";
+import { DetailModal } from "@/components/DetailModal";
 import { InventoryFormModal } from "./InventoryFormModal";
 
 type BadgeVariant = "default" | "success" | "warning" | "danger" | "info";
@@ -111,6 +113,7 @@ export default function InventoryPage() {
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<InventoryItem | null>(null);
+  const [viewing, setViewing] = useState<InventoryItem | null>(null);
   const [pendingDelete, setPendingDelete] = useState<InventoryItem | null>(null);
   const { toast } = useToast();
 
@@ -299,6 +302,13 @@ export default function InventoryPage() {
       render: (item) => (
         <div className="flex items-center justify-end gap-1">
           <button
+            onClick={() => setViewing(item)}
+            aria-label={`View ${item.name}`}
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+          >
+            <Eye className="size-4" />
+          </button>
+          <button
             onClick={() => {
               setEditing(item);
               setFormOpen(true);
@@ -451,6 +461,32 @@ export default function InventoryPage() {
         record={editing}
         saving={saving}
         onSubmit={handleSubmit}
+      />
+
+      <DetailModal
+        open={Boolean(viewing)}
+        onOpenChange={(o) => !o && setViewing(null)}
+        title={viewing?.name ?? "Item"}
+        description={viewing ? `${viewing.code} · ${viewing.category}` : ""}
+        rows={
+          viewing
+            ? [
+                { label: "Code", value: viewing.code },
+                { label: "Item", value: viewing.name },
+                { label: "Category", value: viewing.category },
+                { label: "Quantity", value: `${viewing.qty} ${viewing.unit}` },
+                { label: "Min quantity", value: viewing.minQty },
+                { label: "Unit price", value: `₹${viewing.unitPrice.toLocaleString()}` },
+                {
+                  label: "Stock value",
+                  value: `₹${(viewing.qty * viewing.unitPrice).toLocaleString()}`,
+                },
+                { label: "Status", value: statusConfig[viewing.status]?.label ?? viewing.status },
+                { label: "Supplier", value: viewing.supplier },
+                { label: "Last updated", value: viewing.lastUpdated },
+              ]
+            : []
+        }
       />
 
       <ConfirmDialog

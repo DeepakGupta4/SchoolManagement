@@ -8,6 +8,7 @@ import {
   CheckCircle,
   Clock,
   Download,
+  Eye,
   Pencil,
   PencilLine,
   Plus,
@@ -32,6 +33,7 @@ import { exportToCsv } from "@/lib/exportCsv";
 import { useResource } from "@/hooks/useResource";
 import { examScheduleApi, type ScheduledExam } from "@/lib/api/examSchedule";
 import type { ScheduledExamSchema } from "@/lib/schemas/examSchedule";
+import { DetailModal } from "@/components/DetailModal";
 import { ScheduledExamFormModal } from "./ScheduledExamFormModal";
 
 type BadgeVariant = React.ComponentProps<typeof Badge>["variant"];
@@ -61,6 +63,7 @@ export default function ExamSchedulePage() {
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<ScheduledExam | null>(null);
+  const [viewing, setViewing] = useState<ScheduledExam | null>(null);
   const [pendingDelete, setPendingDelete] = useState<ScheduledExam | null>(null);
   const { toast } = useToast();
 
@@ -221,6 +224,13 @@ export default function ExamSchedulePage() {
       render: (e) => (
         <div className="flex items-center justify-end gap-1">
           <button
+            onClick={() => setViewing(e)}
+            aria-label={`View ${e.exam} — ${e.subject}`}
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+          >
+            <Eye className="size-4" />
+          </button>
+          <button
             onClick={() => {
               setEditing(e);
               setFormOpen(true);
@@ -335,6 +345,30 @@ export default function ExamSchedulePage() {
         record={editing}
         saving={saving}
         onSubmit={handleSubmit}
+      />
+
+      <DetailModal
+        open={Boolean(viewing)}
+        onOpenChange={(o) => !o && setViewing(null)}
+        title={viewing ? `${viewing.exam} — ${viewing.subject}` : "Scheduled exam"}
+        description={viewing ? `${viewing.code} · ${viewing.class}` : ""}
+        rows={
+          viewing
+            ? [
+                { label: "Exam", value: viewing.exam },
+                { label: "Code", value: viewing.code },
+                { label: "Subject", value: viewing.subject },
+                { label: "Class", value: viewing.class },
+                { label: "Date", value: viewing.date },
+                { label: "Time", value: viewing.time },
+                { label: "Duration", value: viewing.duration },
+                { label: "Room", value: viewing.room },
+                { label: "Invigilator", value: viewing.invigilator },
+                { label: "Total marks", value: viewing.totalMarks },
+                { label: "Status", value: <span className="capitalize">{viewing.status}</span> },
+              ]
+            : []
+        }
       />
 
       <ConfirmDialog

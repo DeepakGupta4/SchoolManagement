@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState } from "react";
 import {
-  Plus, Search, Download, Eye, Edit, Trash2, Calendar, Clock, Users,
+  Plus, Search, Download, Eye, Pencil, Trash2, Calendar, Clock, Users,
   Paperclip, CheckCircle, AlertCircle, XCircle, BookOpen, X,
 } from "lucide-react";
 import {
@@ -294,7 +294,7 @@ export default function AssignmentsPage() {
             aria-label={`Edit ${a.title}`}
             className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-success-soft hover:text-success-text"
           >
-            <Edit className="size-4" />
+            <Pencil className="size-4" />
           </button>
           <button
             onClick={() => setPendingDelete(a)}

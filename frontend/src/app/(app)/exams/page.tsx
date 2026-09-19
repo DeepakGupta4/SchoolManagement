@@ -8,6 +8,7 @@ import {
   CheckCircle,
   Clock,
   Download,
+  Eye,
   FileText,
   Pencil,
   Plus,
@@ -37,6 +38,7 @@ import { exportToCsv } from "@/lib/exportCsv";
 import { useResource } from "@/hooks/useResource";
 import { examsApi, type Exam } from "@/lib/api/exams";
 import type { ExamSchema } from "@/lib/schemas/exam";
+import { DetailModal } from "@/components/DetailModal";
 import { ExamFormModal } from "./ExamFormModal";
 
 type BadgeVariant = React.ComponentProps<typeof Badge>["variant"];
@@ -83,6 +85,7 @@ export default function ExamsPage() {
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Exam | null>(null);
+  const [viewing, setViewing] = useState<Exam | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Exam | null>(null);
   const { toast } = useToast();
 
@@ -300,6 +303,13 @@ export default function ExamsPage() {
       render: (exam) => (
         <div className="flex items-center justify-end gap-1">
           <button
+            onClick={() => setViewing(exam)}
+            aria-label={`View ${exam.name}`}
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+          >
+            <Eye className="size-4" />
+          </button>
+          <button
             onClick={() => {
               setEditing(exam);
               setFormOpen(true);
@@ -508,6 +518,38 @@ export default function ExamsPage() {
         record={editing}
         saving={saving}
         onSubmit={handleSubmit}
+      />
+
+      <DetailModal
+        open={Boolean(viewing)}
+        onOpenChange={(o) => !o && setViewing(null)}
+        title={viewing?.name ?? "Exam"}
+        description={
+          viewing
+            ? `${viewing.code} · ${(statusConfig[viewing.status] ?? fallbackStatus).label}`
+            : ""
+        }
+        rows={
+          viewing
+            ? [
+                { label: "Exam", value: viewing.name },
+                { label: "Code", value: viewing.code },
+                { label: "Type", value: viewing.type },
+                { label: "Subject", value: viewing.subject },
+                { label: "Date", value: viewing.date },
+                { label: "Time", value: viewing.time },
+                { label: "Duration", value: viewing.duration },
+                { label: "Total marks", value: viewing.totalMarks },
+                { label: "Students", value: viewing.students.toLocaleString() },
+                { label: "Status", value: (statusConfig[viewing.status] ?? fallbackStatus).label },
+                {
+                  label: "Classes",
+                  value: viewing.classes.length ? viewing.classes.join(", ") : "—",
+                  full: true,
+                },
+              ]
+            : []
+        }
       />
 
       <ConfirmDialog

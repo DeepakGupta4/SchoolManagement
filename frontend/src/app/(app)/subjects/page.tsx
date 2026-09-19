@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { BookOpen, Building2, Library, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { BookOpen, Building2, Eye, Library, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import {
   Badge,
   Button,
@@ -17,6 +17,7 @@ import {
 import { useResource } from "@/hooks/useResource";
 import { subjectsApi, type SchoolSubject } from "@/lib/api/subjects";
 import type { SubjectSchema } from "@/lib/schemas/subject";
+import { DetailModal } from "@/components/DetailModal";
 import { SubjectFormModal } from "./SubjectFormModal";
 
 export default function SubjectsPage() {
@@ -32,6 +33,7 @@ export default function SubjectsPage() {
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<SchoolSubject | null>(null);
+  const [viewing, setViewing] = useState<SchoolSubject | null>(null);
   const [pendingDelete, setPendingDelete] = useState<SchoolSubject | null>(null);
 
   const stats = useMemo(
@@ -97,6 +99,13 @@ export default function SubjectsPage() {
       align: "right",
       render: (s) => (
         <div className="flex items-center justify-end gap-1">
+          <button
+            onClick={() => setViewing(s)}
+            aria-label={`View ${s.name}`}
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+          >
+            <Eye className="size-4" />
+          </button>
           <button
             onClick={() => {
               setEditing(s);
@@ -187,6 +196,22 @@ export default function SubjectsPage() {
         record={editing}
         saving={saving}
         onSubmit={handleSubmit}
+      />
+
+      <DetailModal
+        open={Boolean(viewing)}
+        onOpenChange={(o) => !o && setViewing(null)}
+        title={viewing?.name ?? "Subject"}
+        description={viewing?.code || ""}
+        rows={
+          viewing
+            ? [
+                { label: "Subject", value: viewing.name },
+                { label: "Code", value: viewing.code || "—" },
+                { label: "Department", value: viewing.department || "—" },
+              ]
+            : []
+        }
       />
 
       <ConfirmDialog

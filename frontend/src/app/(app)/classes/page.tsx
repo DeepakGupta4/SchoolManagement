@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { GraduationCap, Layers, Pencil, Plus, School, Search, Trash2, Users } from "lucide-react";
+import { Eye, GraduationCap, Layers, Pencil, Plus, School, Search, Trash2, Users } from "lucide-react";
 import {
   Badge,
   Button,
@@ -18,6 +18,7 @@ import {
 import { useResource } from "@/hooks/useResource";
 import { classesApi, STREAM_OPTIONS, type SchoolClass } from "@/lib/api/classes";
 import type { SchoolClassSchema } from "@/lib/schemas/schoolClass";
+import { DetailModal } from "@/components/DetailModal";
 import { ClassFormModal } from "./ClassFormModal";
 
 export default function ClassesPage() {
@@ -34,6 +35,7 @@ export default function ClassesPage() {
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<SchoolClass | null>(null);
+  const [viewing, setViewing] = useState<SchoolClass | null>(null);
   const [pendingDelete, setPendingDelete] = useState<SchoolClass | null>(null);
 
   const stats = useMemo(
@@ -115,6 +117,13 @@ export default function ClassesPage() {
       align: "right",
       render: (c) => (
         <div className="flex items-center justify-end gap-1">
+          <button
+            onClick={() => setViewing(c)}
+            aria-label={`View ${c.name}`}
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+          >
+            <Eye className="size-4" />
+          </button>
           <button
             onClick={() => {
               setEditing(c);
@@ -215,6 +224,30 @@ export default function ClassesPage() {
         record={editing}
         saving={saving}
         onSubmit={handleSubmit}
+      />
+
+      <DetailModal
+        open={Boolean(viewing)}
+        onOpenChange={(o) => !o && setViewing(null)}
+        title={viewing?.name ?? "Class"}
+        description={viewing ? `Room ${viewing.room}` : ""}
+        rows={
+          viewing
+            ? [
+                { label: "Class", value: viewing.name },
+                { label: "Room", value: viewing.room },
+                { label: "Stream", value: viewing.stream },
+                { label: "Class teacher", value: viewing.classTeacher },
+                { label: "Students", value: viewing.students },
+                { label: "Teachers", value: viewing.teachers },
+                {
+                  label: "Sections",
+                  value: viewing.sections.length ? viewing.sections.join(", ") : "—",
+                  full: true,
+                },
+              ]
+            : []
+        }
       />
 
       <ConfirmDialog

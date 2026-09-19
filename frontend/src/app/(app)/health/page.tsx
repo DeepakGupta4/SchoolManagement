@@ -5,6 +5,7 @@ import {
   Search,
   Plus,
   Download,
+  Eye,
   Pencil,
   Trash2,
   Activity,
@@ -43,6 +44,7 @@ import {
 } from "@/lib/api/patients";
 import type { MedicineSchema } from "@/lib/schemas/medicine";
 import type { PatientSchema } from "@/lib/schemas/patient";
+import { DetailModal } from "@/components/DetailModal";
 import { MedicineFormModal } from "./MedicineFormModal";
 import { PatientFormModal } from "./PatientFormModal";
 
@@ -125,10 +127,12 @@ export default function HealthPage() {
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Medicine | null>(null);
+  const [viewing, setViewing] = useState<Medicine | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Medicine | null>(null);
 
   const [patientFormOpen, setPatientFormOpen] = useState(false);
   const [editingPatient, setEditingPatient] = useState<Patient | null>(null);
+  const [viewingPatient, setViewingPatient] = useState<Patient | null>(null);
   const [pendingDeletePatient, setPendingDeletePatient] = useState<Patient | null>(null);
 
   const recovered = patients.filter((p) => p.status === "Recovered").length;
@@ -281,6 +285,15 @@ export default function HealthPage() {
             variant="ghost"
             size="sm"
             className="px-2"
+            aria-label={`View ${p.name}`}
+            onClick={() => setViewingPatient(p)}
+          >
+            <Eye className="size-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="px-2"
             aria-label={`Edit ${p.name}`}
             onClick={() => {
               setEditingPatient(p);
@@ -364,6 +377,15 @@ export default function HealthPage() {
       align: "right",
       render: (m) => (
         <div className="flex items-center justify-end gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="px-2"
+            aria-label={`View ${m.name}`}
+            onClick={() => setViewing(m)}
+          >
+            <Eye className="size-4" />
+          </Button>
           <Button
             variant="ghost"
             size="sm"
@@ -587,6 +609,46 @@ export default function HealthPage() {
         record={editingPatient}
         saving={savingPatient}
         onSubmit={handlePatientSubmit}
+      />
+
+      <DetailModal
+        open={Boolean(viewingPatient)}
+        onOpenChange={(o) => !o && setViewingPatient(null)}
+        title={viewingPatient?.name ?? "Health Record"}
+        description={viewingPatient ? `${viewingPatient.code} · ${viewingPatient.status}` : ""}
+        rows={
+          viewingPatient
+            ? [
+                { label: "Code", value: viewingPatient.code },
+                { label: "Name", value: viewingPatient.name },
+                { label: "Class", value: viewingPatient.class },
+                { label: "Type", value: viewingPatient.type },
+                { label: "Doctor", value: viewingPatient.doctor },
+                { label: "Date", value: viewingPatient.date },
+                { label: "Status", value: viewingPatient.status },
+                { label: "Issue", value: viewingPatient.issue, full: true },
+              ]
+            : []
+        }
+      />
+
+      <DetailModal
+        open={Boolean(viewing)}
+        onOpenChange={(o) => !o && setViewing(null)}
+        title={viewing?.name ?? "Medicine"}
+        description={viewing ? `${viewing.code} · ${viewing.category}` : ""}
+        rows={
+          viewing
+            ? [
+                { label: "Code", value: viewing.code },
+                { label: "Medicine", value: viewing.name },
+                { label: "Category", value: viewing.category },
+                { label: "Stock", value: `${viewing.stock} ${viewing.unit}` },
+                { label: "Expiry", value: viewing.expiry },
+                { label: "Status", value: viewing.status },
+              ]
+            : []
+        }
       />
 
       <ConfirmDialog

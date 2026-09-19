@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import {
   CalendarRange,
   Download,
+  Eye,
   GraduationCap,
   Pencil,
   Plus,
@@ -43,6 +44,7 @@ import {
   type LoadBand,
 } from "@/lib/api/allocations";
 import type { AllocationSchema } from "@/lib/schemas/allocation";
+import { DetailModal } from "@/components/DetailModal";
 import { AllocationFormModal } from "./AllocationFormModal";
 
 const PAGE_SIZE = 10;
@@ -95,6 +97,7 @@ export default function AllocationPage() {
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Allocation | null>(null);
+  const [viewing, setViewing] = useState<Allocation | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Allocation | null>(null);
   const { toast } = useToast();
 
@@ -255,6 +258,13 @@ export default function AllocationPage() {
       align: "right",
       render: (a) => (
         <div className="flex items-center justify-end gap-1">
+          <button
+            onClick={() => setViewing(a)}
+            aria-label={`View allocation for ${a.teacher}`}
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+          >
+            <Eye className="size-4" />
+          </button>
           <button
             onClick={() => {
               setEditing(a);
@@ -418,6 +428,28 @@ export default function AllocationPage() {
         record={editing}
         saving={saving}
         onSubmit={handleSubmit}
+      />
+
+      <DetailModal
+        open={Boolean(viewing)}
+        onOpenChange={(o) => !o && setViewing(null)}
+        title={viewing ? `${viewing.subject} — ${viewing.teacher}` : "Allocation"}
+        description={viewing ? `${viewing.empId} · ${viewing.dept}` : ""}
+        rows={
+          viewing
+            ? [
+                { label: "Teacher", value: viewing.teacher },
+                { label: "Employee ID", value: viewing.empId },
+                { label: "Subject", value: viewing.subject },
+                { label: "Department", value: viewing.dept },
+                { label: "Room", value: viewing.room },
+                { label: "Lab periods / week", value: viewing.labs > 0 ? `${viewing.labs} p/w` : "—" },
+                { label: "Periods / week", value: `${viewing.periods} of ${MAX_PERIODS}` },
+                { label: "Load", value: `${loadPercent(viewing.periods)}% · ${loadBandLabel(viewing.periods)}` },
+                { label: "Classes", value: viewing.classes.join(", "), full: true },
+              ]
+            : []
+        }
       />
 
       <ConfirmDialog

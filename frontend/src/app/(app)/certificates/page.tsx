@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import {
   Clock,
   Download,
+  Eye,
   FileCheck2,
   FileText,
   Pencil,
@@ -43,6 +44,7 @@ import {
   type CertificateType,
 } from "@/lib/api/certificates";
 import type { CertificateSchema } from "@/lib/schemas/certificate";
+import { DetailModal } from "@/components/DetailModal";
 import { CertificateFormModal } from "./CertificateFormModal";
 import { VerifyCodeModal } from "./VerifyCodeModal";
 
@@ -81,6 +83,7 @@ export default function CertificatesPage() {
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Certificate | null>(null);
+  const [viewing, setViewing] = useState<Certificate | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Certificate | null>(null);
   const [verifyOpen, setVerifyOpen] = useState(false);
 
@@ -253,6 +256,13 @@ export default function CertificatesPage() {
             </Button>
           ) : null}
           <button
+            onClick={() => setViewing(c)}
+            aria-label={`View ${c.type} certificate request for ${c.student}`}
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+          >
+            <Eye className="size-4" />
+          </button>
+          <button
             onClick={() => openEdit(c)}
             aria-label={`Edit ${c.type} certificate request for ${c.student}`}
             className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
@@ -373,6 +383,35 @@ export default function CertificatesPage() {
           />
         </>
       )}
+
+      <DetailModal
+        open={Boolean(viewing)}
+        onOpenChange={(o) => !o && setViewing(null)}
+        title={viewing ? `${viewing.type} certificate` : "Certificate"}
+        description={viewing ? `${viewing.code} · ${viewing.student}` : ""}
+        rows={
+          viewing
+            ? [
+                { label: "Student", value: viewing.student },
+                { label: "Admission no.", value: viewing.admissionNo },
+                { label: "Class", value: viewing.className },
+                { label: "Certificate type", value: viewing.type },
+                { label: "Reference code", value: viewing.code },
+                { label: "Requested by", value: viewing.requestedBy },
+                { label: "Requested on", value: formatDate(viewing.requestedOn) },
+                {
+                  label: "Issue date",
+                  value: viewing.issueDate ? formatDate(viewing.issueDate) : "Not issued",
+                },
+                { label: "Verification code", value: viewing.verificationCode ?? "—" },
+                {
+                  label: "Status",
+                  value: <span className="capitalize">{viewing.status.replace("-", " ")}</span>,
+                },
+              ]
+            : []
+        }
+      />
 
       <VerifyCodeModal open={verifyOpen} onOpenChange={setVerifyOpen} />
 

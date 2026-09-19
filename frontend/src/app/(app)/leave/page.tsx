@@ -7,6 +7,7 @@ import {
   Download,
   Check,
   X,
+  Eye,
   Pencil,
   Trash2,
   CalendarDays,
@@ -40,6 +41,7 @@ import {
   type LeaveRequest,
 } from "@/lib/api/leaveRequests";
 import type { LeaveRequestSchema } from "@/lib/schemas/leaveRequest";
+import { DetailModal } from "@/components/DetailModal";
 import { LeaveFormModal } from "./LeaveFormModal";
 
 type BadgeVariant = "default" | "success" | "warning" | "danger" | "info";
@@ -78,6 +80,7 @@ export default function LeavePage() {
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<LeaveRequest | null>(null);
+  const [viewing, setViewing] = useState<LeaveRequest | null>(null);
   const [pendingDelete, setPendingDelete] = useState<LeaveRequest | null>(null);
   const { toast } = useToast();
 
@@ -248,6 +251,13 @@ export default function LeavePage() {
               </Button>
             </>
           )}
+          <button
+            onClick={() => setViewing(l)}
+            aria-label={`View leave request for ${l.name}`}
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+          >
+            <Eye className="size-4" />
+          </button>
           <button
             onClick={() => {
               setEditing(l);
@@ -424,6 +434,29 @@ export default function LeavePage() {
         record={editing}
         saving={saving}
         onSubmit={handleSubmit}
+      />
+
+      <DetailModal
+        open={Boolean(viewing)}
+        onOpenChange={(o) => !o && setViewing(null)}
+        title={viewing?.name ?? "Leave Request"}
+        description={viewing ? `${viewing.code} · ${viewing.status}` : ""}
+        rows={
+          viewing
+            ? [
+                { label: "Code", value: viewing.code },
+                { label: "Name", value: viewing.name },
+                { label: "Role", value: viewing.role },
+                { label: "Department", value: viewing.dept },
+                { label: "Leave type", value: viewing.type },
+                { label: "From", value: viewing.from },
+                { label: "To", value: viewing.to },
+                { label: "Days", value: `${viewing.days}d` },
+                { label: "Status", value: viewing.status },
+                { label: "Reason", value: viewing.reason, full: true },
+              ]
+            : []
+        }
       />
 
       <ConfirmDialog

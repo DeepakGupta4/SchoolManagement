@@ -5,6 +5,7 @@ import {
   Plus,
   Search,
   Download,
+  Eye,
   Pencil,
   Trash2,
   Wallet,
@@ -46,6 +47,7 @@ import {
 } from "@/lib/api/menuItems";
 import type { MenuItemSchema } from "@/lib/schemas/menuItem";
 import { cn } from "@/lib/utils";
+import { DetailModal } from "@/components/DetailModal";
 import { MenuItemFormModal } from "./MenuItemFormModal";
 
 type Order = {
@@ -135,6 +137,7 @@ export default function CanteenPage() {
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<MenuItem | null>(null);
+  const [viewing, setViewing] = useState<MenuItem | null>(null);
   const [pendingDelete, setPendingDelete] = useState<MenuItem | null>(null);
 
   const openCreate = () => {
@@ -277,6 +280,13 @@ export default function CanteenPage() {
       align: "right",
       render: (m) => (
         <div className="flex items-center justify-end gap-1">
+          <button
+            onClick={() => setViewing(m)}
+            aria-label={`View ${m.name}`}
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+          >
+            <Eye className="size-4" />
+          </button>
           <button
             onClick={() => {
               setEditing(m);
@@ -487,6 +497,25 @@ export default function CanteenPage() {
         record={editing}
         saving={saving}
         onSubmit={handleSubmit}
+      />
+
+      <DetailModal
+        open={Boolean(viewing)}
+        onOpenChange={(o) => !o && setViewing(null)}
+        title={viewing ? `${viewing.emoji} ${viewing.name}` : "Menu Item"}
+        description={viewing ? `${viewing.code} · ${viewing.category}` : ""}
+        rows={
+          viewing
+            ? [
+                { label: "Code", value: viewing.code },
+                { label: "Item", value: viewing.name },
+                { label: "Category", value: viewing.category },
+                { label: "Price", value: `₹${viewing.price}` },
+                { label: "Availability", value: viewing.available ? "Available" : "Unavailable" },
+                { label: "Sold today", value: viewing.sold },
+              ]
+            : []
+        }
       />
 
       <ConfirmDialog

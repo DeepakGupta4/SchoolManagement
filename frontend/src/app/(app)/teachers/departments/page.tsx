@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import {
   Building2,
   Download,
+  Eye,
   IndianRupee,
   Pencil,
   Plus,
@@ -37,6 +38,7 @@ import {
   type Department,
 } from "@/lib/api/departments";
 import type { DepartmentSchema } from "@/lib/schemas/department";
+import { DetailModal } from "@/components/DetailModal";
 import { DepartmentFormModal } from "./DepartmentFormModal";
 
 const PAGE_SIZE = 8;
@@ -85,6 +87,7 @@ export default function DepartmentsPage() {
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Department | null>(null);
+  const [viewing, setViewing] = useState<Department | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Department | null>(null);
   const { toast } = useToast();
 
@@ -252,6 +255,13 @@ export default function DepartmentsPage() {
       render: (d) => (
         <div className="flex items-center justify-end gap-1">
           <button
+            onClick={() => setViewing(d)}
+            aria-label={`View ${d.name}`}
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+          >
+            <Eye className="size-4" />
+          </button>
+          <button
             onClick={() => {
               setEditing(d);
               setFormOpen(true);
@@ -394,6 +404,32 @@ export default function DepartmentsPage() {
         record={editing}
         saving={saving}
         onSubmit={handleSubmit}
+      />
+
+      <DetailModal
+        open={Boolean(viewing)}
+        onOpenChange={(o) => !o && setViewing(null)}
+        title={viewing?.name ?? "Department"}
+        description={viewing ? `${viewing.code} · ${viewing.block}` : ""}
+        rows={
+          viewing
+            ? [
+                { label: "Department", value: viewing.name },
+                { label: "Code", value: viewing.code },
+                { label: "Head of dept.", value: viewing.hod },
+                { label: "Block", value: viewing.block },
+                { label: "Teachers", value: viewing.teachers },
+                { label: "Annual budget", value: inr(viewing.budget) },
+                { label: "Spent", value: inr(viewing.spent) },
+                {
+                  label: "Utilisation",
+                  value: `${viewing.budget > 0 ? Math.round((viewing.spent / viewing.budget) * 100) : 0}%`,
+                },
+                { label: "Status", value: <span className="capitalize">{viewing.status}</span> },
+                { label: "Subjects", value: viewing.subjects.join(", "), full: true },
+              ]
+            : []
+        }
       />
 
       <ConfirmDialog

@@ -5,6 +5,7 @@ import {
   Search,
   Plus,
   Download,
+  Eye,
   Pencil,
   Trash2,
   MapPin,
@@ -38,6 +39,7 @@ import { cn } from "@/lib/utils";
 import { useResource } from "@/hooks/useResource";
 import { busRoutesApi, type BusRoute } from "@/lib/api/busRoutes";
 import type { BusRouteSchema } from "@/lib/schemas/busRoute";
+import { DetailModal } from "@/components/DetailModal";
 import { BusRouteFormModal } from "./BusRouteFormModal";
 
 const statusConfig: Record<
@@ -77,15 +79,26 @@ function occupancyTone(pct: number) {
 
 function RowActions({
   label,
+  onView,
   onEdit,
   onDelete,
 }: {
   label: string;
+  onView: () => void;
   onEdit: () => void;
   onDelete: () => void;
 }) {
   return (
     <div className="flex items-center gap-1">
+      <Button
+        variant="ghost"
+        size="sm"
+        className="px-2"
+        onClick={onView}
+        aria-label={`View ${label}`}
+      >
+        <Eye className="size-4" />
+      </Button>
       <Button
         variant="ghost"
         size="sm"
@@ -126,6 +139,7 @@ export default function TransportPage() {
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<BusRoute | null>(null);
+  const [viewing, setViewing] = useState<BusRoute | null>(null);
   const [pendingDelete, setPendingDelete] = useState<BusRoute | null>(null);
   const { toast } = useToast();
 
@@ -299,6 +313,7 @@ export default function TransportPage() {
         <div className="flex justify-end">
           <RowActions
             label={route.name}
+            onView={() => setViewing(route)}
             onEdit={() => openEdit(route)}
             onDelete={() => setPendingDelete(route)}
           />
@@ -483,6 +498,7 @@ export default function TransportPage() {
                           </span>
                           <RowActions
                             label={route.name}
+                            onView={() => setViewing(route)}
                             onEdit={() => openEdit(route)}
                             onDelete={() => setPendingDelete(route)}
                           />
@@ -567,6 +583,36 @@ export default function TransportPage() {
         record={editing}
         saving={saving}
         onSubmit={handleSubmit}
+      />
+
+      <DetailModal
+        open={Boolean(viewing)}
+        onOpenChange={(o) => !o && setViewing(null)}
+        title={viewing?.name ?? "Route"}
+        description={viewing ? `${viewing.code} · ${(statusConfig[viewing.status] ?? fallbackStatus).label}` : ""}
+        rows={
+          viewing
+            ? [
+                { label: "Route code", value: viewing.code },
+                { label: "Route", value: viewing.name },
+                { label: "Bus no", value: viewing.bus },
+                { label: "Driver", value: viewing.driver },
+                { label: "Departure", value: viewing.departure },
+                { label: "Arrival", value: viewing.arrival },
+                { label: "Distance", value: viewing.distance },
+                {
+                  label: "Occupancy",
+                  value: `${viewing.students}/${viewing.capacity} students`,
+                },
+                { label: "Status", value: (statusConfig[viewing.status] ?? fallbackStatus).label },
+                {
+                  label: `Stops (${viewing.stops.length})`,
+                  value: viewing.stops.join(" · "),
+                  full: true,
+                },
+              ]
+            : []
+        }
       />
 
       <ConfirmDialog

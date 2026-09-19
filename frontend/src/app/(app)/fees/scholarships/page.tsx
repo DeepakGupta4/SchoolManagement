@@ -6,6 +6,7 @@ import {
   CheckCircle,
   Clock,
   Download,
+  Eye,
   GraduationCap,
   HeartHandshake,
   Pencil,
@@ -32,6 +33,7 @@ import { exportToCsv } from "@/lib/exportCsv";
 import { useResource } from "@/hooks/useResource";
 import { scholarshipsApi, type Scholarship } from "@/lib/api/scholarships";
 import type { ScholarshipSchema } from "@/lib/schemas/scholarship";
+import { DetailModal } from "@/components/DetailModal";
 import { ScholarshipFormModal } from "./ScholarshipFormModal";
 
 type BadgeVariant = "default" | "success" | "warning" | "danger" | "info";
@@ -85,6 +87,7 @@ export default function ScholarshipsPage() {
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Scholarship | null>(null);
+  const [viewing, setViewing] = useState<Scholarship | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Scholarship | null>(null);
   const { toast } = useToast();
 
@@ -247,6 +250,14 @@ export default function ScholarshipsPage() {
       render: (s) => (
         <div className="flex items-center justify-end gap-1">
           <button
+            onClick={() => setViewing(s)}
+            title="View"
+            aria-label={`View scholarship ${s.code}`}
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+          >
+            <Eye className="size-4" />
+          </button>
+          <button
             onClick={() => {
               setEditing(s);
               setFormOpen(true);
@@ -387,6 +398,28 @@ export default function ScholarshipsPage() {
         record={editing}
         saving={saving}
         onSubmit={handleSubmit}
+      />
+
+      <DetailModal
+        open={Boolean(viewing)}
+        onOpenChange={(o) => !o && setViewing(null)}
+        title={viewing?.student ?? "Scholarship"}
+        description={viewing ? `${viewing.code} · ${viewing.type}` : ""}
+        rows={
+          viewing
+            ? [
+                { label: "Code", value: viewing.code },
+                { label: "Student", value: viewing.student },
+                { label: "Class", value: viewing.class },
+                { label: "Type", value: viewing.type },
+                { label: "Concession", value: `${viewing.percentage}%` },
+                { label: "Amount waived", value: inr.format(viewing.amount) },
+                { label: "Status", value: statusConfig[viewing.status]?.label ?? viewing.status },
+                { label: "Since", value: viewing.since },
+                { label: "Reason", value: viewing.reason, full: true },
+              ]
+            : []
+        }
       />
 
       <ConfirmDialog

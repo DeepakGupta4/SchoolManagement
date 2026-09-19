@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import {
   Atom,
   CalendarClock,
+  Eye,
   FlaskConical,
   Microscope,
   Monitor,
@@ -43,6 +44,7 @@ import {
   type LabType,
 } from "@/lib/api/labs";
 import type { LabSchema } from "@/lib/schemas/lab";
+import { DetailModal } from "@/components/DetailModal";
 import { LabFormModal } from "./LabFormModal";
 
 const PAGE_SIZE = 10;
@@ -86,6 +88,7 @@ export default function LabsPage() {
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Lab | null>(null);
+  const [viewing, setViewing] = useState<Lab | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Lab | null>(null);
 
   // A narrowed filter can strand you past the last page, so every filter
@@ -266,6 +269,13 @@ export default function LabsPage() {
       render: (l) => (
         <div className="flex items-center justify-end gap-1">
           <button
+            onClick={() => setViewing(l)}
+            aria-label={`View ${l.name}`}
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+          >
+            <Eye className="size-4" />
+          </button>
+          <button
             onClick={() => {
               setEditing(l);
               setFormOpen(true);
@@ -443,6 +453,33 @@ export default function LabsPage() {
         record={editing}
         saving={saving}
         onSubmit={handleSubmit}
+      />
+
+      <DetailModal
+        open={Boolean(viewing)}
+        onOpenChange={(o) => !o && setViewing(null)}
+        title={viewing?.name ?? "Lab"}
+        description={viewing ? `${viewing.type} · ${viewing.block}` : ""}
+        rows={
+          viewing
+            ? [
+                { label: "Lab", value: viewing.name },
+                { label: "Type", value: viewing.type },
+                { label: "Block", value: viewing.block },
+                { label: "Capacity", value: `${viewing.capacity} seats` },
+                { label: "Lab in-charge", value: viewing.inCharge },
+                { label: "Assistant", value: viewing.assistant },
+                {
+                  label: "Equipment",
+                  value: `${viewing.equipmentWorking}/${viewing.equipmentTotal} working`,
+                },
+                { label: "Practicals / week", value: viewing.weeklyPracticals },
+                { label: "Next practical", value: formatDate(viewing.nextPractical) },
+                { label: "Next practical class", value: viewing.nextPracticalClass },
+                { label: "Status", value: viewing.status },
+              ]
+            : []
+        }
       />
 
       <ConfirmDialog

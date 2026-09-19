@@ -5,6 +5,7 @@ import {
   CalendarDays,
   CheckCircle2,
   Download,
+  Eye,
   Images,
   MapPin,
   Pencil,
@@ -42,6 +43,7 @@ import {
   type SchoolEvent,
 } from "@/lib/api/events";
 import type { EventSchema } from "@/lib/schemas/event";
+import { DetailModal } from "@/components/DetailModal";
 import { EventFormModal } from "./EventFormModal";
 
 const PAGE_SIZE = 8;
@@ -93,6 +95,7 @@ export default function EventsPage() {
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<SchoolEvent | null>(null);
+  const [viewing, setViewing] = useState<SchoolEvent | null>(null);
   const [pendingDelete, setPendingDelete] = useState<SchoolEvent | null>(null);
   const { toast } = useToast();
 
@@ -290,6 +293,13 @@ export default function EventsPage() {
       render: (e) => (
         <div className="flex items-center justify-end gap-1">
           <button
+            onClick={() => setViewing(e)}
+            aria-label={`View ${e.name}`}
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+          >
+            <Eye className="size-4" />
+          </button>
+          <button
             onClick={() => openEdit(e)}
             aria-label={`Edit ${e.name}`}
             className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
@@ -422,6 +432,32 @@ export default function EventsPage() {
         record={editing}
         saving={saving}
         onSubmit={handleSubmit}
+      />
+
+      <DetailModal
+        open={Boolean(viewing)}
+        onOpenChange={(o) => !o && setViewing(null)}
+        title={viewing?.name ?? "Event"}
+        description={viewing ? `${viewing.code} · ${viewing.category}` : ""}
+        rows={
+          viewing
+            ? [
+                { label: "Event", value: viewing.name },
+                { label: "Code", value: viewing.code },
+                { label: "Category", value: viewing.category },
+                { label: "Date", value: formatDate(viewing.date) },
+                { label: "Venue", value: viewing.venue },
+                { label: "Coordinator", value: viewing.coordinator },
+                { label: "Participants", value: `${viewing.participants} of ${viewing.capacity}` },
+                {
+                  label: "Registration",
+                  value: <span className="capitalize">{viewing.registration.replace("-", " ")}</span>,
+                },
+                { label: "Status", value: <span className="capitalize">{viewing.status}</span> },
+                { label: "Media files", value: viewing.mediaCount },
+              ]
+            : []
+        }
       />
 
       <ConfirmDialog

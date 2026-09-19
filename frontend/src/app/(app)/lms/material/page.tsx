@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import {
   Download,
+  Eye,
   FileText,
   HardDrive,
   Library,
@@ -40,6 +41,7 @@ import {
   type Material,
 } from "@/lib/api/studyMaterial";
 import type { MaterialSchema } from "@/lib/schemas/material";
+import { DetailModal } from "@/components/DetailModal";
 import { MaterialFormModal } from "./MaterialFormModal";
 
 const PAGE_SIZE = 10;
@@ -83,6 +85,7 @@ export default function StudyMaterialPage() {
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Material | null>(null);
+  const [viewing, setViewing] = useState<Material | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Material | null>(null);
   const { toast } = useToast();
 
@@ -258,6 +261,13 @@ export default function StudyMaterialPage() {
             </button>
           </Tooltip>
           <button
+            onClick={() => setViewing(m)}
+            aria-label={`View ${m.title}`}
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+          >
+            <Eye className="size-4" />
+          </button>
+          <button
             onClick={() => {
               setEditing(m);
               setFormOpen(true);
@@ -403,6 +413,30 @@ export default function StudyMaterialPage() {
         record={editing}
         saving={saving}
         onSubmit={handleSubmit}
+      />
+
+      <DetailModal
+        open={Boolean(viewing)}
+        onOpenChange={(o) => !o && setViewing(null)}
+        title={viewing?.title ?? "Material"}
+        description={viewing ? `${viewing.subject} · Class ${viewing.klass}` : ""}
+        rows={
+          viewing
+            ? [
+                { label: "Title", value: viewing.title },
+                { label: "Type", value: (TYPE_META[viewing.type] ?? FALLBACK_TYPE).label },
+                { label: "Subject", value: viewing.subject },
+                { label: "Class", value: viewing.klass },
+                { label: "Uploaded by", value: viewing.uploader },
+                { label: "Uploaded", value: viewing.uploaded },
+                { label: "Size", value: formatSize(viewing.sizeMb) },
+                { label: "Downloads", value: viewing.downloads },
+                { label: "Visibility", value: <span className="capitalize">{viewing.visibility}</span> },
+                { label: "Tags", value: viewing.tags.join(", "), full: true },
+                { label: "Description", value: viewing.description, full: true },
+              ]
+            : []
+        }
       />
 
       <ConfirmDialog

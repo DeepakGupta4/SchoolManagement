@@ -5,7 +5,8 @@ import {
   Search,
   Plus,
   Download,
-  Edit,
+  Eye,
+  Pencil,
   Trash2,
   Pin,
   FileText,
@@ -38,6 +39,7 @@ import {
   type Notice,
 } from "@/lib/api/notices";
 import type { NoticeSchema } from "@/lib/schemas/notice";
+import { DetailModal } from "@/components/DetailModal";
 import { NoticeFormModal } from "./NoticeFormModal";
 
 type BadgeVariant = "default" | "success" | "warning" | "danger" | "info" | "outline";
@@ -97,6 +99,7 @@ export default function NoticesPage() {
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Notice | null>(null);
+  const [viewing, setViewing] = useState<Notice | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Notice | null>(null);
   const { toast } = useToast();
 
@@ -242,11 +245,18 @@ export default function NoticesPage() {
       render: (n) => (
         <div className="flex items-center justify-end gap-1">
           <button
+            onClick={() => setViewing(n)}
+            aria-label={`View ${n.title}`}
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+          >
+            <Eye className="size-4" />
+          </button>
+          <button
             onClick={() => openEdit(n)}
             aria-label={`Edit ${n.title}`}
             className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
           >
-            <Edit className="size-4" />
+            <Pencil className="size-4" />
           </button>
           <button
             onClick={() => setPendingDelete(n)}
@@ -326,11 +336,18 @@ export default function NoticesPage() {
                     </div>
                     <div className="flex shrink-0 flex-col gap-1">
                       <button
+                        onClick={() => setViewing(n)}
+                        aria-label={`View ${n.title}`}
+                        className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+                      >
+                        <Eye className="size-4" />
+                      </button>
+                      <button
                         onClick={() => openEdit(n)}
                         aria-label={`Edit ${n.title}`}
                         className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
                       >
-                        <Edit className="size-4" />
+                        <Pencil className="size-4" />
                       </button>
                       <button
                         onClick={() => setPendingDelete(n)}
@@ -445,6 +462,28 @@ export default function NoticesPage() {
         record={editing}
         saving={saving}
         onSubmit={handleSubmit}
+      />
+
+      <DetailModal
+        open={Boolean(viewing)}
+        onOpenChange={(o) => !o && setViewing(null)}
+        title={viewing?.title ?? "Notice"}
+        description={viewing ? `${viewing.category} · ${viewing.priority} priority` : ""}
+        rows={
+          viewing
+            ? [
+                { label: "Title", value: viewing.title },
+                { label: "Category", value: viewing.category },
+                { label: "Priority", value: viewing.priority },
+                { label: "Posted by", value: viewing.postedBy },
+                { label: "Date", value: viewing.date },
+                { label: "Expiry", value: viewing.expiry },
+                { label: "Pinned", value: viewing.pinned ? "Yes" : "No" },
+                { label: "Audience", value: viewing.audience.join(", ") },
+                { label: "Body", value: viewing.body, full: true },
+              ]
+            : []
+        }
       />
 
       <ConfirmDialog

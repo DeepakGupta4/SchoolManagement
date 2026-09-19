@@ -5,6 +5,7 @@ import {
   Award,
   Briefcase,
   Download,
+  Eye,
   Mail,
   MapPin,
   Pencil,
@@ -41,6 +42,7 @@ import {
   type Alumnus,
 } from "@/lib/api/alumni";
 import type { AlumnusSchema } from "@/lib/schemas/alumnus";
+import { DetailModal } from "@/components/DetailModal";
 import { AlumnusFormModal } from "./AlumnusFormModal";
 
 const PAGE_SIZE = 10;
@@ -65,6 +67,7 @@ export default function AlumniPage() {
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Alumnus | null>(null);
+  const [viewing, setViewing] = useState<Alumnus | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Alumnus | null>(null);
   const { toast } = useToast();
 
@@ -242,6 +245,13 @@ export default function AlumniPage() {
             <Mail className="size-4" />
           </button>
           <button
+            onClick={() => setViewing(a)}
+            aria-label={`View ${a.name}`}
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+          >
+            <Eye className="size-4" />
+          </button>
+          <button
             onClick={() => {
               setEditing(a);
               setFormOpen(true);
@@ -379,6 +389,34 @@ export default function AlumniPage() {
         record={editing}
         saving={saving}
         onSubmit={handleSubmit}
+      />
+
+      <DetailModal
+        open={Boolean(viewing)}
+        onOpenChange={(o) => !o && setViewing(null)}
+        title={viewing?.name ?? "Alumnus"}
+        description={viewing ? `${viewing.id} · Batch of ${viewing.batch}` : ""}
+        rows={
+          viewing
+            ? [
+                { label: "Name", value: viewing.name },
+                { label: "Alumni ID", value: viewing.id },
+                { label: "Batch", value: viewing.batch },
+                { label: "Stream", value: viewing.stream },
+                { label: "Occupation", value: viewing.occupation },
+                { label: "Employer", value: viewing.employer },
+                { label: "City", value: viewing.city },
+                { label: "Email", value: viewing.email },
+                { label: "Phone", value: viewing.phone },
+                { label: "Mentor", value: viewing.mentor ? "Yes" : "No" },
+                {
+                  label: "Can help with",
+                  value: viewing.interests.length ? viewing.interests.join(", ") : "—",
+                  full: true,
+                },
+              ]
+            : []
+        }
       />
 
       <ConfirmDialog

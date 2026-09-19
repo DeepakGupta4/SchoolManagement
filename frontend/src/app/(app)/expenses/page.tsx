@@ -5,6 +5,7 @@ import {
   CheckCircle,
   Clock,
   Download,
+  Eye,
   ListChecks,
   Pencil,
   Plus,
@@ -53,6 +54,7 @@ import {
 import type { ExpenseSchema } from "@/lib/schemas/expense";
 import { useChartTheme, toneClass, type ChartTone } from "@/hooks/useChartTheme";
 import { cn } from "@/lib/utils";
+import { DetailModal } from "@/components/DetailModal";
 import { ExpenseFormModal } from "./ExpenseFormModal";
 
 /** Cycled across the category breakdown — keeps the pie and its legend matched. */
@@ -89,6 +91,7 @@ export default function ExpensesPage() {
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Expense | null>(null);
+  const [viewing, setViewing] = useState<Expense | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Expense | null>(null);
   const { toast } = useToast();
 
@@ -278,6 +281,13 @@ export default function ExpensesPage() {
       align: "right",
       render: (e) => (
         <div className="flex items-center justify-end gap-1">
+          <button
+            onClick={() => setViewing(e)}
+            aria-label={`View ${e.title}`}
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+          >
+            <Eye className="size-4" />
+          </button>
           <button
             onClick={() => {
               setEditing(e);
@@ -500,6 +510,29 @@ export default function ExpensesPage() {
         record={editing}
         saving={saving}
         onSubmit={handleSubmit}
+      />
+
+      <DetailModal
+        open={Boolean(viewing)}
+        onOpenChange={(o) => !o && setViewing(null)}
+        title={viewing?.title ?? "Expense"}
+        description={viewing ? `${viewing.voucherNo} · ${viewing.category}` : ""}
+        rows={
+          viewing
+            ? [
+                { label: "Voucher no", value: viewing.voucherNo },
+                { label: "Title", value: viewing.title },
+                { label: "Category", value: viewing.category },
+                { label: "Amount", value: inr.format(viewing.amount) },
+                { label: "Date", value: viewing.date },
+                { label: "Paid to", value: viewing.paidTo },
+                { label: "Method", value: viewing.method },
+                { label: "Status", value: viewing.status === "paid" ? "Paid" : "Pending" },
+                { label: "Recurring", value: viewing.recurring ? "Yes" : "No" },
+                { label: "Notes", value: viewing.notes, full: true },
+              ]
+            : []
+        }
       />
 
       <ConfirmDialog

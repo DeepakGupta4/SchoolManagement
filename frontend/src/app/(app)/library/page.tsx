@@ -5,6 +5,7 @@ import {
   Search,
   Plus,
   Download,
+  Eye,
   Pencil,
   Trash2,
   BookOpen,
@@ -32,6 +33,7 @@ import { exportToCsv } from "@/lib/exportCsv";
 import { useResource } from "@/hooks/useResource";
 import { booksApi, CATEGORY_OPTIONS, type Book } from "@/lib/api/books";
 import type { BookSchema } from "@/lib/schemas/book";
+import { DetailModal } from "@/components/DetailModal";
 import { BookFormModal } from "./BookFormModal";
 
 type IssueRecord = {
@@ -110,6 +112,7 @@ export default function LibraryPage() {
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Book | null>(null);
+  const [viewing, setViewing] = useState<Book | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Book | null>(null);
   const { toast } = useToast();
 
@@ -282,6 +285,13 @@ export default function LibraryPage() {
       render: (b) => (
         <div className="flex items-center justify-end gap-1">
           <button
+            onClick={() => setViewing(b)}
+            aria-label={`View ${b.title}`}
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+          >
+            <Eye className="size-4" />
+          </button>
+          <button
             onClick={() => {
               setEditing(b);
               setFormOpen(true);
@@ -415,6 +425,28 @@ export default function LibraryPage() {
         record={editing}
         saving={saving}
         onSubmit={handleSubmit}
+      />
+
+      <DetailModal
+        open={Boolean(viewing)}
+        onOpenChange={(o) => !o && setViewing(null)}
+        title={viewing?.title ?? "Book"}
+        description={viewing ? `${viewing.author} · ${viewing.category}` : ""}
+        rows={
+          viewing
+            ? [
+                { label: "Title", value: viewing.title },
+                { label: "Author", value: viewing.author },
+                { label: "Category", value: viewing.category },
+                { label: "ISBN", value: viewing.isbn },
+                { label: "Publisher", value: viewing.publisher },
+                { label: "Year", value: viewing.year },
+                { label: "Total copies", value: viewing.total },
+                { label: "Available", value: viewing.available },
+                { label: "Issued out", value: viewing.total - viewing.available },
+              ]
+            : []
+        }
       />
 
       <ConfirmDialog

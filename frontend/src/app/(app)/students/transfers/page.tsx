@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   Clock,
   Download,
+  Eye,
   LogOut,
   Pencil,
   Plus,
@@ -39,6 +40,7 @@ import {
   type TransferRequest,
 } from "@/lib/api/transfers";
 import type { TransferSchema } from "@/lib/schemas/transfer";
+import { DetailModal } from "@/components/DetailModal";
 import { TransferFormModal } from "./TransferFormModal";
 
 const PAGE_SIZE = 10;
@@ -65,6 +67,7 @@ export default function TransfersPage() {
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<TransferRequest | null>(null);
+  const [viewing, setViewing] = useState<TransferRequest | null>(null);
   const [pendingDelete, setPendingDelete] = useState<TransferRequest | null>(null);
   const { toast } = useToast();
 
@@ -234,6 +237,13 @@ export default function TransfersPage() {
             <Printer className="size-4" />
           </button>
           <button
+            onClick={() => setViewing(r)}
+            aria-label={`View request for ${r.name}`}
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+          >
+            <Eye className="size-4" />
+          </button>
+          <button
             onClick={() => {
               setEditing(r);
               setFormOpen(true);
@@ -364,6 +374,36 @@ export default function TransfersPage() {
         record={editing}
         saving={saving}
         onSubmit={handleSubmit}
+      />
+
+      <DetailModal
+        open={Boolean(viewing)}
+        onOpenChange={(o) => !o && setViewing(null)}
+        title={viewing?.name ?? "Transfer request"}
+        description={
+          viewing
+            ? `${viewing.studentId} · ${STATUS_META[viewing.status]?.label ?? viewing.status}`
+            : ""
+        }
+        rows={
+          viewing
+            ? [
+                { label: "Student", value: viewing.name },
+                { label: "Student ID", value: viewing.studentId },
+                { label: "Class", value: viewing.className },
+                { label: "Type", value: viewing.type },
+                { label: "Requested on", value: viewing.requestedOn },
+                { label: "TC number", value: viewing.tcNo === "—" ? "—" : viewing.tcNo },
+                { label: "Issued on", value: viewing.issuedOn },
+                {
+                  label: "Pending dues",
+                  value: viewing.dues > 0 ? inr.format(viewing.dues) : "Cleared",
+                },
+                { label: "Status", value: STATUS_META[viewing.status]?.label ?? viewing.status },
+                { label: "Reason", value: viewing.reason, full: true },
+              ]
+            : []
+        }
       />
 
       <ConfirmDialog

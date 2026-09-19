@@ -5,6 +5,7 @@ import {
   Search,
   Plus,
   Download,
+  Eye,
   Pencil,
   Trash2,
   Users,
@@ -39,6 +40,7 @@ import {
   type HostelStudent,
 } from "@/lib/api/hostelStudents";
 import type { HostelStudentSchema } from "@/lib/schemas/hostelStudent";
+import { DetailModal } from "@/components/DetailModal";
 import { HostelStudentFormModal } from "./HostelStudentFormModal";
 
 const feeVariant: Record<string, "success" | "warning" | "danger"> = {
@@ -74,6 +76,7 @@ export default function HostelPage() {
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<HostelStudent | null>(null);
+  const [viewing, setViewing] = useState<HostelStudent | null>(null);
   const [pendingDelete, setPendingDelete] = useState<HostelStudent | null>(null);
   const { toast } = useToast();
 
@@ -211,6 +214,13 @@ export default function HostelPage() {
       align: "right",
       render: (s) => (
         <div className="flex items-center justify-end gap-1">
+          <button
+            onClick={() => setViewing(s)}
+            aria-label={`View ${s.name}`}
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+          >
+            <Eye className="size-4" />
+          </button>
           <button
             onClick={() => {
               setEditing(s);
@@ -375,6 +385,28 @@ export default function HostelPage() {
         record={editing}
         saving={saving}
         onSubmit={handleSubmit}
+      />
+
+      <DetailModal
+        open={Boolean(viewing)}
+        onOpenChange={(o) => !o && setViewing(null)}
+        title={viewing?.name ?? "Resident"}
+        description={viewing ? `${viewing.studentId} · Class ${viewing.class}` : ""}
+        rows={
+          viewing
+            ? [
+                { label: "Student ID", value: viewing.studentId },
+                { label: "Name", value: viewing.name },
+                { label: "Class", value: viewing.class },
+                { label: "Hostel", value: viewing.hostel },
+                { label: "Room", value: viewing.room },
+                { label: "Type", value: viewing.type },
+                { label: "Fee status", value: viewing.fees },
+                { label: "Join date", value: viewing.joinDate },
+                { label: "Contact", value: viewing.contact },
+              ]
+            : []
+        }
       />
 
       <ConfirmDialog

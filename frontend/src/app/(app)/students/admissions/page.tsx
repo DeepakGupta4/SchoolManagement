@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   ChevronRight,
   Download,
+  Eye,
   Pencil,
   Phone,
   Plus,
@@ -45,6 +46,7 @@ import {
 import type { AdmissionSchema } from "@/lib/schemas/admission";
 import { useClassOptions } from "@/hooks/useClassOptions";
 import { cn } from "@/lib/utils";
+import { DetailModal } from "@/components/DetailModal";
 import { AdmissionFormModal } from "./AdmissionFormModal";
 
 const PAGE_SIZE = 10;
@@ -73,6 +75,7 @@ export default function AdmissionsPage() {
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Application | null>(null);
+  const [viewing, setViewing] = useState<Application | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Application | null>(null);
   const { toast } = useToast();
 
@@ -269,6 +272,13 @@ export default function AdmissionsPage() {
               </Tooltip>
             )}
             <button
+              onClick={() => setViewing(a)}
+              aria-label={`View ${a.name}`}
+              className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+            >
+              <Eye className="size-4" />
+            </button>
+            <button
               onClick={() => {
                 setEditing(a);
                 setFormOpen(true);
@@ -460,6 +470,37 @@ export default function AdmissionsPage() {
         record={editing}
         saving={saving}
         onSubmit={handleSubmit}
+      />
+
+      <DetailModal
+        open={Boolean(viewing)}
+        onOpenChange={(o) => !o && setViewing(null)}
+        title={viewing?.name ?? "Application"}
+        description={viewing ? `${viewing.applicationNo} · ${STAGE_META[viewing.stage]?.label ?? viewing.stage}` : ""}
+        rows={
+          viewing
+            ? [
+                { label: "Applicant", value: viewing.name },
+                { label: "Application No", value: viewing.applicationNo },
+                { label: "Date of birth", value: viewing.dateOfBirth },
+                { label: "Gender", value: viewing.gender },
+                { label: "Class applied", value: viewing.classApplied },
+                { label: "Category", value: viewing.category },
+                { label: "Blood group", value: viewing.bloodGroup },
+                { label: "Previous school", value: viewing.previousSchool },
+                { label: "Parent / guardian", value: viewing.parent },
+                { label: "Relation", value: viewing.relation },
+                { label: "Phone", value: viewing.phone },
+                { label: "Email", value: viewing.email },
+                { label: "Address", value: viewing.address, full: true },
+                { label: "Source", value: viewing.source },
+                { label: "Applied on", value: viewing.appliedOn },
+                { label: "Stage", value: STAGE_META[viewing.stage]?.label ?? viewing.stage },
+                { label: "Entrance score", value: viewing.score > 0 ? viewing.score : "—" },
+                { label: "Notes", value: viewing.notes, full: true },
+              ]
+            : []
+        }
       />
 
       <ConfirmDialog

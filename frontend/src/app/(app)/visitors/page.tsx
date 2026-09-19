@@ -4,6 +4,7 @@ import { useCallback, useMemo, useState } from "react";
 import {
   BadgeCheck,
   DoorOpen,
+  Eye,
   LogIn,
   Pencil,
   QrCode,
@@ -45,6 +46,7 @@ import {
   type VisitorStatus,
 } from "@/lib/api/visitors";
 import type { VisitorSchema } from "@/lib/schemas/visitor";
+import { DetailModal } from "@/components/DetailModal";
 import { VisitorFormModal } from "./VisitorFormModal";
 import { ScannerModal } from "./ScannerModal";
 
@@ -81,6 +83,7 @@ export default function VisitorsPage() {
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Visitor | null>(null);
+  const [viewing, setViewing] = useState<Visitor | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Visitor | null>(null);
   const [passVisitor, setPassVisitor] = useState<Visitor | null>(null);
   const [scanOpen, setScanOpen] = useState(false);
@@ -266,6 +269,13 @@ export default function VisitorsPage() {
             <QrCode className="size-4" />
           </button>
           <button
+            onClick={() => setViewing(v)}
+            aria-label={`View ${v.name}`}
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+          >
+            <Eye className="size-4" />
+          </button>
+          <button
             onClick={() => openEdit(v)}
             aria-label={`Edit ${v.name}`}
             className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
@@ -389,6 +399,28 @@ export default function VisitorsPage() {
         record={editing}
         saving={saving}
         onSubmit={handleSubmit}
+      />
+
+      <DetailModal
+        open={Boolean(viewing)}
+        onOpenChange={(o) => !o && setViewing(null)}
+        title={viewing?.name ?? "Visitor"}
+        description={viewing ? `${viewing.passCode} · ${viewing.purpose}` : ""}
+        rows={
+          viewing
+            ? [
+                { label: "Visitor", value: viewing.name },
+                { label: "Phone", value: viewing.phone },
+                { label: "Purpose", value: viewing.purpose },
+                { label: "Whom to meet", value: viewing.whomToMeet },
+                { label: "In time", value: viewing.inTime },
+                { label: "Out time", value: viewing.outTime ?? "Still inside" },
+                { label: "Gate pass", value: viewing.passCode },
+                { label: "Status", value: <span className="capitalize">{viewing.status.replace("-", " ")}</span> },
+                { label: "Pickup for", value: viewing.pickupFor ?? "—", full: true },
+              ]
+            : []
+        }
       />
 
       <ConfirmDialog

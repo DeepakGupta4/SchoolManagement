@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import {
   CalendarClock,
   Clock,
+  Eye,
   Pencil,
   Plus,
   Radio,
@@ -38,6 +39,7 @@ import {
   type OnlineClass,
 } from "@/lib/api/onlineClasses";
 import type { OnlineClassSchema } from "@/lib/schemas/onlineClass";
+import { DetailModal } from "@/components/DetailModal";
 import { OnlineClassFormModal } from "./OnlineClassFormModal";
 
 const PAGE_SIZE = 10;
@@ -72,6 +74,7 @@ export default function OnlineClassesPage() {
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<OnlineClass | null>(null);
+  const [viewing, setViewing] = useState<OnlineClass | null>(null);
   const [pendingDelete, setPendingDelete] = useState<OnlineClass | null>(null);
 
   // A narrowed filter can strand you past the last page, so every filter
@@ -222,6 +225,13 @@ export default function OnlineClassesPage() {
               </Button>
             </a>
           )}
+          <button
+            onClick={() => setViewing(c)}
+            aria-label={`View ${c.topic}`}
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+          >
+            <Eye className="size-4" />
+          </button>
           <button
             onClick={() => {
               setEditing(c);
@@ -422,6 +432,30 @@ export default function OnlineClassesPage() {
         record={editing}
         saving={saving}
         onSubmit={handleSubmit}
+      />
+
+      <DetailModal
+        open={Boolean(viewing)}
+        onOpenChange={(o) => !o && setViewing(null)}
+        title={viewing?.topic ?? "Online class"}
+        description={viewing ? `${viewing.subject} · Class ${viewing.klass}` : ""}
+        rows={
+          viewing
+            ? [
+                { label: "Topic", value: viewing.topic },
+                { label: "Subject", value: viewing.subject },
+                { label: "Class", value: viewing.klass },
+                { label: "Teacher", value: viewing.teacher },
+                { label: "Schedule", value: viewing.when },
+                { label: "Duration", value: `${viewing.duration} min` },
+                { label: "Attendees", value: viewing.attendees > 0 ? viewing.attendees : "—" },
+                { label: "Platform", value: viewing.platform },
+                { label: "Status", value: STATE_META[viewing.state]?.label ?? viewing.state },
+                { label: "Link", value: viewing.link, full: true },
+                { label: "Agenda", value: viewing.agenda, full: true },
+              ]
+            : []
+        }
       />
 
       <ConfirmDialog

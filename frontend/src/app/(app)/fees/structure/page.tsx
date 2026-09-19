@@ -4,6 +4,7 @@ import React, { useMemo, useState } from "react";
 import {
   BookOpen,
   Download,
+  Eye,
   Layers,
   Pencil,
   Plus,
@@ -28,6 +29,7 @@ import { exportToCsv } from "@/lib/exportCsv";
 import { useResource } from "@/hooks/useResource";
 import { FEE_HEADS, feeStructuresApi, feeTotal, type FeeStructure } from "@/lib/api/feeStructures";
 import type { FeeStructureSchema } from "@/lib/schemas/feeStructure";
+import { DetailModal } from "@/components/DetailModal";
 import { FeeStructureFormModal } from "./FeeStructureFormModal";
 
 const inr = new Intl.NumberFormat("en-IN", {
@@ -49,6 +51,7 @@ export default function FeeStructurePage() {
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<FeeStructure | null>(null);
+  const [viewing, setViewing] = useState<FeeStructure | null>(null);
   const [pendingDelete, setPendingDelete] = useState<FeeStructure | null>(null);
   const { toast } = useToast();
 
@@ -158,6 +161,13 @@ export default function FeeStructurePage() {
       render: (f) => (
         <div className="flex items-center justify-end gap-1">
           <button
+            onClick={() => setViewing(f)}
+            aria-label={`View ${f.class} fee structure`}
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+          >
+            <Eye className="size-4" />
+          </button>
+          <button
             onClick={() => {
               setEditing(f);
               setFormOpen(true);
@@ -255,6 +265,26 @@ export default function FeeStructurePage() {
         record={editing}
         saving={saving}
         onSubmit={handleSubmit}
+      />
+
+      <DetailModal
+        open={Boolean(viewing)}
+        onOpenChange={(o) => !o && setViewing(null)}
+        title={viewing ? `Class ${viewing.class}` : "Fee Structure"}
+        description={viewing ? `${viewing.code} · ${inr.format(feeTotal(viewing))} / month` : ""}
+        rows={
+          viewing
+            ? [
+                { label: "Code", value: viewing.code },
+                { label: "Class", value: viewing.class },
+                ...FEE_HEADS.map((head) => ({
+                  label: head.label,
+                  value: inr.format(viewing[head.key] as number),
+                })),
+                { label: "Monthly total", value: inr.format(feeTotal(viewing)) },
+              ]
+            : []
+        }
       />
 
       <ConfirmDialog

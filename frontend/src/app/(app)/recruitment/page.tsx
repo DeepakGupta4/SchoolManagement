@@ -5,6 +5,7 @@ import {
   Search,
   Plus,
   Download,
+  Eye,
   Pencil,
   Trash2,
   Briefcase,
@@ -36,6 +37,7 @@ import {
   type JobPosting,
 } from "@/lib/api/jobPostings";
 import type { JobPostingSchema } from "@/lib/schemas/jobPosting";
+import { DetailModal } from "@/components/DetailModal";
 import { JobPostingFormModal } from "./JobPostingFormModal";
 
 type Applicant = {
@@ -97,6 +99,7 @@ export default function RecruitmentPage() {
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<JobPosting | null>(null);
+  const [viewing, setViewing] = useState<JobPosting | null>(null);
   const [pendingDelete, setPendingDelete] = useState<JobPosting | null>(null);
   const { toast } = useToast();
 
@@ -252,6 +255,13 @@ export default function RecruitmentPage() {
       align: "right",
       render: (j) => (
         <div className="flex items-center justify-end gap-1">
+          <button
+            onClick={() => setViewing(j)}
+            aria-label={`View ${j.title}`}
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+          >
+            <Eye className="size-4" />
+          </button>
           <button
             onClick={() => {
               setEditing(j);
@@ -423,6 +433,27 @@ export default function RecruitmentPage() {
         record={editing}
         saving={saving}
         onSubmit={handleSubmit}
+      />
+
+      <DetailModal
+        open={Boolean(viewing)}
+        onOpenChange={(o) => !o && setViewing(null)}
+        title={viewing?.title ?? "Job posting"}
+        description={viewing ? `${viewing.code} · ${viewing.dept}` : ""}
+        rows={
+          viewing
+            ? [
+                { label: "Title", value: viewing.title },
+                { label: "Code", value: viewing.code },
+                { label: "Department", value: viewing.dept },
+                { label: "Type", value: viewing.type },
+                { label: "Posted", value: viewing.posted },
+                { label: "Deadline", value: viewing.deadline },
+                { label: "Applicants", value: viewing.applicants },
+                { label: "Status", value: viewing.status },
+              ]
+            : []
+        }
       />
 
       <ConfirmDialog
