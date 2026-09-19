@@ -34,9 +34,9 @@ import {
 import { exportToCsv } from "@/lib/exportCsv";
 import { useResource } from "@/hooks/useResource";
 import { useClassOptions } from "@/hooks/useClassOptions";
+import { useSubjectOptions } from "@/hooks/useSubjectOptions";
 import {
   studyMaterialApi,
-  SUBJECT_OPTIONS,
   TYPE_OPTIONS,
   type Material,
 } from "@/lib/api/studyMaterial";
@@ -66,6 +66,7 @@ const formatSize = (mb: number) => (mb >= 1024 ? `${(mb / 1024).toFixed(1)} GB` 
 
 export default function StudyMaterialPage() {
   const { classOptions } = useClassOptions();
+  const { subjectOptions } = useSubjectOptions();
   const [search, setSearch] = useState("");
   const [type, setType] = useState("");
   const [subject, setSubject] = useState("");
@@ -138,6 +139,7 @@ export default function StudyMaterialPage() {
         { header: "Downloads", value: (m) => m.downloads },
         { header: "Visibility", value: (m) => m.visibility },
         { header: "Tags", value: (m) => m.tags.join(" / ") },
+        { header: "Link", value: (m) => m.url },
         { header: "Description", value: (m) => m.description },
       ],
       items
@@ -252,13 +254,27 @@ export default function StudyMaterialPage() {
       align: "right",
       render: (m) => (
         <div className="flex items-center justify-end gap-1">
-          <Tooltip content={`Download ${m.title}`} side="left">
-            <button
-              aria-label={`Download ${m.title}`}
-              className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
-            >
-              <Download className="size-4" />
-            </button>
+          <Tooltip content={m.url ? `Open ${m.title}` : "No link attached"} side="left">
+            {m.url ? (
+              <a
+                href={m.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={`Open ${m.title}`}
+                className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+              >
+                <Download className="size-4" />
+              </a>
+            ) : (
+              <button
+                type="button"
+                disabled
+                aria-label={`No link for ${m.title}`}
+                className="rounded-md p-1.5 text-subtle opacity-40"
+              >
+                <Download className="size-4" />
+              </button>
+            )}
           </Tooltip>
           <button
             onClick={() => setViewing(m)}
@@ -352,7 +368,7 @@ export default function StudyMaterialPage() {
             value={subject}
             onChange={(e) => applyFilter(setSubject)(e.target.value)}
             placeholder="All subjects"
-            options={SUBJECT_OPTIONS.map((s) => ({ label: s, value: s }))}
+            options={subjectOptions}
             aria-label="Filter by subject"
           />
         </div>
@@ -432,6 +448,22 @@ export default function StudyMaterialPage() {
                 { label: "Size", value: formatSize(viewing.sizeMb) },
                 { label: "Downloads", value: viewing.downloads },
                 { label: "Visibility", value: <span className="capitalize">{viewing.visibility}</span> },
+                {
+                  label: "Link",
+                  value: viewing.url ? (
+                    <a
+                      href={viewing.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="focus-ring rounded-sm font-medium text-primary-text transition-colors hover:text-primary"
+                    >
+                      {viewing.url}
+                    </a>
+                  ) : (
+                    "—"
+                  ),
+                  full: true,
+                },
                 { label: "Tags", value: viewing.tags.join(", "), full: true },
                 { label: "Description", value: viewing.description, full: true },
               ]

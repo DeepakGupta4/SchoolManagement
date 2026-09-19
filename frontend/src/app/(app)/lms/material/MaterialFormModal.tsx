@@ -1,35 +1,32 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Modal, Button, Input, MultiSelect, Select, Textarea } from "@/components/ui";
 import { useClassOptions } from "@/hooks/useClassOptions";
+import { useSubjectOptions } from "@/hooks/useSubjectOptions";
+import { listTeachers } from "@/lib/api/teachers";
+import { teacherName } from "@/types/teacher";
 import { materialSchema, type MaterialSchema } from "@/lib/schemas/material";
-import {
-  SUBJECT_OPTIONS,
-  TAG_OPTIONS,
-  TYPE_OPTIONS,
-  UPLOADER_OPTIONS,
-  VISIBILITY_OPTIONS,
-  type Material,
-} from "@/lib/api/studyMaterial";
+import { TAG_OPTIONS, TYPE_OPTIONS, VISIBILITY_OPTIONS, type Material } from "@/lib/api/studyMaterial";
 
 const today = () =>
   new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 
 const emptyValues: MaterialSchema = {
   title: "",
-  type: TYPE_OPTIONS[0].value,
-  subject: SUBJECT_OPTIONS[0],
+  type: "",
+  subject: "",
   klass: "",
-  uploader: UPLOADER_OPTIONS[0],
+  uploader: "",
   uploaded: today(),
   sizeMb: 1,
   downloads: 0,
   visibility: "draft",
   description: "",
   tags: [],
+  url: "",
 };
 
 interface MaterialFormModalProps {
@@ -50,6 +47,8 @@ export function MaterialFormModal({
 }: MaterialFormModalProps) {
   const isEdit = Boolean(record);
   const { classOptions } = useClassOptions();
+  const { subjectOptions } = useSubjectOptions();
+  const [teacherNames, setTeacherNames] = useState<string[]>([]);
 
   const {
     register,
@@ -62,10 +61,29 @@ export function MaterialFormModal({
     defaultValues: emptyValues,
   });
 
+  // Real teachers power the "Uploaded by" picker so the owner chooses from staff
+  // they actually created rather than a static list.
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    listTeachers()
+      .then((teachers) => {
+        if (!cancelled) setTeacherNames(teachers.map(teacherName));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
   // Repopulate on open so the previous record's values can't leak through.
   useEffect(() => {
     if (!open) return;
-    reset(record ? { ...record } : { ...emptyValues, uploaded: today() });
+    reset(
+      record
+        ? { ...emptyValues, ...record, url: record.url ?? "" }
+        : { ...emptyValues, uploaded: today() }
+    );
   }, [open, record, reset]);
 
   const submit = handleSubmit(onSubmit);
@@ -104,6 +122,7 @@ export function MaterialFormModal({
           <Select
             label="Type"
             required
+            placeholder="Select type"
             options={TYPE_OPTIONS}
             {...register("type")}
             error={errors.type?.message}
@@ -111,7 +130,8 @@ export function MaterialFormModal({
           <Select
             label="Subject"
             required
-            options={SUBJECT_OPTIONS.map((s) => ({ label: s, value: s }))}
+            placeholder="Select subject"
+            options={subjectOptions}
             {...register("subject")}
             error={errors.subject?.message}
           />
@@ -126,7 +146,8 @@ export function MaterialFormModal({
           <Select
             label="Uploaded by"
             required
-            options={UPLOADER_OPTIONS.map((u) => ({ label: u, value: u }))}
+            placeholder="Select teacher"
+            options={teacherNames.map((t) => ({ label: t, value: t }))}
             {...register("uploader")}
             error={errors.uploader?.message}
           />
@@ -159,6 +180,13 @@ export function MaterialFormModal({
             options={VISIBILITY_OPTIONS}
             {...register("visibility")}
             error={errors.visibility?.message}
+          />
+          <Input
+            label="Resource link"
+            hint="Drive, YouTube or PDF URL — optional."
+            placeholder="https://…"
+            {...register("url")}
+            error={errors.url?.message}
           />
         </div>
 

@@ -14,6 +14,7 @@ const materialSchema = z.object({
   visibility: z.string().default("draft"),
   description: z.string().default(""),
   tags: z.array(z.string()).default([]),
+  url: z.string().default(""),
 });
 
 export default createCrudRouter({

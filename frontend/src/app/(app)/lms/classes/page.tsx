@@ -30,12 +30,13 @@ import {
   type Column,
 } from "@/components/ui";
 import { useResource } from "@/hooks/useResource";
+import { useSubjectOptions } from "@/hooks/useSubjectOptions";
+import { useTeachers } from "@/hooks/useTeachers";
+import { teacherName } from "@/types/teacher";
 import {
   onlineClassesApi,
   STATE_META,
   STATE_OPTIONS,
-  SUBJECT_OPTIONS,
-  TEACHER_OPTIONS,
   type OnlineClass,
 } from "@/lib/api/onlineClasses";
 import type { OnlineClassSchema } from "@/lib/schemas/onlineClass";
@@ -54,7 +55,11 @@ function LiveDot() {
   );
 }
 
+const EMPTY_TEACHER_FILTERS = {} as const;
+
 export default function OnlineClassesPage() {
+  const { subjectOptions } = useSubjectOptions();
+  const { teachers } = useTeachers(EMPTY_TEACHER_FILTERS);
   const [search, setSearch] = useState("");
   const [subject, setSubject] = useState("");
   const [teacher, setTeacher] = useState("");
@@ -362,7 +367,7 @@ export default function OnlineClassesPage() {
             value={subject}
             onChange={(e) => applyFilter(setSubject)(e.target.value)}
             placeholder="All subjects"
-            options={SUBJECT_OPTIONS.map((s) => ({ label: s, value: s }))}
+            options={subjectOptions}
             aria-label="Filter by subject"
           />
         </div>
@@ -371,7 +376,7 @@ export default function OnlineClassesPage() {
             value={teacher}
             onChange={(e) => applyFilter(setTeacher)(e.target.value)}
             placeholder="All teachers"
-            options={TEACHER_OPTIONS.map((t) => ({ label: t, value: t }))}
+            options={teachers.map((t) => ({ label: teacherName(t), value: teacherName(t) }))}
             aria-label="Filter by teacher"
           />
         </div>

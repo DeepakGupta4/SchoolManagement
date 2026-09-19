@@ -70,7 +70,16 @@ export default function AttendancePage() {
     };
   }, []);
 
-  const holiday = useMemo(() => holidays.find((h) => h.date === date), [holidays, date]);
+  // Sunday is a weekly holiday. A real holiday on the same date takes priority
+  // for the name; otherwise a synthetic "Sunday" holiday closes the marking UI.
+  const isSunday = useMemo(() => new Date(`${date}T00:00:00`).getDay() === 0, [date]);
+  const holiday = useMemo<Holiday | null>(() => {
+    const real = holidays.find((h) => h.date === date);
+    if (real) return real;
+    if (isSunday)
+      return { id: "sunday", date, name: "Sunday", type: "Weekly holiday" };
+    return null;
+  }, [holidays, date, isSunday]);
 
   // Load the class roster (real students) + any saved roll-call for the date.
   useEffect(() => {
@@ -295,7 +304,9 @@ export default function AttendancePage() {
         <div className="flex items-center gap-3 rounded-lg border border-success/30 bg-success-soft px-5 py-4 text-success-text">
           <PartyPopper className="size-5 shrink-0" />
           <div className="min-w-0">
-            <p className="text-sm font-semibold">🎉 Holiday — {holiday.name}</p>
+            <p className="text-sm font-semibold">
+              {holiday.id === "sunday" ? "🎉 Sunday — Weekly holiday" : `🎉 Holiday — ${holiday.name}`}
+            </p>
             <p className="mt-0.5 text-xs">
               {holiday.type} · School is closed on this date. Attendance is not taken and no one is marked absent.
             </p>

@@ -20,6 +20,10 @@ interface HolidayFormModalProps {
   onOpenChange: (open: boolean) => void;
   /** Present = edit mode, absent = create mode. */
   record?: Holiday | null;
+  /** Prefills the date when creating (e.g. a clicked calendar cell). */
+  defaultDate?: string;
+  /** Prefills the name when creating (e.g. a national-holiday suggestion). */
+  defaultName?: string;
   saving?: boolean;
   onSubmit: (values: HolidaySchema) => Promise<void>;
 }
@@ -28,6 +32,8 @@ export function HolidayFormModal({
   open,
   onOpenChange,
   record,
+  defaultDate,
+  defaultName,
   saving,
   onSubmit,
 }: HolidayFormModalProps) {
@@ -46,8 +52,17 @@ export function HolidayFormModal({
   // Repopulate on open so a previous record's values can't leak through.
   useEffect(() => {
     if (!open) return;
-    reset(record ? { date: record.date, name: record.name, type: record.type } : emptyValues());
-  }, [open, record, reset]);
+    if (record) {
+      reset({ date: record.date, name: record.name, type: record.type });
+    } else {
+      const base = emptyValues();
+      reset({
+        ...base,
+        date: defaultDate || base.date,
+        name: defaultName || base.name,
+      });
+    }
+  }, [open, record, defaultDate, defaultName, reset]);
 
   const submit = handleSubmit((values) => onSubmit(values));
 

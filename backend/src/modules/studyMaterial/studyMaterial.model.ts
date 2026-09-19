@@ -14,6 +14,7 @@ const studyMaterialSchema = new Schema(
     visibility: { type: String, default: "draft" },
     description: { type: String, default: "" },
     tags: { type: [String], default: [] },
+    url: { type: String, default: "" },
   },
   { timestamps: true }
 );

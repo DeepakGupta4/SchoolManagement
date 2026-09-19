@@ -1,27 +1,31 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Modal, Button, Input, Select, Textarea } from "@/components/ui";
-import { onlineClassSchema, type OnlineClassSchema } from "@/lib/schemas/onlineClass";
+import { useClassOptions } from "@/hooks/useClassOptions";
+import { useSubjectOptions } from "@/hooks/useSubjectOptions";
+import { listTeachers } from "@/lib/api/teachers";
+import { teacherName } from "@/types/teacher";
 import {
-  KLASS_OPTIONS,
-  PLATFORM_OPTIONS,
-  STATE_OPTIONS,
-  SUBJECT_OPTIONS,
-  TEACHER_OPTIONS,
-  type OnlineClass,
-} from "@/lib/api/onlineClasses";
+  onlineClassFormSchema,
+  joinWhen,
+  splitWhen,
+  type OnlineClassFormSchema,
+  type OnlineClassSchema,
+} from "@/lib/schemas/onlineClass";
+import { PLATFORM_OPTIONS, STATE_OPTIONS, type OnlineClass } from "@/lib/api/onlineClasses";
 
-const emptyValues: OnlineClassSchema = {
+const emptyValues: OnlineClassFormSchema = {
   topic: "",
-  subject: SUBJECT_OPTIONS[0],
-  teacher: TEACHER_OPTIONS[0],
-  klass: KLASS_OPTIONS[0],
-  platform: PLATFORM_OPTIONS[0],
+  subject: "",
+  teacher: "",
+  klass: "",
+  platform: "",
   state: "scheduled",
-  when: "",
+  date: "",
+  time: "",
   duration: 45,
   attendees: 0,
   link: "",
@@ -45,24 +49,63 @@ export function OnlineClassFormModal({
   onSubmit,
 }: OnlineClassFormModalProps) {
   const isEdit = Boolean(record);
+  const { classOptions } = useClassOptions();
+  const { subjectOptions } = useSubjectOptions();
+  const [teacherNames, setTeacherNames] = useState<string[]>([]);
 
   const {
     register,
     handleSubmit,
     reset,
     formState: { errors },
-  } = useForm<OnlineClassSchema>({
-    resolver: zodResolver(onlineClassSchema),
+  } = useForm<OnlineClassFormSchema>({
+    resolver: zodResolver(onlineClassFormSchema),
     defaultValues: emptyValues,
   });
+
+  // Real teachers power the teacher picker so the owner chooses from staff they
+  // actually created rather than a static list.
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    listTeachers()
+      .then((teachers) => {
+        if (!cancelled) setTeacherNames(teachers.map(teacherName));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
 
   // Repopulate on open so the previous record's values can't leak through.
   useEffect(() => {
     if (!open) return;
-    reset(record ? { ...record } : emptyValues);
+    if (record) {
+      const { date, time } = splitWhen(record.when);
+      reset({
+        topic: record.topic,
+        subject: record.subject,
+        teacher: record.teacher,
+        klass: record.klass,
+        platform: record.platform,
+        state: record.state,
+        date,
+        time,
+        duration: record.duration,
+        attendees: record.attendees,
+        link: record.link,
+        agenda: record.agenda,
+      });
+    } else {
+      reset(emptyValues);
+    }
   }, [open, record, reset]);
 
-  const submit = handleSubmit(onSubmit);
+  // Collapse the date + time controls back into the stored `when` string.
+  const submit = handleSubmit(({ date, time, ...rest }) =>
+    onSubmit({ ...rest, when: joinWhen(date, time) })
+  );
 
   return (
     <Modal
@@ -98,27 +141,31 @@ export function OnlineClassFormModal({
           <Select
             label="Subject"
             required
-            options={SUBJECT_OPTIONS.map((s) => ({ label: s, value: s }))}
+            placeholder="Select subject"
+            options={subjectOptions}
             {...register("subject")}
             error={errors.subject?.message}
           />
           <Select
             label="Teacher"
             required
-            options={TEACHER_OPTIONS.map((t) => ({ label: t, value: t }))}
+            placeholder="Select teacher"
+            options={teacherNames.map((t) => ({ label: t, value: t }))}
             {...register("teacher")}
             error={errors.teacher?.message}
           />
           <Select
             label="Class"
             required
-            options={KLASS_OPTIONS.map((k) => ({ label: k, value: k }))}
+            placeholder="Select class"
+            options={classOptions}
             {...register("klass")}
             error={errors.klass?.message}
           />
           <Select
             label="Platform"
             required
+            placeholder="Select platform"
             options={PLATFORM_OPTIONS.map((p) => ({ label: p, value: p }))}
             {...register("platform")}
             error={errors.platform?.message}
@@ -131,11 +178,18 @@ export function OnlineClassFormModal({
             error={errors.state?.message}
           />
           <Input
-            label="Schedule"
+            label="Date"
+            type="date"
             required
-            placeholder="Today · 11:30"
-            {...register("when")}
-            error={errors.when?.message}
+            {...register("date")}
+            error={errors.date?.message}
+          />
+          <Input
+            label="Time"
+            type="time"
+            required
+            {...register("time")}
+            error={errors.time?.message}
           />
           <Input
             label="Duration (minutes)"

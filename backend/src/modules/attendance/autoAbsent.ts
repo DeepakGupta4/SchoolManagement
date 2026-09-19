@@ -27,6 +27,9 @@ export async function runAutoAbsentForAllSchools(now: Date = new Date()): Promis
 }> {
   const result = { schools: 0, marked: 0 };
 
+  // Sunday is a weekly holiday for every school — no one is marked absent.
+  if (now.getDay() === 0) return result;
+
   // Before the cutoff there is nothing to do — students still have time to be
   // marked present/late by a teacher.
   if (now.getHours() < CUTOFF_HOUR) return result;

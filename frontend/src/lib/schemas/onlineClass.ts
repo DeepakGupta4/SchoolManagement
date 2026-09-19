@@ -15,3 +15,26 @@ export const onlineClassSchema = z.object({
 });
 
 export type OnlineClassSchema = z.infer<typeof onlineClassSchema>;
+
+/**
+ * Form-facing schema. The stored record keeps a single free-text `when`, but the
+ * form collects a date + time separately (low typing, native pickers) and the
+ * modal combines them on submit.
+ */
+export const onlineClassFormSchema = onlineClassSchema.omit({ when: true }).extend({
+  date: z.string().min(1, "Date is required"),
+  time: z.string().min(1, "Time is required"),
+});
+
+export type OnlineClassFormSchema = z.infer<typeof onlineClassFormSchema>;
+
+/** Combine the date + time controls into the stored `when` string. */
+export function joinWhen(date: string, time: string): string {
+  return [date, time].filter(Boolean).join(" ");
+}
+
+/** Split a stored `when` back into date + time for the edit form. */
+export function splitWhen(when: string): { date: string; time: string } {
+  const match = when?.match(/(\d{4}-\d{2}-\d{2})[ T]?(\d{2}:\d{2})?/);
+  return { date: match?.[1] ?? "", time: match?.[2] ?? "" };
+}

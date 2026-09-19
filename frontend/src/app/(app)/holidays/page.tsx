@@ -1,7 +1,18 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CalendarX, CalendarClock, CalendarCheck, Eye, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import {
+  CalendarX,
+  CalendarClock,
+  CalendarCheck,
+  ChevronLeft,
+  ChevronRight,
+  Eye,
+  Pencil,
+  Plus,
+  Search,
+  Trash2,
+} from "lucide-react";
 import {
   Badge,
   Button,
@@ -14,6 +25,7 @@ import {
   Table,
   type Column,
 } from "@/components/ui";
+import { cn } from "@/lib/utils";
 import { useResource } from "@/hooks/useResource";
 import { holidaysApi, type Holiday } from "@/lib/api/holidays";
 import type { HolidaySchema } from "@/lib/schemas/holiday";
@@ -21,6 +33,26 @@ import { DetailModal } from "@/components/DetailModal";
 import { HolidayFormModal } from "./HolidayFormModal";
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
+
+const pad2 = (n: number) => String(n).padStart(2, "0");
+
+/**
+ * Fixed-date national holidays (MM-DD → name). Shown as faint suggestions on
+ * their dates. Lunar/festival dates shift each year, so they are not included.
+ */
+const NATIONAL_HOLIDAYS: Record<string, string> = {
+  "01-01": "New Year's Day",
+  "01-26": "Republic Day",
+  "08-15": "Independence Day",
+  "10-02": "Gandhi Jayanti",
+};
+
+const MONTH_NAMES = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
+const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 /** Human-friendly date, e.g. "15 Aug 2026". Falls back to the raw string. */
 function formatDate(iso: string): string {
@@ -51,8 +83,45 @@ export default function HolidaysPage() {
   const [editing, setEditing] = useState<Holiday | null>(null);
   const [viewing, setViewing] = useState<Holiday | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Holiday | null>(null);
+  // Prefill values for the create modal (from a clicked calendar cell/suggestion).
+  const [createDate, setCreateDate] = useState<string | undefined>(undefined);
+  const [createName, setCreateName] = useState<string | undefined>(undefined);
+
+  // Which month the calendar is showing (defaults to the current month).
+  const [cal, setCal] = useState(() => {
+    const d = new Date();
+    return { year: d.getFullYear(), month: d.getMonth() };
+  });
 
   const today = todayIso();
+
+  // Fast lookup of a holiday by its date for the calendar cells.
+  const holidayByDate = useMemo(() => {
+    const map = new Map<string, Holiday>();
+    for (const h of items) map.set(h.date, h);
+    return map;
+  }, [items]);
+
+  // Grid cells for the shown month: leading blanks (so day 1 lands on its
+  // weekday) followed by each day of the month.
+  const calendarCells = useMemo(() => {
+    const startWeekday = new Date(cal.year, cal.month, 1).getDay();
+    const daysInMonth = new Date(cal.year, cal.month + 1, 0).getDate();
+    const cells: (number | null)[] = [];
+    for (let i = 0; i < startWeekday; i++) cells.push(null);
+    for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+    while (cells.length % 7 !== 0) cells.push(null);
+    return cells;
+  }, [cal]);
+
+  const prevMonth = () =>
+    setCal((c) => (c.month === 0 ? { year: c.year - 1, month: 11 } : { year: c.year, month: c.month - 1 }));
+  const nextMonth = () =>
+    setCal((c) => (c.month === 11 ? { year: c.year + 1, month: 0 } : { year: c.year, month: c.month + 1 }));
+  const goToday = () => {
+    const d = new Date();
+    setCal({ year: d.getFullYear(), month: d.getMonth() });
+  };
 
   const stats = useMemo(() => {
     const upcoming = items.filter((h) => h.date >= today).length;
@@ -68,6 +137,21 @@ export default function HolidaysPage() {
 
   const openCreate = () => {
     setEditing(null);
+    setCreateDate(undefined);
+    setCreateName(undefined);
+    setFormOpen(true);
+  };
+
+  /** Open the create modal prefilled from a calendar cell / suggestion. */
+  const openCreateFor = (date: string, name?: string) => {
+    setEditing(null);
+    setCreateDate(date);
+    setCreateName(name);
+    setFormOpen(true);
+  };
+
+  const openEdit = (h: Holiday) => {
+    setEditing(h);
     setFormOpen(true);
   };
 
@@ -137,10 +221,7 @@ export default function HolidaysPage() {
             <Eye className="size-4" />
           </button>
           <button
-            onClick={() => {
-              setEditing(h);
-              setFormOpen(true);
-            }}
+            onClick={() => openEdit(h)}
             aria-label={`Edit ${h.name}`}
             className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
           >
@@ -176,6 +257,99 @@ export default function HolidaysPage() {
         <StatCard label="Upcoming" value={stats.upcoming} icon={CalendarClock} tone="violet" />
         <StatCard label="This year" value={stats.thisYear} icon={CalendarCheck} tone="emerald" />
       </div>
+
+      <Card>
+        <CardContent className="flex flex-col gap-4">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-base font-semibold text-text">
+              {MONTH_NAMES[cal.month]} {cal.year}
+            </h2>
+            <div className="flex items-center gap-1">
+              <Button variant="outline" size="sm" onClick={goToday}>
+                Today
+              </Button>
+              <button
+                onClick={prevMonth}
+                aria-label="Previous month"
+                className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+              >
+                <ChevronLeft className="size-4" />
+              </button>
+              <button
+                onClick={nextMonth}
+                aria-label="Next month"
+                className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+              >
+                <ChevronRight className="size-4" />
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-7 gap-1">
+            {WEEKDAY_LABELS.map((w) => (
+              <div key={w} className="pb-1 text-center text-xs font-medium text-subtle">
+                {w}
+              </div>
+            ))}
+
+            {calendarCells.map((day, i) => {
+              if (day === null) return <div key={`blank-${i}`} className="min-h-16 rounded-md" />;
+
+              const iso = `${cal.year}-${pad2(cal.month + 1)}-${pad2(day)}`;
+              const isSunday = i % 7 === 0;
+              const isToday = iso === today;
+              const dayHoliday = holidayByDate.get(iso);
+              const suggestion = NATIONAL_HOLIDAYS[`${pad2(cal.month + 1)}-${pad2(day)}`];
+
+              return (
+                <button
+                  key={iso}
+                  onClick={() =>
+                    dayHoliday ? openEdit(dayHoliday) : openCreateFor(iso, suggestion)
+                  }
+                  title={
+                    dayHoliday
+                      ? `Edit ${dayHoliday.name}`
+                      : suggestion
+                        ? `Add ${suggestion}`
+                        : "Add holiday"
+                  }
+                  className={cn(
+                    "focus-ring flex min-h-16 flex-col items-stretch gap-1 rounded-md border p-1.5 text-left transition-colors hover:bg-surface-hover",
+                    isToday ? "border-indigo-500" : "border-border"
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "text-xs font-medium",
+                      isToday ? "text-indigo-500" : isSunday ? "text-subtle" : "text-text"
+                    )}
+                  >
+                    {day}
+                  </span>
+
+                  {dayHoliday ? (
+                    <span className="truncate rounded bg-info-soft px-1 py-0.5 text-[10px] font-medium text-info-text">
+                      {dayHoliday.name}
+                    </span>
+                  ) : suggestion ? (
+                    <span className="truncate rounded border border-dashed border-border px-1 py-0.5 text-[10px] font-medium text-subtle opacity-70">
+                      {suggestion}
+                    </span>
+                  ) : isSunday ? (
+                    <span className="text-[10px] text-subtle">Sunday</span>
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
+
+          <p className="text-xs text-subtle">
+            Sundays are weekly holidays. Click any day to add a holiday, a faded name to add a
+            suggested national holiday, or a holiday to edit it.
+          </p>
+        </CardContent>
+      </Card>
 
       <div className="flex flex-wrap items-center gap-3">
         <div className="min-w-60 flex-1">
@@ -224,6 +398,8 @@ export default function HolidaysPage() {
         open={formOpen}
         onOpenChange={setFormOpen}
         record={editing}
+        defaultDate={createDate}
+        defaultName={createName}
         saving={saving}
         onSubmit={handleSubmit}
       />

@@ -12,6 +12,7 @@ export const materialSchema = z.object({
   visibility: z.string().min(1, "Visibility is required"),
   description: z.string().max(300, "Keep the description under 300 characters"),
   tags: z.array(z.string()),
+  url: z.string().trim().max(500, "Link is too long"),
 });
 
 export type MaterialSchema = z.infer<typeof materialSchema>;

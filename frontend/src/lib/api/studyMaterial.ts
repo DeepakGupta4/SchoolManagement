@@ -13,6 +13,8 @@ export interface Material {
   visibility: string;
   description: string;
   tags: string[];
+  /** Link to the resource (Drive/YouTube/PDF URL). Empty when none is attached. */
+  url: string;
 }
 
 export interface MaterialFilters {
@@ -31,20 +33,6 @@ export const TYPE_OPTIONS = [
 export const VISIBILITY_OPTIONS = [
   { label: "Published", value: "published" },
   { label: "Draft", value: "draft" },
-];
-
-export const SUBJECT_OPTIONS = [
-  "Accountancy", "Biology", "Chemistry", "Computer Science", "Electronics",
-  "English", "French", "Hindi", "History", "Mathematics", "Physics", "Sanskrit",
-];
-
-export const CLASS_OPTIONS = ["VII", "VIII", "IX", "X", "XI", "XII"];
-
-export const UPLOADER_OPTIONS = [
-  "Dr. Priya Sharma", "Mr. Amit Joshi", "Mr. Naveen Chawla", "Mr. Rahul Verma",
-  "Mr. Rakesh Yadav", "Mr. Suresh Kumar", "Ms. Anita Patel", "Ms. Deepa Nair",
-  "Ms. Elena D'Souza", "Ms. Kavita Singh", "Ms. Lata Trivedi", "Ms. Meenakshi Rao",
-  "Ms. Ritu Bansal",
 ];
 
 /** Curriculum tags used to group material across subjects. */

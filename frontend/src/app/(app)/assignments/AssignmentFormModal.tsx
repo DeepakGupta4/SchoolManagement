@@ -1,20 +1,23 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Modal, Button, Input, Select } from "@/components/ui";
+import { useClassOptions } from "@/hooks/useClassOptions";
+import { useSubjectOptions } from "@/hooks/useSubjectOptions";
 import { assignmentSchema, type AssignmentSchema } from "@/lib/schemas/assignment";
 import {
   ASSIGNMENT_STATUS_OPTIONS,
-  ASSIGNMENT_SUBJECT_OPTIONS,
   ASSIGNMENT_TYPE_OPTIONS,
   type Assignment,
 } from "@/lib/api/assignments";
+import { listTeachers } from "@/lib/api/teachers";
+import { teacherName } from "@/types/teacher";
 
 const emptyValues: AssignmentSchema = {
   title: "",
-  subject: ASSIGNMENT_SUBJECT_OPTIONS[0],
+  subject: "",
   class: "",
   teacher: "",
   given: "",
@@ -23,7 +26,7 @@ const emptyValues: AssignmentSchema = {
   submitted: 0,
   total: 40,
   status: "upcoming",
-  type: ASSIGNMENT_TYPE_OPTIONS[0],
+  type: "",
 };
 
 const statusLabel = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -45,6 +48,25 @@ export function AssignmentFormModal({
   onSubmit,
 }: AssignmentFormModalProps) {
   const isEdit = Boolean(record);
+  const { classOptions } = useClassOptions();
+  const { subjectOptions } = useSubjectOptions();
+
+  // Real teachers power the "assigned by" picker so the owner chooses from staff
+  // they've actually created instead of typing a name by hand.
+  const [teacherNames, setTeacherNames] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    listTeachers()
+      .then((teachers) => {
+        if (!cancelled) setTeacherNames(teachers.map(teacherName));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
 
   const {
     register,
@@ -98,27 +120,31 @@ export function AssignmentFormModal({
           <Select
             label="Subject"
             required
-            options={ASSIGNMENT_SUBJECT_OPTIONS.map((s) => ({ label: s, value: s }))}
+            placeholder="Select subject"
+            options={subjectOptions}
             {...register("subject")}
             error={errors.subject?.message}
           />
-          <Input
+          <Select
             label="Class"
             required
-            placeholder="10-A"
+            placeholder="Select class"
+            options={classOptions}
             {...register("class")}
             error={errors.class?.message}
           />
-          <Input
+          <Select
             label="Teacher"
             required
-            placeholder="Dr. Priya Sharma"
+            placeholder="Select teacher"
+            options={teacherNames.map((t) => ({ label: t, value: t }))}
             {...register("teacher")}
             error={errors.teacher?.message}
           />
           <Select
             label="Type"
             required
+            placeholder="Select type"
             options={ASSIGNMENT_TYPE_OPTIONS.map((t) => ({ label: t, value: t }))}
             {...register("type")}
             error={errors.type?.message}
@@ -126,14 +152,14 @@ export function AssignmentFormModal({
           <Input
             label="Given on"
             required
-            placeholder="Jul 10"
+            type="date"
             {...register("given")}
             error={errors.given?.message}
           />
           <Input
             label="Due date"
             required
-            placeholder="Jul 17"
+            type="date"
             {...register("due")}
             error={errors.due?.message}
           />
