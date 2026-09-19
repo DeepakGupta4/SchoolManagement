@@ -37,10 +37,87 @@ import {
   type StudentFeeAccount,
   type FeeSummary,
 } from "@/lib/api/feeLedger";
+import { admissionsApi, type Application } from "@/lib/api/admissions";
 import type { Student } from "@/types/student";
 import type { Teacher } from "@/types/teacher";
 
 const periods = ["week", "month", "year"] as const;
+type Period = (typeof periods)[number];
+
+const pad = (n: number) => String(n).padStart(2, "0");
+
+/** Parses a "yyyy-mm-dd" string as a local date, tolerant of junk. */
+function parseYmd(s: string | null | undefined): Date | null {
+  if (!s) return null;
+  const [y, m, d] = s.split("-").map(Number);
+  if (!y || !m || !d) return null;
+  return new Date(y, m - 1, d);
+}
+
+/**
+ * Ordered, period-aware time buckets ending at today, plus the key function
+ * that maps a date onto them:
+ *   - week:  last 7 days,     one bucket per day  (label "Mon")
+ *   - month: last 12 months,  one bucket per month (label "Sep")
+ *   - year:  last 5 years,    one bucket per year  (label "2026")
+ */
+function buildBuckets(period: Period): {
+  buckets: { key: string; label: string }[];
+  keyOf: (d: Date) => string;
+} {
+  const now = new Date();
+  const buckets: { key: string; label: string }[] = [];
+
+  if (period === "week") {
+    const keyOf = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
+      buckets.push({ key: keyOf(d), label: d.toLocaleDateString("en-US", { weekday: "short" }) });
+    }
+    return { buckets, keyOf };
+  }
+
+  if (period === "month") {
+    const keyOf = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      buckets.push({ key: keyOf(d), label: d.toLocaleDateString("en-US", { month: "short" }) });
+    }
+    return { buckets, keyOf };
+  }
+
+  const keyOf = (d: Date) => String(d.getFullYear());
+  for (let i = 4; i >= 0; i--) {
+    const y = now.getFullYear() - i;
+    buckets.push({ key: String(y), label: String(y) });
+  }
+  return { buckets, keyOf };
+}
+
+/** Aggregates records into the period's buckets, summing getValue per record. */
+function bucketize<T>(
+  records: T[],
+  period: Period,
+  getDate: (r: T) => string | null | undefined,
+  getValue: (r: T) => number
+): { label: string; value: number }[] {
+  const { buckets, keyOf } = buildBuckets(period);
+  const totals = new Map<string, number>(buckets.map((b) => [b.key, 0] as [string, number]));
+  for (const r of records) {
+    const d = parseYmd(getDate(r));
+    if (!d) continue;
+    const k = keyOf(d);
+    if (totals.has(k)) totals.set(k, (totals.get(k) ?? 0) + getValue(r));
+  }
+  return buckets.map((b) => ({ label: b.label, value: totals.get(b.key) ?? 0 }));
+}
+
+/** Subtitle fragment describing the trend window for the active period. */
+const periodWindow: Record<Period, string> = {
+  week: "over the last 7 days",
+  month: "over the last 12 months",
+  year: "over the last 5 years",
+};
 
 const inr = new Intl.NumberFormat("en-IN", {
   style: "currency",
@@ -79,7 +156,7 @@ function ChartTitle({
 }
 
 export default function AnalyticsPage() {
-  const [period, setPeriod] = useState<(typeof periods)[number]>("month");
+  const [period, setPeriod] = useState<Period>("month");
   const t = useChartTheme();
 
   const [loading, setLoading] = useState(true);
@@ -87,16 +164,24 @@ export default function AnalyticsPage() {
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [accounts, setAccounts] = useState<StudentFeeAccount[]>([]);
   const [feeSummary, setFeeSummary] = useState<FeeSummary | null>(null);
+  const [applications, setApplications] = useState<Application[]>([]);
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([listStudents(), listTeachers(), feeAccountsApi.list(), getFeeSummary()])
-      .then(([s, te, ac, fs]) => {
+    Promise.all([
+      listStudents(),
+      listTeachers(),
+      feeAccountsApi.list(),
+      getFeeSummary(),
+      admissionsApi.list(),
+    ])
+      .then(([s, te, ac, fs, ap]) => {
         if (cancelled) return;
         setStudents(s);
         setTeachers(te);
         setAccounts(ac);
         setFeeSummary(fs);
+        setApplications(ap);
       })
       .catch(() => {
         /* leaves the empty states in place */
@@ -198,6 +283,22 @@ export default function AnalyticsPage() {
     },
   ];
 
+  /* ---- Period-aware trends (react to the week/month/year tabs) ---------- */
+
+  const admissionsTrend = useMemo(
+    () => bucketize(applications, period, (a) => a.appliedOn, () => 1),
+    [applications, period]
+  );
+  const hasAdmissions = admissionsTrend.some((d) => d.value > 0);
+
+  // lastPaymentDate exists on the account, so we can bucket real collections:
+  // each account's total paid is credited to the bucket of its last payment.
+  const feesTrend = useMemo(
+    () => bucketize(accounts, period, (a) => a.lastPaymentDate, (a) => totalPaid(a)),
+    [accounts, period]
+  );
+  const hasFees = feesTrend.some((d) => d.value > 0);
+
   const genderColors = genderData.map((g) => t.series[g.tone]);
   const feeStatusColors = feeStatusData.map((f) => t.series[f.tone]);
   const hasGender = genderData.some((g) => g.value > 0);
@@ -242,14 +343,50 @@ export default function AnalyticsPage() {
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
         <Card className="xl:col-span-2">
-          <ChartTitle title="Admissions Trend" subtitle="Monthly admissions over time" />
+          <ChartTitle
+            title="Admissions Trend"
+            subtitle={`Applications received ${periodWindow[period]}`}
+            legend={[{ tone: "primary", label: "Applications" }]}
+          />
           <CardContent>
-            {/* No per-month admission history is exposed by the backend, so a
-                real trend can't be derived — an empty state beats fake bars. */}
-            <EmptyState
-              title="Historical trend needs more data"
-              description="Monthly admission trends will appear once history is recorded."
-            />
+            {loading ? (
+              <Skeleton className="h-[210px] w-full" />
+            ) : !hasAdmissions ? (
+              <EmptyState
+                title="No admissions in this period"
+                description="Applications will appear here as they come in."
+              />
+            ) : (
+              <ResponsiveContainer width="100%" height={210}>
+                <BarChart data={admissionsTrend} barSize={period === "week" ? 26 : 18}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={t.grid} vertical={false} />
+                  <XAxis
+                    dataKey="label"
+                    tick={{ fontSize: 11, fill: t.axis }}
+                    axisLine={false}
+                    tickLine={false}
+                    interval={0}
+                  />
+                  <YAxis
+                    allowDecimals={false}
+                    tick={{ fontSize: 11, fill: t.axis }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <Tooltip
+                    contentStyle={t.tooltip}
+                    cursor={{ fill: t.cursor, radius: 6 }}
+                    formatter={(v) => [`${Number(v)}`, "Applications"]}
+                  />
+                  <Bar
+                    dataKey="value"
+                    fill={t.series.primary}
+                    radius={[6, 6, 0, 0]}
+                    name="Applications"
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </CardContent>
         </Card>
 
@@ -302,14 +439,50 @@ export default function AnalyticsPage() {
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <Card>
-          <ChartTitle title="Fee Collection vs Target" subtitle="Monthly performance" />
+          <ChartTitle
+            title="Fees Collected"
+            subtitle={`Collections ${periodWindow[period]}`}
+            legend={[{ tone: "success", label: "Collected" }]}
+          />
           <CardContent>
-            {/* Monthly collection history / targets aren't stored, so this stays
-                an empty state rather than a fabricated series. */}
-            <EmptyState
-              title="Historical trend needs more data"
-              description="Monthly collection trends will appear once history is recorded."
-            />
+            {loading ? (
+              <Skeleton className="h-[210px] w-full" />
+            ) : !hasFees ? (
+              <EmptyState
+                title="No collections in this period"
+                description="Payments will appear here as fees are collected."
+              />
+            ) : (
+              <ResponsiveContainer width="100%" height={210}>
+                <BarChart data={feesTrend} barSize={period === "week" ? 26 : 18}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={t.grid} vertical={false} />
+                  <XAxis
+                    dataKey="label"
+                    tick={{ fontSize: 11, fill: t.axis }}
+                    axisLine={false}
+                    tickLine={false}
+                    interval={0}
+                  />
+                  <YAxis
+                    tick={{ fontSize: 11, fill: t.axis }}
+                    axisLine={false}
+                    tickLine={false}
+                    tickFormatter={(v) => `₹${(Number(v) / 1000).toFixed(0)}k`}
+                  />
+                  <Tooltip
+                    contentStyle={t.tooltip}
+                    cursor={{ fill: t.cursor, radius: 6 }}
+                    formatter={(v) => [`₹${Number(v).toLocaleString("en-IN")}`, "Collected"]}
+                  />
+                  <Bar
+                    dataKey="value"
+                    fill={t.series.success}
+                    radius={[6, 6, 0, 0]}
+                    name="Collected"
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </CardContent>
         </Card>
 

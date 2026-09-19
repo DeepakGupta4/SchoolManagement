@@ -1,4 +1,5 @@
 import { Router } from "express";
+import mongoose from "mongoose";
 import net from "node:net";
 import dns from "node:dns/promises";
 import { z } from "zod";
@@ -102,6 +103,42 @@ router.patch(
       );
       if (!school) throw ApiError.notFound("No school profile for this account.");
       res.json({ data: toPublicSchool(school) });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+/**
+ * Danger zone: wipe ALL of this school's domain data (students, teachers, fees,
+ * classes, exams, events, notifications, documents, …) for a clean-slate setup.
+ * Auth (users), the school record and school requests are preserved, so the
+ * admin stays logged in. Scoped strictly to the caller's own schoolId.
+ */
+router.post(
+  "/reset-data",
+  requireRole("super_admin", "school_admin", "principal"),
+  async (req, res, next) => {
+    try {
+      const schoolId = req.user!.schoolId;
+      const db = mongoose.connection.db;
+      if (!db) throw new Error("Database not connected");
+
+      const KEEP = new Set(["users", "schools", "schoolrequests"]);
+      const collections = await db.listCollections().toArray();
+      const cleared: Record<string, number> = {};
+      let removed = 0;
+
+      for (const c of collections) {
+        if (KEEP.has(c.name)) continue;
+        const result = await db.collection(c.name).deleteMany({ schoolId });
+        if (result.deletedCount) {
+          cleared[c.name] = result.deletedCount;
+          removed += result.deletedCount;
+        }
+      }
+
+      res.json({ data: { removed, cleared } });
     } catch (err) {
       next(err);
     }

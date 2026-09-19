@@ -1,16 +1,19 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { getMySchool, updateMySchool } from "@/lib/api/schools";
+import { getMySchool, updateMySchool, resetSchoolData } from "@/lib/api/schools";
 import {
+  AlertTriangle,
   Bell,
   Building2,
   CalendarRange,
+  Loader2,
   Palette,
   Plug,
   RotateCcw,
   Save,
   ShieldCheck,
+  Trash2,
 } from "lucide-react";
 import {
   Badge,
@@ -21,6 +24,7 @@ import {
   EmptyState,
   Field,
   Input,
+  Modal,
   Select,
   StatCard,
   PageHeader,
@@ -107,6 +111,32 @@ export default function SettingsPage() {
 
   const activeTab = TABS.find((t) => t.id === tab) ?? TABS[0];
   const [saving, setSaving] = useState(false);
+
+  // Danger zone — wipe all school data for a clean slate.
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetText, setResetText] = useState("");
+  const [resetting, setResetting] = useState(false);
+
+  const handleResetData = async () => {
+    setResetting(true);
+    try {
+      const res = await resetSchoolData();
+      toast({
+        title: "School data cleared",
+        description: `${res.removed} record${res.removed === 1 ? "" : "s"} removed. The app will reload.`,
+      });
+      setResetOpen(false);
+      // Reload so every page reflects the now-empty data.
+      setTimeout(() => window.location.reload(), 900);
+    } catch (e) {
+      toast({
+        title: "Could not reset data",
+        description: e instanceof Error ? e.message : "Please try again.",
+        variant: "error",
+      });
+      setResetting(false);
+    }
+  };
 
   // Load the real school profile (skips the platform owner / no-tenant case).
   useEffect(() => {
@@ -562,6 +592,55 @@ export default function SettingsPage() {
           </Button>
         </CardContent>
       </Card>
+
+      {/* Danger zone — clear all school data */}
+      <Card className="border-danger/40">
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="size-4 text-danger" />
+            <h2 className="text-sm font-semibold text-text">Danger zone</h2>
+          </div>
+        </CardHeader>
+        <CardContent className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-text">Reset all school data</p>
+            <p className="mt-0.5 text-xs text-muted">
+              Permanently deletes every student, teacher, staff, fee, class, exam, event and other
+              record for this school. Your login and school account are kept. This cannot be undone.
+            </p>
+          </div>
+          <Button variant="danger" onClick={() => { setResetText(""); setResetOpen(true); }}>
+            <Trash2 className="size-4" />
+            Reset data
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Modal
+        open={resetOpen}
+        onOpenChange={(o) => !resetting && setResetOpen(o)}
+        title="Reset all school data?"
+        description="This permanently deletes ALL records for your school. Type RESET to confirm."
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setResetOpen(false)} disabled={resetting}>
+              Cancel
+            </Button>
+            <Button variant="danger" onClick={handleResetData} disabled={resetting || resetText !== "RESET"}>
+              {resetting ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+              {resetting ? "Clearing…" : "Delete everything"}
+            </Button>
+          </>
+        }
+      >
+        <Input
+          label='Type "RESET" to confirm'
+          value={resetText}
+          onChange={(e) => setResetText(e.target.value)}
+          placeholder="RESET"
+          autoFocus
+        />
+      </Modal>
     </div>
   );
 }

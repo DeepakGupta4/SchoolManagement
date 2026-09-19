@@ -107,6 +107,16 @@ export async function updateMySchool(updates: Partial<SchoolProfile>): Promise<S
   return apiRequest<SchoolProfile>("/api/schools/mine", { method: "PATCH", body: updates });
 }
 
+export interface ResetDataResult {
+  removed: number;
+  cleared: Record<string, number>;
+}
+
+/** Danger zone: wipe all of the current school's domain data for a clean slate. */
+export async function resetSchoolData(): Promise<ResetDataResult> {
+  return apiRequest<ResetDataResult>("/api/schools/reset-data", { method: "POST" });
+}
+
 export interface ResetPasswordResult {
   email: string;
   temporaryPassword: string;
