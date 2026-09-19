@@ -2,6 +2,8 @@ import { z } from "zod";
 import { requireRole } from "../../middleware/auth.js";
 import { validate } from "../../middleware/validate.js";
 import { Student } from "./student.model.js";
+import { FeeAccount, Payment } from "../fees/fee.model.js";
+import { StoredDocument } from "../documents/document.model.js";
 import { createCrudRouter } from "../../utils/crudRouter.js";
 
 const PHONE = /^\d{10}$/;
@@ -64,6 +66,21 @@ export default createCrudRouter({
     body: `${s.firstName} ${s.lastName} · ${s.className}-${s.section}`,
     link: "/students",
   }),
+  // Cascade: removing a student also removes their fee account, payments and
+  // uploaded documents, so no orphan records linger (e.g. in Fee Defaulters).
+  afterDelete: async (doc, req) => {
+    const schoolId = req.user!.schoolId;
+    const studentId = doc._id;
+    await Promise.all([
+      FeeAccount.deleteMany({ schoolId, studentId }).catch(() => {}),
+      Payment.deleteMany({ schoolId, studentId }).catch(() => {}),
+      StoredDocument.deleteMany({
+        schoolId,
+        ownerType: "student",
+        ownerId: String(studentId),
+      }).catch(() => {}),
+    ]);
+  },
   // Custom bulk-promote route. `extend` runs after createCrudRouter's
   // `router.use(requireAuth)`, so the callers here are already authenticated.
   extend: (router) => {

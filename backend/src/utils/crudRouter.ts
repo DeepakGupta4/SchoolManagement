@@ -45,6 +45,8 @@ export interface CrudOptions<T> {
   afterCreate?: (doc: HydratedDocument<T>, req: Request) => void | Promise<void>;
   /** Side effect after a successful update. */
   afterUpdate?: (doc: HydratedDocument<T>, req: Request) => void | Promise<void>;
+  /** Side effect after a successful delete (e.g. cascade cleanup). */
+  afterDelete?: (doc: HydratedDocument<T>, req: Request) => void | Promise<void>;
 }
 
 /** Strips internals and exposes `id` — the shape every client expects. */
@@ -79,6 +81,7 @@ export function createCrudRouter<T>(options: CrudOptions<T>): Router {
     generate,
     afterCreate,
     afterUpdate,
+    afterDelete,
   } = options;
 
   const router = Router();
@@ -183,6 +186,7 @@ export function createCrudRouter<T>(options: CrudOptions<T>): Router {
         schoolId: req.user!.schoolId,
       });
       if (!doc) throw ApiError.notFound("Record not found.");
+      if (afterDelete) await afterDelete(doc as HydratedDocument<T>, req);
       res.status(204).send();
     } catch (err) {
       next(err);
