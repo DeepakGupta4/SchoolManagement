@@ -110,9 +110,18 @@ export default function ReportCardsPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [preview, setPreview] = useState<ReportCardData | null>(null);
 
+  // Report cards need a specific class + section + exam (the marks API requires
+  // all three); with "All"/blank we don't fetch, avoiding a 400.
+  const ready = Boolean(selectedClass && selectedSection && selectedExam);
+
   // Build each student's report from real students + saved marks.
   useEffect(() => {
     let cancelled = false;
+    if (!ready) {
+      setReports([]);
+      setLoading(false);
+      return;
+    }
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     Promise.all([
@@ -170,7 +179,7 @@ export default function ReportCardsPage() {
     return () => {
       cancelled = true;
     };
-  }, [selectedClass, selectedSection, selectedExam, toast]);
+  }, [ready, selectedClass, selectedSection, selectedExam, toast]);
 
   const classSize = reports.length;
 
@@ -373,7 +382,13 @@ export default function ReportCardsPage() {
         </CardContent>
       </Card>
 
-      {loading ? (
+      {!ready ? (
+        <div className="py-16 text-center text-sm text-muted">
+          Select a <span className="font-medium text-text">class</span>,{" "}
+          <span className="font-medium text-text">section</span> and{" "}
+          <span className="font-medium text-text">exam</span> to generate report cards.
+        </div>
+      ) : loading ? (
         <div className="grid place-items-center py-16 text-muted">
           <Loader2 className="size-6 animate-spin" />
         </div>

@@ -109,9 +109,17 @@ export default function MeritListPage() {
   const [cohort, setCohort] = useState<MeritStudent[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Needs a specific class + section + exam (the marks API requires all three).
+  const ready = Boolean(selClass && selSection && selExam);
+
   // Rank students by total marks from real saved marks for the exam-class.
   useEffect(() => {
     let cancelled = false;
+    if (!ready) {
+      setCohort([]);
+      setLoading(false);
+      return;
+    }
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     Promise.all([
@@ -154,7 +162,7 @@ export default function MeritListPage() {
     return () => {
       cancelled = true;
     };
-  }, [selClass, selSection, selExam, toast]);
+  }, [ready, selClass, selSection, selExam, toast]);
 
   const query = search.trim().toLowerCase();
   const filtered = cohort.filter((s) => !query || s.name.toLowerCase().includes(query));
@@ -444,7 +452,13 @@ export default function MeritListPage() {
         <p className="ml-auto text-xs text-muted">{filtered.length} students</p>
       </div>
 
-      {loading ? (
+      {!ready ? (
+        <div className="py-16 text-center text-sm text-muted">
+          Select a <span className="font-medium text-text">class</span>,{" "}
+          <span className="font-medium text-text">section</span> and{" "}
+          <span className="font-medium text-text">exam</span> to build the merit list.
+        </div>
+      ) : loading ? (
         <div className="grid place-items-center py-16 text-muted">
           <Loader2 className="size-6 animate-spin" />
         </div>

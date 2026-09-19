@@ -104,9 +104,18 @@ export default function MarkEntryPage() {
   const markOf = (studentId: string) => marks[markKey(studentId, selectedSubject)] ?? "";
   const saved = savedSheet === sheetKey;
 
+  // Marks load only once a specific class + section + exam are all chosen —
+  // the API requires all three, so fetching with "All"/blank would 400.
+  const ready = Boolean(selectedClass && selectedSection && selectedExam);
+
   // Load the class roster (real students) + any saved marks for the exam-class.
   useEffect(() => {
     let cancelled = false;
+    if (!ready) {
+      setRoster([]);
+      setLoading(false);
+      return;
+    }
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     Promise.all([
@@ -148,7 +157,7 @@ export default function MarkEntryPage() {
     return () => {
       cancelled = true;
     };
-  }, [selectedClass, selectedSection, selectedExam, toast]);
+  }, [ready, selectedClass, selectedSection, selectedExam, toast]);
 
   const filtered = roster.filter((s) =>
     s.name.toLowerCase().includes(search.toLowerCase())
@@ -413,7 +422,14 @@ export default function MarkEntryPage() {
         </div>
       </div>
 
-      {loading ? (
+      {!ready ? (
+        <div className="py-16 text-center text-sm text-muted">
+          Select a <span className="font-medium text-text">class</span>,{" "}
+          <span className="font-medium text-text">section</span>,{" "}
+          <span className="font-medium text-text">subject</span> and{" "}
+          <span className="font-medium text-text">exam</span> to start entering marks.
+        </div>
+      ) : loading ? (
         <div className="grid place-items-center py-16 text-muted">
           <Loader2 className="size-6 animate-spin" />
         </div>
