@@ -27,6 +27,12 @@ export const teacherSchema = z.object({
   avatar: z.string().optional(),
   salary: z.coerce.number<number>().min(0, "Salary cannot be negative"),
   isClassTeacher: z.boolean(),
-});
+  /** When isClassTeacher, the class + section they are class teacher of. */
+  classTeacherOf: z.string().optional(),
+  classTeacherSection: z.string().optional(),
+}).refine(
+  (d) => !d.isClassTeacher || (!!d.classTeacherOf && !!d.classTeacherSection),
+  { message: "Choose the class and section", path: ["classTeacherOf"] }
+);
 
 export type TeacherSchema = z.infer<typeof teacherSchema>;

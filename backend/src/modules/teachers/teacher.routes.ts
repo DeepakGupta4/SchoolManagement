@@ -24,6 +24,8 @@ const teacherSchema = z.object({
   avatar: z.string().optional(),
   salary: z.coerce.number<number>().min(0),
   isClassTeacher: z.boolean().default(false),
+  classTeacherOf: z.string().optional(),
+  classTeacherSection: z.string().optional(),
 });
 
 export default createCrudRouter({

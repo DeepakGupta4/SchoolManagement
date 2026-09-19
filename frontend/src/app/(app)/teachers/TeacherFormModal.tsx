@@ -58,6 +58,8 @@ const emptyValues: TeacherSchema = {
   avatar: "",
   salary: 0,
   isClassTeacher: false,
+  classTeacherOf: "",
+  classTeacherSection: "",
 };
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
@@ -87,7 +89,7 @@ export function TeacherFormModal({
   // Files attached in the form, uploaded once the teacher record has an id.
   const [attachments, setAttachments] = useState<File[]>([]);
   const [savingDocs, setSavingDocs] = useState(false);
-  const { classNames } = useClassOptions();
+  const { classNames, classOptions, sectionOptions } = useClassOptions();
   const { subjectNames } = useSubjectOptions();
 
   const {
@@ -106,6 +108,7 @@ export function TeacherFormModal({
   const avatar = useWatch({ control, name: "avatar" });
   const firstName = useWatch({ control, name: "firstName" });
   const lastName = useWatch({ control, name: "lastName" });
+  const isClassTeacher = useWatch({ control, name: "isClassTeacher" });
 
   const handlePhoto = async (file: File | undefined) => {
     if (!file) return;
@@ -297,6 +300,27 @@ export function TeacherFormModal({
             />
             <span className="text-sm text-text">Assign as class teacher</span>
           </label>
+
+          {isClassTeacher && (
+            <div className="mt-3 grid grid-cols-1 gap-4 rounded-md border border-border bg-surface-sunken p-3 sm:grid-cols-2">
+              <Select
+                label="Class teacher of"
+                required
+                placeholder="Select class"
+                options={classOptions}
+                {...register("classTeacherOf")}
+                error={errors.classTeacherOf?.message}
+              />
+              <Select
+                label="Section"
+                required
+                placeholder="Select section"
+                options={sectionOptions}
+                {...register("classTeacherSection")}
+                error={errors.classTeacherSection?.message}
+              />
+            </div>
+          )}
         </section>
 
         <section>

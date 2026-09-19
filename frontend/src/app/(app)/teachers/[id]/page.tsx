@@ -249,7 +249,14 @@ export default function TeacherDetailPage({ params }: { params: Promise<{ id: st
               <Badge variant={STATUS_VARIANT[teacher.status]} className="capitalize">
                 {teacher.status.replace("-", " ")}
               </Badge>
-              {teacher.isClassTeacher && <Badge variant="info">Class teacher</Badge>}
+              {teacher.isClassTeacher && (
+                <Badge variant="info">
+                  Class teacher
+                  {teacher.classTeacherOf
+                    ? ` · ${teacher.classTeacherOf}${teacher.classTeacherSection ? `-${teacher.classTeacherSection}` : ""}`
+                    : ""}
+                </Badge>
+              )}
             </div>
             <p className="mt-1 text-sm text-muted">
               {teacher.department} · {teacher.qualification}

@@ -31,6 +31,10 @@ export interface Teacher {
   /** Weekly teaching periods assigned. */
   weeklyPeriods: number;
   isClassTeacher: boolean;
+  /** The class this teacher is class teacher of, e.g. "Class 10" (when isClassTeacher). */
+  classTeacherOf?: string;
+  /** The section they are class teacher of, e.g. "A". */
+  classTeacherSection?: string;
 }
 
 /** Fields the create/edit form owns. Server-derived fields are excluded. */

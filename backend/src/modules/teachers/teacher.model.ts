@@ -40,6 +40,8 @@ const teacherSchema = new Schema(
     avatar: { type: String, default: "" },
     salary: { type: Number, default: 0, min: 0 },
     isClassTeacher: { type: Boolean, default: false },
+    classTeacherOf: { type: String, default: "" },
+    classTeacherSection: { type: String, default: "" },
 
     // Server-owned metrics — clients never set these directly.
     rating: { type: Number, default: 0, min: 0, max: 5 },
