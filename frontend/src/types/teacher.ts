@@ -36,7 +36,7 @@ export interface Teacher {
 /** Fields the create/edit form owns. Server-derived fields are excluded. */
 export type TeacherFormValues = Omit<
   Teacher,
-  "id" | "rating" | "attendancePercent" | "weeklyPeriods" | "avatar"
+  "id" | "rating" | "attendancePercent" | "weeklyPeriods"
 >;
 
 export const teacherName = (t: Teacher) => `${t.firstName} ${t.lastName}`;

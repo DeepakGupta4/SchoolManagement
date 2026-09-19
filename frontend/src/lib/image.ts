@@ -6,6 +6,19 @@
  * base64-encoded would bloat memory and, later, any real payload. 512px on the
  * long edge is plenty for an ID-card / profile photo.
  */
+/**
+ * Reads ANY file (PDF, image, doc…) as a raw base64 data URL, unmodified.
+ * Used for document uploads where the original file must be preserved.
+ */
+export function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Could not read the file."));
+    reader.onload = () => resolve(reader.result as string);
+    reader.readAsDataURL(file);
+  });
+}
+
 export function fileToDataUrl(file: File, maxSize = 512, quality = 0.82): Promise<string> {
   return new Promise((resolve, reject) => {
     if (!file.type.startsWith("image/")) {

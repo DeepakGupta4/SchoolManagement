@@ -34,6 +34,7 @@ import { assessStudent, RISK_META } from "@/lib/insights";
 import { getStudentRisk, generateRemark, type AiRisk } from "@/lib/api/ai";
 import { cn } from "@/lib/utils";
 import { StudentFormModal } from "../StudentFormModal";
+import { DocumentsCard } from "@/components/DocumentsCard";
 
 const STATUS_VARIANT: Record<StudentStatus, "success" | "default" | "info" | "warning"> = {
   active: "success",
@@ -408,6 +409,9 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
 
       {/* Risk assessment — deterministic baseline, upgradable with Gemini */}
       <RiskCard student={student} />
+
+      {/* Student documents — birth certificate, Aadhaar, TC, marksheets */}
+      <DocumentsCard ownerType="student" ownerId={student.id} ownerName={fullName(student)} />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card>

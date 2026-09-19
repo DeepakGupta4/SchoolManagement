@@ -24,6 +24,7 @@ export const teacherSchema = z.object({
   employmentType: z.enum(["full-time", "part-time", "contract", "visiting"]),
   status: z.enum(["active", "on-leave", "inactive", "resigned"]),
   address: z.string().min(5, "Address must be at least 5 characters"),
+  avatar: z.string().optional(),
   salary: z.coerce.number<number>().min(0, "Salary cannot be negative"),
   isClassTeacher: z.boolean(),
 });

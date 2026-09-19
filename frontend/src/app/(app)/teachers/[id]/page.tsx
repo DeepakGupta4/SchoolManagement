@@ -37,6 +37,7 @@ import {
   type TeacherStatus,
 } from "@/types/teacher";
 import { TeacherFormModal } from "../TeacherFormModal";
+import { DocumentsCard } from "@/components/DocumentsCard";
 
 const STATUS_VARIANT: Record<TeacherStatus, "success" | "warning" | "default" | "danger"> = {
   active: "success",
@@ -319,6 +320,9 @@ export default function TeacherDetailPage({ params }: { params: Promise<{ id: st
           </CardContent>
         </Card>
       </div>
+
+      {/* Teacher documents — qualifications, ID proofs, certificates */}
+      <DocumentsCard ownerType="teacher" ownerId={teacher.id} ownerName={teacherName(teacher)} />
 
       <TeacherFormModal
         open={editOpen}

@@ -21,14 +21,22 @@ export interface DepartmentFilters {
 }
 
 export const DEPARTMENT_BLOCK_OPTIONS = [
-  "Main Block",
-  "Science Block",
+  "Main Building",
+  "Administrative Block",
+  "Pre-Primary Wing",
+  "Primary Wing",
+  "Middle Wing",
   "Senior Wing",
-  "IT Wing",
-  "Activity Block",
-  "Sports Complex",
+  "Science Block",
+  "Computer Lab",
   "Library Block",
-  "Counselling Wing",
+  "Activity Block",
+  "Assembly Hall",
+  "Sports Ground",
+  "Music & Arts Room",
+  "Staff Room",
+  "Counselling Room",
+  "Medical Room",
 ];
 
 export const DEPARTMENT_STATUS_OPTIONS = [

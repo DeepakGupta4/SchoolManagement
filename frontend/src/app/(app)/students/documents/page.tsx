@@ -6,7 +6,6 @@ import {
   Clock,
   Download,
   FileText,
-  FolderOpen,
   Search,
   ShieldCheck,
   Upload,
@@ -30,6 +29,7 @@ import { cn } from "@/lib/utils";
 import { useResource } from "@/hooks/useResource";
 import { useClassOptions } from "@/hooks/useClassOptions";
 import { studentDocumentsApi, type StudentDocument } from "@/lib/api/studentDocuments";
+import { BulkUploadModal } from "./BulkUploadModal";
 
 const PAGE_SIZE = 10;
 
@@ -76,6 +76,7 @@ export default function StudentDocumentsPage() {
   // Stat-card quick filter: only students whose vault is 100% complete.
   const [onlyComplete, setOnlyComplete] = useState(false);
   const [page, setPage] = useState(1);
+  const [bulkOpen, setBulkOpen] = useState(false);
   const { toast } = useToast();
   const { classOptions } = useClassOptions();
   const { items, loading } = useResource(studentDocumentsApi, {}, { label: "student file" });
@@ -234,15 +235,9 @@ export default function StudentDocumentsPage() {
       render: (r) => (
         <div className="flex items-center justify-end gap-1">
           <button
-            title="Open vault"
-            aria-label={`Open document vault for ${r.name}`}
-            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
-          >
-            <FolderOpen className="size-4" />
-          </button>
-          <button
-            title="Upload document"
-            aria-label={`Upload document for ${r.name}`}
+            onClick={() => setBulkOpen(true)}
+            title="Upload documents"
+            aria-label={`Upload documents for ${r.name}`}
             className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
           >
             <Upload className="size-4" />
@@ -263,7 +258,7 @@ export default function StudentDocumentsPage() {
               <Download className="size-4" />
               Export Report
             </Button>
-            <Button>
+            <Button onClick={() => setBulkOpen(true)}>
               <Upload className="size-4" />
               Bulk Upload
             </Button>
@@ -390,6 +385,8 @@ export default function StudentDocumentsPage() {
         totalItems={filtered.length}
         onPageChange={setPage}
       />
+
+      <BulkUploadModal open={bulkOpen} onOpenChange={setBulkOpen} />
     </div>
   );
 }
