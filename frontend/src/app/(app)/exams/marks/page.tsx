@@ -18,12 +18,11 @@ import {
 } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import { useClassOptions } from "@/hooks/useClassOptions";
+import { useSubjectOptions } from "@/hooks/useSubjectOptions";
 import { listStudents } from "@/lib/api/students";
+import { examsApi } from "@/lib/api/exams";
 import { getMarks, saveMarks, type MarkRecord } from "@/lib/api/marks";
 import type { Student as ApiStudent } from "@/types/student";
-
-const subjects = ["Mathematics", "Physics", "Chemistry", "English", "Biology", "History"];
-const exams    = ["Unit Test 1", "Mid-Term Exam", "Final Exam"];
 
 type Row = { id: string; name: string; roll: number };
 
@@ -52,12 +51,42 @@ const toOptions = (values: string[]) => values.map((v) => ({ label: v, value: v 
 export default function MarkEntryPage() {
   const { toast } = useToast();
   const { classOptions, sectionOptions } = useClassOptions();
+  const { subjectOptions } = useSubjectOptions();
+
+  // Real exams the school created power the exam picker.
+  const [examNames, setExamNames] = useState<string[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    examsApi
+      .list()
+      .then((exams) => {
+        if (!cancelled) setExamNames(exams.map((e) => e.name));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const [selectedClass,   setSelectedClass]   = useState("");
   const [selectedSection, setSelectedSection] = useState("");
-  const [selectedSubject, setSelectedSubject] = useState("Mathematics");
-  const [selectedExam,    setSelectedExam]    = useState("Mid-Term Exam");
+  const [selectedSubject, setSelectedSubject] = useState("");
+  const [selectedExam,    setSelectedExam]    = useState("");
   const [totalMarks,      setTotalMarks]      = useState(100);
+
+  // Default to the first real subject/exam once they load, so nothing is invented.
+  useEffect(() => {
+    if (!selectedSubject && subjectOptions.length > 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSelectedSubject(subjectOptions[0].value);
+    }
+  }, [subjectOptions, selectedSubject]);
+  useEffect(() => {
+    if (!selectedExam && examNames.length > 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSelectedExam(examNames[0]);
+    }
+  }, [examNames, selectedExam]);
 
   const [roster, setRoster] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
@@ -319,13 +348,15 @@ export default function MarkEntryPage() {
             label="Subject"
             value={selectedSubject}
             onChange={(e) => setSelectedSubject(e.target.value)}
-            options={toOptions(subjects)}
+            placeholder="Select subject"
+            options={subjectOptions}
           />
           <Select
             label="Exam"
             value={selectedExam}
             onChange={(e) => setSelectedExam(e.target.value)}
-            options={toOptions(exams)}
+            placeholder="Select exam"
+            options={toOptions(examNames)}
           />
           <Input
             label="Total Marks"

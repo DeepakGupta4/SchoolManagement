@@ -1,7 +1,8 @@
 import { z } from "zod";
 
 export const examSchema = z.object({
-  code: z.string().min(2, "Exam code is required"),
+  // Optional — auto-generated from the exam when left blank.
+  code: z.string(),
   name: z.string().min(2, "Exam name is required"),
   type: z.string().min(1, "Type is required"),
   classes: z.array(z.string()).min(1, "Select at least one class"),

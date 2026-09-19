@@ -21,11 +21,11 @@ import type { ReportCardData } from "@/components/cards/ReportCard";
 import { ReportCardModal } from "./ReportCardModal";
 import { useClassOptions } from "@/hooks/useClassOptions";
 import { listStudents } from "@/lib/api/students";
+import { examsApi } from "@/lib/api/exams";
 import { getMarks } from "@/lib/api/marks";
 import type { Student as ApiStudent } from "@/types/student";
 
 const SESSION = "2025-26";
-const exams = ["Unit Test 1", "Mid-Term Exam", "Final Exam"];
 
 // Preferred display order for subjects; anything else falls in after these.
 const SUBJECT_ORDER = ["Mathematics", "Physics", "Chemistry", "English", "Biology", "History"];
@@ -80,7 +80,28 @@ export default function ReportCardsPage() {
 
   const [selectedClass, setSelectedClass] = useState("");
   const [selectedSection, setSelectedSection] = useState("");
-  const [selectedExam, setSelectedExam] = useState("Mid-Term Exam");
+  const [selectedExam, setSelectedExam] = useState("");
+
+  // Real exams the school created power the exam picker.
+  const [examNames, setExamNames] = useState<string[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    examsApi
+      .list()
+      .then((exams) => {
+        if (!cancelled) setExamNames(exams.map((e) => e.name));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  useEffect(() => {
+    if (!selectedExam && examNames.length > 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSelectedExam(examNames[0]);
+    }
+  }, [examNames, selectedExam]);
 
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
@@ -345,7 +366,8 @@ export default function ReportCardsPage() {
               label="Exam"
               value={selectedExam}
               onChange={(e) => setSelectedExam(e.target.value)}
-              options={toOptions(exams)}
+              placeholder="Select exam"
+              options={toOptions(examNames)}
             />
           </div>
         </CardContent>

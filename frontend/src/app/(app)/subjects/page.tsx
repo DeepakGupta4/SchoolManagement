@@ -16,20 +16,10 @@ import {
   type Column,
 } from "@/components/ui";
 import { useResource } from "@/hooks/useResource";
-import { subjectsApi, suggestSubjectCode, type SchoolSubject } from "@/lib/api/subjects";
+import { subjectsApi, suggestSubjectCode, COMMON_SUBJECTS, type SchoolSubject } from "@/lib/api/subjects";
 import type { SubjectSchema } from "@/lib/schemas/subject";
 import { DetailModal } from "@/components/DetailModal";
 import { SubjectFormModal } from "./SubjectFormModal";
-
-// Common subjects offered by most Indian schools — shown as a quick-pick strip
-// so an admin can add several at once instead of typing each one.
-const COMMON_SUBJECTS = [
-  "English", "Hindi", "Mathematics", "Science", "Social Science", "EVS",
-  "Physics", "Chemistry", "Biology", "Computer Science", "Physical Education",
-  "Sanskrit", "Art & Craft", "Music", "General Knowledge", "Moral Science",
-  "Economics", "Accountancy", "Business Studies", "Geography", "History",
-  "Political Science",
-];
 
 /** Chip styling for the quick-add strip: added (locked), picked, or default. */
 function cnChip(added: boolean, picked: boolean): string {

@@ -31,10 +31,9 @@ import { cn } from "@/lib/utils";
 import { exportToCsv } from "@/lib/exportCsv";
 import { useClassOptions } from "@/hooks/useClassOptions";
 import { listStudents } from "@/lib/api/students";
+import { examsApi } from "@/lib/api/exams";
 import { getMarks } from "@/lib/api/marks";
 import type { Student as ApiStudent } from "@/types/student";
-
-const exams = ["Mid-Term Exam", "Unit Test 1", "Final Exam"];
 
 type MeritStudent = {
   id: string;
@@ -84,7 +83,28 @@ export default function MeritListPage() {
   const [search, setSearch] = useState("");
   const [selClass, setSelClass] = useState("");
   const [selSection, setSelSection] = useState("");
-  const [selExam, setSelExam] = useState("Mid-Term Exam");
+  const [selExam, setSelExam] = useState("");
+
+  // Real exams the school created power the exam picker.
+  const [examNames, setExamNames] = useState<string[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    examsApi
+      .list()
+      .then((exams) => {
+        if (!cancelled) setExamNames(exams.map((e) => e.name));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  useEffect(() => {
+    if (!selExam && examNames.length > 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSelExam(examNames[0]);
+    }
+  }, [examNames, selExam]);
 
   const [cohort, setCohort] = useState<MeritStudent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -406,7 +426,8 @@ export default function MeritListPage() {
           <Select
             value={selExam}
             onChange={(e) => setSelExam(e.target.value)}
-            options={toOptions(exams)}
+            placeholder="Select exam"
+            options={toOptions(examNames)}
             aria-label="Filter by exam"
           />
         </div>

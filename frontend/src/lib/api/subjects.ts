@@ -29,6 +29,15 @@ export const SUBJECT_DEPARTMENT_OPTIONS = [
 
 export const SUBJECT_TYPE_OPTIONS = ["Core", "Elective", "Language", "Co-curricular"];
 
+/** Common subjects offered by most Indian schools — used for quick pick + suggestions. */
+export const COMMON_SUBJECTS = [
+  "English", "Hindi", "Mathematics", "Science", "Social Science", "EVS",
+  "Physics", "Chemistry", "Biology", "Computer Science", "Physical Education",
+  "Sanskrit", "Art & Craft", "Music", "General Knowledge", "Moral Science",
+  "Economics", "Accountancy", "Business Studies", "Geography", "History",
+  "Political Science",
+];
+
 /** Suggests a short code from a subject name, e.g. "Social Science" → "SS". */
 export function suggestSubjectCode(name: string): string {
   const words = name.trim().split(/\s+/).filter(Boolean);

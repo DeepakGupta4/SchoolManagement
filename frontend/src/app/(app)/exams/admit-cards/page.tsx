@@ -9,6 +9,7 @@ import { AdmitCard, type AdmitCardData, type AdmitCardSubject } from "@/componen
 import { useAsyncList } from "@/hooks/useAsyncList";
 import { useClassOptions } from "@/hooks/useClassOptions";
 import { listStudents } from "@/lib/api/students";
+import { examsApi } from "@/lib/api/exams";
 import { examScheduleApi, type ScheduledExam } from "@/lib/api/examSchedule";
 import { fullName, type Student } from "@/types/student";
 
@@ -63,19 +64,28 @@ export default function AdmitCardsPage() {
 
   const loading = studentsLoading || scheduleLoading;
 
-  // Distinct exam names present in the schedule power the exam selector.
-  const examOptions = useMemo(
-    () => Array.from(new Set(schedule.map((s) => s.exam).filter(Boolean))),
-    [schedule]
-  );
-
-  // Default to the first available exam once the schedule loads.
+  // Real exams the school created power the exam selector.
+  const [examNames, setExamNames] = useState<string[]>([]);
   useEffect(() => {
-    if (examOptions.length > 0 && !examOptions.includes(exam)) {
+    let cancelled = false;
+    examsApi
+      .list()
+      .then((exams) => {
+        if (!cancelled) setExamNames(exams.map((e) => e.name));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Default to the first available exam once they load.
+  useEffect(() => {
+    if (!exam && examNames.length > 0) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setExam(examOptions[0]);
+      setExam(examNames[0]);
     }
-  }, [examOptions, exam]);
+  }, [examNames, exam]);
 
   // Papers scheduled for the selected exam, indexed by class code.
   const subjectsByClass = useMemo(() => {
@@ -216,7 +226,7 @@ export default function AdmitCardsPage() {
               value={exam}
               onChange={(e) => setExam(e.target.value)}
               placeholder="Select examination"
-              options={examOptions.map((x) => ({ label: x, value: x }))}
+              options={examNames.map((x) => ({ label: x, value: x }))}
               aria-label="Select examination"
             />
           </div>

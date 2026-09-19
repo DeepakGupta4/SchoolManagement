@@ -1,30 +1,36 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Modal, Button, Input, Select } from "@/components/ui";
 import { useClassOptions } from "@/hooks/useClassOptions";
+import { useSubjectOptions } from "@/hooks/useSubjectOptions";
 import { scheduledExamSchema, type ScheduledExamSchema } from "@/lib/schemas/examSchedule";
 import {
-  SCHEDULE_EXAM_OPTIONS,
-  SCHEDULE_INVIGILATOR_OPTIONS,
   SCHEDULE_ROOM_OPTIONS,
   SCHEDULE_STATUS_OPTIONS,
-  SCHEDULE_SUBJECT_OPTIONS,
   type ScheduledExam,
 } from "@/lib/api/examSchedule";
+import { examsApi } from "@/lib/api/exams";
+import { listTeachers } from "@/lib/api/teachers";
+import { teacherName } from "@/types/teacher";
+
+/** Module-scope (not render) so it isn't flagged as an impure render call. */
+function genScheduleCode() {
+  return `ES-${Math.floor(1000 + Math.random() * 9000)}`;
+}
 
 const emptyValues: ScheduledExamSchema = {
   code: "",
-  exam: SCHEDULE_EXAM_OPTIONS[0],
-  subject: SCHEDULE_SUBJECT_OPTIONS[0],
+  exam: "",
+  subject: "",
   class: "",
   date: "",
   time: "",
   duration: "1 hr",
   room: SCHEDULE_ROOM_OPTIONS[0],
-  invigilator: SCHEDULE_INVIGILATOR_OPTIONS[0],
+  invigilator: "",
   totalMarks: 25,
   status: "upcoming",
 };
@@ -47,6 +53,31 @@ export function ScheduledExamFormModal({
 }: ScheduledExamFormModalProps) {
   const isEdit = Boolean(record);
   const { classOptions } = useClassOptions();
+  const { subjectOptions } = useSubjectOptions();
+
+  // Real exams and teachers power the "which exam" and invigilator pickers so the
+  // owner chooses from what they've actually created instead of static lists.
+  const [examNames, setExamNames] = useState<string[]>([]);
+  const [teacherNames, setTeacherNames] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    examsApi
+      .list()
+      .then((exams) => {
+        if (!cancelled) setExamNames(exams.map((e) => e.name));
+      })
+      .catch(() => {});
+    listTeachers()
+      .then((teachers) => {
+        if (!cancelled) setTeacherNames(teachers.map(teacherName));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
 
   const {
     register,
@@ -64,7 +95,13 @@ export function ScheduledExamFormModal({
     reset(record ? { ...record } : emptyValues);
   }, [open, record, reset]);
 
-  const submit = handleSubmit(onSubmit);
+  // Auto-generate a schedule code when the owner leaves it blank.
+  const submit = handleSubmit((values) =>
+    onSubmit({
+      ...values,
+      code: values.code.trim() || genScheduleCode(),
+    })
+  );
 
   return (
     <Modal
@@ -92,22 +129,23 @@ export function ScheduledExamFormModal({
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Input
             label="Schedule code"
-            required
-            placeholder="ES008"
+            placeholder="Auto (e.g. ES-1234)"
             {...register("code")}
             error={errors.code?.message}
           />
           <Select
             label="Exam"
             required
-            options={SCHEDULE_EXAM_OPTIONS.map((e) => ({ label: e, value: e }))}
+            placeholder="Select exam"
+            options={examNames.map((e) => ({ label: e, value: e }))}
             {...register("exam")}
             error={errors.exam?.message}
           />
           <Select
             label="Subject"
             required
-            options={SCHEDULE_SUBJECT_OPTIONS.map((s) => ({ label: s, value: s }))}
+            placeholder="Select subject"
+            options={subjectOptions}
             {...register("subject")}
             error={errors.subject?.message}
           />
@@ -122,7 +160,7 @@ export function ScheduledExamFormModal({
           <Input
             label="Date"
             required
-            placeholder="Jul 28, 2025"
+            type="date"
             {...register("date")}
             error={errors.date?.message}
           />
@@ -150,7 +188,8 @@ export function ScheduledExamFormModal({
           <Select
             label="Invigilator"
             required
-            options={SCHEDULE_INVIGILATOR_OPTIONS.map((i) => ({ label: i, value: i }))}
+            placeholder="Select invigilator"
+            options={teacherNames.map((t) => ({ label: t, value: t }))}
             {...register("invigilator")}
             error={errors.invigilator?.message}
           />

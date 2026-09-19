@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const scheduledExamSchema = z.object({
-  code: z.string().min(2, "Schedule code is required"),
+  code: z.string(),
   exam: z.string().min(2, "Exam is required"),
   subject: z.string().min(1, "Subject is required"),
   class: z.string().min(1, "Class is required"),

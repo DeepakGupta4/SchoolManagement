@@ -8,6 +8,7 @@ import { subjectSchema, type SubjectSchema } from "@/lib/schemas/subject";
 import {
   SUBJECT_DEPARTMENT_OPTIONS,
   SUBJECT_TYPE_OPTIONS,
+  COMMON_SUBJECTS,
   suggestSubjectCode,
   type SchoolSubject,
 } from "@/lib/api/subjects";
@@ -81,7 +82,19 @@ export function SubjectFormModal({
     >
       <form onSubmit={submit} className="flex flex-col gap-4">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Input label="Subject name" required placeholder="Mathematics" {...register("name")} error={errors.name?.message} />
+          <Input
+            label="Subject name"
+            required
+            list="common-subjects"
+            placeholder="Pick or type — e.g. Mathematics"
+            {...register("name")}
+            error={errors.name?.message}
+          />
+          <datalist id="common-subjects">
+            {COMMON_SUBJECTS.map((s) => (
+              <option key={s} value={s} />
+            ))}
+          </datalist>
           <Input label="Code" hint="Leave blank to auto-generate" placeholder="MATH" {...register("code")} error={errors.code?.message} />
           <Select
             label="Department"
