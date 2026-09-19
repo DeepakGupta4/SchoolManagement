@@ -25,6 +25,9 @@ export interface DashboardInsights {
   nextExamName: string | null;
   lowAttendance: number;
   attention: AttentionStudent[];
+  /** Totals used to detect a brand-new (empty) school for onboarding. */
+  totalStudents: number;
+  totalTeachers: number;
 }
 
 /**
@@ -93,6 +96,8 @@ export function useDashboardInsights() {
         nextExamName: upcoming[0]?.name ?? null,
         lowAttendance: students.filter((s) => s.attendancePercent < 75).length,
         attention,
+        totalStudents: students.length,
+        totalTeachers: teachers.length,
       });
       setLoading(false);
     })();

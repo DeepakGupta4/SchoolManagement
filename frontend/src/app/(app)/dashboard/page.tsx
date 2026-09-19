@@ -4,8 +4,9 @@ import React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  ArrowRight, ArrowUpRight, BadgeIndianRupee, Cake, CalendarClock,
-  CalendarOff, GraduationCap, Sparkles, TrendingDown, UserRound, type LucideIcon,
+  ArrowRight, ArrowUpRight, BadgeIndianRupee, BookMarked, Cake, CalendarClock,
+  CalendarDays, CalendarOff, GraduationCap, School, Sparkles, TrendingDown,
+  UserRound, Users, type LucideIcon,
 } from "lucide-react";
 import { Avatar, Badge, Card, CardContent, CardHeader, CountUp, Skeleton } from "@/components/ui";
 import { AttendanceChart, FeeCollectionChart } from "@/components/dashboard/Charts";
@@ -60,6 +61,60 @@ function buildOverview(d: DashboardInsights): OverviewItem[] {
   ];
 }
 
+/** Setup steps shown to a brand-new school with no data yet. */
+const SETUP_STEPS = [
+  { n: 1, icon: School, title: "Create Classes & Sections", desc: "Set up your grades and sections first — everything else links to them.", href: "/classes", cta: "Add classes" },
+  { n: 2, icon: BookMarked, title: "Add Subjects", desc: "Add the subjects your school teaches.", href: "/subjects", cta: "Add subjects" },
+  { n: 3, icon: GraduationCap, title: "Add Teachers & Staff", desc: "Bring your teaching and support staff on board.", href: "/teachers", cta: "Add teachers" },
+  { n: 4, icon: Users, title: "Enrol Students", desc: "Add students to their classes — or approve them from Admissions.", href: "/students", cta: "Add students" },
+  { n: 5, icon: CalendarDays, title: "Build the Timetable", desc: "Assign periods once classes, subjects and teachers exist.", href: "/timetable", cta: "Open timetable" },
+];
+
+function Onboarding({ name }: { name?: string }) {
+  return (
+    <div className="flex flex-col gap-5">
+      <Card className="overflow-hidden">
+        <CardContent className="flex flex-col items-start gap-2 bg-linear-to-br from-primary-soft to-violet-soft/40 py-8">
+          <span className="inline-flex items-center gap-2 rounded-full bg-surface-raised px-3 py-1 text-xs font-semibold text-primary-text shadow-sm">
+            <Sparkles className="size-3.5" /> Welcome to SchoolDeck
+          </span>
+          <h2 className="mt-1 text-2xl font-bold text-text">
+            Let&apos;s set up your school{name ? `, ${name}` : ""} 🎉
+          </h2>
+          <p className="max-w-2xl text-sm text-muted">
+            Your school is empty right now. Follow these quick steps in order — each one links
+            straight to the page where you create it. Start with classes.
+          </p>
+        </CardContent>
+      </Card>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        {SETUP_STEPS.map((s) => (
+          <Card key={s.n} className="card-hover">
+            <CardContent className="flex h-full flex-col gap-3">
+              <div className="flex items-center gap-3">
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-bold text-white">
+                  {s.n}
+                </span>
+                <div className="flex size-9 items-center justify-center rounded-md bg-primary-soft text-primary-text">
+                  <s.icon className="size-4" />
+                </div>
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="text-sm font-semibold text-text">{s.title}</h3>
+                <p className="mt-1 text-xs text-muted">{s.desc}</p>
+              </div>
+              <Link href={s.href} className="focus-ring inline-flex w-fit items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-primary-hover">
+                {s.cta} <ArrowRight className="size-3.5" />
+              </Link>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function OverviewSkeleton() {
   return (
     <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-6">
@@ -83,6 +138,8 @@ export default function DashboardPage() {
   });
 
   const overview = data ? buildOverview(data) : [];
+  // A brand-new school (no students and no teachers) gets guided setup steps.
+  const isEmpty = !loading && !!data && data.totalStudents === 0 && data.totalTeachers === 0;
 
   return (
     <div className="flex flex-col gap-5">
@@ -100,6 +157,10 @@ export default function DashboardPage() {
         </span>
       </div>
 
+      {isEmpty ? (
+        <Onboarding name={user?.name?.split(" ")[0]} />
+      ) : (
+       <>
       {/* Today's Overview — the insight board */}
       <section>
         <div className="mb-3 flex items-center gap-2">
@@ -223,6 +284,8 @@ export default function DashboardPage() {
         <RecentActivity />
         <UpcomingEvents />
       </div>
+       </>
+      )}
     </div>
   );
 }

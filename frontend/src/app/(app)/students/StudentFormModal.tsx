@@ -313,6 +313,11 @@ export function StudentFormModal({
             <Input label="Admission date" type="date" required {...register("admissionDate")} error={errors.admissionDate?.message} />
             <Select label="Status" required options={STATUS_OPTIONS} {...register("status")} error={errors.status?.message} />
           </div>
+          {classOptions.length === 0 && (
+            <p className="mt-3 rounded-md bg-warning-soft/50 px-3 py-2 text-xs text-warning-text">
+              No classes yet — create a class in <span className="font-semibold">Classes &amp; Sections</span> first, then pick it here.
+            </p>
+          )}
         </section>
 
         <section>
