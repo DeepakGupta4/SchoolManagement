@@ -73,6 +73,8 @@ export default function StudentDocumentsPage() {
   const [className, setClassName] = useState("");
   const [docType, setDocType] = useState("");
   const [docState, setDocState] = useState("");
+  // Stat-card quick filter: only students whose vault is 100% complete.
+  const [onlyComplete, setOnlyComplete] = useState(false);
   const [page, setPage] = useState(1);
   const { toast } = useToast();
   const { classOptions } = useClassOptions();
@@ -98,7 +100,12 @@ export default function StudentDocumentsPage() {
         ? r[docType as DocKey] === docState
         : statesOf(r).includes(docState);
 
-    return matchSearch && (!className || r.className === className) && matchDoc;
+    return (
+      matchSearch &&
+      (!className || r.className === className) &&
+      matchDoc &&
+      (!onlyComplete || completion(r) === 100)
+    );
   });
 
   const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -265,15 +272,51 @@ export default function StudentDocumentsPage() {
       />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Documents Verified" value={verifiedCount} icon={ShieldCheck} tone="emerald" />
-        <StatCard label="Awaiting Verification" value={pendingCount} icon={Clock} tone="amber" />
-        <StatCard label="Missing Documents" value={missingCount} icon={XCircle} tone="rose" />
+        <StatCard
+          label="Documents Verified"
+          value={verifiedCount}
+          icon={ShieldCheck}
+          tone="emerald"
+          active={docState === "verified"}
+          onClick={() => {
+            setOnlyComplete(false);
+            applyFilter(setDocState)(docState === "verified" ? "" : "verified");
+          }}
+        />
+        <StatCard
+          label="Awaiting Verification"
+          value={pendingCount}
+          icon={Clock}
+          tone="amber"
+          active={docState === "pending"}
+          onClick={() => {
+            setOnlyComplete(false);
+            applyFilter(setDocState)(docState === "pending" ? "" : "pending");
+          }}
+        />
+        <StatCard
+          label="Missing Documents"
+          value={missingCount}
+          icon={XCircle}
+          tone="rose"
+          active={docState === "missing"}
+          onClick={() => {
+            setOnlyComplete(false);
+            applyFilter(setDocState)(docState === "missing" ? "" : "missing");
+          }}
+        />
         <StatCard
           label="Files Complete"
           value={fullyComplete}
           suffix={` / ${items.length}`}
           icon={CheckCircle2}
           tone="indigo"
+          active={onlyComplete}
+          onClick={() => {
+            setDocState("");
+            setOnlyComplete((v) => !v);
+            setPage(1);
+          }}
         />
       </div>
 
