@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Eye, GraduationCap, Layers, Pencil, Plus, School, Search, Trash2, Users } from "lucide-react";
 import {
   Badge,
@@ -17,6 +17,10 @@ import {
 } from "@/components/ui";
 import { useResource } from "@/hooks/useResource";
 import { classesApi, STREAM_OPTIONS, type SchoolClass } from "@/lib/api/classes";
+import { listStudents } from "@/lib/api/students";
+import { listTeachers } from "@/lib/api/teachers";
+import type { Student } from "@/types/student";
+import type { Teacher } from "@/types/teacher";
 import type { SchoolClassSchema } from "@/lib/schemas/schoolClass";
 import { DetailModal } from "@/components/DetailModal";
 import { ClassFormModal } from "./ClassFormModal";
@@ -38,14 +42,43 @@ export default function ClassesPage() {
   const [viewing, setViewing] = useState<SchoolClass | null>(null);
   const [pendingDelete, setPendingDelete] = useState<SchoolClass | null>(null);
 
+  // Live rosters so student/teacher counts are derived, never typed.
+  const [roster, setRoster] = useState<Student[]>([]);
+  const [staff, setStaff] = useState<Teacher[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([listStudents(), listTeachers()])
+      .then(([s, t]) => {
+        if (cancelled) return;
+        setRoster(s);
+        setStaff(t);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [items]);
+
+  const studentCount = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const s of roster) m.set(s.className, (m.get(s.className) ?? 0) + 1);
+    return m;
+  }, [roster]);
+
+  const teacherCount = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const t of staff) for (const c of t.classes) m.set(c, (m.get(c) ?? 0) + 1);
+    return m;
+  }, [staff]);
+
   const stats = useMemo(
     () => ({
       classes: items.length,
       sections: items.reduce((sum, c) => sum + c.sections.length, 0),
-      students: items.reduce((sum, c) => sum + c.students, 0),
-      teachers: items.reduce((sum, c) => sum + c.teachers, 0),
+      students: roster.length,
+      teachers: staff.length,
     }),
-    [items]
+    [items, roster, staff]
   );
 
   const openCreate = () => {
@@ -109,8 +142,22 @@ export default function ClassesPage() {
       sortable: true,
       render: (c) => <span className="whitespace-nowrap text-muted">{c.classTeacher}</span>,
     },
-    { key: "students", header: "Students", sortable: true, align: "right" },
-    { key: "teachers", header: "Teachers", sortable: true, align: "right" },
+    {
+      key: "students",
+      header: "Students",
+      sortable: true,
+      align: "right",
+      sortValue: (c) => studentCount.get(c.name) ?? 0,
+      render: (c) => <span className="text-muted">{studentCount.get(c.name) ?? 0}</span>,
+    },
+    {
+      key: "teachers",
+      header: "Teachers",
+      sortable: true,
+      align: "right",
+      sortValue: (c) => teacherCount.get(c.name) ?? 0,
+      render: (c) => <span className="text-muted">{teacherCount.get(c.name) ?? 0}</span>,
+    },
     {
       key: "actions",
       header: "",
@@ -237,9 +284,9 @@ export default function ClassesPage() {
                 { label: "Class", value: viewing.name },
                 { label: "Room", value: viewing.room },
                 { label: "Stream", value: viewing.stream },
-                { label: "Class teacher", value: viewing.classTeacher },
-                { label: "Students", value: viewing.students },
-                { label: "Teachers", value: viewing.teachers },
+                { label: "Class teacher", value: viewing.classTeacher || "—" },
+                { label: "Students", value: studentCount.get(viewing.name) ?? 0 },
+                { label: "Teachers", value: teacherCount.get(viewing.name) ?? 0 },
                 {
                   label: "Sections",
                   value: viewing.sections.length ? viewing.sections.join(", ") : "—",
