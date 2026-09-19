@@ -35,6 +35,7 @@ import studentDocumentRoutes from "./studentDocuments/studentDocument.routes.js"
 import timetableRoutes from "./timetable/timetable.routes.js";
 import syllabusRoutes from "./syllabus/syllabus.routes.js";
 import messageRoutes from "./messages/message.routes.js";
+import workflowRoutes from "./workflows/workflow.routes.js";
 
 /**
  * Tenant CRUD modules mounted uniformly under the subscription guard. Each is a
@@ -78,4 +79,5 @@ export const crudModules: { path: string; router: Router }[] = [
   { path: "/api/timetable", router: timetableRoutes },
   { path: "/api/syllabus", router: syllabusRoutes },
   { path: "/api/messages", router: messageRoutes },
+  { path: "/api/workflows", router: workflowRoutes },
 ];

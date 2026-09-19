@@ -56,3 +56,64 @@ export function askAi(question: string) {
     body: { question },
   });
 }
+
+export interface QuestionPaperInput {
+  className: string;
+  subject: string;
+  topics?: string;
+  totalMarks?: number;
+}
+
+export interface QuestionPaperResult {
+  paper: string;
+  source: AiSource;
+}
+
+export function generateQuestionPaper(input: QuestionPaperInput) {
+  return apiRequest<QuestionPaperResult>("/api/ai/question-paper", {
+    method: "POST",
+    body: input,
+  });
+}
+
+export interface BulkRemarksInput {
+  className: string;
+  section?: string;
+}
+
+export interface StudentRemark {
+  id: string;
+  name: string;
+  remark: string;
+}
+
+export interface BulkRemarksResult {
+  remarks: StudentRemark[];
+  source: AiSource;
+}
+
+export function generateBulkRemarks(input: BulkRemarksInput) {
+  return apiRequest<BulkRemarksResult>("/api/ai/remarks-bulk", {
+    method: "POST",
+    body: input,
+  });
+}
+
+export interface LessonPlanInput {
+  className: string;
+  subject: string;
+  topic: string;
+  duration?: string;
+}
+
+export interface LessonPlanResult {
+  plan: string;
+  source: AiSource;
+}
+
+export function generateLessonPlan(input: LessonPlanInput) {
+  return apiRequest<LessonPlanResult>("/api/ai/lesson-plan", {
+    method: "POST",
+    body: input,
+  });
+}

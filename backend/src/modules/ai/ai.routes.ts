@@ -266,4 +266,171 @@ QUESTION: ${question.trim()}`;
   }
 });
 
+/** POST /api/ai/question-paper { className, subject, topics, totalMarks } — exam paper generator. */
+router.post("/question-paper", async (req, res, next) => {
+  try {
+    const { className, subject, topics, totalMarks } = req.body as {
+      className?: string;
+      subject?: string;
+      topics?: string;
+      totalMarks?: number | string;
+    };
+    if (!className || !subject) {
+      return res.status(400).json({ error: "className and subject are required" });
+    }
+
+    if (!isGeminiConfigured()) {
+      return res.json({
+        data: {
+          paper: "AI is not configured. Add GEMINI_API_KEY to enable the question paper generator.",
+          source: "rule" as const,
+        },
+      });
+    }
+
+    const marks = Number(totalMarks) || 100;
+    try {
+      const prompt = `You are an experienced school examiner. Create a well-structured examination question paper as PLAIN TEXT (no markdown, no code fences).
+Class: ${className}. Subject: ${subject}. Total marks: ${marks}.${topics ? `\nTopics to cover: ${topics}.` : ""}
+Requirements:
+- Include a header line with subject, class, total marks and suggested time.
+- Organise into clearly labelled sections (e.g. Section A: Objective, Section B: Short Answer, Section C: Long Answer).
+- Use a mix of question types (MCQ, fill in the blanks, short answer, long answer) appropriate to the class level.
+- Show the marks for each question and each section so the totals add up to ${marks}.
+- Number every question. Keep it exam-ready and grade-appropriate.`;
+      const paper = (await geminiGenerate(prompt, { temperature: 0.5 })).trim();
+      res.json({ data: { paper, source: "gemini" as const } });
+    } catch {
+      res.json({
+        data: {
+          paper: "The AI service is temporarily unavailable. Please try again in a moment.",
+          source: "rule" as const,
+        },
+      });
+    }
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** POST /api/ai/remarks-bulk { className, section? } — report-card remarks for a whole class. */
+router.post("/remarks-bulk", async (req, res, next) => {
+  try {
+    const { className, section } = req.body as { className?: string; section?: string };
+    if (!className) return res.status(400).json({ error: "className is required" });
+
+    const schoolId = req.user!.schoolId;
+    const query: Record<string, unknown> = { schoolId, status: "active", className };
+    if (section) query.section = section;
+    // Cap the roster so the prompt (and response) stays sane.
+    const students = (await Student.find(query)).slice(0, 60);
+
+    // Deterministic per-student remark, mirroring the single /remarks fallback.
+    const fallbackFor = (s: {
+      firstName: string;
+      attendancePercent?: number;
+      performancePercent?: number;
+    }) => {
+      const attendance = s.attendancePercent ?? 0;
+      const performance = s.performancePercent ?? 0;
+      return `${s.firstName} has maintained ${attendance}% attendance with an average of ${performance}%. ${
+        performance >= 65
+          ? "A consistent and sincere student; keep up the good work."
+          : performance >= 45
+            ? "Shows potential; more regular practice will lift results."
+            : "Needs focused support and regular revision to improve outcomes."
+      }`;
+    };
+
+    const buildFallback = () =>
+      students.map((s) => ({
+        id: String(s._id),
+        name: `${s.firstName} ${s.lastName}`.trim(),
+        remark: fallbackFor(s),
+      }));
+
+    if (!isGeminiConfigured() || students.length === 0) {
+      return res.json({ data: { remarks: buildFallback(), source: "rule" as const } });
+    }
+
+    try {
+      const roster = students.map((s) => ({
+        id: String(s._id),
+        name: `${s.firstName} ${s.lastName}`.trim(),
+        attendance: s.attendancePercent ?? 0,
+        performance: s.performancePercent ?? 0,
+      }));
+      const prompt = `You are a class teacher writing report-card remarks. For EACH student below, write a warm, professional remark (2-3 sentences, teacher's voice, encouraging but honest, plain text, no bullet points).
+Respond ONLY as JSON: {"remarks":[{"id": string, "remark": string}]}. Use the exact id from each student.
+Students: ${JSON.stringify(roster)}`;
+      const ai = await geminiJson<{ remarks: { id: string; remark: string }[] }>(prompt);
+      const byId = new Map(
+        (Array.isArray(ai.remarks) ? ai.remarks : []).map((r) => [String(r.id), String(r.remark || "")])
+      );
+      const remarks = students.map((s) => {
+        const id = String(s._id);
+        const aiRemark = byId.get(id);
+        return {
+          id,
+          name: `${s.firstName} ${s.lastName}`.trim(),
+          remark: aiRemark && aiRemark.trim() ? aiRemark.trim() : fallbackFor(s),
+        };
+      });
+      res.json({ data: { remarks, source: "gemini" as const } });
+    } catch {
+      res.json({ data: { remarks: buildFallback(), source: "rule" as const } });
+    }
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** POST /api/ai/lesson-plan { className, subject, topic, duration } — structured lesson plan. */
+router.post("/lesson-plan", async (req, res, next) => {
+  try {
+    const { className, subject, topic, duration } = req.body as {
+      className?: string;
+      subject?: string;
+      topic?: string;
+      duration?: string;
+    };
+    if (!className || !subject || !topic) {
+      return res.status(400).json({ error: "className, subject and topic are required" });
+    }
+
+    if (!isGeminiConfigured()) {
+      return res.json({
+        data: {
+          plan: "AI is not configured. Add GEMINI_API_KEY to enable the lesson-plan helper.",
+          source: "rule" as const,
+        },
+      });
+    }
+
+    try {
+      const prompt = `You are an experienced teacher creating a structured lesson plan as PLAIN TEXT (no markdown, no code fences).
+Class: ${className}. Subject: ${subject}. Topic: ${topic}. Duration: ${duration || "45 minutes"}.
+Include these clearly labelled sections, each with concrete, grade-appropriate detail:
+1. Learning Objectives
+2. Materials & Resources
+3. Introduction / Warm-up
+4. Main Activities (step-by-step, with approximate timings)
+5. Assessment / Check for Understanding
+6. Homework / Follow-up
+Keep it practical and ready to use in class.`;
+      const plan = (await geminiGenerate(prompt, { temperature: 0.5 })).trim();
+      res.json({ data: { plan, source: "gemini" as const } });
+    } catch {
+      res.json({
+        data: {
+          plan: "The AI service is temporarily unavailable. Please try again in a moment.",
+          source: "rule" as const,
+        },
+      });
+    }
+  } catch (err) {
+    next(err);
+  }
+});
+
 export default router;

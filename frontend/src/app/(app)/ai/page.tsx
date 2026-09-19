@@ -4,10 +4,14 @@ import { useEffect, useRef, useState } from "react";
 import {
   AlertTriangle,
   BookOpenCheck,
+  ClipboardList,
+  Copy,
   FileText,
   Info,
   Lightbulb,
+  Loader2,
   MessageSquare,
+  NotebookPen,
   RefreshCw,
   Send,
   Sparkles,
@@ -20,18 +24,27 @@ import {
   Card,
   CardContent,
   CardHeader,
+  Input,
+  Modal,
   PageHeader,
+  Select,
   Skeleton,
   StatCard,
+  Textarea,
   useToast,
 } from "@/components/ui";
 import { cn } from "@/lib/utils";
+import { useClassOptions } from "@/hooks/useClassOptions";
 import {
   askAi,
+  generateBulkRemarks,
+  generateLessonPlan,
+  generateQuestionPaper,
   getAiInsights,
   getAiStatus,
   type AiInsight,
   type AiInsightsResult,
+  type StudentRemark,
 } from "@/lib/api/ai";
 
 type Tone = "indigo" | "emerald" | "amber" | "rose" | "violet" | "cyan";
@@ -82,6 +95,7 @@ const CAPABILITIES = [
 
 export default function AiPage() {
   const { toast } = useToast();
+  const { classOptions, sectionOptions } = useClassOptions();
 
   const [configured, setConfigured] = useState<boolean | null>(null);
   const [data, setData] = useState<AiInsightsResult | null>(null);
@@ -92,6 +106,91 @@ export default function AiPage() {
   const [asking, setAsking] = useState(false);
   const [answer, setAnswer] = useState<string | null>(null);
   const answerRef = useRef<HTMLDivElement | null>(null);
+
+  // Question Paper Generator state
+  const [qpOpen, setQpOpen] = useState(false);
+  const [qpForm, setQpForm] = useState({ className: "", subject: "", topics: "", totalMarks: "100" });
+  const [qpLoading, setQpLoading] = useState(false);
+  const [qpResult, setQpResult] = useState<string | null>(null);
+
+  // Bulk Report-Card Remarks state
+  const [brOpen, setBrOpen] = useState(false);
+  const [brForm, setBrForm] = useState({ className: "", section: "" });
+  const [brLoading, setBrLoading] = useState(false);
+  const [brResult, setBrResult] = useState<StudentRemark[] | null>(null);
+
+  // Lesson-Plan helper state
+  const [lpOpen, setLpOpen] = useState(false);
+  const [lpForm, setLpForm] = useState({ className: "", subject: "", topic: "", duration: "45 minutes" });
+  const [lpLoading, setLpLoading] = useState(false);
+  const [lpResult, setLpResult] = useState<string | null>(null);
+
+  const copy = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast({ title: "Copied to clipboard" });
+    } catch {
+      toast({ title: "Could not copy", variant: "error" });
+    }
+  };
+
+  const runQuestionPaper = async () => {
+    if (!qpForm.className || !qpForm.subject || qpLoading) return;
+    setQpLoading(true);
+    setQpResult(null);
+    try {
+      const res = await generateQuestionPaper({
+        className: qpForm.className,
+        subject: qpForm.subject,
+        topics: qpForm.topics || undefined,
+        totalMarks: Number(qpForm.totalMarks) || 100,
+      });
+      setQpResult(res.paper);
+    } catch {
+      toast({ title: "Could not generate the paper", description: "Please try again.", variant: "error" });
+    } finally {
+      setQpLoading(false);
+    }
+  };
+
+  const runBulkRemarks = async () => {
+    if (!brForm.className || brLoading) return;
+    setBrLoading(true);
+    setBrResult(null);
+    try {
+      const res = await generateBulkRemarks({
+        className: brForm.className,
+        section: brForm.section || undefined,
+      });
+      setBrResult(res.remarks);
+      if (res.remarks.length === 0) {
+        toast({ title: "No active students in that class" });
+      }
+    } catch {
+      toast({ title: "Could not generate remarks", description: "Please try again.", variant: "error" });
+    } finally {
+      setBrLoading(false);
+    }
+  };
+
+  const runLessonPlan = async () => {
+    if (!lpForm.className || !lpForm.subject || !lpForm.topic || lpLoading) return;
+    setLpLoading(true);
+    setLpResult(null);
+    try {
+      const res = await generateLessonPlan({
+        className: lpForm.className,
+        subject: lpForm.subject,
+        topic: lpForm.topic,
+        duration: lpForm.duration || undefined,
+      });
+      setLpResult(res.plan);
+    } catch {
+      toast({ title: "Could not generate the lesson plan", description: "Please try again.", variant: "error" });
+    } finally {
+      setLpLoading(false);
+    }
+  };
 
   const loadInsights = () => {
     setLoading(true);
@@ -249,6 +348,53 @@ export default function AiPage() {
         </Card>
       </div>
 
+      {/* Tools */}
+      <div>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold text-text">AI Tools</h2>
+          {configured === false && (
+            <span className="text-xs text-muted">
+              Gemini isn&apos;t connected — tools will show a setup hint instead of AI output.
+            </span>
+          )}
+        </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <ToolCard
+            icon={FileText}
+            tone="indigo"
+            name="Question Paper Generator"
+            description="Generate a structured exam paper with sections, marks distribution and mixed question types."
+            action="Generate paper"
+            onClick={() => {
+              setQpResult(null);
+              setQpOpen(true);
+            }}
+          />
+          <ToolCard
+            icon={ClipboardList}
+            tone="emerald"
+            name="Bulk Report-Card Remarks"
+            description="Draft personalised remarks for a whole class in one go, from live marks and attendance."
+            action="Generate remarks"
+            onClick={() => {
+              setBrResult(null);
+              setBrOpen(true);
+            }}
+          />
+          <ToolCard
+            icon={NotebookPen}
+            tone="violet"
+            name="Lesson-Plan Helper"
+            description="Build a ready-to-use lesson plan with objectives, activities, assessment and homework."
+            action="Generate plan"
+            onClick={() => {
+              setLpResult(null);
+              setLpOpen(true);
+            }}
+          />
+        </div>
+      </div>
+
       {/* Capabilities */}
       <div>
         <h2 className="mb-3 text-sm font-semibold text-text">What the AI Suite can do</h2>
@@ -271,6 +417,263 @@ export default function AiPage() {
           })}
         </div>
       </div>
+
+      {/* Question Paper Generator modal */}
+      <Modal
+        open={qpOpen}
+        onOpenChange={setQpOpen}
+        title="Question Paper Generator"
+        description="Enter the exam details and generate a structured paper."
+        size="lg"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setQpOpen(false)}>
+              Close
+            </Button>
+            <Button onClick={runQuestionPaper} disabled={qpLoading || !qpForm.className || !qpForm.subject}>
+              {qpLoading ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
+              {qpLoading ? "Generating…" : "Generate paper"}
+            </Button>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-4">
+          {configured === false && <ConfigHint />}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Select
+              label="Class"
+              value={qpForm.className}
+              onChange={(e) => setQpForm((f) => ({ ...f, className: e.target.value }))}
+              placeholder="Select class"
+              options={classOptions}
+            />
+            <Input
+              label="Subject"
+              value={qpForm.subject}
+              onChange={(e) => setQpForm((f) => ({ ...f, subject: e.target.value }))}
+              placeholder="e.g. Mathematics"
+            />
+            <Input
+              label="Total marks"
+              type="number"
+              value={qpForm.totalMarks}
+              onChange={(e) => setQpForm((f) => ({ ...f, totalMarks: e.target.value }))}
+              placeholder="100"
+            />
+          </div>
+          <Textarea
+            label="Topics (optional)"
+            value={qpForm.topics}
+            onChange={(e) => setQpForm((f) => ({ ...f, topics: e.target.value }))}
+            placeholder="e.g. Algebra, Geometry, Trigonometry"
+            rows={2}
+          />
+          {qpResult && (
+            <ResultBlock text={qpResult} onCopy={() => copy(qpResult)} />
+          )}
+        </div>
+      </Modal>
+
+      {/* Bulk Report-Card Remarks modal */}
+      <Modal
+        open={brOpen}
+        onOpenChange={setBrOpen}
+        title="Bulk Report-Card Remarks"
+        description="Pick a class to draft a remark for every active student."
+        size="lg"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setBrOpen(false)}>
+              Close
+            </Button>
+            <Button onClick={runBulkRemarks} disabled={brLoading || !brForm.className}>
+              {brLoading ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
+              {brLoading ? "Generating…" : "Generate remarks"}
+            </Button>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-4">
+          {configured === false && <ConfigHint />}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Select
+              label="Class"
+              value={brForm.className}
+              onChange={(e) => setBrForm((f) => ({ ...f, className: e.target.value }))}
+              placeholder="Select class"
+              options={classOptions}
+            />
+            <Select
+              label="Section (optional)"
+              value={brForm.section}
+              onChange={(e) => setBrForm((f) => ({ ...f, section: e.target.value }))}
+              placeholder="All sections"
+              options={sectionOptions}
+            />
+          </div>
+          {brResult && brResult.length > 0 && (
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-medium text-muted">{brResult.length} student(s)</p>
+                <button
+                  type="button"
+                  onClick={() =>
+                    copy(brResult.map((r) => `${r.name}: ${r.remark}`).join("\n\n"))
+                  }
+                  className="focus-ring inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-primary transition-colors hover:bg-surface-hover"
+                >
+                  <Copy className="size-3.5" />
+                  Copy all
+                </button>
+              </div>
+              <ul className="flex flex-col gap-2">
+                {brResult.map((r) => (
+                  <li key={r.id} className="rounded-md border border-border bg-surface-sunken p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-sm font-medium text-text">{r.name}</p>
+                      <button
+                        type="button"
+                        onClick={() => copy(r.remark)}
+                        aria-label={`Copy remark for ${r.name}`}
+                        title="Copy remark"
+                        className="focus-ring shrink-0 rounded-md p-1 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+                      >
+                        <Copy className="size-3.5" />
+                      </button>
+                    </div>
+                    <p className="mt-1 text-xs text-muted">{r.remark}</p>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      </Modal>
+
+      {/* Lesson-Plan helper modal */}
+      <Modal
+        open={lpOpen}
+        onOpenChange={setLpOpen}
+        title="Lesson-Plan Helper"
+        description="Enter the lesson details and generate a structured plan."
+        size="lg"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setLpOpen(false)}>
+              Close
+            </Button>
+            <Button
+              onClick={runLessonPlan}
+              disabled={lpLoading || !lpForm.className || !lpForm.subject || !lpForm.topic}
+            >
+              {lpLoading ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
+              {lpLoading ? "Generating…" : "Generate plan"}
+            </Button>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-4">
+          {configured === false && <ConfigHint />}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Select
+              label="Class"
+              value={lpForm.className}
+              onChange={(e) => setLpForm((f) => ({ ...f, className: e.target.value }))}
+              placeholder="Select class"
+              options={classOptions}
+            />
+            <Input
+              label="Subject"
+              value={lpForm.subject}
+              onChange={(e) => setLpForm((f) => ({ ...f, subject: e.target.value }))}
+              placeholder="e.g. Science"
+            />
+            <Input
+              label="Topic"
+              value={lpForm.topic}
+              onChange={(e) => setLpForm((f) => ({ ...f, topic: e.target.value }))}
+              placeholder="e.g. Photosynthesis"
+            />
+            <Input
+              label="Duration"
+              value={lpForm.duration}
+              onChange={(e) => setLpForm((f) => ({ ...f, duration: e.target.value }))}
+              placeholder="e.g. 45 minutes"
+            />
+          </div>
+          {lpResult && <ResultBlock text={lpResult} onCopy={() => copy(lpResult)} />}
+        </div>
+      </Modal>
+    </div>
+  );
+}
+
+/** A clickable tool card that opens its modal. */
+function ToolCard({
+  icon: Icon,
+  tone,
+  name,
+  description,
+  action,
+  onClick,
+}: {
+  icon: typeof FileText;
+  tone: Tone;
+  name: string;
+  description: string;
+  action: string;
+  onClick: () => void;
+}) {
+  return (
+    <Card>
+      <CardContent className="flex h-full flex-col gap-3">
+        <div className={cn("flex size-10 shrink-0 items-center justify-center rounded-md text-white shadow-sm", GRADIENTS[tone])}>
+          <Icon className="size-5" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <h3 className="text-sm font-semibold text-text">{name}</h3>
+          <p className="mt-1.5 text-xs text-muted">{description}</p>
+        </div>
+        <Button variant="outline" className="mt-1 w-full" onClick={onClick}>
+          <Sparkles className="size-4" />
+          {action}
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+/** Plain-text result with preserved line breaks and a copy button. */
+function ResultBlock({ text, onCopy }: { text: string; onCopy: () => void }) {
+  return (
+    <div className="rounded-md border border-border bg-surface-sunken">
+      <div className="flex items-center justify-between border-b border-border px-3 py-2">
+        <p className="text-xs font-medium text-muted">Result</p>
+        <button
+          type="button"
+          onClick={onCopy}
+          className="focus-ring inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-primary transition-colors hover:bg-surface-hover"
+        >
+          <Copy className="size-3.5" />
+          Copy
+        </button>
+      </div>
+      <div className="max-h-80 overflow-y-auto whitespace-pre-wrap px-3 py-3 text-sm text-text">
+        {text}
+      </div>
+    </div>
+  );
+}
+
+/** Inline hint shown inside tool modals when Gemini isn't connected. */
+function ConfigHint() {
+  return (
+    <div className="flex items-start gap-2 rounded-md border border-warning/40 bg-warning-soft/40 px-3 py-2 text-xs text-muted">
+      <Info className="mt-0.5 size-4 shrink-0 text-warning-text" />
+      <span>
+        Gemini isn&apos;t connected, so this tool will return a setup message instead of AI output. Add a{" "}
+        <code className="rounded bg-surface-hover px-1 py-0.5">GEMINI_API_KEY</code> on the server to enable it.
+      </span>
     </div>
   );
 }

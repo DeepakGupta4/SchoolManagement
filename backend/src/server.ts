@@ -2,6 +2,7 @@ import { createApp } from "./app.js";
 import { connectDatabase, disconnectDatabase } from "./config/db.js";
 import { ensureSuperAdmin } from "./utils/ensureSuperAdmin.js";
 import { runSubscriptionReminders } from "./modules/schools/reminders.js";
+import { runAllSchools } from "./modules/workflows/workflow.service.js";
 import { env } from "./config/env.js";
 
 async function start() {
@@ -15,8 +16,10 @@ async function start() {
   // exposed as a cron endpoint; running it here keeps a live instance nudging
   // on its own. Idempotent, so overlapping triggers do no harm.
   const REMINDER_INTERVAL_MS = 12 * 60 * 60 * 1000;
-  const sweep = () =>
+  const sweep = () => {
     runSubscriptionReminders().catch((e) => console.error("Reminder sweep failed:", e));
+    runAllSchools().catch((e) => console.error("Workflow sweep failed:", e));
+  };
   setTimeout(sweep, 60_000).unref();
   setInterval(sweep, REMINDER_INTERVAL_MS).unref();
 
