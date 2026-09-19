@@ -1,5 +1,6 @@
 import type { Router } from "express";
 import classRoutes from "./classes/class.routes.js";
+import subjectRoutes from "./subjects/subject.routes.js";
 import examRoutes from "./exams/exam.routes.js";
 import examScheduleRoutes from "./examSchedule/examSchedule.routes.js";
 import assignmentRoutes from "./assignments/assignment.routes.js";
@@ -42,6 +43,7 @@ import messageRoutes from "./messages/message.routes.js";
  */
 export const crudModules: { path: string; router: Router }[] = [
   { path: "/api/classes", router: classRoutes },
+  { path: "/api/subjects", router: subjectRoutes },
   { path: "/api/exams", router: examRoutes },
   { path: "/api/exam-schedule", router: examScheduleRoutes },
   { path: "/api/assignments", router: assignmentRoutes },

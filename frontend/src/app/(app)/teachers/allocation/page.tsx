@@ -297,7 +297,20 @@ export default function AllocationPage() {
       />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Teachers allocated" value={stats.teachers} icon={Users} tone="indigo" />
+        <StatCard
+          label="Teachers allocated"
+          value={stats.teachers}
+          icon={Users}
+          tone="indigo"
+          active={!search && !dept && !klass && !load}
+          onClick={() => {
+            setSearch("");
+            setDept("");
+            setKlass("");
+            setLoad("");
+            setPage(1);
+          }}
+        />
         <StatCard label="Periods / week" value={stats.totalPeriods} icon={CalendarRange} tone="cyan" />
         <StatCard
           label="Average load"
@@ -307,7 +320,14 @@ export default function AllocationPage() {
           tone="emerald"
           sub={`Cap is ${MAX_PERIODS} periods`}
         />
-        <StatCard label="Overloaded" value={stats.overloaded} icon={TriangleAlert} tone="rose" />
+        <StatCard
+          label="Overloaded"
+          value={stats.overloaded}
+          icon={TriangleAlert}
+          tone="rose"
+          active={load === "Overloaded"}
+          onClick={() => applyFilter(setLoad)(load === "Overloaded" ? "" : "Overloaded")}
+        />
       </div>
 
       <div className="flex flex-wrap items-center gap-3">

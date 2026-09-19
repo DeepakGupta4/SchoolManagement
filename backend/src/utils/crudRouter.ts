@@ -1,4 +1,4 @@
-import { Router, type RequestHandler } from "express";
+import { Router, type RequestHandler, type Request } from "express";
 import type { Model, HydratedDocument } from "mongoose";
 import { z, type ZodType } from "zod";
 import { requireAuth, requireRole } from "../middleware/auth.js";
@@ -41,6 +41,10 @@ export interface CrudOptions<T> {
    * Anything the client sends still wins over generated values.
    */
   generate?: (seq: number) => Record<string, unknown>;
+  /** Side effect after a successful create (e.g. downstream record creation). */
+  afterCreate?: (doc: HydratedDocument<T>, req: Request) => void | Promise<void>;
+  /** Side effect after a successful update. */
+  afterUpdate?: (doc: HydratedDocument<T>, req: Request) => void | Promise<void>;
 }
 
 /** Strips internals and exposes `id` — the shape every client expects. */
@@ -73,6 +77,8 @@ export function createCrudRouter<T>(options: CrudOptions<T>): Router {
     extend,
     notifyOnCreate,
     generate,
+    afterCreate,
+    afterUpdate,
   } = options;
 
   const router = Router();
@@ -142,6 +148,7 @@ export function createCrudRouter<T>(options: CrudOptions<T>): Router {
       if (notifyOnCreate) {
         void notifySchool(req.user!.schoolId, notifyOnCreate(doc as HydratedDocument<T>));
       }
+      if (afterCreate) await afterCreate(doc as HydratedDocument<T>, req);
       res.status(201).json({ data: toPublic(doc as HydratedDocument<T>) });
     } catch (err) {
       next(err);
@@ -161,6 +168,7 @@ export function createCrudRouter<T>(options: CrudOptions<T>): Router {
           { new: true, runValidators: true }
         );
         if (!doc) throw ApiError.notFound("Record not found.");
+        if (afterUpdate) await afterUpdate(doc as HydratedDocument<T>, req);
         res.json({ data: toPublic(doc as HydratedDocument<T>) });
       } catch (err) {
         next(err);

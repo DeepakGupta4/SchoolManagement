@@ -341,10 +341,38 @@ export default function ExamsPage() {
       />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Total Exams" value={counts.total} icon={FileText} tone="indigo" />
-        <StatCard label="Upcoming" value={counts.upcoming} icon={CalendarClock} tone="cyan" />
-        <StatCard label="Ongoing" value={counts.ongoing} icon={Clock} tone="amber" />
-        <StatCard label="Completed" value={counts.completed} icon={CheckCircle} tone="emerald" />
+        <StatCard
+          label="Total Exams"
+          value={counts.total}
+          icon={FileText}
+          tone="indigo"
+          active={activeTab === "All"}
+          onClick={() => changeTab("All")}
+        />
+        <StatCard
+          label="Upcoming"
+          value={counts.upcoming}
+          icon={CalendarClock}
+          tone="cyan"
+          active={activeTab === "Upcoming"}
+          onClick={() => changeTab(activeTab === "Upcoming" ? "All" : "Upcoming")}
+        />
+        <StatCard
+          label="Ongoing"
+          value={counts.ongoing}
+          icon={Clock}
+          tone="amber"
+          active={activeTab === "Ongoing"}
+          onClick={() => changeTab(activeTab === "Ongoing" ? "All" : "Ongoing")}
+        />
+        <StatCard
+          label="Completed"
+          value={counts.completed}
+          icon={CheckCircle}
+          tone="emerald"
+          active={activeTab === "Completed"}
+          onClick={() => changeTab(activeTab === "Completed" ? "All" : "Completed")}
+        />
       </div>
 
       <div className="flex flex-wrap items-center gap-3">

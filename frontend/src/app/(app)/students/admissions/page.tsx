@@ -82,10 +82,13 @@ export default function AdmissionsPage() {
     setPage(1);
   };
 
-  const staged = useMemo(
-    () => (stage ? items.filter((a) => a.stage === stage) : items),
-    [items, stage]
-  );
+  const staged = useMemo(() => {
+    // "in-process" is a synthetic filter used by the top stat card.
+    if (stage === "in-process") {
+      return items.filter((a) => a.stage === "applied" || a.stage === "interview");
+    }
+    return stage ? items.filter((a) => a.stage === stage) : items;
+  }, [items, stage]);
 
   const stats = useMemo(() => {
     const countOf = (s: string) => items.filter((a) => a.stage === s).length;
@@ -308,15 +311,38 @@ export default function AdmissionsPage() {
       />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Total Applications" value={stats.total} icon={Users} tone="indigo" />
-        <StatCard label="In Process" value={stats.inProcess} icon={UserPlus} tone="amber" />
-        <StatCard label="Approved" value={stats.approved} icon={CheckCircle2} tone="emerald" />
+        <StatCard
+          label="Total Applications"
+          value={stats.total}
+          icon={Users}
+          tone="indigo"
+          active={stage === ""}
+          onClick={() => applyFilter(setStage)("")}
+        />
+        <StatCard
+          label="In Process"
+          value={stats.inProcess}
+          icon={UserPlus}
+          tone="amber"
+          active={stage === "in-process"}
+          onClick={() => applyFilter(setStage)(stage === "in-process" ? "" : "in-process")}
+        />
+        <StatCard
+          label="Approved"
+          value={stats.approved}
+          icon={CheckCircle2}
+          tone="emerald"
+          active={stage === "approved"}
+          onClick={() => applyFilter(setStage)(stage === "approved" ? "" : "approved")}
+        />
         <StatCard
           label="Conversion Rate"
           value={stats.conversion}
           suffix="%"
           icon={CalendarDays}
           tone="violet"
+          active={stage === "approved"}
+          onClick={() => applyFilter(setStage)(stage === "approved" ? "" : "approved")}
         />
       </div>
 

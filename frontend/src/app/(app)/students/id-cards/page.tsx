@@ -37,6 +37,8 @@ export default function StudentIdCardsPage() {
 
   const [search, setSearch] = useState("");
   const [className, setClassName] = useState("");
+  // Stat-card quick filter for photo status, applied client-side before grouping.
+  const [photo, setPhoto] = useState<"all" | "with" | "without">("all");
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   // Sourced from the real students API, so a photo added on the student form
@@ -44,14 +46,21 @@ export default function StudentIdCardsPage() {
   const fetcher = useCallback(() => listStudents({ search, className }), [search, className]);
   const { items: students, loading } = useAsyncList<Student>(fetcher);
 
-  const cards = useMemo(() => students.map(toHolder), [students]);
+  // Photo quick-filter drives the displayed cards; stat counts stay on `students`.
+  const displayed = useMemo(() => {
+    if (photo === "with") return students.filter((s) => s.avatar);
+    if (photo === "without") return students.filter((s) => !s.avatar);
+    return students;
+  }, [students, photo]);
+
+  const cards = useMemo(() => displayed.map(toHolder), [displayed]);
   const withPhoto = useMemo(() => students.filter((s) => s.avatar).length, [students]);
 
   // Group students by class (academic order), each class's students sorted by
   // section then roll number, so the sheet prints class-wise.
   const groups = useMemo(() => {
     const map = new Map<string, Student[]>();
-    for (const s of students) {
+    for (const s of displayed) {
       const key = s.className || "Unassigned";
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(s);
@@ -63,7 +72,7 @@ export default function StudentIdCardsPage() {
       );
     }
     return [...map.entries()].sort((a, b) => classRank(a[0]) - classRank(b[0]));
-  }, [students]);
+  }, [displayed]);
 
   const toggle = (id: string) =>
     setSelected((prev) => {
@@ -114,9 +123,34 @@ export default function StudentIdCardsPage() {
         />
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <StatCard label="Total students" value={students.length} icon={Users} tone="indigo" />
-          <StatCard label="With photo" value={withPhoto} icon={IdCardIcon} tone="emerald" />
-          <StatCard label="Photo pending" value={students.length - withPhoto} icon={Printer} tone="amber" />
+          <StatCard
+            label="Total students"
+            value={students.length}
+            icon={Users}
+            tone="indigo"
+            active={!search && !className && photo === "all"}
+            onClick={() => {
+              setSearch("");
+              setClassName("");
+              setPhoto("all");
+            }}
+          />
+          <StatCard
+            label="With photo"
+            value={withPhoto}
+            icon={IdCardIcon}
+            tone="emerald"
+            active={photo === "with"}
+            onClick={() => setPhoto(photo === "with" ? "all" : "with")}
+          />
+          <StatCard
+            label="Photo pending"
+            value={students.length - withPhoto}
+            icon={Printer}
+            tone="amber"
+            active={photo === "without"}
+            onClick={() => setPhoto(photo === "without" ? "all" : "without")}
+          />
           <StatCard label="Selected" value={selected.size} icon={CheckSquare} tone="violet" />
         </div>
 

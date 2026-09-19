@@ -293,7 +293,19 @@ export default function DepartmentsPage() {
       />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Departments" value={stats.count} icon={Building2} tone="indigo" />
+        <StatCard
+          label="Departments"
+          value={stats.count}
+          icon={Building2}
+          tone="indigo"
+          active={!search && !block && !status}
+          onClick={() => {
+            setSearch("");
+            setBlock("");
+            setStatus("");
+            setPage(1);
+          }}
+        />
         <StatCard label="Teaching staff" value={stats.totalTeachers} icon={Users} tone="emerald" />
         <StatCard label="Total budget" value={inr(stats.totalBudget)} icon={IndianRupee} tone="violet" />
         <StatCard

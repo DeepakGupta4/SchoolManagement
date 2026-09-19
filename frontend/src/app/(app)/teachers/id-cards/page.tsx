@@ -33,6 +33,8 @@ export default function TeacherIdCardsPage() {
 
   const [search, setSearch] = useState("");
   const [department, setDepartment] = useState("");
+  // Stat-card quick filter for photo status, applied client-side to the cards.
+  const [photo, setPhoto] = useState<"all" | "with" | "without">("all");
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   // Sourced from the real teachers API, so a photo added on the teacher form
@@ -46,7 +48,14 @@ export default function TeacherIdCardsPage() {
     [allTeachers, department]
   );
 
-  const cards = useMemo(() => teachers.map(toHolder), [teachers]);
+  // Photo quick-filter drives the displayed cards; stat counts stay on `teachers`.
+  const displayed = useMemo(() => {
+    if (photo === "with") return teachers.filter((t) => t.avatar);
+    if (photo === "without") return teachers.filter((t) => !t.avatar);
+    return teachers;
+  }, [teachers, photo]);
+
+  const cards = useMemo(() => displayed.map(toHolder), [displayed]);
   const withPhoto = useMemo(() => teachers.filter((t) => t.avatar).length, [teachers]);
 
   const toggle = (id: string) =>
@@ -97,9 +106,34 @@ export default function TeacherIdCardsPage() {
         />
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <StatCard label="Total staff" value={teachers.length} icon={Users} tone="indigo" />
-          <StatCard label="With photo" value={withPhoto} icon={IdCardIcon} tone="emerald" />
-          <StatCard label="Photo pending" value={teachers.length - withPhoto} icon={Printer} tone="amber" />
+          <StatCard
+            label="Total staff"
+            value={teachers.length}
+            icon={Users}
+            tone="indigo"
+            active={!search && !department && photo === "all"}
+            onClick={() => {
+              setSearch("");
+              setDepartment("");
+              setPhoto("all");
+            }}
+          />
+          <StatCard
+            label="With photo"
+            value={withPhoto}
+            icon={IdCardIcon}
+            tone="emerald"
+            active={photo === "with"}
+            onClick={() => setPhoto(photo === "with" ? "all" : "with")}
+          />
+          <StatCard
+            label="Photo pending"
+            value={teachers.length - withPhoto}
+            icon={Printer}
+            tone="amber"
+            active={photo === "without"}
+            onClick={() => setPhoto(photo === "without" ? "all" : "without")}
+          />
           <StatCard label="Selected" value={selected.size} icon={CheckSquare} tone="violet" />
         </div>
 

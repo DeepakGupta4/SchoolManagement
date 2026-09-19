@@ -6,7 +6,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Modal, Button, Input, MultiSelect, Select } from "@/components/ui";
 import { allocationSchema, type AllocationSchema } from "@/lib/schemas/allocation";
 import { useClassOptions } from "@/hooks/useClassOptions";
-import { listTeachers, SUBJECT_OPTIONS } from "@/lib/api/teachers";
+import { useSubjectOptions } from "@/hooks/useSubjectOptions";
+import { listTeachers } from "@/lib/api/teachers";
 import { teacherName, type Teacher } from "@/types/teacher";
 import {
   ALLOCATION_DEPT_OPTIONS,
@@ -25,7 +26,6 @@ const emptyValues: AllocationSchema = {
   room: "",
 };
 
-const SUBJECT_SELECT_OPTIONS = SUBJECT_OPTIONS.map((s) => ({ label: s, value: s }));
 const DEPT_SELECT_OPTIONS = ALLOCATION_DEPT_OPTIONS.map((d) => ({ label: d, value: d }));
 
 interface AllocationFormModalProps {
@@ -46,6 +46,7 @@ export function AllocationFormModal({
 }: AllocationFormModalProps) {
   const isEdit = Boolean(record);
   const { classNames } = useClassOptions();
+  const { subjectOptions } = useSubjectOptions();
   const [teachers, setTeachers] = useState<Teacher[]>([]);
 
   // Load real teachers whenever the modal opens so the dropdown reflects
@@ -121,7 +122,7 @@ export function AllocationFormModal({
           <Select label="Teacher" required placeholder="Select teacher" options={teacherOptions} {...register("teacher")} error={errors.teacher?.message} />
           <Input label="Employee ID" required placeholder="TCH-1041" {...register("empId")} error={errors.empId?.message} />
           <Select label="Department" required placeholder="Select department" options={DEPT_SELECT_OPTIONS} {...register("dept")} error={errors.dept?.message} />
-          <Select label="Subject" required placeholder="Select subject" options={SUBJECT_SELECT_OPTIONS} {...register("subject")} error={errors.subject?.message} />
+          <Select label="Subject" required placeholder="Select subject" options={subjectOptions} {...register("subject")} error={errors.subject?.message} />
           <Input label="Periods / week" type="number" min={0} max={MAX_PERIODS} {...register("periods")} error={errors.periods?.message} />
           <Input label="Lab periods / week" type="number" min={0} {...register("labs")} error={errors.labs?.message} />
           <Input label="Room" required placeholder="R-204" {...register("room")} error={errors.room?.message} />

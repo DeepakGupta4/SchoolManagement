@@ -10,10 +10,8 @@ import { teacherSchema, type TeacherSchema } from "@/lib/schemas/teacher";
 import { digitsOnly10 } from "@/lib/phone";
 import { fileToDataUrl } from "@/lib/image";
 import { useClassOptions } from "@/hooks/useClassOptions";
-import {
-  SUBJECT_OPTIONS,
-  DEPARTMENT_OPTIONS,
-} from "@/lib/api/teachers";
+import { useSubjectOptions } from "@/hooks/useSubjectOptions";
+import { DEPARTMENT_OPTIONS } from "@/lib/api/teachers";
 import type { Teacher, TeacherFormValues } from "@/types/teacher";
 
 const toOptions = (values: readonly string[]) => values.map((v) => ({ label: v, value: v }));
@@ -84,6 +82,7 @@ export function TeacherFormModal({
   const { toast } = useToast();
   const [uploading, setUploading] = useState(false);
   const { classNames } = useClassOptions();
+  const { subjectNames } = useSubjectOptions();
 
   const {
     register,
@@ -234,7 +233,7 @@ export function TeacherFormModal({
                 <MultiSelect
                   label="Subjects"
                   required
-                  options={SUBJECT_OPTIONS}
+                  options={subjectNames}
                   value={field.value}
                   onChange={field.onChange}
                   error={errors.subjects?.message}
