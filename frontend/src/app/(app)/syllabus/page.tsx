@@ -1,16 +1,20 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
-import { ChevronDown, ChevronRight, CheckCircle, Circle, Clock, BookOpen, Download, Plus } from "lucide-react";
-import { Badge, Button, Card, CardContent, PageHeader, Select, useToast } from "@/components/ui";
+import { ChevronDown, ChevronRight, CheckCircle, Circle, Clock, BookOpen, Download, Plus, Pencil, Trash2 } from "lucide-react";
+import { Badge, Button, Card, CardContent, ConfirmDialog, PageHeader, Select, useToast } from "@/components/ui";
 import { exportToCsv } from "@/lib/exportCsv";
 import { cn } from "@/lib/utils";
 import { useResource } from "@/hooks/useResource";
+import { useClassOptions } from "@/hooks/useClassOptions";
 import { syllabusApi, type SyllabusChapter } from "@/lib/api/syllabus";
+import { SyllabusFormModal } from "./SyllabusFormModal";
 
 type ChapterStatus = "completed" | "in-progress" | "pending";
 
 type Chapter = {
+  /** The underlying record id, carried through so rows can be edited/deleted. */
+  id: string;
   name: string;
   status: ChapterStatus;
   topics: number;
@@ -70,6 +74,7 @@ function buildSyllabus(rows: SyllabusChapter[]): SubjectSyllabus[] {
 
     const status = row.status as ChapterStatus;
     unit.chapters.push({
+      id: row.id,
       name: row.chapter,
       status,
       topics: row.topics,
@@ -114,31 +119,36 @@ function StatusIcon({ status, className }: { status: string; className?: string 
 }
 
 export default function SyllabusPage() {
-  const [selClass,   setSelClass]   = useState("10-A");
+  const [selClass,   setSelClass]   = useState("");
   const [selSubject, setSelSubject] = useState(ALL_SUBJECTS);
   const [openUnits,  setOpenUnits]  = useState<Record<string, boolean>>({});
   const [openSubjects, setOpenSubjects] = useState<Record<string, boolean>>({});
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<SyllabusChapter | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<SyllabusChapter | null>(null);
   const { toast } = useToast();
 
   const toggleUnit = (key: string) => setOpenUnits(p => ({ ...p, [key]: !p[key] }));
 
-  // All syllabus rows for the school load once; the class dropdown and the
-  // per-subject tree below are derived from them client-side.
-  const filters = useMemo(() => ({}), []);
-  const { items, loading, error, refetch } = useResource(syllabusApi, filters, {
-    label: "chapter",
-    describe: (r) => r.chapter,
-  });
+  // The class list is the school's real classes (from Classes & Sections), so a
+  // brand-new school can add syllabus even before any chapters exist.
+  const { classOptions } = useClassOptions();
 
-  const classes = useMemo(
-    () =>
-      [...new Set(items.map((r) => r.className))].sort((a, b) =>
-        a.localeCompare(b, undefined, { numeric: true })
-      ),
-    [items]
+  // All syllabus rows for the school load once; the per-subject tree below is
+  // derived from them client-side.
+  const filters = useMemo(() => ({}), []);
+  const { items, loading, error, refetch, save, remove, saving, deleting } = useResource(
+    syllabusApi,
+    filters,
+    { label: "chapter", describe: (r) => r.chapter }
   );
 
-  const activeClass = classes.includes(selClass) ? selClass : classes[0] ?? selClass;
+  // The selected class defaults to the first available class; a class that
+  // disappears (or an unset selection) falls back to the first — derived here
+  // rather than reset from an effect.
+  const activeClass = classOptions.some((c) => c.value === selClass)
+    ? selClass
+    : classOptions[0]?.value ?? "";
 
   const syllabusData = useMemo(
     () => buildSyllabus(items.filter((r) => r.className === activeClass)),
@@ -212,6 +222,32 @@ export default function SyllabusPage() {
     });
   };
 
+  const openCreate = () => {
+    setEditing(null);
+    setFormOpen(true);
+  };
+
+  const openEdit = (id: string) => {
+    setEditing(items.find((i) => i.id === id) ?? null);
+    setFormOpen(true);
+  };
+
+  const handleSubmit = async (values: Omit<SyllabusChapter, "id">) => {
+    const ok = await save(values, editing);
+    if (ok) {
+      setFormOpen(false);
+      setEditing(null);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!pendingDelete) return;
+    const ok = await remove(pendingDelete);
+    if (ok) setPendingDelete(null);
+  };
+
+  const hasClasses = classOptions.length > 0;
+
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
@@ -223,7 +259,7 @@ export default function SyllabusPage() {
               <Download className="size-4" />
               Export
             </Button>
-            <Button>
+            <Button onClick={openCreate} disabled={!hasClasses}>
               <Plus className="size-4" />
               Add Chapter
             </Button>
@@ -231,32 +267,45 @@ export default function SyllabusPage() {
         }
       />
 
-      <Card>
-        <CardContent className="flex flex-wrap items-center gap-3">
-          <div className="w-40">
-            <Select
-              value={activeClass}
-              onChange={(e) => setSelClass(e.target.value)}
-              options={classes.map((c) => ({ label: `Class ${c}`, value: c }))}
-              aria-label="Select class"
-            />
-            {loading && <span className="text-xs text-muted">Loading…</span>}
-          </div>
-          <div className="flex flex-wrap gap-1 rounded-md bg-surface-sunken p-1">
-            {subjects.map((s) => (
-              <Button
-                key={s}
-                size="sm"
-                variant={activeSubject === s ? "primary" : "ghost"}
-                onClick={() => setSelSubject(s)}
-                className="whitespace-nowrap"
-              >
-                {s}
-              </Button>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+      {hasClasses ? (
+        <Card>
+          <CardContent className="flex flex-wrap items-center gap-3">
+            <div className="w-40">
+              <Select
+                value={activeClass}
+                onChange={(e) => setSelClass(e.target.value)}
+                options={classOptions}
+                aria-label="Select class"
+              />
+              {loading && <span className="text-xs text-muted">Loading…</span>}
+            </div>
+            <div className="flex flex-wrap gap-1 rounded-md bg-surface-sunken p-1">
+              {subjects.map((s) => (
+                <Button
+                  key={s}
+                  size="sm"
+                  variant={activeSubject === s ? "primary" : "ghost"}
+                  onClick={() => setSelSubject(s)}
+                  className="whitespace-nowrap"
+                >
+                  {s}
+                </Button>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardContent className="flex flex-col items-center gap-2 py-10 text-center">
+            <BookOpen className="size-8 text-subtle" />
+            <p className="text-sm font-semibold text-text">Add classes first</p>
+            <p className="max-w-sm text-xs text-muted">
+              Create classes in Classes &amp; Sections, then come back to track the
+              syllabus for each one.
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       {error && (
         <Card>
@@ -454,6 +503,27 @@ export default function SyllabusPage() {
                                   )}
 
                                   <Badge variant={sc.variant}>{sc.label}</Badge>
+
+                                  <div className="flex items-center gap-1">
+                                    <button
+                                      onClick={() => openEdit(ch.id)}
+                                      aria-label={`Edit ${ch.name}`}
+                                      className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+                                    >
+                                      <Pencil className="size-4" />
+                                    </button>
+                                    <button
+                                      onClick={() =>
+                                        setPendingDelete(
+                                          items.find((i) => i.id === ch.id) ?? null
+                                        )
+                                      }
+                                      aria-label={`Delete ${ch.name}`}
+                                      className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-danger-soft hover:text-danger"
+                                    >
+                                      <Trash2 className="size-4" />
+                                    </button>
+                                  </div>
                                 </div>
                               );
                             })}
@@ -468,6 +538,30 @@ export default function SyllabusPage() {
           );
         })}
       </div>
+
+      <SyllabusFormModal
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        record={editing}
+        defaultClass={activeClass}
+        saving={saving}
+        onSubmit={handleSubmit}
+      />
+
+      <ConfirmDialog
+        open={Boolean(pendingDelete)}
+        onOpenChange={(open) => !open && setPendingDelete(null)}
+        title="Delete chapter?"
+        description={
+          pendingDelete
+            ? `${pendingDelete.chapter} will be permanently removed. This cannot be undone.`
+            : ""
+        }
+        confirmLabel="Delete"
+        destructive
+        loading={deleting}
+        onConfirm={handleDelete}
+      />
     </div>
   );
 }
