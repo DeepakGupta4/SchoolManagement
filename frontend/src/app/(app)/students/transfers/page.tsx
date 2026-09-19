@@ -42,6 +42,7 @@ import {
 import type { TransferSchema } from "@/lib/schemas/transfer";
 import { DetailModal } from "@/components/DetailModal";
 import { TransferFormModal } from "./TransferFormModal";
+import { TransferCertificate } from "./TransferCertificate";
 
 const PAGE_SIZE = 10;
 
@@ -68,7 +69,15 @@ export default function TransfersPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<TransferRequest | null>(null);
   const [viewing, setViewing] = useState<TransferRequest | null>(null);
+  const [printing, setPrinting] = useState<TransferRequest | null>(null);
   const [pendingDelete, setPendingDelete] = useState<TransferRequest | null>(null);
+
+  /** Render the certificate for this record, then open the print dialog. */
+  const printCertificate = (r: TransferRequest) => {
+    setPrinting(r);
+    // Let the print sheet render before the (blocking) print dialog opens.
+    setTimeout(() => window.print(), 150);
+  };
   const { toast } = useToast();
 
   // Narrowing a filter can strand you past the last page, so reset on change.
@@ -229,7 +238,8 @@ export default function TransfersPage() {
       render: (r) => (
         <div className="flex items-center justify-end gap-1">
           <button
-            title="Print transfer certificate"
+            onClick={() => printCertificate(r)}
+            title={r.status === "issued" ? "Print transfer certificate" : "Issue the TC first to print"}
             aria-label={`Print certificate for ${r.name}`}
             disabled={r.status !== "issued"}
             className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text disabled:pointer-events-none disabled:opacity-40"
@@ -367,6 +377,11 @@ export default function TransfersPage() {
           />
         </>
       )}
+
+      {/* Off-screen certificate — the only thing that prints */}
+      <div className="hidden print:block">
+        {printing && <TransferCertificate record={printing} />}
+      </div>
 
       <TransferFormModal
         open={formOpen}

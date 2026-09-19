@@ -237,13 +237,25 @@ export default function AlumniPage() {
       align: "right",
       render: (a) => (
         <div className="flex items-center justify-end gap-1">
-          <button
-            title="Email alumnus"
-            aria-label={`Email ${a.name}`}
-            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
-          >
-            <Mail className="size-4" />
-          </button>
+          {a.email ? (
+            <a
+              href={`mailto:${a.email}`}
+              title={`Email ${a.email}`}
+              aria-label={`Email ${a.name}`}
+              className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+            >
+              <Mail className="size-4" />
+            </a>
+          ) : (
+            <button
+              disabled
+              title="No email on record"
+              aria-label={`No email for ${a.name}`}
+              className="rounded-md p-1.5 text-subtle opacity-40"
+            >
+              <Mail className="size-4" />
+            </button>
+          )}
           <button
             onClick={() => setViewing(a)}
             aria-label={`View ${a.name}`}
