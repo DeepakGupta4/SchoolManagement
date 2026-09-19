@@ -8,8 +8,13 @@ export const staffSchema = z.object({
   dept: z.string().min(1, "Department is required"),
   type: z.string().min(1, "Employment type is required"),
   status: z.string().min(1, "Status is required"),
+  gender: z.string().min(1, "Select a gender"),
+  dateOfBirth: z.string(),
+  qualification: z.string().min(2, "Qualification is required"),
+  experienceYears: z.coerce.number<number>().min(0, "Cannot be negative").max(60, "Looks too high"),
   phone: z.string().regex(PHONE_REGEX, PHONE_MESSAGE),
   email: z.email("Enter a valid email address"),
+  address: z.string(),
   join: z.string().min(3, "Join date is required"),
   salary: z.coerce.number<number>().min(0, "Cannot be negative"),
 });

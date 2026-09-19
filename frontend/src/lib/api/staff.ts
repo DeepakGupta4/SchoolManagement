@@ -9,8 +9,13 @@ export interface StaffMember {
   dept: string;
   type: string;
   status: string;
+  gender: string;
+  dateOfBirth: string;
+  qualification: string;
+  experienceYears: number;
   phone: string;
   email: string;
+  address: string;
   join: string;
   salary: number;
 }

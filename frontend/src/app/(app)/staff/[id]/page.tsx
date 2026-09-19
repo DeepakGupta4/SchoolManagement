@@ -5,11 +5,14 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
+  Award,
   BriefcaseBusiness,
   Building2,
   CalendarDays,
+  GraduationCap,
   IdCard,
   Mail,
+  MapPin,
   Pencil,
   Phone,
   Trash2,
@@ -246,6 +249,9 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
           <CardContent className="divide-y divide-border py-1">
             <DetailRow icon={Mail} label="Email" value={staff.email} />
             <DetailRow icon={Phone} label="Phone" value={staff.phone} />
+            <DetailRow icon={UserRound} label="Gender" value={staff.gender} />
+            <DetailRow icon={CalendarDays} label="Date of birth" value={staff.dateOfBirth} />
+            <DetailRow icon={MapPin} label="Address" value={staff.address} />
           </CardContent>
         </Card>
 
@@ -257,6 +263,12 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
             <DetailRow icon={IdCard} label="Employee ID" value={staff.employeeId} />
             <DetailRow icon={BriefcaseBusiness} label="Role" value={staff.role} />
             <DetailRow icon={Building2} label="Department" value={staff.dept} />
+            <DetailRow icon={GraduationCap} label="Qualification" value={staff.qualification} />
+            <DetailRow
+              icon={Award}
+              label="Experience"
+              value={staff.experienceYears ? `${staff.experienceYears} years` : "—"}
+            />
             <DetailRow icon={BriefcaseBusiness} label="Employment type" value={staff.type} />
             <DetailRow icon={CalendarDays} label="Join date" value={staff.join} />
           </CardContent>

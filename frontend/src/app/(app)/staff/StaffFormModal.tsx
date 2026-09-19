@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Modal, Button, Input, Select, useToast } from "@/components/ui";
+import { Modal, Button, Input, Select, Textarea, useToast } from "@/components/ui";
 import { staffSchema, type StaffSchema } from "@/lib/schemas/staff";
 import { digitsOnly10 } from "@/lib/phone";
 import { AttachmentsField } from "@/components/AttachmentsField";
@@ -15,6 +15,12 @@ import {
   type StaffMember,
 } from "@/lib/api/staff";
 
+const GENDER_OPTIONS = [
+  { label: "Male", value: "male" },
+  { label: "Female", value: "female" },
+  { label: "Other", value: "other" },
+];
+
 const emptyValues: StaffSchema = {
   employeeId: "",
   name: "",
@@ -22,8 +28,13 @@ const emptyValues: StaffSchema = {
   dept: STAFF_DEPT_OPTIONS[0],
   type: STAFF_TYPE_OPTIONS[0],
   status: "active",
+  gender: "",
+  dateOfBirth: "",
+  qualification: "",
+  experienceYears: 0,
   phone: "",
   email: "",
+  address: "",
   join: "",
   salary: 0,
 };
@@ -115,6 +126,10 @@ export function StaffFormModal({
           <Input label="Full name" required placeholder="Ms. Anita Gupta" {...register("name")} error={errors.name?.message} />
           <Input label="Role" required placeholder="Receptionist" {...register("role")} error={errors.role?.message} />
           <Select label="Department" required options={STAFF_DEPT_OPTIONS.map((d) => ({ label: d, value: d }))} {...register("dept")} error={errors.dept?.message} />
+          <Select label="Gender" required placeholder="Select gender" options={GENDER_OPTIONS} {...register("gender")} error={errors.gender?.message} />
+          <Input label="Date of birth" type="date" {...register("dateOfBirth")} error={errors.dateOfBirth?.message} />
+          <Input label="Qualification" required placeholder="e.g. B.Com / Diploma / 12th" {...register("qualification")} error={errors.qualification?.message} />
+          <Input label="Experience (years)" type="number" min={0} {...register("experienceYears")} error={errors.experienceYears?.message} />
           <Select label="Employment type" required options={STAFF_TYPE_OPTIONS.map((t) => ({ label: t, value: t }))} {...register("type")} error={errors.type?.message} />
           <Select label="Status" required options={STAFF_STATUS_OPTIONS} {...register("status")} error={errors.status?.message} />
           <Input label="Phone" required inputMode="numeric" maxLength={10} placeholder="9876543210" {...register("phone", { onChange: digitsOnly10 })} error={errors.phone?.message} />
@@ -122,6 +137,9 @@ export function StaffFormModal({
           <Input label="Join date" required placeholder="Jan 2024" {...register("join")} error={errors.join?.message} />
           <Input label="Monthly salary (₹)" type="number" min={0} {...register("salary")} error={errors.salary?.message} />
         </div>
+
+        <Textarea label="Address" placeholder="Residential address" {...register("address")} error={errors.address?.message} />
+
 
         <div>
           <p className="mb-3 mt-1 text-xs font-semibold uppercase tracking-wide text-subtle">Documents</p>
