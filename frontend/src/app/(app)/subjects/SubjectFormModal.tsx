@@ -3,14 +3,20 @@
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Modal, Button, Input } from "@/components/ui";
+import { Modal, Button, Input, Select } from "@/components/ui";
 import { subjectSchema, type SubjectSchema } from "@/lib/schemas/subject";
-import type { SchoolSubject } from "@/lib/api/subjects";
+import {
+  SUBJECT_DEPARTMENT_OPTIONS,
+  SUBJECT_TYPE_OPTIONS,
+  suggestSubjectCode,
+  type SchoolSubject,
+} from "@/lib/api/subjects";
 
 const emptyValues: SubjectSchema = {
   name: "",
   code: "",
   department: "",
+  type: "Core",
 };
 
 interface SubjectFormModalProps {
@@ -47,7 +53,10 @@ export function SubjectFormModal({
     reset(record ? { ...record } : emptyValues);
   }, [open, record, reset]);
 
-  const submit = handleSubmit(onSubmit);
+  // Auto-fill the code from the name when the operator leaves it blank.
+  const submit = handleSubmit((values) =>
+    onSubmit({ ...values, code: values.code.trim() || suggestSubjectCode(values.name) })
+  );
 
   return (
     <Modal
@@ -73,8 +82,20 @@ export function SubjectFormModal({
       <form onSubmit={submit} className="flex flex-col gap-4">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Input label="Subject name" required placeholder="Mathematics" {...register("name")} error={errors.name?.message} />
-          <Input label="Code" placeholder="MATH" {...register("code")} error={errors.code?.message} />
-          <Input label="Department" placeholder="Science" {...register("department")} error={errors.department?.message} />
+          <Input label="Code" hint="Leave blank to auto-generate" placeholder="MATH" {...register("code")} error={errors.code?.message} />
+          <Select
+            label="Department"
+            placeholder="Select department"
+            options={SUBJECT_DEPARTMENT_OPTIONS.map((d) => ({ label: d, value: d }))}
+            {...register("department")}
+            error={errors.department?.message}
+          />
+          <Select
+            label="Type"
+            options={SUBJECT_TYPE_OPTIONS.map((t) => ({ label: t, value: t }))}
+            {...register("type")}
+            error={errors.type?.message}
+          />
         </div>
 
         {/* Enables Enter-to-submit without duplicating the footer button. */}

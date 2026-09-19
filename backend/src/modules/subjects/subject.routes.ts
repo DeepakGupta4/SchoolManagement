@@ -6,11 +6,12 @@ const subjectSchema = z.object({
   name: z.string().min(1),
   code: z.string().default(""),
   department: z.string().default(""),
+  type: z.string().default("Core"),
 });
 
 export default createCrudRouter({
   model: Subject,
   createSchema: subjectSchema,
   searchFields: ["name", "code", "department"],
-  filterFields: ["department"],
+  filterFields: ["department", "type"],
 });

@@ -16,7 +16,7 @@ import {
   type Column,
 } from "@/components/ui";
 import { useResource } from "@/hooks/useResource";
-import { subjectsApi, type SchoolSubject } from "@/lib/api/subjects";
+import { subjectsApi, suggestSubjectCode, type SchoolSubject } from "@/lib/api/subjects";
 import type { SubjectSchema } from "@/lib/schemas/subject";
 import { DetailModal } from "@/components/DetailModal";
 import { SubjectFormModal } from "./SubjectFormModal";
@@ -79,7 +79,7 @@ export default function SubjectsPage() {
     setBulkSaving(true);
     try {
       for (const name of toAdd) {
-        await subjectsApi.create({ name, code: "", department: "" });
+        await subjectsApi.create({ name, code: suggestSubjectCode(name), department: "", type: "Core" });
       }
       toast({
         title: `${toAdd.length} subject${toAdd.length === 1 ? "" : "s"} added`,
@@ -154,6 +154,17 @@ export default function SubjectsPage() {
       header: "Department",
       sortable: true,
       render: (s) => <span className="whitespace-nowrap text-muted">{s.department || "—"}</span>,
+    },
+    {
+      key: "type",
+      header: "Type",
+      sortable: true,
+      render: (s) =>
+        s.type ? (
+          <Badge variant={s.type === "Core" ? "info" : "default"}>{s.type}</Badge>
+        ) : (
+          <span className="text-subtle">—</span>
+        ),
     },
     {
       key: "actions",
@@ -310,6 +321,7 @@ export default function SubjectsPage() {
                 { label: "Subject", value: viewing.name },
                 { label: "Code", value: viewing.code || "—" },
                 { label: "Department", value: viewing.department || "—" },
+                { label: "Type", value: viewing.type || "—" },
               ]
             : []
         }

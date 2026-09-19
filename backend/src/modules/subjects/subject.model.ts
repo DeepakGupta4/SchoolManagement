@@ -6,6 +6,7 @@ const subjectSchema = new Schema(
     name: { type: String, required: true, trim: true },
     code: { type: String, default: "" },
     department: { type: String, default: "" },
+    type: { type: String, default: "Core" },
   },
   { timestamps: true }
 );
