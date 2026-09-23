@@ -17,6 +17,7 @@ const DEMO_USERS = [
   { name: "Rajesh Kumar", email: "admin@springdale.edu", role: "school_admin" as const },
   { name: "Sunita Menon", email: "principal@springdale.edu", role: "principal" as const },
   { name: "Priya Sharma", email: "priya.sharma@springdale.edu", role: "teacher" as const },
+  { name: "Neha Verma", email: "accounts@springdale.edu", role: "accountant" as const },
   { name: "Mahesh Patel", email: "parent@springdale.edu", role: "parent" as const },
   { name: "Aarav Sharma", email: "aarav.sharma@springdale.edu", role: "student" as const },
   { name: "Ramesh Yadav", email: "driver@springdale.edu", role: "driver" as const },

@@ -16,6 +16,7 @@ const DEMO_ACCOUNTS = [
   { label: "Admin", email: "admin@springdale.edu" },
   { label: "Principal", email: "principal@springdale.edu" },
   { label: "Teacher", email: "priya.sharma@springdale.edu" },
+  { label: "Accounts", email: "accounts@springdale.edu" },
 ];
 
 const DEMO_PASSWORD = "springdale123";
@@ -75,7 +76,7 @@ export default function LoginPage() {
           <CardContent className="flex flex-col gap-4">
             <div>
               <p className="mb-2 text-xs font-medium text-muted">Demo accounts</p>
-              <div className="grid grid-cols-3 gap-1.5">
+              <div className="grid grid-cols-2 gap-1.5">
                 {DEMO_ACCOUNTS.map((account) => {
                   const active = currentEmail === account.email;
                   return (

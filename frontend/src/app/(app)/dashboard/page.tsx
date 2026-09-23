@@ -222,7 +222,7 @@ export default function DashboardPage() {
 
       {user?.role === "teacher" ? (
         <TeacherDashboard />
-      ) : setupPending && data ? (
+      ) : setupPending && data && user?.role !== "accountant" ? (
         <Onboarding name={user?.name?.split(" ")[0]} data={data} />
       ) : (
        <>

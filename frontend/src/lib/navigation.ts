@@ -253,6 +253,38 @@ const TEACHER_NAV_HREFS = new Set<string>([
   "/leave",
 ]);
 
+/**
+ * Sidebar links an accounts/reception person may see — everything fees &
+ * finance, student lookup, front-desk (visitors) and communication.
+ */
+const ACCOUNTANT_NAV_HREFS = new Set<string>([
+  "/dashboard",
+  // Fees & finance
+  "/fees",
+  "/fees/structure",
+  "/fees/collect",
+  "/fees/receipts",
+  "/fees/defaulters",
+  "/fees/scholarships",
+  "/expenses",
+  "/payroll",
+  // Student lookup (view)
+  "/students",
+  // Front desk & communication
+  "/visitors",
+  "/announcements",
+  "/messages",
+  "/notices",
+  // Profile
+  "/settings",
+]);
+
+/** Roles whose navigation is restricted to a specific allow-list. */
+const RESTRICTED_ROLE_HREFS: Partial<Record<UserRole, Set<string>>> = {
+  teacher: TEACHER_NAV_HREFS,
+  accountant: ACCOUNTANT_NAV_HREFS,
+};
+
 /** Student sub-routes that stay admin-only even though /students is allowed. */
 const STUDENT_ADMIN_SUBROUTES = new Set([
   "admissions",
@@ -263,34 +295,34 @@ const STUDENT_ADMIN_SUBROUTES = new Set([
   "documents",
 ]);
 
-/** True when `pathname` is reachable by `role`. Non-teachers are unrestricted. */
+/** True when `pathname` is reachable by `role`. Unlisted roles are unrestricted. */
 export function isPathAllowed(role: UserRole | undefined, pathname: string): boolean {
-  if (role !== "teacher") return true;
+  const allowed = role ? RESTRICTED_ROLE_HREFS[role] : undefined;
+  if (!allowed) return true;
   if (pathname === "/" || pathname === "/dashboard") return true;
 
-  // Exact allowed pages (and their dynamic detail routes below).
-  if (TEACHER_NAV_HREFS.has(pathname)) return true;
+  // Exact allowed pages.
+  if (allowed.has(pathname)) return true;
 
   // /students/<id> detail is fine (viewing a student), but the named admin
   // sub-routes under /students are not.
-  if (pathname.startsWith("/students/")) {
+  if (allowed.has("/students") && pathname.startsWith("/students/")) {
     const seg = pathname.slice("/students/".length).split("/")[0];
     return !STUDENT_ADMIN_SUBROUTES.has(seg);
   }
 
-  // Sub-routes of allowed sections.
-  if (pathname.startsWith("/lms/")) return true;
-  if (pathname.startsWith("/exams/marks") || pathname.startsWith("/exams/report-cards")) return true;
-
-  // Detail routes for other allowed list pages, e.g. /assignments/<id>.
-  const ALLOWED_PREFIXES = ["/attendance", "/timetable", "/assignments", "/syllabus", "/settings", "/leave", "/messages", "/notices", "/events", "/announcements", "/holidays"];
-  return ALLOWED_PREFIXES.some((p) => pathname.startsWith(`${p}/`));
+  // Detail / sub-routes of any other allowed base, e.g. /fees/collect,
+  // /assignments/<id>, /lms/classes.
+  for (const base of allowed) {
+    if (base !== "/students" && pathname.startsWith(`${base}/`)) return true;
+  }
+  return false;
 }
 
 /** Filters the nav tree to what `role` should see. */
 export function navGroupsForRole(role: UserRole | undefined): NavGroup[] {
   const isSuper = role === "super_admin";
-  const isTeacher = role === "teacher";
+  const allowed = role ? RESTRICTED_ROLE_HREFS[role] : undefined;
 
   return navGroups
     .filter((g) => {
@@ -300,19 +332,15 @@ export function navGroupsForRole(role: UserRole | undefined): NavGroup[] {
       return !isSuper; // "school"
     })
     .map((g) => {
-      if (!isTeacher) return g;
-      // Teachers see only their allowed items; parent items keep only the
-      // children a teacher may open.
+      if (!allowed) return g;
+      // Restricted roles see only their allowed items; parent items keep only
+      // the children they may open.
       const items = g.items
         .map((it) => {
-          const children = it.children?.filter((c) => TEACHER_NAV_HREFS.has(c.href));
+          const children = it.children?.filter((c) => allowed.has(c.href));
           return children && it.children ? { ...it, children } : it;
         })
-        .filter(
-          (it) =>
-            TEACHER_NAV_HREFS.has(it.href) ||
-            (it.children?.length ?? 0) > 0
-        );
+        .filter((it) => allowed.has(it.href) || (it.children?.length ?? 0) > 0);
       return { ...g, items };
     })
     .filter((g) => g.items.length > 0);
