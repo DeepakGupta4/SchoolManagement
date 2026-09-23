@@ -12,7 +12,8 @@ import { listStudents } from "@/lib/api/students";
 import { useClassOptions } from "@/hooks/useClassOptions";
 import { fileToDataUrl } from "@/lib/image";
 import { AttachmentsField } from "@/components/AttachmentsField";
-import { uploadDocumentFiles } from "@/lib/api/documents";
+import { SingleDocField } from "@/components/SingleDocField";
+import { uploadDocumentFiles, uploadLabeledDocument } from "@/lib/api/documents";
 import { MIN_STUDENT_DOB, MAX_STUDENT_DOB, MIN_RECORD_DATE, TODAY_ISO } from "@/lib/dates";
 import type { Student, StudentFormValues } from "@/types/student";
 
@@ -112,6 +113,10 @@ export function StudentFormModal({
   const [uploading, setUploading] = useState(false);
   // Files attached in the form, uploaded once the student record has an id.
   const [attachments, setAttachments] = useState<File[]>([]);
+  // Required documents on create: a birth certificate and a government ID.
+  const [birthCert, setBirthCert] = useState<File | null>(null);
+  const [aadhaar, setAadhaar] = useState<File | null>(null);
+  const [docError, setDocError] = useState<string | null>(null);
   const [savingDocs, setSavingDocs] = useState(false);
   // Existing students, used to auto-derive the next admission & roll numbers.
   const [existing, setExisting] = useState<Student[]>([]);
@@ -170,6 +175,14 @@ export function StudentFormModal({
     );
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setAttachments([]);
+    // Deferred: clearing these synchronously in an effect trips the
+    // react-hooks/set-state-in-effect rule.
+    const t = setTimeout(() => {
+      setDocError(null);
+      setBirthCert(null);
+      setAadhaar(null);
+    }, 0);
+    return () => clearTimeout(t);
   }, [open, student, reset]);
 
   // On create, pull the roster once so the next admission & roll numbers can
@@ -198,20 +211,32 @@ export function StudentFormModal({
   }, [open, isEdit, existing, className, section, setValue]);
 
   const submit = handleSubmit(async (values) => {
+    // On create, a birth certificate and a government ID are mandatory.
+    if (!isEdit && (!birthCert || !aadhaar)) {
+      setDocError("Attach the birth certificate and the student's Aadhaar / government ID.");
+      return;
+    }
+    setDocError(null);
+
     const saved = await onSubmit(values as StudentFormValues);
     if (!saved) return; // save failed — keep the form open (error already shown)
+
+    setSavingDocs(true);
+    const name = `${values.firstName} ${values.lastName}`.trim();
+    let failed = 0;
+    if (birthCert && !(await uploadLabeledDocument("student", saved.id, name, "Birth certificate", birthCert))) failed += 1;
+    if (aadhaar && !(await uploadLabeledDocument("student", saved.id, name, "Aadhaar / Government ID", aadhaar))) failed += 1;
     if (attachments.length > 0) {
-      setSavingDocs(true);
-      const name = `${values.firstName} ${values.lastName}`.trim();
-      const { uploaded, failed } = await uploadDocumentFiles("student", saved.id, name, attachments);
-      setSavingDocs(false);
-      if (failed) {
-        toast({
-          title: `${uploaded} uploaded, ${failed} failed`,
-          description: "Some attachments could not be saved.",
-          variant: "warning",
-        });
-      }
+      const r = await uploadDocumentFiles("student", saved.id, name, attachments);
+      failed += r.failed;
+    }
+    setSavingDocs(false);
+    if (failed) {
+      toast({
+        title: "Some documents could not be saved",
+        description: `${failed} file(s) failed to upload. You can re-add them from the profile.`,
+        variant: "warning",
+      });
     }
     onOpenChange(false);
   });
@@ -224,7 +249,7 @@ export function StudentFormModal({
       description={
         isEdit
           ? "Update this student's record. Changes apply immediately."
-          : "Create a student record. Admission number must be unique."
+          : "Create a student record. A birth certificate and a government ID are required."
       }
       size="lg"
       footer={
@@ -343,12 +368,38 @@ export function StudentFormModal({
         </section>
 
         <section>
-          <SectionTitle>Documents</SectionTitle>
-          <AttachmentsField
-            files={attachments}
-            onChange={setAttachments}
-            hint="Optional — Aadhaar, birth certificate, TC, marksheets. You can also add these later from the profile."
-          />
+          <SectionTitle>Documents{!isEdit ? " (required)" : ""}</SectionTitle>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <SingleDocField
+              label="Birth certificate"
+              required={!isEdit}
+              file={birthCert}
+              onChange={setBirthCert}
+              hint="PDF or image"
+              error={!isEdit && docError && !birthCert ? docError : undefined}
+            />
+            <SingleDocField
+              label="Aadhaar / Government ID"
+              required={!isEdit}
+              file={aadhaar}
+              onChange={setAadhaar}
+              hint="Aadhaar / passport (PDF or image)"
+              error={!isEdit && docError && !aadhaar ? docError : undefined}
+            />
+          </div>
+          <div className="mt-4">
+            <p className="mb-2 text-xs font-medium text-muted">Other documents (optional)</p>
+            <AttachmentsField
+              files={attachments}
+              onChange={setAttachments}
+              hint="Transfer certificate (TC), previous marksheets, caste certificate, photos…"
+            />
+          </div>
+          {isEdit && (
+            <p className="mt-2 text-xs text-subtle">
+              Existing documents are managed on the student&apos;s profile.
+            </p>
+          )}
         </section>
 
         {/* Enables Enter-to-submit without duplicating the footer button. */}
