@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowRight, ArrowUpRight, BadgeIndianRupee, BookMarked, Cake, CalendarClock,
-  CalendarDays, CalendarOff, GraduationCap, School, Sparkles, TrendingDown,
+  CalendarDays, CalendarOff, Check, GraduationCap, School, Sparkles, TrendingDown,
   UserRound, Users, type LucideIcon,
 } from "lucide-react";
 import { Avatar, Badge, Card, CardContent, CardHeader, CountUp, Skeleton } from "@/components/ui";
@@ -61,16 +61,33 @@ function buildOverview(d: DashboardInsights): OverviewItem[] {
   ];
 }
 
-/** Setup steps shown to a brand-new school with no data yet. */
-const SETUP_STEPS = [
-  { n: 1, icon: School, title: "Create Classes & Sections", desc: "Set up your grades and sections first — everything else links to them.", href: "/classes", cta: "Add classes" },
-  { n: 2, icon: BookMarked, title: "Add Subjects", desc: "Add the subjects your school teaches.", href: "/subjects", cta: "Add subjects" },
-  { n: 3, icon: GraduationCap, title: "Add Teachers & Staff", desc: "Bring your teaching and support staff on board.", href: "/teachers", cta: "Add teachers" },
-  { n: 4, icon: Users, title: "Enrol Students", desc: "Add students to their classes — or approve them from Admissions.", href: "/students", cta: "Add students" },
-  { n: 5, icon: CalendarDays, title: "Build the Timetable", desc: "Assign periods once classes, subjects and teachers exist.", href: "/timetable", cta: "Open timetable" },
+/**
+ * Setup steps for a school still being set up. Each `done` predicate reads the
+ * live insights, so a step ticks itself off the moment the owner creates that
+ * thing — no manual "mark complete".
+ */
+const SETUP_STEPS: {
+  n: number;
+  icon: LucideIcon;
+  title: string;
+  desc: string;
+  href: string;
+  cta: string;
+  doneCta: string;
+  done: (d: DashboardInsights) => boolean;
+}[] = [
+  { n: 1, icon: School, title: "Create Classes & Sections", desc: "Set up your grades and sections first — everything else links to them.", href: "/classes", cta: "Add classes", doneCta: "Manage classes", done: (d) => d.totalClasses > 0 },
+  { n: 2, icon: BookMarked, title: "Add Subjects", desc: "Add the subjects your school teaches.", href: "/subjects", cta: "Add subjects", doneCta: "Manage subjects", done: (d) => d.totalSubjects > 0 },
+  { n: 3, icon: GraduationCap, title: "Add Teachers & Staff", desc: "Bring your teaching and support staff on board.", href: "/teachers", cta: "Add teachers", doneCta: "Manage teachers", done: (d) => d.totalTeachers > 0 },
+  { n: 4, icon: Users, title: "Enrol Students", desc: "Add students to their classes — or approve them from Admissions.", href: "/students", cta: "Add students", doneCta: "Manage students", done: (d) => d.totalStudents > 0 },
+  { n: 5, icon: CalendarDays, title: "Build the Timetable", desc: "Assign periods once classes, subjects and teachers exist.", href: "/timetable", cta: "Open timetable", doneCta: "Open timetable", done: (d) => d.totalTimetableEntries > 0 },
 ];
 
-function Onboarding({ name }: { name?: string }) {
+function Onboarding({ name, data }: { name?: string; data: DashboardInsights }) {
+  const doneCount = SETUP_STEPS.filter((s) => s.done(data)).length;
+  const total = SETUP_STEPS.length;
+  const started = doneCount > 0;
+
   return (
     <div className="flex flex-col gap-5">
       <Card className="overflow-hidden">
@@ -79,37 +96,80 @@ function Onboarding({ name }: { name?: string }) {
             <Sparkles className="size-3.5" /> Welcome to SchoolDeck
           </span>
           <h2 className="mt-1 text-2xl font-bold text-text">
-            Let&apos;s set up your school{name ? `, ${name}` : ""} 🎉
+            {started
+              ? `Nice progress${name ? `, ${name}` : ""} — a few steps to go 🚀`
+              : `Let's set up your school${name ? `, ${name}` : ""} 🎉`}
           </h2>
           <p className="max-w-2xl text-sm text-muted">
-            Your school is empty right now. Follow these quick steps in order — each one links
-            straight to the page where you create it. Start with classes.
+            {started
+              ? "Completed steps are ticked off below. Finish the remaining ones to unlock your full dashboard."
+              : "Your school is empty right now. Follow these quick steps in order — each one links straight to the page where you create it. Start with classes."}
           </p>
+
+          {/* Progress bar */}
+          <div className="mt-3 w-full max-w-md">
+            <div className="mb-1.5 flex items-center justify-between text-xs font-medium text-muted">
+              <span>Setup progress</span>
+              <span>{doneCount} of {total} done</span>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-surface-hover">
+              <div
+                className="h-full rounded-full bg-primary transition-all duration-500"
+                style={{ width: `${(doneCount / total) * 100}%` }}
+              />
+            </div>
+          </div>
         </CardContent>
       </Card>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {SETUP_STEPS.map((s) => (
-          <Card key={s.n} className="card-hover">
-            <CardContent className="flex h-full flex-col gap-3">
-              <div className="flex items-center gap-3">
-                <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-bold text-white">
-                  {s.n}
-                </span>
-                <div className="flex size-9 items-center justify-center rounded-md bg-primary-soft text-primary-text">
-                  <s.icon className="size-4" />
+        {SETUP_STEPS.map((s) => {
+          const isDone = s.done(data);
+          return (
+            <Card key={s.n} className={cn("card-hover", isDone && "border-success/40 bg-success-soft/20")}>
+              <CardContent className="flex h-full flex-col gap-3">
+                <div className="flex items-center gap-3">
+                  <span
+                    className={cn(
+                      "flex size-9 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white",
+                      isDone ? "bg-success" : "bg-primary"
+                    )}
+                  >
+                    {isDone ? <Check className="size-4.5" /> : s.n}
+                  </span>
+                  <div
+                    className={cn(
+                      "flex size-9 items-center justify-center rounded-md",
+                      isDone ? "bg-success-soft text-success-text" : "bg-primary-soft text-primary-text"
+                    )}
+                  >
+                    <s.icon className="size-4" />
+                  </div>
+                  {isDone && (
+                    <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-success-soft px-2 py-0.5 text-[11px] font-semibold text-success-text">
+                      <Check className="size-3" /> Done
+                    </span>
+                  )}
                 </div>
-              </div>
-              <div className="min-w-0 flex-1">
-                <h3 className="text-sm font-semibold text-text">{s.title}</h3>
-                <p className="mt-1 text-xs text-muted">{s.desc}</p>
-              </div>
-              <Link href={s.href} className="focus-ring inline-flex w-fit items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-primary-hover">
-                {s.cta} <ArrowRight className="size-3.5" />
-              </Link>
-            </CardContent>
-          </Card>
-        ))}
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-sm font-semibold text-text">{s.title}</h3>
+                  <p className="mt-1 text-xs text-muted">{s.desc}</p>
+                </div>
+                <Link
+                  href={s.href}
+                  className={cn(
+                    "focus-ring inline-flex w-fit items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors",
+                    isDone
+                      ? "border border-border bg-surface text-text hover:bg-surface-hover"
+                      : "bg-primary text-white hover:bg-primary-hover"
+                  )}
+                >
+                  {isDone ? s.doneCta : s.cta} <ArrowRight className="size-3.5" />
+                </Link>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
     </div>
   );
@@ -138,8 +198,10 @@ export default function DashboardPage() {
   });
 
   const overview = data ? buildOverview(data) : [];
-  // A brand-new school (no students and no teachers) gets guided setup steps.
-  const isEmpty = !loading && !!data && data.totalStudents === 0 && data.totalTeachers === 0;
+  // Guided setup stays up until every step is ticked off; each step tracks its
+  // own completion from live data, so finished steps show as Done and the whole
+  // board disappears once the school is fully set up.
+  const setupPending = !loading && !!data && !SETUP_STEPS.every((s) => s.done(data));
 
   return (
     <div className="flex flex-col gap-5">
@@ -157,8 +219,8 @@ export default function DashboardPage() {
         </span>
       </div>
 
-      {isEmpty ? (
-        <Onboarding name={user?.name?.split(" ")[0]} />
+      {setupPending && data ? (
+        <Onboarding name={user?.name?.split(" ")[0]} data={data} />
       ) : (
        <>
       {/* Today's Overview — the insight board */}

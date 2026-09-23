@@ -6,6 +6,9 @@ import { listTeachers } from "@/lib/api/teachers";
 import { admissionsApi } from "@/lib/api/admissions";
 import { examsApi } from "@/lib/api/exams";
 import { feeAccountsApi, balanceOf } from "@/lib/api/feeLedger";
+import { classesApi } from "@/lib/api/classes";
+import { subjectsApi } from "@/lib/api/subjects";
+import { timetableApi } from "@/lib/api/timetable";
 import { assessStudent } from "@/lib/insights";
 import type { Student } from "@/types/student";
 
@@ -28,6 +31,9 @@ export interface DashboardInsights {
   /** Totals used to detect a brand-new (empty) school for onboarding. */
   totalStudents: number;
   totalTeachers: number;
+  totalClasses: number;
+  totalSubjects: number;
+  totalTimetableEntries: number;
 }
 
 /**
@@ -47,17 +53,21 @@ export function useDashboardInsights() {
     let cancelled = false;
 
     (async () => {
-      let students, teachers, admissions, exams, accounts;
+      let students, teachers, admissions, exams, accounts, classes, subjects, timetable;
       try {
         // Students now come over the network, so a failure here is a real
         // possibility — without this the dashboard would spin forever.
-        [students, teachers, admissions, exams, accounts] = await Promise.all([
-          listStudents(),
-          listTeachers(),
-          admissionsApi.list(),
-          examsApi.list(),
-          feeAccountsApi.list(),
-        ]);
+        [students, teachers, admissions, exams, accounts, classes, subjects, timetable] =
+          await Promise.all([
+            listStudents(),
+            listTeachers(),
+            admissionsApi.list(),
+            examsApi.list(),
+            feeAccountsApi.list(),
+            classesApi.list(),
+            subjectsApi.list(),
+            timetableApi.list(),
+          ]);
       } catch (e) {
         if (cancelled) return;
         setError(e instanceof Error ? e.message : "Could not load dashboard data.");
@@ -98,6 +108,9 @@ export function useDashboardInsights() {
         attention,
         totalStudents: students.length,
         totalTeachers: teachers.length,
+        totalClasses: classes.length,
+        totalSubjects: subjects.length,
+        totalTimetableEntries: timetable.length,
       });
       setLoading(false);
     })();
