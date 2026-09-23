@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { TriangleAlert } from "lucide-react";
 import { Button, Card, CardContent, Input } from "@/components/ui";
@@ -34,6 +34,7 @@ export default function LoginPage() {
     register,
     handleSubmit,
     setValue,
+    control,
     formState: { errors, isSubmitting },
   } = useForm<LoginSchema>({
     resolver: zodResolver(loginSchema),
@@ -43,6 +44,9 @@ export default function LoginPage() {
       remember: true,
     },
   });
+
+  // Highlight the demo account whose email is currently in the field.
+  const currentEmail = useWatch({ control, name: "email" });
 
   const onSubmit = handleSubmit(async (values) => {
     setError(null);
@@ -72,19 +76,27 @@ export default function LoginPage() {
             <div>
               <p className="mb-2 text-xs font-medium text-muted">Demo accounts</p>
               <div className="grid grid-cols-3 gap-1.5">
-                {DEMO_ACCOUNTS.map((account) => (
-                  <button
-                    key={account.email}
-                    type="button"
-                    onClick={() => {
-                      setValue("email", account.email);
-                      setValue("password", DEMO_PASSWORD);
-                    }}
-                    className="focus-ring rounded-md bg-surface-hover px-2 py-1.5 text-xs font-medium text-muted transition-colors hover:text-text"
-                  >
-                    {account.label}
-                  </button>
-                ))}
+                {DEMO_ACCOUNTS.map((account) => {
+                  const active = currentEmail === account.email;
+                  return (
+                    <button
+                      key={account.email}
+                      type="button"
+                      aria-pressed={active}
+                      onClick={() => {
+                        setValue("email", account.email);
+                        setValue("password", DEMO_PASSWORD);
+                      }}
+                      className={
+                        active
+                          ? "focus-ring rounded-md border border-primary bg-primary-soft px-2 py-1.5 text-xs font-semibold text-primary-text shadow-sm ring-1 ring-primary/20 transition-colors"
+                          : "focus-ring rounded-md border border-transparent bg-surface-hover px-2 py-1.5 text-xs font-medium text-muted transition-colors hover:text-text"
+                      }
+                    >
+                      {account.label}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
