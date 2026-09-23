@@ -1,13 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Controller, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Check } from "lucide-react";
-import { Modal, Button, Input, Select, MultiSelect } from "@/components/ui";
+import { Modal, Button, Input } from "@/components/ui";
 import { Field } from "@/components/ui/Input";
-import { schoolClassSchema, type SchoolClassSchema } from "@/lib/schemas/schoolClass";
-import { STREAM_OPTIONS, SECTION_OPTIONS, type SchoolClass } from "@/lib/api/classes";
+import {
+  schoolClassSchema,
+  SECTION_SEQUENCE,
+  type SchoolClassSchema,
+} from "@/lib/schemas/schoolClass";
+import { STREAM_OPTIONS, type SchoolClass } from "@/lib/api/classes";
 import { listTeachers } from "@/lib/api/teachers";
 import { teacherName, type Teacher } from "@/types/teacher";
 
@@ -34,6 +38,8 @@ interface ClassFormModalProps {
   onOpenChange: (open: boolean) => void;
   /** Present = edit mode, absent = create mode. */
   record?: SchoolClass | null;
+  /** Existing classes — used to block a duplicate class name. */
+  existing?: SchoolClass[];
   saving?: boolean;
   onSubmit: (values: SchoolClassSchema) => Promise<void>;
 }
@@ -42,11 +48,13 @@ export function ClassFormModal({
   open,
   onOpenChange,
   record,
+  existing = [],
   saving,
   onSubmit,
 }: ClassFormModalProps) {
   const isEdit = Boolean(record);
   const [teachers, setTeachers] = useState<Teacher[]>([]);
+  const [dupError, setDupError] = useState<string | null>(null);
 
   const {
     register,
@@ -61,11 +69,16 @@ export function ClassFormModal({
   });
 
   const selectedTeacher = useWatch({ control, name: "classTeacher" });
+  const sections = useWatch({ control, name: "sections" }) ?? [];
 
   // Repopulate on open so the previous record's values can't leak through.
   useEffect(() => {
     if (!open) return;
     reset(record ? { ...record } : emptyValues);
+    // Deferred: clearing the duplicate-name error synchronously in an effect
+    // trips the react-hooks/set-state-in-effect rule.
+    const t = setTimeout(() => setDupError(null), 0);
+    return () => clearTimeout(t);
   }, [open, record, reset]);
 
   // Load real teachers for the class-teacher picker.
@@ -80,7 +93,34 @@ export function ClassFormModal({
     };
   }, [open]);
 
-  const submit = handleSubmit(onSubmit);
+  // Case-insensitive set of names already taken by *other* classes.
+  const takenNames = useMemo(() => {
+    const set = new Set<string>();
+    for (const c of existing) {
+      if (record && c.id === record.id) continue;
+      set.add(c.name.trim().toLowerCase());
+    }
+    return set;
+  }, [existing, record]);
+
+  const submit = handleSubmit((values) => {
+    const name = values.name.trim();
+    if (takenNames.has(name.toLowerCase())) {
+      setDupError(`"${name}" already exists. Pick a different class name.`);
+      return;
+    }
+    setDupError(null);
+    return onSubmit({ ...values, name, stream: values.stream.trim() });
+  });
+
+  /** Tap a letter → sections become A through that letter (always gap-free). */
+  const pickUpTo = (index: number) =>
+    setValue("sections", SECTION_SEQUENCE.slice(0, index + 1) as string[], {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+
+  const sectionCount = sections.length;
 
   return (
     <Modal
@@ -111,35 +151,69 @@ export function ClassFormModal({
             list="grade-presets"
             placeholder="Pick or type — e.g. Class 6"
             {...register("name")}
-            error={errors.name?.message}
+            error={errors.name?.message ?? dupError ?? undefined}
           />
           <datalist id="grade-presets">
             {GRADE_PRESETS.map((g) => (
               <option key={g} value={g} />
             ))}
           </datalist>
-          <Select
+
+          {/* Stream — pick a preset or type a custom one (same as class name). */}
+          <Input
             label="Stream"
             required
-            options={STREAM_OPTIONS.map((s) => ({ label: s, value: s }))}
+            list="stream-presets"
+            placeholder="Pick or type — e.g. Science"
             {...register("stream")}
             error={errors.stream?.message}
           />
+          <datalist id="stream-presets">
+            {STREAM_OPTIONS.map((s) => (
+              <option key={s} value={s} />
+            ))}
+          </datalist>
+
           <Input label="Room(s)" placeholder="e.g. 101-103" {...register("room")} error={errors.room?.message} />
         </div>
 
+        {/* Sections — always a gap-free run from A. Tapping a letter sets the
+            range A→that letter, so you can never create D without A, B and C. */}
         <Controller
           control={control}
           name="sections"
-          render={({ field }) => (
-            <MultiSelect
+          render={() => (
+            <Field
               label="Sections"
               required
-              options={SECTION_OPTIONS}
-              value={field.value}
-              onChange={field.onChange}
+              hint={`Tap a letter to set sections A through it — ${sectionCount} section${sectionCount === 1 ? "" : "s"} (${sections.join(", ")})`}
               error={errors.sections?.message}
-            />
+            >
+              <div
+                role="group"
+                aria-label="Sections"
+                className="flex flex-wrap gap-1.5 rounded-md border border-border bg-surface p-2"
+              >
+                {SECTION_SEQUENCE.map((letter, i) => {
+                  const selected = i < sectionCount;
+                  return (
+                    <button
+                      key={letter}
+                      type="button"
+                      onClick={() => pickUpTo(i)}
+                      aria-pressed={selected}
+                      className={`focus-ring inline-flex size-9 items-center justify-center rounded-md text-sm font-semibold transition-colors ${
+                        selected
+                          ? "bg-primary text-white"
+                          : "bg-surface-hover text-muted hover:text-text"
+                      }`}
+                    >
+                      {letter}
+                    </button>
+                  );
+                })}
+              </div>
+            </Field>
           )}
         />
 
