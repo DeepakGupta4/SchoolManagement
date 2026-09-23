@@ -8,6 +8,7 @@ import { Modal, Button, Input, Textarea, Select, MultiSelect, useToast } from "@
 import { PhotoFrame } from "@/components/cards/PhotoFrame";
 import { teacherSchema, type TeacherSchema } from "@/lib/schemas/teacher";
 import { digitsOnly10 } from "@/lib/phone";
+import { nextCodeId } from "@/lib/autoId";
 import { fileToDataUrl } from "@/lib/image";
 import { useClassOptions } from "@/hooks/useClassOptions";
 import { useSubjectOptions } from "@/hooks/useSubjectOptions";
@@ -149,6 +150,12 @@ export function TeacherFormModal({
     return () => clearTimeout(t);
   }, [open, teacher, reset]);
 
+  // Auto employee ID on create (editable), once existing teachers are known.
+  useEffect(() => {
+    if (!open || isEdit) return;
+    setValue("employeeId", nextCodeId("TCH", existing.map((t) => t.employeeId)));
+  }, [open, isEdit, existing, setValue]);
+
   // Case-insensitive set of emails already taken by *other* teachers.
   const takenEmails = useMemo(() => {
     const set = new Set<string>();
@@ -267,7 +274,7 @@ export function TeacherFormModal({
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Input label="First name" required {...register("firstName")} error={errors.firstName?.message} />
             <Input label="Last name" required {...register("lastName")} error={errors.lastName?.message} />
-            <Input label="Employee ID" required {...register("employeeId")} error={errors.employeeId?.message} />
+            <Input label="Employee ID" required hint={!isEdit ? "Auto-generated — editable" : undefined} {...register("employeeId")} error={errors.employeeId?.message} />
             <Select label="Gender" required options={GENDER_OPTIONS} {...register("gender")} error={errors.gender?.message} />
             <Input label="Date of birth" type="date" required {...register("dateOfBirth")} error={errors.dateOfBirth?.message} />
             <Input label="Joining date" type="date" required {...register("joiningDate")} error={errors.joiningDate?.message} />

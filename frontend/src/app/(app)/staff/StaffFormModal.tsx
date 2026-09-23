@@ -6,6 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Modal, Button, Input, Select, Textarea, useToast } from "@/components/ui";
 import { staffSchema, type StaffSchema } from "@/lib/schemas/staff";
 import { digitsOnly10 } from "@/lib/phone";
+import { nextCodeId } from "@/lib/autoId";
 import { AttachmentsField } from "@/components/AttachmentsField";
 import { uploadDocumentFiles } from "@/lib/api/documents";
 import {
@@ -87,6 +88,7 @@ export function StaffFormModal({
     register,
     handleSubmit,
     reset,
+    setValue,
     formState: { errors },
   } = useForm<StaffSchema>({
     resolver: zodResolver(staffSchema),
@@ -104,6 +106,12 @@ export function StaffFormModal({
     const t = setTimeout(() => setDupError(null), 0);
     return () => clearTimeout(t);
   }, [open, record, reset]);
+
+  // Auto employee ID on create (editable), once existing staff are known.
+  useEffect(() => {
+    if (!open || isEdit) return;
+    setValue("employeeId", nextCodeId("STF", existing.map((s) => s.employeeId)));
+  }, [open, isEdit, existing, setValue]);
 
   // Case-insensitive set of emails already taken by *other* staff members.
   const takenEmails = useMemo(() => {
@@ -162,7 +170,7 @@ export function StaffFormModal({
     >
       <form onSubmit={submit} className="flex flex-col gap-4">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Input label="Employee ID" required placeholder="ST013" {...register("employeeId")} error={errors.employeeId?.message} />
+          <Input label="Employee ID" required hint={!isEdit ? "Auto-generated — editable" : undefined} placeholder="STF013" {...register("employeeId")} error={errors.employeeId?.message} />
           <Input label="Full name" required placeholder="Ms. Anita Gupta" {...register("name")} error={errors.name?.message} />
 
           {/* Role — pick a preset or type a custom one. */}
