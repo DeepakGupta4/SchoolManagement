@@ -45,6 +45,36 @@ import { readFileAsDataUrl } from "@/lib/image";
 export const MAX_DOC_BYTES = 3.5 * 1024 * 1024;
 
 /**
+ * Uploads a single file under an explicit title (e.g. "Government ID"), so a
+ * required document is identifiable later on the profile. Best-effort: returns
+ * whether it succeeded and never throws.
+ */
+export async function uploadLabeledDocument(
+  ownerType: DocumentOwnerType,
+  ownerId: string,
+  ownerName: string,
+  title: string,
+  file: File
+): Promise<boolean> {
+  try {
+    const dataUrl = await readFileAsDataUrl(file);
+    await uploadDocument({
+      ownerType,
+      ownerId,
+      ownerName,
+      title,
+      fileName: file.name,
+      mimeType: file.type,
+      dataUrl,
+      size: file.size,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Uploads a batch of picked files as documents for one owner. Best-effort:
  * returns how many succeeded, and never throws (so a form save isn't lost if
  * one attachment fails).

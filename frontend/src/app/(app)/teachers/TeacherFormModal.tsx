@@ -15,7 +15,8 @@ import { useClassOptions } from "@/hooks/useClassOptions";
 import { useSubjectOptions } from "@/hooks/useSubjectOptions";
 import { DEPARTMENT_OPTIONS } from "@/lib/api/teachers";
 import { AttachmentsField } from "@/components/AttachmentsField";
-import { uploadDocumentFiles } from "@/lib/api/documents";
+import { SingleDocField } from "@/components/SingleDocField";
+import { uploadDocumentFiles, uploadLabeledDocument } from "@/lib/api/documents";
 import type { Teacher, TeacherFormValues } from "@/types/teacher";
 
 // Common teaching qualifications — offered as a quick pick, but the field stays
@@ -99,6 +100,10 @@ export function TeacherFormModal({
   const [uploading, setUploading] = useState(false);
   // Files attached in the form, uploaded once the teacher record has an id.
   const [attachments, setAttachments] = useState<File[]>([]);
+  // Required documents on create: a qualification certificate and a govt ID.
+  const [qualDoc, setQualDoc] = useState<File | null>(null);
+  const [govtId, setGovtId] = useState<File | null>(null);
+  const [docError, setDocError] = useState<string | null>(null);
   const [savingDocs, setSavingDocs] = useState(false);
   const [dupError, setDupError] = useState<string | null>(null);
   const { classNames, classOptions, sectionOptions } = useClassOptions();
@@ -145,9 +150,14 @@ export function TeacherFormModal({
     reset(teacher ? { ...teacher } : emptyValues);
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setAttachments([]);
-    // Deferred: clearing the duplicate-email error synchronously in an effect
-    // trips the react-hooks/set-state-in-effect rule.
-    const t = setTimeout(() => setDupError(null), 0);
+    // Deferred: clearing these synchronously in an effect trips the
+    // react-hooks/set-state-in-effect rule.
+    const t = setTimeout(() => {
+      setDupError(null);
+      setDocError(null);
+      setQualDoc(null);
+      setGovtId(null);
+    }, 0);
     return () => clearTimeout(t);
   }, [open, teacher, reset]);
 
@@ -174,6 +184,14 @@ export function TeacherFormModal({
       return;
     }
     setDupError(null);
+
+    // On create, a qualification certificate and a government ID are mandatory.
+    if (!isEdit && (!qualDoc || !govtId)) {
+      setDocError("Attach the qualification certificate and a government ID.");
+      return;
+    }
+    setDocError(null);
+
     // Trim free-text fields so stray whitespace can't create near-duplicates.
     const cleaned = {
       ...values,
@@ -187,18 +205,23 @@ export function TeacherFormModal({
     };
     const saved = await onSubmit(cleaned as TeacherFormValues);
     if (!saved) return; // save failed — keep the form open (error already shown)
+
+    setSavingDocs(true);
+    const name = `${cleaned.firstName} ${cleaned.lastName}`.trim();
+    let failed = 0;
+    if (qualDoc && !(await uploadLabeledDocument("teacher", saved.id, name, "Qualification certificate", qualDoc))) failed += 1;
+    if (govtId && !(await uploadLabeledDocument("teacher", saved.id, name, "Government ID", govtId))) failed += 1;
     if (attachments.length > 0) {
-      setSavingDocs(true);
-      const name = `${cleaned.firstName} ${cleaned.lastName}`.trim();
-      const { uploaded, failed } = await uploadDocumentFiles("teacher", saved.id, name, attachments);
-      setSavingDocs(false);
-      if (failed) {
-        toast({
-          title: `${uploaded} uploaded, ${failed} failed`,
-          description: "Some attachments could not be saved.",
-          variant: "warning",
-        });
-      }
+      const r = await uploadDocumentFiles("teacher", saved.id, name, attachments);
+      failed += r.failed;
+    }
+    setSavingDocs(false);
+    if (failed) {
+      toast({
+        title: "Some documents could not be saved",
+        description: `${failed} file(s) failed to upload. You can re-add them from the profile.`,
+        variant: "warning",
+      });
     }
     onOpenChange(false);
   });
@@ -211,7 +234,7 @@ export function TeacherFormModal({
       description={
         isEdit
           ? "Update this teacher's record. Changes apply immediately."
-          : "Create a teacher record. Employee ID must be unique."
+          : "Create a teacher record. A qualification certificate and a government ID are required."
       }
       size="lg"
       footer={
@@ -400,12 +423,38 @@ export function TeacherFormModal({
         </section>
 
         <section>
-          <SectionTitle>Documents</SectionTitle>
-          <AttachmentsField
-            files={attachments}
-            onChange={setAttachments}
-            hint="Optional — qualifications, ID proofs, certificates. You can also add these later from the profile."
-          />
+          <SectionTitle>Documents{!isEdit ? " (required)" : ""}</SectionTitle>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <SingleDocField
+              label="Qualification certificate"
+              required={!isEdit}
+              file={qualDoc}
+              onChange={setQualDoc}
+              hint="Degree / B.Ed / diploma (PDF or image)"
+              error={!isEdit && docError && !qualDoc ? docError : undefined}
+            />
+            <SingleDocField
+              label="Government ID"
+              required={!isEdit}
+              file={govtId}
+              onChange={setGovtId}
+              hint="Aadhaar / PAN / Passport (PDF or image)"
+              error={!isEdit && docError && !govtId ? docError : undefined}
+            />
+          </div>
+          <div className="mt-4">
+            <p className="mb-2 text-xs font-medium text-muted">Other documents (optional)</p>
+            <AttachmentsField
+              files={attachments}
+              onChange={setAttachments}
+              hint="Experience letter, address proof, PAN, resume, photos…"
+            />
+          </div>
+          {isEdit && (
+            <p className="mt-2 text-xs text-subtle">
+              Existing documents are managed on the teacher&apos;s profile.
+            </p>
+          )}
         </section>
 
         {/* Enables Enter-to-submit without duplicating the footer button. */}
