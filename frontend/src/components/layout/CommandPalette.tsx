@@ -4,7 +4,8 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import * as Dialog from "@radix-ui/react-dialog";
 import { CornerDownLeft, Search } from "lucide-react";
-import { flatNav, type FlatNavItem } from "@/lib/navigation";
+import { flatNav, isPathAllowed, type FlatNavItem } from "@/lib/navigation";
+import { useAuthStore } from "@/store";
 import { cn } from "@/lib/utils";
 
 /** Subsequence match, so "merl" finds "Merit List". */
@@ -35,14 +36,21 @@ const NAVIGABLE = flatNav.filter((item) => !item.soon);
  */
 function PaletteContent({ onClose }: { onClose: () => void }) {
   const router = useRouter();
+  const role = useAuthStore((s) => s.user?.role);
   const [query, setQuery] = useState("");
   const [rawIndex, setRawIndex] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
 
-  const results = useMemo(() => {
-    if (!query.trim()) return NAVIGABLE.slice(0, 8);
+  // Don't surface destinations the current role can't open.
+  const navigable = useMemo(
+    () => NAVIGABLE.filter((item) => isPathAllowed(role, item.href)),
+    [role]
+  );
 
-    return NAVIGABLE.map((item) => {
+  const results = useMemo(() => {
+    if (!query.trim()) return navigable.slice(0, 8);
+
+    return navigable.map((item) => {
       const haystack = item.parent ? `${item.parent} ${item.title}` : item.title;
       const score = fuzzyScore(haystack, query.trim());
       return score === null ? null : { item, score };
@@ -51,7 +59,7 @@ function PaletteContent({ onClose }: { onClose: () => void }) {
       .sort((a, b) => a.score - b.score)
       .slice(0, 10)
       .map((r) => r.item);
-  }, [query]);
+  }, [query, navigable]);
 
   // Clamped during render rather than corrected in an effect — a shrinking
   // result list must never leave the highlight past the end.

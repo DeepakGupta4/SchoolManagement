@@ -12,6 +12,7 @@ import { Avatar, Badge, Card, CardContent, CardHeader, CountUp, Skeleton } from 
 import { AttendanceChart, FeeCollectionChart } from "@/components/dashboard/Charts";
 import { RecentActivity } from "@/components/dashboard/RecentActivity";
 import { UpcomingEvents } from "@/components/dashboard/UpcomingEvents";
+import { TeacherDashboard } from "@/components/dashboard/TeacherDashboard";
 import { useAuthStore } from "@/store";
 import { useDashboardInsights, type DashboardInsights } from "@/hooks/useDashboardInsights";
 import { fullName } from "@/types/student";
@@ -219,7 +220,9 @@ export default function DashboardPage() {
         </span>
       </div>
 
-      {setupPending && data ? (
+      {user?.role === "teacher" ? (
+        <TeacherDashboard />
+      ) : setupPending && data ? (
         <Onboarding name={user?.name?.split(" ")[0]} data={data} />
       ) : (
        <>

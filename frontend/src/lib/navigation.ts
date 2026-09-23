@@ -6,6 +6,7 @@ import {
   Smartphone, Package, Utensils, HeartPulse, Trophy, Workflow,
   IdCard, Building2, BookMarked, CalendarX, type LucideIcon,
 } from "lucide-react";
+import type { UserRole } from "@/types";
 
 export interface NavChild {
   title: string;
@@ -217,6 +218,105 @@ export const flatNav: FlatNavItem[] = navGroups.flatMap((group) =>
       })),
   ])
 );
+
+/* ------------------------------------------------------------------ */
+/* Role-based access                                                    */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Sidebar links a teacher may see. Anything not listed is an admin-only module
+ * and is hidden from teachers (fees, payroll, admissions, settings→reset, etc.).
+ * These are the hrefs as they appear in `navGroups` (parents + children).
+ */
+const TEACHER_NAV_HREFS = new Set<string>([
+  "/dashboard",
+  // Teaching essentials
+  "/attendance",
+  "/timetable",
+  "/assignments",
+  "/syllabus",
+  "/exams/marks",
+  "/exams/report-cards",
+  "/lms",
+  "/lms/classes",
+  "/lms/material",
+  // Own classes' students (view)
+  "/students",
+  // Communication
+  "/announcements",
+  "/messages",
+  "/notices",
+  "/events",
+  "/holidays",
+  // Profile & leave
+  "/settings",
+  "/leave",
+]);
+
+/** Student sub-routes that stay admin-only even though /students is allowed. */
+const STUDENT_ADMIN_SUBROUTES = new Set([
+  "admissions",
+  "promotions",
+  "transfers",
+  "alumni",
+  "id-cards",
+  "documents",
+]);
+
+/** True when `pathname` is reachable by `role`. Non-teachers are unrestricted. */
+export function isPathAllowed(role: UserRole | undefined, pathname: string): boolean {
+  if (role !== "teacher") return true;
+  if (pathname === "/" || pathname === "/dashboard") return true;
+
+  // Exact allowed pages (and their dynamic detail routes below).
+  if (TEACHER_NAV_HREFS.has(pathname)) return true;
+
+  // /students/<id> detail is fine (viewing a student), but the named admin
+  // sub-routes under /students are not.
+  if (pathname.startsWith("/students/")) {
+    const seg = pathname.slice("/students/".length).split("/")[0];
+    return !STUDENT_ADMIN_SUBROUTES.has(seg);
+  }
+
+  // Sub-routes of allowed sections.
+  if (pathname.startsWith("/lms/")) return true;
+  if (pathname.startsWith("/exams/marks") || pathname.startsWith("/exams/report-cards")) return true;
+
+  // Detail routes for other allowed list pages, e.g. /assignments/<id>.
+  const ALLOWED_PREFIXES = ["/attendance", "/timetable", "/assignments", "/syllabus", "/settings", "/leave", "/messages", "/notices", "/events", "/announcements", "/holidays"];
+  return ALLOWED_PREFIXES.some((p) => pathname.startsWith(`${p}/`));
+}
+
+/** Filters the nav tree to what `role` should see. */
+export function navGroupsForRole(role: UserRole | undefined): NavGroup[] {
+  const isSuper = role === "super_admin";
+  const isTeacher = role === "teacher";
+
+  return navGroups
+    .filter((g) => {
+      const scope = g.scope ?? "school";
+      if (scope === "both") return true;
+      if (scope === "platform") return isSuper;
+      return !isSuper; // "school"
+    })
+    .map((g) => {
+      if (!isTeacher) return g;
+      // Teachers see only their allowed items; parent items keep only the
+      // children a teacher may open.
+      const items = g.items
+        .map((it) => {
+          const children = it.children?.filter((c) => TEACHER_NAV_HREFS.has(c.href));
+          return children && it.children ? { ...it, children } : it;
+        })
+        .filter(
+          (it) =>
+            TEACHER_NAV_HREFS.has(it.href) ||
+            (it.children?.length ?? 0) > 0
+        );
+      return { ...g, items };
+    })
+    .filter((g) => g.items.length > 0);
+}
 
 /** Human-readable trail for the current pathname, e.g. Academic → Examinations → Mark Entry. */
 export function breadcrumbFor(pathname: string): string[] {

@@ -6,7 +6,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ChevronDown, PanelLeftClose, PanelLeftOpen, Search, X } from "lucide-react";
 import { useSidebarStore, useAuthStore } from "@/store";
-import { navGroups, type NavEntry } from "@/lib/navigation";
+import { navGroupsForRole, type NavEntry } from "@/lib/navigation";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { cn } from "@/lib/utils";
 
@@ -184,13 +184,10 @@ export function Sidebar() {
   const role = useAuthStore((s) => s.user?.role);
 
   const visibleGroups = useMemo(() => {
-    // The platform owner sees only platform groups; school users see only the
-    // tenant modules. "both" groups (Settings) show to everyone.
-    const isSuper = role === "super_admin";
-    const allowed = navGroups.filter((g) => {
-      const scope = g.scope ?? "school";
-      return scope === "both" || (scope === "platform" ? isSuper : !isSuper);
-    });
+    // Role decides which groups/items appear: the platform owner sees only
+    // platform modules, teachers see a restricted teaching set, school admins
+    // see everything tenant-side. "both" groups (Settings) show to everyone.
+    const allowed = navGroupsForRole(role);
     if (!query) return allowed;
     return allowed
       .map((group) => ({
