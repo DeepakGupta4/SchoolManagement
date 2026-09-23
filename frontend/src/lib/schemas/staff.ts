@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { PHONE_REGEX, PHONE_MESSAGE } from "@/lib/phone";
+import { isValidDateString, isWithin, MIN_ADULT_DOB, MAX_ADULT_DOB } from "@/lib/dates";
 
 export const staffSchema = z.object({
   employeeId: z.string().trim().min(2, "Employee ID is required"),
@@ -9,7 +10,11 @@ export const staffSchema = z.object({
   type: z.string().min(1, "Employment type is required"),
   status: z.string().min(1, "Status is required"),
   gender: z.string().min(1, "Select a gender"),
-  dateOfBirth: z.string(),
+  // Optional, but when provided it must be a real date for an adult.
+  dateOfBirth: z
+    .string()
+    .refine((d) => d === "" || isValidDateString(d), "Enter a valid date")
+    .refine((d) => d === "" || isWithin(d, MIN_ADULT_DOB, MAX_ADULT_DOB), "Staff must be between 18 and 100 years old"),
   qualification: z.string().trim().min(2, "Qualification is required"),
   experienceYears: z.coerce.number<number>().min(0, "Cannot be negative").max(60, "Looks too high"),
   phone: z.string().regex(PHONE_REGEX, PHONE_MESSAGE),

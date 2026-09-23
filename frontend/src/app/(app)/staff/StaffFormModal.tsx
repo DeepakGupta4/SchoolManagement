@@ -7,6 +7,7 @@ import { Modal, Button, Input, Select, Textarea, useToast } from "@/components/u
 import { staffSchema, type StaffSchema } from "@/lib/schemas/staff";
 import { digitsOnly10 } from "@/lib/phone";
 import { nextCodeId } from "@/lib/autoId";
+import { MIN_ADULT_DOB, MAX_ADULT_DOB } from "@/lib/dates";
 import { AttachmentsField } from "@/components/AttachmentsField";
 import { uploadDocumentFiles } from "@/lib/api/documents";
 import {
@@ -190,7 +191,7 @@ export function StaffFormModal({
           </datalist>
 
           <Select label="Gender" required placeholder="Select gender" options={GENDER_OPTIONS} {...register("gender")} error={errors.gender?.message} />
-          <Input label="Date of birth" type="date" {...register("dateOfBirth")} error={errors.dateOfBirth?.message} />
+          <Input label="Date of birth" type="date" min={MIN_ADULT_DOB} max={MAX_ADULT_DOB} {...register("dateOfBirth")} error={errors.dateOfBirth?.message} />
 
           {/* Qualification — pick a preset or type a custom one. */}
           <Input label="Qualification" required list="staff-qualifications" placeholder="Pick or type — e.g. B.Com / Diploma / 12th" {...register("qualification")} error={errors.qualification?.message} />

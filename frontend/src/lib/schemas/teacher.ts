@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { PHONE_REGEX, PHONE_MESSAGE } from "@/lib/phone";
+import { isValidDateString, isWithin, MIN_ADULT_DOB, MAX_ADULT_DOB, MIN_RECORD_DATE, TODAY_ISO } from "@/lib/dates";
 
 export const teacherSchema = z.object({
   employeeId: z.string().trim().min(1, "Employee ID is required"),
@@ -11,8 +12,13 @@ export const teacherSchema = z.object({
   dateOfBirth: z
     .string()
     .min(1, "Date of birth is required")
-    .refine((d) => new Date(d) < new Date(), "Date of birth must be in the past"),
-  joiningDate: z.string().min(1, "Joining date is required"),
+    .refine(isValidDateString, "Enter a valid date")
+    .refine((d) => isWithin(d, MIN_ADULT_DOB, MAX_ADULT_DOB), "Teacher must be between 18 and 100 years old"),
+  joiningDate: z
+    .string()
+    .min(1, "Joining date is required")
+    .refine(isValidDateString, "Enter a valid date")
+    .refine((d) => isWithin(d, MIN_RECORD_DATE, TODAY_ISO), "Joining date can't be in the future"),
   department: z.string().trim().min(1, "Department is required"),
   subjects: z.array(z.string()).min(1, "Select at least one subject"),
   classes: z.array(z.string()),

@@ -9,6 +9,7 @@ import { PhotoFrame } from "@/components/cards/PhotoFrame";
 import { teacherSchema, type TeacherSchema } from "@/lib/schemas/teacher";
 import { digitsOnly10 } from "@/lib/phone";
 import { nextCodeId } from "@/lib/autoId";
+import { MIN_ADULT_DOB, MAX_ADULT_DOB, MIN_RECORD_DATE, TODAY_ISO } from "@/lib/dates";
 import { fileToDataUrl } from "@/lib/image";
 import { useClassOptions } from "@/hooks/useClassOptions";
 import { useSubjectOptions } from "@/hooks/useSubjectOptions";
@@ -276,8 +277,8 @@ export function TeacherFormModal({
             <Input label="Last name" required {...register("lastName")} error={errors.lastName?.message} />
             <Input label="Employee ID" required hint={!isEdit ? "Auto-generated — editable" : undefined} {...register("employeeId")} error={errors.employeeId?.message} />
             <Select label="Gender" required options={GENDER_OPTIONS} {...register("gender")} error={errors.gender?.message} />
-            <Input label="Date of birth" type="date" required {...register("dateOfBirth")} error={errors.dateOfBirth?.message} />
-            <Input label="Joining date" type="date" required {...register("joiningDate")} error={errors.joiningDate?.message} />
+            <Input label="Date of birth" type="date" required min={MIN_ADULT_DOB} max={MAX_ADULT_DOB} {...register("dateOfBirth")} error={errors.dateOfBirth?.message} />
+            <Input label="Joining date" type="date" required min={MIN_RECORD_DATE} max={TODAY_ISO} {...register("joiningDate")} error={errors.joiningDate?.message} />
           </div>
         </section>
 

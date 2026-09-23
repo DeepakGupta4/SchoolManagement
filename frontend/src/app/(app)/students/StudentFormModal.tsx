@@ -13,6 +13,7 @@ import { useClassOptions } from "@/hooks/useClassOptions";
 import { fileToDataUrl } from "@/lib/image";
 import { AttachmentsField } from "@/components/AttachmentsField";
 import { uploadDocumentFiles } from "@/lib/api/documents";
+import { MIN_STUDENT_DOB, MAX_STUDENT_DOB, MIN_RECORD_DATE, TODAY_ISO } from "@/lib/dates";
 import type { Student, StudentFormValues } from "@/types/student";
 
 /** Next school-wide admission number, e.g. ADM-2026-0007, unique vs. existing. */
@@ -289,7 +290,7 @@ export function StudentFormModal({
             <Input label="Last name" required {...register("lastName")} error={errors.lastName?.message} />
             <Input label="Admission no." required hint={!isEdit ? "Auto-generated — editable" : undefined} {...register("admissionNo")} error={errors.admissionNo?.message} />
             <Input label="Roll no." required hint={!isEdit ? "Auto, class-wise — editable" : undefined} {...register("rollNo")} error={errors.rollNo?.message} />
-            <Input label="Date of birth" type="date" required {...register("dateOfBirth")} error={errors.dateOfBirth?.message} />
+            <Input label="Date of birth" type="date" required min={MIN_STUDENT_DOB} max={MAX_STUDENT_DOB} {...register("dateOfBirth")} error={errors.dateOfBirth?.message} />
             <Select label="Gender" required options={GENDER_OPTIONS} {...register("gender")} error={errors.gender?.message} />
           </div>
         </section>
@@ -310,7 +311,7 @@ export function StudentFormModal({
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Select label="Class" required placeholder="Select class" options={classOptions} {...register("className")} error={errors.className?.message} />
             <Select label="Section" required placeholder="Select section" options={sectionOptions} {...register("section")} error={errors.section?.message} />
-            <Input label="Admission date" type="date" required {...register("admissionDate")} error={errors.admissionDate?.message} />
+            <Input label="Admission date" type="date" required min={MIN_RECORD_DATE} max={TODAY_ISO} {...register("admissionDate")} error={errors.admissionDate?.message} />
             <Select label="Status" required options={STATUS_OPTIONS} {...register("status")} error={errors.status?.message} />
           </div>
           {classOptions.length === 0 && (
