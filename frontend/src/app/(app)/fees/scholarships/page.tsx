@@ -396,6 +396,7 @@ export default function ScholarshipsPage() {
         open={formOpen}
         onOpenChange={setFormOpen}
         record={editing}
+        existing={items}
         saving={saving}
         onSubmit={handleSubmit}
       />

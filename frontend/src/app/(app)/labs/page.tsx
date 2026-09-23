@@ -451,6 +451,7 @@ export default function LabsPage() {
         open={formOpen}
         onOpenChange={setFormOpen}
         record={editing}
+        existing={items}
         saving={saving}
         onSubmit={handleSubmit}
       />

@@ -402,6 +402,7 @@ export default function DepartmentsPage() {
         open={formOpen}
         onOpenChange={setFormOpen}
         record={editing}
+        existing={items}
         saving={saving}
         onSubmit={handleSubmit}
       />

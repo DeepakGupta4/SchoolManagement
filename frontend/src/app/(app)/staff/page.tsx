@@ -483,6 +483,7 @@ export default function StaffPage() {
           if (!o) setEditing(null);
         }}
         record={editing}
+        existing={items}
         saving={saving}
         onSubmit={handleSubmit}
       />

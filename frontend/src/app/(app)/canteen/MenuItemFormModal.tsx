@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Modal, Button, Input, Select } from "@/components/ui";
@@ -25,6 +25,8 @@ interface MenuItemFormModalProps {
   onOpenChange: (open: boolean) => void;
   /** Present = edit mode, absent = create mode. */
   record?: MenuItem | null;
+  /** Existing menu items — used to block a duplicate item name. */
+  existing?: MenuItem[];
   saving?: boolean;
   onSubmit: (values: MenuItemSchema) => Promise<void>;
 }
@@ -33,10 +35,12 @@ export function MenuItemFormModal({
   open,
   onOpenChange,
   record,
+  existing = [],
   saving,
   onSubmit,
 }: MenuItemFormModalProps) {
   const isEdit = Boolean(record);
+  const [dupError, setDupError] = useState<string | null>(null);
 
   const {
     register,
@@ -63,9 +67,32 @@ export function MenuItemFormModal({
           }
         : emptyValues
     );
+    // Deferred: clearing the duplicate error synchronously in an effect trips
+    // the react-hooks/set-state-in-effect rule.
+    const t = setTimeout(() => setDupError(null), 0);
+    return () => clearTimeout(t);
   }, [open, record, reset]);
 
-  const submit = handleSubmit(onSubmit);
+  // Case-insensitive set of names already taken by *other* menu items.
+  const takenNames = useMemo(() => {
+    const set = new Set<string>();
+    for (const m of existing) {
+      if (record && m.id === record.id) continue;
+      set.add(m.name.trim().toLowerCase());
+    }
+    return set;
+  }, [existing, record]);
+
+  // Block a duplicate item name before it reaches the server.
+  const submit = handleSubmit((values) => {
+    const name = values.name.trim();
+    if (takenNames.has(name.toLowerCase())) {
+      setDupError(`"${name}" is already on the menu. Pick a different name.`);
+      return;
+    }
+    setDupError(null);
+    return onSubmit({ ...values, name });
+  });
 
   return (
     <Modal
@@ -95,15 +122,24 @@ export function MenuItemFormModal({
             required
             placeholder="Veg Thali"
             {...register("name")}
-            error={errors.name?.message}
+            error={errors.name?.message ?? dupError ?? undefined}
           />
-          <Select
+
+          {/* Category — pick a preset or type a custom one. */}
+          <Input
             label="Category"
             required
-            options={CATEGORY_OPTIONS.map((c) => ({ label: c, value: c }))}
+            list="menu-categories"
+            placeholder="Pick or type — e.g. Meals"
             {...register("category")}
             error={errors.category?.message}
           />
+          <datalist id="menu-categories">
+            {CATEGORY_OPTIONS.map((c) => (
+              <option key={c} value={c} />
+            ))}
+          </datalist>
+
           <Input
             label="Emoji"
             required

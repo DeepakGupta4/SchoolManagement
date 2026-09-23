@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Modal, Button, Input, Select } from "@/components/ui";
@@ -27,6 +27,8 @@ interface LabFormModalProps {
   onOpenChange: (open: boolean) => void;
   /** Present = edit mode, absent = create mode. */
   record?: Lab | null;
+  /** Existing labs — used to block a duplicate lab name. */
+  existing?: Lab[];
   saving?: boolean;
   onSubmit: (values: LabSchema) => Promise<void>;
 }
@@ -35,10 +37,12 @@ export function LabFormModal({
   open,
   onOpenChange,
   record,
+  existing = [],
   saving,
   onSubmit,
 }: LabFormModalProps) {
   const isEdit = Boolean(record);
+  const [dupError, setDupError] = useState<string | null>(null);
 
   const {
     register,
@@ -54,9 +58,32 @@ export function LabFormModal({
   useEffect(() => {
     if (!open) return;
     reset(record ? { ...record } : emptyValues);
+    // Deferred: clearing the duplicate error synchronously in an effect trips
+    // the react-hooks/set-state-in-effect rule.
+    const t = setTimeout(() => setDupError(null), 0);
+    return () => clearTimeout(t);
   }, [open, record, reset]);
 
-  const submit = handleSubmit(onSubmit);
+  // Case-insensitive set of names already taken by *other* labs.
+  const takenNames = useMemo(() => {
+    const set = new Set<string>();
+    for (const l of existing) {
+      if (record && l.id === record.id) continue;
+      set.add(l.name.trim().toLowerCase());
+    }
+    return set;
+  }, [existing, record]);
+
+  // Block a duplicate lab name before it reaches the server.
+  const submit = handleSubmit((values) => {
+    const name = values.name.trim();
+    if (takenNames.has(name.toLowerCase())) {
+      setDupError(`"${name}" already exists. Pick a different lab name.`);
+      return;
+    }
+    setDupError(null);
+    return onSubmit({ ...values, name });
+  });
 
   return (
     <Modal
@@ -87,7 +114,7 @@ export function LabFormModal({
             required
             placeholder="Physics Lab I"
             {...register("name")}
-            error={errors.name?.message}
+            error={errors.name?.message ?? dupError ?? undefined}
           />
           <Select
             label="Lab type"

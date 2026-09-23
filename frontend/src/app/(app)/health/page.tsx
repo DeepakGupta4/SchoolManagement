@@ -599,6 +599,7 @@ export default function HealthPage() {
         open={formOpen}
         onOpenChange={setFormOpen}
         record={editing}
+        existing={medicines}
         saving={saving}
         onSubmit={handleSubmit}
       />

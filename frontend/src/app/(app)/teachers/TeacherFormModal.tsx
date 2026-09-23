@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Controller, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Upload, X } from "lucide-react";
@@ -16,7 +16,13 @@ import { AttachmentsField } from "@/components/AttachmentsField";
 import { uploadDocumentFiles } from "@/lib/api/documents";
 import type { Teacher, TeacherFormValues } from "@/types/teacher";
 
-const toOptions = (values: readonly string[]) => values.map((v) => ({ label: v, value: v }));
+// Common teaching qualifications — offered as a quick pick, but the field stays
+// free text so any custom qualification works.
+const QUALIFICATION_PRESETS = [
+  "B.Ed", "M.Ed", "D.El.Ed", "NTT",
+  "B.A", "M.A", "B.Sc", "M.Sc", "B.Com", "M.Com",
+  "B.Tech", "M.Tech", "BCA", "MCA", "Ph.D", "Diploma",
+];
 
 const GENDER_OPTIONS = [
   { label: "Male", value: "male" },
@@ -73,6 +79,8 @@ interface TeacherFormModalProps {
   onOpenChange: (open: boolean) => void;
   /** Present = edit mode, absent = create mode. */
   teacher?: Teacher | null;
+  /** Existing teachers — used to block a duplicate email. */
+  existing?: Teacher[];
   /** Returns the saved teacher (so attachments can be uploaded), or null on error. */
   onSubmit: (values: TeacherFormValues) => Promise<Teacher | null | void>;
 }
@@ -81,6 +89,7 @@ export function TeacherFormModal({
   open,
   onOpenChange,
   teacher,
+  existing = [],
   onSubmit,
 }: TeacherFormModalProps) {
   const isEdit = Boolean(teacher);
@@ -89,6 +98,7 @@ export function TeacherFormModal({
   // Files attached in the form, uploaded once the teacher record has an id.
   const [attachments, setAttachments] = useState<File[]>([]);
   const [savingDocs, setSavingDocs] = useState(false);
+  const [dupError, setDupError] = useState<string | null>(null);
   const { classNames, classOptions, sectionOptions } = useClassOptions();
   const { subjectNames } = useSubjectOptions();
 
@@ -133,14 +143,45 @@ export function TeacherFormModal({
     reset(teacher ? { ...teacher } : emptyValues);
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setAttachments([]);
+    // Deferred: clearing the duplicate-email error synchronously in an effect
+    // trips the react-hooks/set-state-in-effect rule.
+    const t = setTimeout(() => setDupError(null), 0);
+    return () => clearTimeout(t);
   }, [open, teacher, reset]);
 
+  // Case-insensitive set of emails already taken by *other* teachers.
+  const takenEmails = useMemo(() => {
+    const set = new Set<string>();
+    for (const t of existing) {
+      if (teacher && t.id === teacher.id) continue;
+      if (t.email) set.add(t.email.trim().toLowerCase());
+    }
+    return set;
+  }, [existing, teacher]);
+
   const submit = handleSubmit(async (values) => {
-    const saved = await onSubmit(values as TeacherFormValues);
+    const email = values.email.trim();
+    if (takenEmails.has(email.toLowerCase())) {
+      setDupError(`A teacher with the email "${email}" already exists.`);
+      return;
+    }
+    setDupError(null);
+    // Trim free-text fields so stray whitespace can't create near-duplicates.
+    const cleaned = {
+      ...values,
+      firstName: values.firstName.trim(),
+      lastName: values.lastName.trim(),
+      employeeId: values.employeeId.trim(),
+      email,
+      department: values.department.trim(),
+      qualification: values.qualification.trim(),
+      address: values.address.trim(),
+    };
+    const saved = await onSubmit(cleaned as TeacherFormValues);
     if (!saved) return; // save failed — keep the form open (error already shown)
     if (attachments.length > 0) {
       setSavingDocs(true);
-      const name = `${values.firstName} ${values.lastName}`.trim();
+      const name = `${cleaned.firstName} ${cleaned.lastName}`.trim();
       const { uploaded, failed } = await uploadDocumentFiles("teacher", saved.id, name, attachments);
       setSavingDocs(false);
       if (failed) {
@@ -236,7 +277,7 @@ export function TeacherFormModal({
         <section>
           <SectionTitle>Contact</SectionTitle>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Input label="Email" type="email" required {...register("email")} error={errors.email?.message} />
+            <Input label="Email" type="email" required {...register("email")} error={errors.email?.message ?? dupError ?? undefined} />
             <Input label="Phone" required hint="10-digit mobile number" inputMode="numeric" maxLength={10} placeholder="9876543210" {...register("phone", { onChange: digitsOnly10 })} error={errors.phone?.message} />
           </div>
           <div className="mt-4">
@@ -247,8 +288,35 @@ export function TeacherFormModal({
         <section>
           <SectionTitle>Teaching</SectionTitle>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Select label="Department" required options={toOptions(DEPARTMENT_OPTIONS)} {...register("department")} error={errors.department?.message} />
-            <Input label="Qualification" required hint="e.g. M.Sc, B.Ed" {...register("qualification")} error={errors.qualification?.message} />
+            {/* Department — pick a preset or type a custom one. */}
+            <Input
+              label="Department"
+              required
+              list="teacher-departments"
+              placeholder="Pick or type — e.g. Science"
+              {...register("department")}
+              error={errors.department?.message}
+            />
+            <datalist id="teacher-departments">
+              {DEPARTMENT_OPTIONS.map((d) => (
+                <option key={d} value={d} />
+              ))}
+            </datalist>
+
+            {/* Qualification — pick a preset or type a custom one. */}
+            <Input
+              label="Qualification"
+              required
+              list="teacher-qualifications"
+              hint="Pick or type — e.g. M.Sc, B.Ed"
+              {...register("qualification")}
+              error={errors.qualification?.message}
+            />
+            <datalist id="teacher-qualifications">
+              {QUALIFICATION_PRESETS.map((q) => (
+                <option key={q} value={q} />
+              ))}
+            </datalist>
           </div>
 
           <div className="mt-4 flex flex-col gap-4">

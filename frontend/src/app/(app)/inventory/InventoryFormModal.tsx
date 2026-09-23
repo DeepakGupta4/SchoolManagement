@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Modal, Button, Input, Select } from "@/components/ui";
@@ -29,6 +29,8 @@ interface InventoryFormModalProps {
   onOpenChange: (open: boolean) => void;
   /** Present = edit mode, absent = create mode. */
   record?: InventoryItem | null;
+  /** Existing items — used to block a duplicate item name. */
+  existing?: InventoryItem[];
   saving?: boolean;
   onSubmit: (values: InventoryItemSchema) => Promise<void>;
 }
@@ -37,10 +39,12 @@ export function InventoryFormModal({
   open,
   onOpenChange,
   record,
+  existing = [],
   saving,
   onSubmit,
 }: InventoryFormModalProps) {
   const isEdit = Boolean(record);
+  const [dupError, setDupError] = useState<string | null>(null);
 
   const {
     register,
@@ -56,9 +60,32 @@ export function InventoryFormModal({
   useEffect(() => {
     if (!open) return;
     reset(record ? { ...record } : emptyValues);
+    // Deferred: clearing the duplicate error synchronously in an effect trips
+    // the react-hooks/set-state-in-effect rule.
+    const t = setTimeout(() => setDupError(null), 0);
+    return () => clearTimeout(t);
   }, [open, record, reset]);
 
-  const submit = handleSubmit(onSubmit);
+  // Case-insensitive set of names already taken by *other* items.
+  const takenNames = useMemo(() => {
+    const set = new Set<string>();
+    for (const i of existing) {
+      if (record && i.id === record.id) continue;
+      set.add(i.name.trim().toLowerCase());
+    }
+    return set;
+  }, [existing, record]);
+
+  // Block a duplicate item name before it reaches the server.
+  const submit = handleSubmit((values) => {
+    const name = values.name.trim();
+    if (takenNames.has(name.toLowerCase())) {
+      setDupError(`"${name}" already exists. Pick a different item name.`);
+      return;
+    }
+    setDupError(null);
+    return onSubmit({ ...values, name });
+  });
 
   return (
     <Modal
@@ -89,15 +116,24 @@ export function InventoryFormModal({
             required
             placeholder="A4 Paper Reams"
             {...register("name")}
-            error={errors.name?.message}
+            error={errors.name?.message ?? dupError ?? undefined}
           />
-          <Select
+
+          {/* Category — pick a preset or type a custom one. */}
+          <Input
             label="Category"
             required
-            options={CATEGORY_OPTIONS.map((c) => ({ label: c, value: c }))}
+            list="inventory-categories"
+            placeholder="Pick or type — e.g. Stationery"
             {...register("category")}
             error={errors.category?.message}
           />
+          <datalist id="inventory-categories">
+            {CATEGORY_OPTIONS.map((c) => (
+              <option key={c} value={c} />
+            ))}
+          </datalist>
+
           <Input
             label="Quantity"
             type="number"
@@ -112,13 +148,22 @@ export function InventoryFormModal({
             {...register("minQty")}
             error={errors.minQty?.message}
           />
-          <Select
+
+          {/* Unit — pick a preset or type a custom one. */}
+          <Input
             label="Unit"
             required
-            options={UNIT_OPTIONS.map((u) => ({ label: u, value: u }))}
+            list="inventory-units"
+            placeholder="Pick or type — e.g. Reams"
             {...register("unit")}
             error={errors.unit?.message}
           />
+          <datalist id="inventory-units">
+            {UNIT_OPTIONS.map((u) => (
+              <option key={u} value={u} />
+            ))}
+          </datalist>
+
           <Input
             label="Unit price (₹)"
             type="number"

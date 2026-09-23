@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Modal, Button, Input, Select } from "@/components/ui";
@@ -29,6 +29,8 @@ interface ScholarshipFormModalProps {
   onOpenChange: (open: boolean) => void;
   /** Present = edit mode, absent = create mode. */
   record?: Scholarship | null;
+  /** Existing scholarships — used to block a duplicate scholarship ID. */
+  existing?: Scholarship[];
   saving?: boolean;
   onSubmit: (values: ScholarshipSchema) => Promise<void>;
 }
@@ -37,11 +39,13 @@ export function ScholarshipFormModal({
   open,
   onOpenChange,
   record,
+  existing = [],
   saving,
   onSubmit,
 }: ScholarshipFormModalProps) {
   const isEdit = Boolean(record);
   const { classOptions } = useClassOptions();
+  const [dupError, setDupError] = useState<string | null>(null);
 
   const {
     register,
@@ -57,9 +61,32 @@ export function ScholarshipFormModal({
   useEffect(() => {
     if (!open) return;
     reset(record ? { ...record } : emptyValues);
+    // Deferred: clearing the duplicate error synchronously in an effect trips
+    // the react-hooks/set-state-in-effect rule.
+    const t = setTimeout(() => setDupError(null), 0);
+    return () => clearTimeout(t);
   }, [open, record, reset]);
 
-  const submit = handleSubmit(onSubmit);
+  // Case-insensitive set of scholarship IDs already taken by *other* records.
+  // A student may hold more than one concession, so the ID is the unique key.
+  const takenCodes = useMemo(() => {
+    const set = new Set<string>();
+    for (const s of existing) {
+      if (record && s.id === record.id) continue;
+      set.add(s.code.trim().toLowerCase());
+    }
+    return set;
+  }, [existing, record]);
+
+  const submit = handleSubmit((values) => {
+    const code = values.code.trim();
+    if (takenCodes.has(code.toLowerCase())) {
+      setDupError(`"${code}" already exists. Pick a different scholarship ID.`);
+      return;
+    }
+    setDupError(null);
+    return onSubmit({ ...values, code });
+  });
 
   return (
     <Modal
@@ -90,7 +117,7 @@ export function ScholarshipFormModal({
             required
             placeholder="SCH009"
             {...register("code")}
-            error={errors.code?.message}
+            error={errors.code?.message ?? dupError ?? undefined}
           />
           <Input
             label="Student"
@@ -107,13 +134,20 @@ export function ScholarshipFormModal({
             {...register("class")}
             error={errors.class?.message}
           />
-          <Select
+          {/* Type — pick a preset or type a custom concession type. */}
+          <Input
             label="Type"
             required
-            options={SCHOLARSHIP_TYPE_OPTIONS.map((t) => ({ label: t, value: t }))}
+            list="scholarship-type-presets"
+            placeholder="Pick or type — e.g. Merit"
             {...register("type")}
             error={errors.type?.message}
           />
+          <datalist id="scholarship-type-presets">
+            {SCHOLARSHIP_TYPE_OPTIONS.map((t) => (
+              <option key={t} value={t} />
+            ))}
+          </datalist>
           <Input
             label="Concession %"
             type="number"

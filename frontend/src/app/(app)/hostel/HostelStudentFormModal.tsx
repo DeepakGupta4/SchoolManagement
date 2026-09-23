@@ -13,6 +13,13 @@ import {
   type HostelStudent,
 } from "@/lib/api/hostelStudents";
 
+// Common class-section labels — offered as a quick pick, but the field stays
+// free text so any custom class label works.
+const CLASS_PRESETS = [
+  "6-A", "6-B", "7-A", "7-B", "8-A", "8-B",
+  "9-A", "9-B", "10-A", "10-B", "11-A", "11-B", "12-A", "12-B",
+];
+
 const emptyValues: HostelStudentSchema = {
   studentId: "",
   name: "",
@@ -99,20 +106,35 @@ export function HostelStudentFormModal({
             {...register("studentId")}
             error={errors.studentId?.message}
           />
+          {/* Class — pick a preset section or type a custom one. */}
           <Input
             label="Class"
             required
-            placeholder="10-A"
+            list="hostel-class-presets"
+            placeholder="Pick or type — e.g. 10-A"
             {...register("class")}
             error={errors.class?.message}
           />
-          <Select
+          <datalist id="hostel-class-presets">
+            {CLASS_PRESETS.map((c) => (
+              <option key={c} value={c} />
+            ))}
+          </datalist>
+
+          {/* Hostel — pick a preset block or type a custom one. */}
+          <Input
             label="Hostel"
             required
-            options={HOSTEL_OPTIONS.map((h) => ({ label: h, value: h }))}
+            list="hostel-block-presets"
+            placeholder="Pick or type — e.g. Boys Hostel A"
             {...register("hostel")}
             error={errors.hostel?.message}
           />
+          <datalist id="hostel-block-presets">
+            {HOSTEL_OPTIONS.map((h) => (
+              <option key={h} value={h} />
+            ))}
+          </datalist>
           <Input
             label="Room no."
             required

@@ -449,6 +449,7 @@ export default function TeachersPage() {
           if (!o) setEditing(null);
         }}
         teacher={editing}
+        existing={teachers}
         onSubmit={handleSubmit}
       />
 

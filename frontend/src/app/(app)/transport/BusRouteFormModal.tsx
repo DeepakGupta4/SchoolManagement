@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Modal, Button, Input, Select, MultiSelect } from "@/components/ui";
@@ -11,6 +11,17 @@ import {
   ROUTE_STOP_OPTIONS,
   type BusRoute,
 } from "@/lib/api/busRoutes";
+
+// Common route-name patterns — offered as a quick pick, but the field stays
+// free text so any custom route name works.
+const ROUTE_NAME_PRESETS = [
+  "North Campus Express",
+  "South City Line",
+  "East Zone Shuttle",
+  "West Enclave Route",
+  "City Centre Loop",
+  "Suburban Connector",
+];
 
 const emptyValues: BusRouteSchema = {
   code: "",
@@ -31,6 +42,8 @@ interface BusRouteFormModalProps {
   onOpenChange: (open: boolean) => void;
   /** Present = edit mode, absent = create mode. */
   record?: BusRoute | null;
+  /** Existing routes — used to block a duplicate route name. */
+  existing?: BusRoute[];
   saving?: boolean;
   onSubmit: (values: BusRouteSchema) => Promise<void>;
 }
@@ -39,10 +52,12 @@ export function BusRouteFormModal({
   open,
   onOpenChange,
   record,
+  existing = [],
   saving,
   onSubmit,
 }: BusRouteFormModalProps) {
   const isEdit = Boolean(record);
+  const [dupError, setDupError] = useState<string | null>(null);
 
   const {
     register,
@@ -59,9 +74,31 @@ export function BusRouteFormModal({
   useEffect(() => {
     if (!open) return;
     reset(record ? { ...record } : emptyValues);
+    // Deferred: clearing the duplicate-name error synchronously in an effect
+    // trips the react-hooks/set-state-in-effect rule.
+    const t = setTimeout(() => setDupError(null), 0);
+    return () => clearTimeout(t);
   }, [open, record, reset]);
 
-  const submit = handleSubmit(onSubmit);
+  // Case-insensitive set of names already taken by *other* routes.
+  const takenNames = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of existing) {
+      if (record && r.id === record.id) continue;
+      set.add(r.name.trim().toLowerCase());
+    }
+    return set;
+  }, [existing, record]);
+
+  const submit = handleSubmit((values) => {
+    const name = values.name.trim();
+    if (takenNames.has(name.toLowerCase())) {
+      setDupError(`"${name}" already exists. Pick a different route name.`);
+      return;
+    }
+    setDupError(null);
+    return onSubmit({ ...values, name });
+  });
 
   return (
     <Modal
@@ -94,20 +131,35 @@ export function BusRouteFormModal({
             {...register("code")}
             error={errors.code?.message}
           />
+          {/* Route name — pick a preset pattern or type a custom one. */}
           <Input
             label="Route name"
             required
-            placeholder="Route I — Vasant Kunj"
+            list="route-name-presets"
+            placeholder="Pick or type — e.g. North Campus Express"
             {...register("name")}
-            error={errors.name?.message}
+            error={errors.name?.message ?? dupError ?? undefined}
           />
-          <Select
+          <datalist id="route-name-presets">
+            {ROUTE_NAME_PRESETS.map((n) => (
+              <option key={n} value={n} />
+            ))}
+          </datalist>
+
+          {/* Driver — pick a known driver or type a new one. */}
+          <Input
             label="Driver"
             required
-            options={ROUTE_DRIVER_OPTIONS.map((d) => ({ label: d, value: d }))}
+            list="route-driver-presets"
+            placeholder="Pick or type — e.g. Ramesh Kumar"
             {...register("driver")}
             error={errors.driver?.message}
           />
+          <datalist id="route-driver-presets">
+            {ROUTE_DRIVER_OPTIONS.map((d) => (
+              <option key={d} value={d} />
+            ))}
+          </datalist>
           <Input
             label="Bus number"
             required

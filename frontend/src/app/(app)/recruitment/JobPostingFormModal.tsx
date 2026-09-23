@@ -12,6 +12,24 @@ import {
   type JobPosting,
 } from "@/lib/api/jobPostings";
 
+// Common school job titles — offered as a quick pick, but the field stays free
+// text so any custom title works. Titles can legitimately repeat (two openings
+// for the same role), so there is no duplicate guard here.
+const JOB_TITLE_PRESETS = [
+  "Chemistry Teacher",
+  "Physics Teacher",
+  "Mathematics Teacher",
+  "English Teacher",
+  "Primary Teacher",
+  "Physical Education Teacher",
+  "Librarian",
+  "Lab Assistant",
+  "Accountant",
+  "IT Administrator",
+  "HR Executive",
+  "Security Guard",
+];
+
 const emptyValues: JobPostingSchema = {
   code: "",
   title: "",
@@ -83,8 +101,36 @@ export function JobPostingFormModal({
       <form onSubmit={submit} className="flex flex-col gap-4">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Input label="Job code" required placeholder="JB007" {...register("code")} error={errors.code?.message} />
-          <Input label="Job title" required placeholder="Chemistry Teacher" {...register("title")} error={errors.title?.message} />
-          <Select label="Department" required options={JOB_DEPT_OPTIONS.map((d) => ({ label: d, value: d }))} {...register("dept")} error={errors.dept?.message} />
+
+          {/* Job title — pick a preset or type a custom one. */}
+          <Input
+            label="Job title"
+            required
+            list="job-title-presets"
+            placeholder="Pick or type — e.g. Chemistry Teacher"
+            {...register("title")}
+            error={errors.title?.message}
+          />
+          <datalist id="job-title-presets">
+            {JOB_TITLE_PRESETS.map((t) => (
+              <option key={t} value={t} />
+            ))}
+          </datalist>
+
+          {/* Department — pick a preset or type a custom one. */}
+          <Input
+            label="Department"
+            required
+            list="job-dept-presets"
+            placeholder="Pick or type — e.g. Teaching"
+            {...register("dept")}
+            error={errors.dept?.message}
+          />
+          <datalist id="job-dept-presets">
+            {JOB_DEPT_OPTIONS.map((d) => (
+              <option key={d} value={d} />
+            ))}
+          </datalist>
           <Select label="Employment type" required options={JOB_TYPE_OPTIONS.map((t) => ({ label: t, value: t }))} {...register("type")} error={errors.type?.message} />
           <Input label="Posted on" required placeholder="01 Jul 2025" {...register("posted")} error={errors.posted?.message} />
           <Input label="Deadline" required placeholder="31 Jul 2025" {...register("deadline")} error={errors.deadline?.message} />

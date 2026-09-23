@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Modal, Button, Input, Select } from "@/components/ui";
@@ -26,6 +26,8 @@ interface MedicineFormModalProps {
   onOpenChange: (open: boolean) => void;
   /** Present = edit mode, absent = create mode. */
   record?: Medicine | null;
+  /** Existing medicines — used to block a duplicate medicine name. */
+  existing?: Medicine[];
   saving?: boolean;
   onSubmit: (values: MedicineSchema) => Promise<void>;
 }
@@ -34,10 +36,12 @@ export function MedicineFormModal({
   open,
   onOpenChange,
   record,
+  existing = [],
   saving,
   onSubmit,
 }: MedicineFormModalProps) {
   const isEdit = Boolean(record);
+  const [dupError, setDupError] = useState<string | null>(null);
 
   const {
     register,
@@ -53,9 +57,32 @@ export function MedicineFormModal({
   useEffect(() => {
     if (!open) return;
     reset(record ? { ...record } : emptyValues);
+    // Deferred: clearing the duplicate error synchronously in an effect trips
+    // the react-hooks/set-state-in-effect rule.
+    const t = setTimeout(() => setDupError(null), 0);
+    return () => clearTimeout(t);
   }, [open, record, reset]);
 
-  const submit = handleSubmit(onSubmit);
+  // Case-insensitive set of names already taken by *other* medicines.
+  const takenNames = useMemo(() => {
+    const set = new Set<string>();
+    for (const m of existing) {
+      if (record && m.id === record.id) continue;
+      set.add(m.name.trim().toLowerCase());
+    }
+    return set;
+  }, [existing, record]);
+
+  // Block a duplicate medicine name before it reaches the server.
+  const submit = handleSubmit((values) => {
+    const name = values.name.trim();
+    if (takenNames.has(name.toLowerCase())) {
+      setDupError(`"${name}" already exists in the stock. Pick a different name.`);
+      return;
+    }
+    setDupError(null);
+    return onSubmit({ ...values, name });
+  });
 
   return (
     <Modal
@@ -85,15 +112,24 @@ export function MedicineFormModal({
             required
             placeholder="Paracetamol 500mg"
             {...register("name")}
-            error={errors.name?.message}
+            error={errors.name?.message ?? dupError ?? undefined}
           />
-          <Select
+
+          {/* Category — pick a preset or type a custom one. */}
+          <Input
             label="Category"
             required
-            options={MEDICINE_CATEGORY_OPTIONS.map((c) => ({ label: c, value: c }))}
+            list="medicine-categories"
+            placeholder="Pick or type — e.g. Analgesic"
             {...register("category")}
             error={errors.category?.message}
           />
+          <datalist id="medicine-categories">
+            {MEDICINE_CATEGORY_OPTIONS.map((c) => (
+              <option key={c} value={c} />
+            ))}
+          </datalist>
+
           <Input
             label="Stock"
             type="number"
@@ -101,13 +137,22 @@ export function MedicineFormModal({
             {...register("stock")}
             error={errors.stock?.message}
           />
-          <Select
+
+          {/* Unit — pick a preset or type a custom one. */}
+          <Input
             label="Unit"
             required
-            options={MEDICINE_UNIT_OPTIONS.map((u) => ({ label: u, value: u }))}
+            list="medicine-units"
+            placeholder="Pick or type — e.g. Tablets"
             {...register("unit")}
             error={errors.unit?.message}
           />
+          <datalist id="medicine-units">
+            {MEDICINE_UNIT_OPTIONS.map((u) => (
+              <option key={u} value={u} />
+            ))}
+          </datalist>
+
           <Input
             label="Expiry"
             required
