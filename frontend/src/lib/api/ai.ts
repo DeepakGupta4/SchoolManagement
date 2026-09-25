@@ -75,6 +75,10 @@ export interface QuestionPaperInput {
   subject: string;
   topics?: string;
   totalMarks?: number;
+  /** Free-text paper pattern from the teacher (question types, counts, marks). */
+  instructions?: string;
+  /** Text extracted from an uploaded book/chapter PDF, to ground the paper. */
+  bookContext?: string;
 }
 
 export interface QuestionPaperResult {

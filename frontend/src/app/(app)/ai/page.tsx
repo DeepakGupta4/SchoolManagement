@@ -6,6 +6,7 @@ import {
   BookOpenCheck,
   ClipboardList,
   Copy,
+  Download,
   FileText,
   Info,
   Lightbulb,
@@ -16,7 +17,9 @@ import {
   Send,
   Sparkles,
   TrendingUp,
+  Upload,
   Users,
+  X,
 } from "lucide-react";
 import {
   Badge,
@@ -35,6 +38,10 @@ import {
 } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import { useClassOptions } from "@/hooks/useClassOptions";
+import { useSubjectOptions } from "@/hooks/useSubjectOptions";
+import { useSubscription } from "@/hooks/useSubscription";
+import { extractPdfText } from "@/lib/pdfText";
+import { printQuestionPaper } from "@/lib/printPaper";
 import {
   askAi,
   generateBulkRemarks,
@@ -96,6 +103,8 @@ const CAPABILITIES = [
 export default function AiPage() {
   const { toast } = useToast();
   const { classOptions, sectionOptions } = useClassOptions();
+  const { subjectNames } = useSubjectOptions();
+  const { sub } = useSubscription();
 
   const [configured, setConfigured] = useState<boolean | null>(null);
   const [data, setData] = useState<AiInsightsResult | null>(null);
@@ -109,9 +118,12 @@ export default function AiPage() {
 
   // Question Paper Generator state
   const [qpOpen, setQpOpen] = useState(false);
-  const [qpForm, setQpForm] = useState({ className: "", subject: "", topics: "", totalMarks: "100" });
+  const [qpForm, setQpForm] = useState({ className: "", subject: "", topics: "", totalMarks: "100", instructions: "" });
   const [qpLoading, setQpLoading] = useState(false);
   const [qpResult, setQpResult] = useState<string | null>(null);
+  // Uploaded book/chapter: extracted text + a short status for the UI.
+  const [qpBook, setQpBook] = useState<{ text: string; label: string } | null>(null);
+  const [qpBookReading, setQpBookReading] = useState(false);
 
   // Bulk Report-Card Remarks state
   const [brOpen, setBrOpen] = useState(false);
@@ -144,12 +156,60 @@ export default function AiPage() {
         subject: qpForm.subject,
         topics: qpForm.topics || undefined,
         totalMarks: Number(qpForm.totalMarks) || 100,
+        instructions: qpForm.instructions || undefined,
+        bookContext: qpBook?.text || undefined,
       });
       setQpResult(res.paper);
     } catch {
       toast({ title: "Could not generate the paper", description: "Please try again.", variant: "error" });
     } finally {
       setQpLoading(false);
+    }
+  };
+
+  const handleBookUpload = async (file: File | undefined) => {
+    if (!file) return;
+    if (file.type !== "application/pdf") {
+      toast({ title: "Please upload a PDF file", variant: "error" });
+      return;
+    }
+    setQpBookReading(true);
+    try {
+      const { text, pages, truncated } = await extractPdfText(file);
+      if (!text) {
+        toast({
+          title: "Couldn't read this PDF",
+          description: "It may be a scanned image with no selectable text.",
+          variant: "error",
+        });
+        setQpBook(null);
+        return;
+      }
+      const label = `${file.name} · ${pages} page${pages === 1 ? "" : "s"}${truncated ? " (first part used)" : ""}`;
+      setQpBook({ text, label });
+      toast({ title: "Book added", description: "Questions will be based on this PDF." });
+    } catch {
+      toast({ title: "Couldn't read this PDF", description: "Try another file.", variant: "error" });
+      setQpBook(null);
+    } finally {
+      setQpBookReading(false);
+    }
+  };
+
+  const downloadPaper = () => {
+    if (!qpResult) return;
+    const ok = printQuestionPaper(qpResult, {
+      schoolName: sub?.schoolName ?? undefined,
+      className: qpForm.className,
+      subject: qpForm.subject,
+      totalMarks: Number(qpForm.totalMarks) || undefined,
+    });
+    if (!ok) {
+      toast({
+        title: "Popup blocked",
+        description: "Allow popups for this site to export the PDF.",
+        variant: "error",
+      });
     }
   };
 
@@ -423,16 +483,22 @@ export default function AiPage() {
         open={qpOpen}
         onOpenChange={setQpOpen}
         title="Question Paper Generator"
-        description="Enter the exam details and generate a structured paper."
+        description="Set the pattern (or upload the book) and generate a ready-to-print paper."
         size="lg"
         footer={
           <>
             <Button variant="outline" onClick={() => setQpOpen(false)}>
               Close
             </Button>
+            {qpResult && (
+              <Button variant="outline" onClick={downloadPaper}>
+                <Download className="size-4" />
+                Export PDF
+              </Button>
+            )}
             <Button onClick={runQuestionPaper} disabled={qpLoading || !qpForm.className || !qpForm.subject}>
               {qpLoading ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
-              {qpLoading ? "Generating…" : "Generate paper"}
+              {qpLoading ? "Generating…" : qpResult ? "Regenerate" : "Generate paper"}
             </Button>
           </>
         }
@@ -449,10 +515,16 @@ export default function AiPage() {
             />
             <Input
               label="Subject"
+              list="qp-subjects"
               value={qpForm.subject}
               onChange={(e) => setQpForm((f) => ({ ...f, subject: e.target.value }))}
-              placeholder="e.g. Mathematics"
+              placeholder="Pick or type — e.g. Mathematics"
             />
+            <datalist id="qp-subjects">
+              {subjectNames.map((s) => (
+                <option key={s} value={s} />
+              ))}
+            </datalist>
             <Input
               label="Total marks"
               type="number"
@@ -461,6 +533,16 @@ export default function AiPage() {
               placeholder="100"
             />
           </div>
+
+          <Textarea
+            label="Paper pattern / instructions"
+            hint="Tell the AI exactly what you want — e.g. 10 MCQs (1 mark each), 5 fill in the blanks, 4 short answers (3 marks), 2 long answers (10 marks). Set difficulty, language, etc."
+            value={qpForm.instructions}
+            onChange={(e) => setQpForm((f) => ({ ...f, instructions: e.target.value }))}
+            placeholder="e.g. 10 MCQ × 1, 5 fill-ups × 1, 5 short × 3, 3 long × 10. Medium difficulty."
+            rows={3}
+          />
+
           <Textarea
             label="Topics (optional)"
             value={qpForm.topics}
@@ -468,9 +550,47 @@ export default function AiPage() {
             placeholder="e.g. Algebra, Geometry, Trigonometry"
             rows={2}
           />
-          {qpResult && (
-            <ResultBlock text={qpResult} onCopy={() => copy(qpResult)} />
-          )}
+
+          {/* Book PDF upload — questions get grounded in this text. */}
+          <div className="flex flex-col gap-2">
+            <label className="text-sm font-medium text-text">Book / chapter PDF (optional)</label>
+            {qpBook ? (
+              <div className="flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-2">
+                <FileText className="size-4 shrink-0 text-primary" />
+                <span className="min-w-0 flex-1 truncate text-sm text-text">{qpBook.label}</span>
+                <button
+                  type="button"
+                  onClick={() => setQpBook(null)}
+                  aria-label="Remove PDF"
+                  className="focus-ring rounded-md p-1 text-subtle transition-colors hover:text-danger"
+                >
+                  <X className="size-4" />
+                </button>
+              </div>
+            ) : (
+              <label className="focus-within:outline-none">
+                <span className="focus-ring inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-md border border-dashed border-border-strong bg-surface-sunken px-4 py-3 text-sm text-muted transition-colors hover:bg-surface-hover">
+                  {qpBookReading ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
+                  {qpBookReading ? "Reading PDF…" : "Upload book/chapter PDF — AI will make questions from it"}
+                </span>
+                <input
+                  type="file"
+                  accept="application/pdf"
+                  className="sr-only"
+                  disabled={qpBookReading}
+                  onChange={(e) => {
+                    handleBookUpload(e.target.files?.[0]);
+                    e.target.value = "";
+                  }}
+                />
+              </label>
+            )}
+            <p className="text-xs text-subtle">
+              Works with text PDFs (not scanned images). Large books use the first part.
+            </p>
+          </div>
+
+          {qpResult && <ResultBlock text={qpResult} onCopy={() => copy(qpResult)} />}
         </div>
       </Modal>
 

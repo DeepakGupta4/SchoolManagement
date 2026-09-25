@@ -278,14 +278,18 @@ QUESTION: ${question.trim()}`;
   }
 });
 
-/** POST /api/ai/question-paper { className, subject, topics, totalMarks } — exam paper generator. */
+/** POST /api/ai/question-paper { className, subject, topics, totalMarks, instructions?, bookContext? } — exam paper generator. */
 router.post("/question-paper", async (req, res, next) => {
   try {
-    const { className, subject, topics, totalMarks } = req.body as {
+    const { className, subject, topics, totalMarks, instructions, bookContext } = req.body as {
       className?: string;
       subject?: string;
       topics?: string;
       totalMarks?: number | string;
+      /** Free-text paper pattern from the teacher (how many MCQs, marks split…). */
+      instructions?: string;
+      /** Text extracted from an uploaded book/chapter PDF, to ground the paper. */
+      bookContext?: string;
     };
     if (!className || !subject) {
       return res.status(400).json({ error: "className and subject are required" });
@@ -301,13 +305,16 @@ router.post("/question-paper", async (req, res, next) => {
     }
 
     const marks = Number(totalMarks) || 100;
+    // Bound the book text so the prompt stays within token/cost limits.
+    const book = typeof bookContext === "string" ? bookContext.trim().slice(0, 30000) : "";
+    const pattern = typeof instructions === "string" ? instructions.trim().slice(0, 2000) : "";
     try {
       const prompt = `You are an experienced school examiner. Create a well-structured examination question paper as PLAIN TEXT (no markdown, no code fences).
 Class: ${className}. Subject: ${subject}. Total marks: ${marks}.${topics ? `\nTopics to cover: ${topics}.` : ""}
+${pattern ? `\nFollow the teacher's paper pattern EXACTLY (question types, counts and marks). If it conflicts with the total marks, honour the pattern and adjust so totals add up:\n"""${pattern}"""\n` : ""}${book ? `\nBase the questions ONLY on the following source material from the prescribed book/chapter. Do not ask anything outside it:\n"""${book}"""\n` : ""}
 Requirements:
-- Include a header line with subject, class, total marks and suggested time.
-- Organise into clearly labelled sections (e.g. Section A: Objective, Section B: Short Answer, Section C: Long Answer).
-- Use a mix of question types (MCQ, fill in the blanks, short answer, long answer) appropriate to the class level.
+- Include a header block with subject, class, total marks and suggested time.
+- Organise into clearly labelled sections. ${pattern ? "Match the sections/counts the teacher asked for." : "Use a sensible mix (Objective/MCQ, Fill in the blanks, Short answer, Long answer) appropriate to the class level."}
 - Show the marks for each question and each section so the totals add up to ${marks}.
 - Number every question. Keep it exam-ready and grade-appropriate.`;
       const paper = (await llmGenerate(prompt, { temperature: 0.5 })).trim();
