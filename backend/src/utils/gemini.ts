@@ -28,10 +28,6 @@ interface GenerateOptions {
 export async function geminiGenerate(prompt: string, opts: GenerateOptions = {}): Promise<string> {
   if (!env.GEMINI_API_KEY) throw new Error("Gemini is not configured");
 
-  // If the configured model has been retired by Google (404), self-heal by
-  // retrying with this always-current alias — so an old GEMINI_MODEL value
-  // (env or Render) can't permanently break the AI.
-  const FALLBACK_MODEL = "gemini-flash-latest";
   const makeUrl = (m: string) =>
     `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${env.GEMINI_API_KEY}`;
 
@@ -48,36 +44,43 @@ export async function geminiGenerate(prompt: string, opts: GenerateOptions = {})
     },
   };
 
-  // A generous timeout: Gemini can take a few seconds; abort rather than hang.
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 25_000);
-  try {
-    // The free tier occasionally answers 503 ("high demand") or 429; a couple
-    // of short retries turn most of those into a successful response.
-    const fetchModel = async (m: string): Promise<Response> => {
-      let r: Response | null = null;
-      for (let attempt = 0; attempt < 3; attempt++) {
-        r = await fetch(makeUrl(m), {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-          signal: controller.signal,
-        });
-        if (r.status !== 503 && r.status !== 429) break;
-        if (attempt < 2) await new Promise((res) => setTimeout(res, 1200 * (attempt + 1)));
-      }
-      return r!;
-    };
+  // Try the configured model, then lighter/alias fallbacks. On the free tier the
+  // full flash models are frequently overloaded (503) and dated names get
+  // retired (404); the "-lite" alias is far more reliable, so it's tried next.
+  const candidates = [env.GEMINI_MODEL, "gemini-flash-lite-latest", "gemini-flash-latest"].filter(
+    (m, i, a) => m && a.indexOf(m) === i
+  );
 
-    let res = await fetchModel(env.GEMINI_MODEL);
-    // Retired model → retry once with the current alias.
-    if (res.status === 404 && env.GEMINI_MODEL !== FALLBACK_MODEL) {
-      res = await fetchModel(FALLBACK_MODEL);
+  // A generous timeout: several models × retries must still fit; abort rather
+  // than hang.
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 40_000);
+  try {
+    const fetchOnce = (m: string) =>
+      fetch(makeUrl(m), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+
+    let res: Response | null = null;
+    for (const m of candidates) {
+      res = await fetchOnce(m);
+      // One quick retry for a transient overload on this model.
+      if (res.status === 503 || res.status === 429) {
+        await new Promise((r) => setTimeout(r, 900));
+        res = await fetchOnce(m);
+      }
+      if (res.ok) break;
+      // Auth/bad-request errors won't be fixed by another model — stop early.
+      if (res.status === 400 || res.status === 401 || res.status === 403) break;
+      // Otherwise (404 retired / 503 overloaded) fall through to the next model.
     }
 
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      throw new Error(`Gemini API ${res.status}: ${text.slice(0, 300)}`);
+    if (!res || !res.ok) {
+      const text = res ? await res.text().catch(() => "") : "";
+      throw new Error(`Gemini API ${res?.status ?? "?"}: ${text.slice(0, 300)}`);
     }
 
     const data = (await res.json()) as {
