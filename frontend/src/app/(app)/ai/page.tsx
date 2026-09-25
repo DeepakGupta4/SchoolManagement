@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
+  ArrowRight,
   BookOpenCheck,
   ClipboardList,
   Copy,
@@ -72,36 +74,54 @@ const toneBadge: Record<AiInsight["tone"], "info" | "success" | "warning" | "dan
   danger: "danger",
 };
 
-// What the AI suite can actually do today, and where each capability lives.
-const CAPABILITIES = [
+type CapabilityAction = "risk" | "insights" | "remarks" | "ask";
+
+// What the AI suite can do today, and the action each card triggers.
+const CAPABILITIES: {
+  icon: typeof AlertTriangle;
+  tone: Tone;
+  name: string;
+  description: string;
+  action: CapabilityAction;
+  cta: string;
+}[] = [
   {
     icon: AlertTriangle,
-    tone: "rose" as Tone,
+    tone: "rose",
     name: "Student Risk Detection",
-    description: "Analyses each student's attendance, marks and fee status to flag dropout/academic risk with a reason and recommendation. Open any student profile.",
+    description: "Analyses each student's attendance, marks and fee status to flag dropout/academic risk with a reason and recommendation.",
+    action: "risk",
+    cta: "Open students",
   },
   {
     icon: Lightbulb,
-    tone: "amber" as Tone,
+    tone: "amber",
     name: "School Insights",
-    description: "Summarises your live data into actionable insights — shown in the feed below and refreshed on demand.",
+    description: "Summarises your live data into actionable insights — shown in the feed above and refreshed on demand.",
+    action: "insights",
+    cta: "Refresh insights",
   },
   {
     icon: FileText,
-    tone: "indigo" as Tone,
+    tone: "indigo",
     name: "Report-Card Remarks",
-    description: "Drafts a personalised remark from a student's marks and attendance. Available on the student profile.",
+    description: "Drafts a personalised remark from a student's marks and attendance — for one student or a whole class.",
+    action: "remarks",
+    cta: "Bulk remarks",
   },
   {
     icon: MessageSquare,
-    tone: "violet" as Tone,
+    tone: "violet",
     name: "Ask AI",
-    description: "Ask questions about your school data and get grounded answers. Use the assistant on this page.",
+    description: "Ask questions about your school data and get grounded answers from the assistant on this page.",
+    action: "ask",
+    cta: "Ask a question",
   },
 ];
 
 export default function AiPage() {
   const { toast } = useToast();
+  const router = useRouter();
   const { classOptions, sectionOptions } = useClassOptions();
   const { subjectNames } = useSubjectOptions();
   const { sub } = useSubscription();
@@ -115,6 +135,9 @@ export default function AiPage() {
   const [asking, setAsking] = useState(false);
   const [answer, setAnswer] = useState<string | null>(null);
   const answerRef = useRef<HTMLDivElement | null>(null);
+  // Anchors for the capability cards to jump/scroll to.
+  const insightsRef = useRef<HTMLDivElement | null>(null);
+  const askInputRef = useRef<HTMLTextAreaElement | null>(null);
 
   // Question Paper Generator state
   const [qpOpen, setQpOpen] = useState(false);
@@ -260,6 +283,27 @@ export default function AiPage() {
       .finally(() => setLoading(false));
   };
 
+  // Each "What the AI Suite can do" card triggers a real action.
+  const runCapability = (action: CapabilityAction) => {
+    switch (action) {
+      case "risk":
+        router.push("/students");
+        break;
+      case "insights":
+        loadInsights();
+        insightsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+        break;
+      case "remarks":
+        setBrResult(null);
+        setBrOpen(true);
+        break;
+      case "ask":
+        askInputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+        askInputRef.current?.focus();
+        break;
+    }
+  };
+
   useEffect(() => {
     let cancelled = false;
     const t = setTimeout(() => {
@@ -340,7 +384,7 @@ export default function AiPage() {
         <StatCard label="Avg performance" value={stats?.avgPerformance ?? 0} suffix="%" icon={BookOpenCheck} tone="violet" />
       </div>
 
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+      <div ref={insightsRef} className="grid grid-cols-1 gap-5 lg:grid-cols-3">
         {/* Insights feed */}
         <Card className="lg:col-span-2">
           <CardHeader>
@@ -386,6 +430,7 @@ export default function AiPage() {
               Ask about your school — e.g. &ldquo;Which class has the lowest attendance?&rdquo;
             </p>
             <textarea
+              ref={askInputRef}
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
               onKeyDown={(e) => {
@@ -462,17 +507,27 @@ export default function AiPage() {
           {CAPABILITIES.map((c) => {
             const Icon = c.icon;
             return (
-              <Card key={c.name}>
-                <CardContent className="flex h-full flex-col gap-3">
-                  <div className={cn("flex size-10 shrink-0 items-center justify-center rounded-md text-white shadow-sm", GRADIENTS[c.tone])}>
-                    <Icon className="size-5" />
-                  </div>
-                  <div className="min-w-0">
-                    <h3 className="text-sm font-semibold text-text">{c.name}</h3>
-                    <p className="mt-1.5 text-xs text-muted">{c.description}</p>
-                  </div>
-                </CardContent>
-              </Card>
+              <button
+                key={c.name}
+                type="button"
+                onClick={() => runCapability(c.action)}
+                className="focus-ring group text-left"
+              >
+                <Card className="card-hover h-full">
+                  <CardContent className="flex h-full flex-col gap-3">
+                    <div className={cn("flex size-10 shrink-0 items-center justify-center rounded-md text-white shadow-sm", GRADIENTS[c.tone])}>
+                      <Icon className="size-5" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <h3 className="text-sm font-semibold text-text">{c.name}</h3>
+                      <p className="mt-1.5 text-xs text-muted">{c.description}</p>
+                    </div>
+                    <span className="inline-flex items-center gap-1 text-xs font-semibold text-primary transition-colors group-hover:text-primary-hover">
+                      {c.cta} <ArrowRight className="size-3.5" />
+                    </span>
+                  </CardContent>
+                </Card>
+              </button>
             );
           })}
         </div>
