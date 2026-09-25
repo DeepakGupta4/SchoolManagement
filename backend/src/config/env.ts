@@ -82,7 +82,10 @@ const envSchema = z.object({
    * HTTPS/443, so they work on hosts that block SMTP (e.g. Render).
    */
   GEMINI_API_KEY: z.string().optional(),
-  GEMINI_MODEL: z.string().default("gemini-2.0-flash"),
+  // `-latest` alias tracks the current flash model, so it won't 404 when Google
+  // retires a dated version (e.g. gemini-2.0-flash was removed). Override with
+  // GEMINI_MODEL if you need a specific pinned version.
+  GEMINI_MODEL: z.string().default("gemini-flash-latest"),
 
   /**
    * OpenAI. Optional and preferred over Gemini when set: the AI endpoints use

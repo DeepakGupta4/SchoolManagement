@@ -48,16 +48,23 @@ export async function geminiGenerate(prompt: string, opts: GenerateOptions = {})
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 25_000);
   try {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-      signal: controller.signal,
-    });
+    // The free tier occasionally answers 503 ("high demand") or 429; a couple
+    // of short retries turn most of those into a successful response.
+    let res: Response | null = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+      if (res.status !== 503 && res.status !== 429) break;
+      if (attempt < 2) await new Promise((r) => setTimeout(r, 1200 * (attempt + 1)));
+    }
 
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      throw new Error(`Gemini API ${res.status}: ${text.slice(0, 300)}`);
+    if (!res || !res.ok) {
+      const text = res ? await res.text().catch(() => "") : "";
+      throw new Error(`Gemini API ${res?.status ?? "?"}: ${text.slice(0, 300)}`);
     }
 
     const data = (await res.json()) as {
