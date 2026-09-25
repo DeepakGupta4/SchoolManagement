@@ -83,6 +83,14 @@ const envSchema = z.object({
    */
   GEMINI_API_KEY: z.string().optional(),
   GEMINI_MODEL: z.string().default("gemini-2.0-flash"),
+
+  /**
+   * OpenAI. Optional and preferred over Gemini when set: the AI endpoints use
+   * OpenAI first, then Gemini, then the deterministic rule engine. Get a key at
+   * platform.openai.com (billing/credits required). Calls go over HTTPS/443.
+   */
+  OPENAI_API_KEY: z.string().optional(),
+  OPENAI_MODEL: z.string().default("gpt-4o-mini"),
 });
 
 const parsed = envSchema.safeParse(process.env);

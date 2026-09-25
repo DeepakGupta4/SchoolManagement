@@ -2,7 +2,7 @@ import { apiRequest } from "./client";
 
 export type RiskLevel = "low" | "medium" | "high";
 export type InsightTone = "info" | "success" | "warning" | "danger";
-export type AiSource = "gemini" | "rule";
+export type AiSource = "openai" | "gemini" | "rule";
 
 export interface AiRisk {
   score: number;
@@ -32,7 +32,20 @@ export interface AiInsightsResult {
 }
 
 export function getAiStatus() {
-  return apiRequest<{ configured: boolean }>("/api/ai/status");
+  return apiRequest<{ configured: boolean; provider?: "openai" | "gemini" | "none" }>("/api/ai/status");
+}
+
+export interface ChatTurn {
+  role: "user" | "assistant";
+  content: string;
+}
+
+/** Sends a message (with recent history) to the SchoolDeck assistant. */
+export function chatWithAssistant(message: string, history: ChatTurn[]) {
+  return apiRequest<{ reply: string; source: AiSource }>("/api/ai/chat", {
+    method: "POST",
+    body: { message, history },
+  });
 }
 
 export function getStudentRisk(studentId: string) {

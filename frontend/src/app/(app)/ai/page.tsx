@@ -288,7 +288,7 @@ export default function AiPage() {
               <h2 className="text-sm font-semibold text-text">AI Insights</h2>
               <p className="mt-0.5 text-xs text-muted">Generated from your live attendance, marks and fee data.</p>
             </div>
-            {data && <Badge variant={data.source === "gemini" ? "success" : "default"}>{data.source === "gemini" ? "Gemini" : "Rule engine"}</Badge>}
+            {data && <Badge variant={data.source !== "rule" ? "success" : "default"}>{data.source === "openai" ? "OpenAI" : data.source === "gemini" ? "Gemini" : "Rule engine"}</Badge>}
           </CardHeader>
           <CardContent>
             {loading ? (

@@ -7,6 +7,7 @@ import { useSidebarStore } from "@/store";
 import { useSubscription } from "@/hooks/useSubscription";
 import { TrialBanner } from "@/components/subscription/TrialBanner";
 import { SubscriptionLock } from "@/components/subscription/SubscriptionLock";
+import { ChatbotWidget } from "@/components/ChatbotWidget";
 
 /**
  * The authenticated app chrome: sidebar + topbar + content well.
@@ -39,6 +40,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           {children}
         </div>
       </main>
+
+      {/* In-app AI assistant — available on every authenticated page. */}
+      {(!sub || sub.allowed) && <ChatbotWidget />}
 
       {/* Full-screen wall when the server says access is not allowed. Covers
           the chrome too, so an expired/suspended school cannot interact. */}

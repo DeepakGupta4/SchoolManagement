@@ -1,13 +1,25 @@
 import { Router } from "express";
 import { Student } from "../students/student.model.js";
-import { isGeminiConfigured, geminiGenerate, geminiJson } from "../../utils/gemini.js";
+import {
+  isLLMConfigured,
+  llmProvider,
+  llmGenerate,
+  llmJson,
+  llmChat,
+  type ChatMessage,
+} from "../../utils/llm.js";
 
 /**
- * AI endpoints, powered by Google Gemini when GEMINI_API_KEY is set and
- * gracefully degrading to a deterministic rule-based engine otherwise. Mounted
- * behind the tenant guard, so every handler is scoped to req.user.schoolId.
+ * AI endpoints, powered by OpenAI (preferred) or Google Gemini when a key is
+ * set, and gracefully degrading to a deterministic rule-based engine otherwise.
+ * Mounted behind the tenant guard, so every handler is scoped to
+ * req.user.schoolId.
  */
 const router = Router();
+
+/** The active AI provider label for a response `source` (never "none" here —
+ *  callers only use it after checking isLLMConfigured()). */
+const aiSource = (): "openai" | "gemini" => (llmProvider() === "openai" ? "openai" : "gemini");
 
 type RiskLevel = "low" | "medium" | "high";
 
@@ -16,7 +28,7 @@ interface RiskResult {
   level: RiskLevel;
   reason: string;
   recommendation: string;
-  source: "gemini" | "rule";
+  source: "openai" | "gemini" | "rule";
 }
 
 /** Deterministic baseline — always available, and the fallback for Gemini. */
@@ -72,9 +84,9 @@ function ruleRisk(s: {
   return { score, level, reason, recommendation, source: "rule" };
 }
 
-/** GET /api/ai/status — whether Gemini is wired up. */
+/** GET /api/ai/status — whether an AI provider is wired up, and which one. */
 router.get("/status", (_req, res) => {
-  res.json({ data: { configured: isGeminiConfigured() } });
+  res.json({ data: { configured: isLLMConfigured(), provider: llmProvider() } });
 });
 
 /** POST /api/ai/risk { studentId } — per-student risk assessment. */
@@ -95,21 +107,21 @@ router.post("/risk", async (req, res, next) => {
     };
     const base = ruleRisk(s);
 
-    if (!isGeminiConfigured()) return res.json({ data: base });
+    if (!isLLMConfigured()) return res.json({ data: base });
 
     try {
       const prompt = `You are a school counsellor's assistant. Assess dropout/academic risk for a student and respond ONLY as JSON: {"score": number 0-100, "level": "low"|"medium"|"high", "reason": string, "recommendation": string}.
 Student: ${doc.firstName} ${doc.lastName}, Class ${doc.className}-${doc.section}.
 Attendance: ${s.attendancePercent}%. Average marks: ${s.performancePercent}%. Fee dues: ₹${s.feeDue}.
 Keep reason and recommendation concise (max 2 sentences each), practical and specific to these numbers.`;
-      const ai = await geminiJson<Omit<RiskResult, "source">>(prompt);
+      const ai = await llmJson<Omit<RiskResult, "source">>(prompt);
       res.json({
         data: {
           score: Math.max(0, Math.min(100, Math.round(Number(ai.score) || base.score))),
           level: (["low", "medium", "high"].includes(ai.level) ? ai.level : base.level) as RiskLevel,
           reason: String(ai.reason || base.reason),
           recommendation: String(ai.recommendation || base.recommendation),
-          source: "gemini" as const,
+          source: aiSource(),
         },
       });
     } catch {
@@ -163,17 +175,17 @@ router.get("/insights", async (req, res, next) => {
       { title: `₹${stats.totalDues.toLocaleString("en-IN")} in outstanding fees`, detail: stats.totalDues > 0 ? "Send reminders to guardians with pending dues." : "All fees are cleared.", tone: stats.totalDues > 0 ? "warning" : "success" },
     ];
 
-    if (!isGeminiConfigured() || total === 0) {
-      return res.json({ data: { insights: fallback, stats, source: isGeminiConfigured() ? "gemini" : "rule" } });
+    if (!isLLMConfigured() || total === 0) {
+      return res.json({ data: { insights: fallback, stats, source: isLLMConfigured() ? aiSource() : "rule" } });
     }
 
     try {
       const prompt = `You are a school analytics assistant. Given these live stats, produce 3-5 short, actionable insights as JSON: {"insights":[{"title": string, "detail": string, "tone": "info"|"success"|"warning"|"danger"}]}.
 Stats: ${JSON.stringify(stats)}.
 Each title max 8 words; each detail max 20 words, specific and practical.`;
-      const ai = await geminiJson<{ insights: { title: string; detail: string; tone: string }[] }>(prompt);
+      const ai = await llmJson<{ insights: { title: string; detail: string; tone: string }[] }>(prompt);
       const insights = Array.isArray(ai.insights) && ai.insights.length ? ai.insights : fallback;
-      res.json({ data: { insights, stats, source: "gemini" } });
+      res.json({ data: { insights, stats, source: aiSource() } });
     } catch {
       res.json({ data: { insights: fallback, stats, source: "rule" } });
     }
@@ -203,12 +215,12 @@ router.post("/remarks", async (req, res, next) => {
           : "Needs focused support and regular revision to improve outcomes."
     }`;
 
-    if (!isGeminiConfigured()) return res.json({ data: { remark: fallback, source: "rule" } });
+    if (!isLLMConfigured()) return res.json({ data: { remark: fallback, source: "rule" } });
 
     try {
       const prompt = `Write a warm, professional report-card remark (2-3 sentences, teacher's voice) for ${doc.firstName} ${doc.lastName}, Class ${doc.className}. Attendance ${attendance}%, average marks ${performance}%. Be encouraging but honest; no bullet points, plain text only.`;
-      const remark = (await geminiGenerate(prompt, { temperature: 0.6 })).trim();
-      res.json({ data: { remark: remark || fallback, source: "gemini" } });
+      const remark = (await llmGenerate(prompt, { temperature: 0.6 })).trim();
+      res.json({ data: { remark: remark || fallback, source: aiSource() } });
     } catch {
       res.json({ data: { remark: fallback, source: "rule" } });
     }
@@ -223,10 +235,10 @@ router.post("/ask", async (req, res, next) => {
     const { question } = req.body as { question?: string };
     if (!question || !question.trim()) return res.status(400).json({ error: "question is required" });
 
-    if (!isGeminiConfigured()) {
+    if (!isLLMConfigured()) {
       return res.json({
         data: {
-          answer: "AI assistant is not configured yet. Add a GEMINI_API_KEY on the server to enable it.",
+          answer: "AI assistant is not configured yet. Add an OPENAI_API_KEY (or GEMINI_API_KEY) on the server to enable it.",
           source: "rule",
         },
       });
@@ -254,8 +266,8 @@ router.post("/ask", async (req, res, next) => {
       const prompt = `You are the assistant for a school admin. Answer the question using ONLY this data context; if the data can't answer it, say so briefly. Be concise (max 4 sentences), plain text.
 DATA: ${JSON.stringify(context)}
 QUESTION: ${question.trim()}`;
-      const answer = (await geminiGenerate(prompt, { temperature: 0.3 })).trim();
-      res.json({ data: { answer, source: "gemini" } });
+      const answer = (await llmGenerate(prompt, { temperature: 0.3 })).trim();
+      res.json({ data: { answer, source: aiSource() } });
     } catch {
       res.json({
         data: { answer: "Sorry, the AI service is temporarily unavailable. Please try again.", source: "rule" },
@@ -279,10 +291,10 @@ router.post("/question-paper", async (req, res, next) => {
       return res.status(400).json({ error: "className and subject are required" });
     }
 
-    if (!isGeminiConfigured()) {
+    if (!isLLMConfigured()) {
       return res.json({
         data: {
-          paper: "AI is not configured. Add GEMINI_API_KEY to enable the question paper generator.",
+          paper: "AI is not configured. Add OPENAI_API_KEY (or GEMINI_API_KEY) to enable the question paper generator.",
           source: "rule" as const,
         },
       });
@@ -298,8 +310,8 @@ Requirements:
 - Use a mix of question types (MCQ, fill in the blanks, short answer, long answer) appropriate to the class level.
 - Show the marks for each question and each section so the totals add up to ${marks}.
 - Number every question. Keep it exam-ready and grade-appropriate.`;
-      const paper = (await geminiGenerate(prompt, { temperature: 0.5 })).trim();
-      res.json({ data: { paper, source: "gemini" as const } });
+      const paper = (await llmGenerate(prompt, { temperature: 0.5 })).trim();
+      res.json({ data: { paper, source: aiSource() } });
     } catch {
       res.json({
         data: {
@@ -349,7 +361,7 @@ router.post("/remarks-bulk", async (req, res, next) => {
         remark: fallbackFor(s),
       }));
 
-    if (!isGeminiConfigured() || students.length === 0) {
+    if (!isLLMConfigured() || students.length === 0) {
       return res.json({ data: { remarks: buildFallback(), source: "rule" as const } });
     }
 
@@ -363,7 +375,7 @@ router.post("/remarks-bulk", async (req, res, next) => {
       const prompt = `You are a class teacher writing report-card remarks. For EACH student below, write a warm, professional remark (2-3 sentences, teacher's voice, encouraging but honest, plain text, no bullet points).
 Respond ONLY as JSON: {"remarks":[{"id": string, "remark": string}]}. Use the exact id from each student.
 Students: ${JSON.stringify(roster)}`;
-      const ai = await geminiJson<{ remarks: { id: string; remark: string }[] }>(prompt);
+      const ai = await llmJson<{ remarks: { id: string; remark: string }[] }>(prompt);
       const byId = new Map(
         (Array.isArray(ai.remarks) ? ai.remarks : []).map((r) => [String(r.id), String(r.remark || "")])
       );
@@ -376,7 +388,7 @@ Students: ${JSON.stringify(roster)}`;
           remark: aiRemark && aiRemark.trim() ? aiRemark.trim() : fallbackFor(s),
         };
       });
-      res.json({ data: { remarks, source: "gemini" as const } });
+      res.json({ data: { remarks, source: aiSource() } });
     } catch {
       res.json({ data: { remarks: buildFallback(), source: "rule" as const } });
     }
@@ -398,10 +410,10 @@ router.post("/lesson-plan", async (req, res, next) => {
       return res.status(400).json({ error: "className, subject and topic are required" });
     }
 
-    if (!isGeminiConfigured()) {
+    if (!isLLMConfigured()) {
       return res.json({
         data: {
-          plan: "AI is not configured. Add GEMINI_API_KEY to enable the lesson-plan helper.",
+          plan: "AI is not configured. Add OPENAI_API_KEY (or GEMINI_API_KEY) to enable the lesson-plan helper.",
           source: "rule" as const,
         },
       });
@@ -418,12 +430,99 @@ Include these clearly labelled sections, each with concrete, grade-appropriate d
 5. Assessment / Check for Understanding
 6. Homework / Follow-up
 Keep it practical and ready to use in class.`;
-      const plan = (await geminiGenerate(prompt, { temperature: 0.5 })).trim();
-      res.json({ data: { plan, source: "gemini" as const } });
+      const plan = (await llmGenerate(prompt, { temperature: 0.5 })).trim();
+      res.json({ data: { plan, source: aiSource() } });
     } catch {
       res.json({
         data: {
           plan: "The AI service is temporarily unavailable. Please try again in a moment.",
+          source: "rule" as const,
+        },
+      });
+    }
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** A short description of what SchoolDeck can do, so the assistant can answer
+ *  "how do I…" questions accurately without hallucinating features. */
+const APP_OVERVIEW = `SchoolDeck is a multi-tenant school management system. Modules:
+- People: Students (admissions, promotions, transfers, alumni, ID cards, documents), Teachers (departments, subject allocation, ID cards), Staff & HR (recruitment, leave, performance).
+- Academic: Classes & Sections, Subjects, Timetable, Attendance (auto-marks absent after 11 AM, skips holidays/Sundays), Holidays, Examinations (schedule, admit cards, mark entry, report cards, merit list), Assignments, Syllabus, LMS (online classes, study material).
+- Finance: Fees (structure, collect, receipts, defaulters, scholarships), Expenses, Payroll, Subscription.
+- Operations: Transport, Hostel, Library, Inventory, Canteen, Health, Labs.
+- Communication: Announcements, Messages, Notice board, Events, Visitors.
+- Platform: AI Suite, Workflow Builder. Roles: school admin, principal, teacher, accounts/reception, plus a platform super admin.
+Teachers and Accounts users see a restricted menu. New IDs (admission, employee) auto-generate. Teacher/student creation requires ID and certificate documents.`;
+
+/** POST /api/ai/chat { message, history? } — project assistant chatbot. */
+router.post("/chat", async (req, res, next) => {
+  try {
+    const { message, history } = req.body as {
+      message?: string;
+      history?: { role?: string; content?: string }[];
+    };
+    if (!message || !message.trim()) {
+      return res.status(400).json({ error: "message is required" });
+    }
+
+    if (!isLLMConfigured()) {
+      return res.json({
+        data: {
+          reply:
+            "The assistant isn't switched on yet. Ask your admin to add an OPENAI_API_KEY on the server, then I can answer questions about SchoolDeck.",
+          source: "rule" as const,
+        },
+      });
+    }
+
+    // Live, tenant-scoped stats so the bot can answer data questions too.
+    const schoolId = req.user!.schoolId;
+    const students = await Student.find({ schoolId, status: "active" }).catch(() => []);
+    const total = students.length;
+    const byClass: Record<string, number> = {};
+    let attendance = 0;
+    let dues = 0;
+    for (const s of students) {
+      byClass[s.className] = (byClass[s.className] ?? 0) + 1;
+      attendance += s.attendancePercent ?? 0;
+      dues += s.feeDue ?? 0;
+    }
+    const stats = {
+      activeStudents: total,
+      classDistribution: byClass,
+      avgAttendance: total ? Math.round(attendance / total) : 0,
+      totalOutstandingDues: dues,
+    };
+
+    const system = `You are SchoolDeck Assistant, a friendly in-app helper for a school's staff.
+Answer ONLY questions about this SchoolDeck app (how to use its features, where to find things) and about this school's data provided below. If asked something unrelated (general knowledge, coding, etc.), politely say you can only help with SchoolDeck.
+Be concise and practical (usually under 5 sentences). Plain text, no markdown headings. When explaining a feature, name the exact menu path (e.g. "Academic → Attendance"). You may reply in the same language the user writes in (English or Hindi/Hinglish).
+
+APP CAPABILITIES:
+${APP_OVERVIEW}
+
+THIS SCHOOL'S LIVE DATA: ${JSON.stringify(stats)}`;
+
+    // Keep only the last few turns to bound token usage.
+    const trimmed = Array.isArray(history) ? history.slice(-8) : [];
+    const messages: ChatMessage[] = [{ role: "system", content: system }];
+    for (const m of trimmed) {
+      const role = m.role === "assistant" ? "assistant" : "user";
+      if (m.content && String(m.content).trim()) {
+        messages.push({ role, content: String(m.content).slice(0, 2000) });
+      }
+    }
+    messages.push({ role: "user", content: message.trim().slice(0, 2000) });
+
+    try {
+      const reply = (await llmChat(messages, { temperature: 0.4, maxTokens: 500 })).trim();
+      res.json({ data: { reply, source: aiSource() } });
+    } catch {
+      res.json({
+        data: {
+          reply: "Sorry, I couldn't reach the AI service just now. Please try again in a moment.",
           source: "rule" as const,
         },
       });
