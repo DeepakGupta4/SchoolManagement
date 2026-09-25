@@ -264,6 +264,14 @@ body {
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
+/* Chat launcher radar pulse. */
+@keyframes chat-ring {
+  0% { transform: scale(0.9); opacity: 0.55; }
+  100% { transform: scale(1.9); opacity: 0; }
+}
+.chat-ring {
+  animation: chat-ring 2s ease-out infinite;
+}
 
 /* Staggered entrance for insight grids. Each child animates a beat after the
    last; the delay is set inline per item. Reduced-motion users get it instantly
@@ -329,6 +337,11 @@ body {
   }
   .animate-pulse {
     animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite !important;
+  }
+  /* The chat launcher's gentle pulse stays alive — it's a small, deliberate
+     invitation to open the assistant. */
+  .chat-ring {
+    animation: chat-ring 2s ease-out infinite !important;
   }
 }
 

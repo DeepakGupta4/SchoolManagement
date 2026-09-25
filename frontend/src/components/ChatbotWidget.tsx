@@ -72,14 +72,35 @@ export function ChatbotWidget() {
   return (
     <>
       {/* Launcher */}
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        aria-label={open ? "Close assistant" : "Open assistant"}
-        className="focus-ring fixed bottom-4 right-4 z-40 flex size-13 items-center justify-center rounded-full bg-primary text-white shadow-lg transition-transform hover:scale-105 active:scale-95 lg:bottom-6 lg:right-6"
-      >
-        {open ? <X className="size-5" /> : <Bot className="size-6" />}
-      </button>
+      <div className="fixed bottom-4 right-4 z-40 lg:bottom-6 lg:right-6">
+        {/* Radar pulse — draws the eye while the chat is closed. Uses a custom
+            keyframe kept alive under reduced-motion (see globals.css). */}
+        {!open && <span aria-hidden className="chat-ring absolute inset-0 rounded-full bg-primary/40" />}
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          aria-label={open ? "Close assistant" : "Open assistant"}
+          className={cn(
+            "focus-ring group relative flex size-14 items-center justify-center rounded-full text-white shadow-lg shadow-primary/40 transition-all duration-300 hover:scale-110 active:scale-95",
+            "bg-linear-to-br from-primary to-violet"
+          )}
+        >
+          {open ? (
+            <X className="size-5 transition-transform duration-300" />
+          ) : (
+            <Bot className="size-6 transition-transform duration-300 group-hover:rotate-12" />
+          )}
+
+          {!open && (
+            <>
+              {/* Sparkle accent (animate-pulse stays alive under reduced motion). */}
+              <Sparkles className="absolute -right-0.5 -top-0.5 size-4 animate-pulse text-amber-300" />
+              {/* Online dot */}
+              <span className="absolute bottom-0.5 right-0.5 size-3 rounded-full border-2 border-white bg-success" />
+            </>
+          )}
+        </button>
+      </div>
 
       {/* Panel */}
       {open && (
