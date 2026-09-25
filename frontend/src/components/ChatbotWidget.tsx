@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Bot, Send, Sparkles, X } from "lucide-react";
+import Image from "next/image";
+import { Send, Sparkles, X } from "lucide-react";
 import { chatWithAssistant, type ChatTurn } from "@/lib/api/ai";
 import { cn } from "@/lib/utils";
 
@@ -81,20 +82,26 @@ export function ChatbotWidget() {
           onClick={() => setOpen((o) => !o)}
           aria-label={open ? "Close assistant" : "Open assistant"}
           className={cn(
-            "focus-ring group relative flex size-14 items-center justify-center rounded-full text-white shadow-lg shadow-primary/40 transition-all duration-300 hover:scale-110 active:scale-95",
-            "bg-linear-to-br from-primary to-violet"
+            "focus-ring group relative flex size-14 items-center justify-center rounded-full shadow-lg shadow-primary/30 ring-1 ring-border transition-all duration-300 hover:scale-110 active:scale-95",
+            open ? "bg-primary text-white" : "bg-white"
           )}
         >
           {open ? (
-            <X className="size-5 transition-transform duration-300" />
+            <X className="size-5" />
           ) : (
-            <Bot className="size-6 transition-transform duration-300 group-hover:rotate-12" />
+            <Image
+              src="/logo-icon.png"
+              alt="SchoolDeck assistant"
+              width={36}
+              height={36}
+              className="size-9 object-contain transition-transform duration-300 group-hover:scale-105"
+            />
           )}
 
           {!open && (
             <>
               {/* Sparkle accent (animate-pulse stays alive under reduced motion). */}
-              <Sparkles className="absolute -right-0.5 -top-0.5 size-4 animate-pulse text-amber-300" />
+              <Sparkles className="absolute -right-0.5 -top-0.5 size-4 animate-pulse text-primary" />
               {/* Online dot */}
               <span className="absolute bottom-0.5 right-0.5 size-3 rounded-full border-2 border-white bg-success" />
             </>
@@ -112,8 +119,8 @@ export function ChatbotWidget() {
         >
           {/* Header */}
           <div className="flex items-center gap-2 border-b border-border bg-linear-to-r from-primary-soft to-violet-soft/40 px-4 py-3">
-            <span className="flex size-8 items-center justify-center rounded-full bg-primary text-white">
-              <Sparkles className="size-4" />
+            <span className="flex size-8 items-center justify-center overflow-hidden rounded-full bg-white ring-1 ring-border">
+              <Image src="/logo-icon.png" alt="" width={24} height={24} className="size-6 object-contain" />
             </span>
             <div className="min-w-0">
               <p className="text-sm font-semibold text-text">SchoolDeck Assistant</p>
