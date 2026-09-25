@@ -12,6 +12,7 @@ export { Modal } from "./Modal";
 export { ConfirmDialog } from "./ConfirmDialog";
 export { Table, type Column } from "./Table";
 export { Skeleton, TableSkeleton } from "./Skeleton";
+export { Spinner, Loading, type SpinnerSize } from "./Spinner";
 export { EmptyState } from "./EmptyState";
 export { Avatar } from "./Avatar";
 export { ToastProvider, useToast } from "./Toast";

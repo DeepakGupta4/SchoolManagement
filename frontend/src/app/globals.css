@@ -260,6 +260,10 @@ body {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
 }
+/* Explicit spin keyframe so loaders spin regardless of the Tailwind build. */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
 
 /* Staggered entrance for insight grids. Each child animates a beat after the
    last; the delay is set inline per item. Reduced-motion users get it instantly
@@ -317,4 +321,17 @@ body {
   .stagger-in > * {
     opacity: 1;
   }
+  /* Loaders convey a functional "working" state, so they must keep spinning
+     even for reduced-motion users. Higher specificity than the * reset above,
+     so these win. */
+  .animate-spin {
+    animation: spin 0.8s linear infinite !important;
+  }
+  .animate-pulse {
+    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite !important;
+  }
+}
+
+@keyframes pulse {
+  50% { opacity: 0.5; }
 }
