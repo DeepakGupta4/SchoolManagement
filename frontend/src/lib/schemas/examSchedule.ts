@@ -1,11 +1,17 @@
 import { z } from "zod";
+import { isValidDateString, isWithin } from "@/lib/dates";
+import { MIN_EXAM_DATE, MAX_EXAM_DATE } from "./exam";
 
 export const scheduledExamSchema = z.object({
   code: z.string(),
   exam: z.string().min(2, "Exam is required"),
   subject: z.string().min(1, "Subject is required"),
   class: z.string().min(1, "Class is required"),
-  date: z.string().min(3, "Date is required"),
+  date: z
+    .string()
+    .min(3, "Date is required")
+    .refine(isValidDateString, "Enter a valid date (YYYY-MM-DD)")
+    .refine((d) => isWithin(d, MIN_EXAM_DATE, MAX_EXAM_DATE), "Exam date looks out of range"),
   time: z.string().min(3, "Time is required"),
   duration: z.string().min(1, "Duration is required"),
   room: z.string().min(1, "Room is required"),

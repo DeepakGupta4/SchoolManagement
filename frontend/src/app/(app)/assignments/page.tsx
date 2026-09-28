@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Plus, Search, Download, Eye, Pencil, Trash2, Calendar, Clock, Users,
   Paperclip, CheckCircle, AlertCircle, XCircle, BookOpen, X,
@@ -13,6 +13,7 @@ import {
   ConfirmDialog,
   Input,
   PageHeader,
+  Select,
   StatCard,
   Table,
   useToast,
@@ -21,7 +22,8 @@ import {
 import { cn } from "@/lib/utils";
 import { exportToCsv } from "@/lib/exportCsv";
 import { useResource } from "@/hooks/useResource";
-import { assignmentsApi, type Assignment } from "@/lib/api/assignments";
+import { useClassOptions } from "@/hooks/useClassOptions";
+import { assignmentsApi, assignmentStatus, type Assignment } from "@/lib/api/assignments";
 import type { AssignmentSchema } from "@/lib/schemas/assignment";
 import { AssignmentFormModal } from "./AssignmentFormModal";
 
@@ -63,20 +65,33 @@ const subjectDot: Record<string, string> = {
   "Comp. Sci": "bg-info",
 };
 
-const tabs = ["All", "Active", "Upcoming", "Completed"];
+const tabs = ["All", "Upcoming", "Active", "Overdue", "Completed"];
 
 export default function AssignmentsPage() {
   const [activeTab, setActiveTab] = useState("All");
   const [search, setSearch]       = useState("");
+  const [className, setClassName] = useState("");
   // Held by id, not by value, so the detail panel always reflects the freshest
   // row and closes by itself when that row is deleted.
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const { toast } = useToast();
 
-  const filters = useMemo(
-    () => ({ search, status: activeTab === "All" ? "All" : activeTab.toLowerCase() }),
-    [search, activeTab]
-  );
+  // The class list is the school's real classes; default to the lowest class
+  // once it loads so the list opens on a concrete, useful view.
+  const { classOptions, defaultClass } = useClassOptions();
+  const defaultedClass = useRef(false);
+  useEffect(() => {
+    if (defaultedClass.current || !defaultClass) return;
+    defaultedClass.current = true;
+    // Deferred setState (React Compiler): a 0ms timer + cleanup. Ref-guarded so
+    // it runs once and never fights a class the user picks (or clears) later.
+    const t = setTimeout(() => setClassName(defaultClass), 0);
+    return () => clearTimeout(t);
+  }, [defaultClass]);
+
+  // Search + class narrow the list on the server; the status tab is applied
+  // below from the derived status, so the tabs can't disagree with the badges.
+  const filters = useMemo(() => ({ search, class: className }), [search, className]);
 
   const { items, loading, error, refetch, save, remove, saving, deleting } = useResource(
     assignmentsApi,
@@ -90,15 +105,26 @@ export default function AssignmentsPage() {
 
   const selected = items.find((a) => a.id === selectedId) ?? null;
 
-  const stats = useMemo(
-    () => ({
-      total: items.length,
-      active: items.filter((a) => a.status === "active").length,
-      completed: items.filter((a) => a.status === "completed").length,
-      upcoming: items.filter((a) => a.status === "upcoming").length,
-    }),
-    [items]
-  );
+  // Rows shown after the status tab — filtered client-side on the DERIVED status
+  // so a stale stored value can never land a row under the wrong tab.
+  const displayed = useMemo(() => {
+    if (activeTab === "All") return items;
+    const want = activeTab.toLowerCase();
+    return items.filter((a) => assignmentStatus(a) === want);
+  }, [items, activeTab]);
+
+  const stats = useMemo(() => {
+    let active = 0,
+      completed = 0,
+      upcoming = 0;
+    for (const a of items) {
+      const s = assignmentStatus(a);
+      if (s === "active") active += 1;
+      else if (s === "completed") completed += 1;
+      else if (s === "upcoming") upcoming += 1;
+    }
+    return { total: items.length, active, completed, upcoming };
+  }, [items]);
 
   const openCreate = () => {
     setEditing(null);
@@ -120,7 +146,7 @@ export default function AssignmentsPage() {
   };
 
   const handleExport = () => {
-    if (items.length === 0) {
+    if (displayed.length === 0) {
       toast({
         title: "Nothing to export",
         description: "No assignments match the current filters.",
@@ -142,13 +168,13 @@ export default function AssignmentsPage() {
         { header: "Total Marks", value: (a) => a.totalMarks },
         { header: "Submitted", value: (a) => a.submitted },
         { header: "Class Size", value: (a) => a.total },
-        { header: "Status", value: (a) => statusConfig[a.status]?.label ?? a.status },
+        { header: "Status", value: (a) => statusConfig[assignmentStatus(a)].label },
       ],
-      items
+      displayed
     );
     toast({
       title: "Export ready",
-      description: `${items.length} assignment${items.length === 1 ? "" : "s"} exported to CSV.`,
+      description: `${displayed.length} assignment${displayed.length === 1 ? "" : "s"} exported to CSV.`,
     });
   };
 
@@ -261,7 +287,7 @@ export default function AssignmentsPage() {
       header: "Status",
       sortable: true,
       render: (a) => {
-        const sc = statusConfig[a.status] ?? fallbackStatus;
+        const sc = statusConfig[assignmentStatus(a)] ?? fallbackStatus;
         const StatusIcon = sc.icon;
         return (
           <Badge variant={sc.variant} className="gap-1.5 px-2.5 py-1">
@@ -310,6 +336,11 @@ export default function AssignmentsPage() {
 
   const detailRows = selected
     ? [
+        {
+          label: "Status",
+          value: statusConfig[assignmentStatus(selected)].label,
+          icon: statusConfig[assignmentStatus(selected)].icon,
+        },
         { label: "Teacher", value: selected.teacher, icon: Users },
         { label: "Given On", value: selected.given, icon: Calendar },
         { label: "Due Date", value: selected.due, icon: Clock },
@@ -364,12 +395,23 @@ export default function AssignmentsPage() {
                 type="search"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search assignments…"
+                placeholder="Search by title or subject…"
                 icon={<Search className="size-4" />}
                 aria-label="Search assignments"
               />
             </div>
-            <p className="ml-auto text-xs text-muted">{items.length} assignments</p>
+            <div className="w-40">
+              <Select
+                value={className}
+                onChange={(e) => setClassName(e.target.value)}
+                placeholder="All classes"
+                options={classOptions}
+                aria-label="Filter by class"
+              />
+            </div>
+            <p className="ml-auto text-xs text-muted">
+              {displayed.length} assignment{displayed.length === 1 ? "" : "s"}
+            </p>
           </div>
 
           {error ? (
@@ -384,24 +426,25 @@ export default function AssignmentsPage() {
           ) : (
             <Table
               columns={columns}
-              rows={items}
+              rows={displayed}
               rowKey={(a) => a.id}
               loading={loading}
               onRowClick={(a) => setSelectedId(selectedId === a.id ? null : a.id)}
               rowClassName={(a) => (selectedId === a.id ? "bg-primary-soft" : undefined)}
               emptyTitle="No assignments found"
               emptyDescription={
-                search || activeTab !== "All"
-                  ? "Try a different tab or clear your search."
+                search || activeTab !== "All" || className
+                  ? "Try a different class or tab, or clear your search."
                   : "Create your first assignment to get started."
               }
               emptyAction={
-                search || activeTab !== "All" ? (
+                search || activeTab !== "All" || className ? (
                   <Button
                     variant="outline"
                     onClick={() => {
                       setSearch("");
                       setActiveTab("All");
+                      setClassName("");
                     }}
                   >
                     Clear filters

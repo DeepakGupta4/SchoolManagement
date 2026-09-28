@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Eye, Pencil, Plus, Search, Trash2, Users, UserCheck, IndianRupee, TrendingDown } from "lucide-react";
 import {
@@ -76,13 +76,23 @@ function StatCard({
 
 export default function StudentsPage() {
   const { toast } = useToast();
-  const { classOptions } = useClassOptions();
+  const { classOptions, defaultClass } = useClassOptions();
 
   const [search, setSearch] = useState("");
   const [className, setClassName] = useState("");
   const [status, setStatus] = useState("");
   // Quick client-side filter driven by the stat cards (fees due / low attendance).
   const [quick, setQuick] = useState<"all" | "fees" | "low">("all");
+
+  // Pre-select the lowest class (e.g. Nursery) once, the first time the class
+  // list resolves — but never fight a user who later clears or changes it.
+  const defaultedClass = useRef(false);
+  useEffect(() => {
+    if (defaultedClass.current || className || !defaultClass) return;
+    defaultedClass.current = true;
+    const t = setTimeout(() => setClassName(defaultClass), 0);
+    return () => clearTimeout(t);
+  }, [className, defaultClass]);
 
   const { students, loading, error, refetch } = useStudents({ search, className, status });
 

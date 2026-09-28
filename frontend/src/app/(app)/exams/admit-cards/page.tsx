@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CheckSquare, FileText, Printer, Search, Square, TriangleAlert, Users } from "lucide-react";
 import {
   Badge, Button, Card, EmptyState, Input, PageHeader, Select, Skeleton, StatCard, useToast,
@@ -23,6 +23,16 @@ function classCode(s: Student) {
   return `${s.className.replace(/^Class\s+/i, "").trim()}-${s.section}`;
 }
 
+/**
+ * Normalises a class label so a sitting scheduled against a class ("Class 6")
+ * lines up with a student's class regardless of the "Class " prefix or casing.
+ * Schedules store the class *name* (e.g. "Class 6"), so matching the student's
+ * class code ("6-A") alone found nothing — the reason no candidates appeared.
+ */
+function normClass(v: string) {
+  return v.replace(/^Class\s+/i, "").trim().toLowerCase();
+}
+
 /** Derives the weekday name from a schedule date string; "" if unparseable. */
 function weekday(date: string) {
   const d = new Date(date);
@@ -42,13 +52,26 @@ function toSubject(row: ScheduledExam): AdmitCardSubject {
 
 export default function AdmitCardsPage() {
   const { toast } = useToast();
-  const { classOptions } = useClassOptions();
+  const { classOptions, defaultClass } = useClassOptions();
 
   const [search, setSearch] = useState("");
   const [className, setClassName] = useState("");
   const [exam, setExam] = useState("");
   const [onlyEligible, setOnlyEligible] = useState(true);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  // Default the class filter to the lowest class once the classes load. Ref-
+  // guarded so it resolves only once (the first time a default is available) and
+  // then always defers to the user's choice — including a later switch to "All
+  // classes". Deferred (setTimeout 0) to avoid a synchronous setState in effect.
+  const didDefaultClass = useRef(false);
+  useEffect(() => {
+    if (didDefaultClass.current || !defaultClass) return;
+    didDefaultClass.current = true;
+    if (className) return; // user already picked — don't override
+    const t = setTimeout(() => setClassName(defaultClass), 0);
+    return () => clearTimeout(t);
+  }, [className, defaultClass]);
 
   // Real students, filtered server-side by class + search — the same source the
   // student ID-cards page uses, so photos flow through automatically.
@@ -87,23 +110,30 @@ export default function AdmitCardsPage() {
     }
   }, [examNames, exam]);
 
-  // Papers scheduled for the selected exam, indexed by class code.
+  // Papers scheduled for the selected exam, indexed by a normalised class key so
+  // a schedule's class name ("Class 6") and a student's class line up.
   const subjectsByClass = useMemo(() => {
     const map = new Map<string, AdmitCardSubject[]>();
     for (const row of schedule) {
       if (exam && row.exam !== exam) continue;
-      const list = map.get(row.class) ?? [];
+      const key = normClass(row.class);
+      const list = map.get(key) ?? [];
       list.push(toSubject(row));
-      map.set(row.class, list);
+      map.set(key, list);
     }
     return map;
   }, [schedule, exam]);
 
-  // A candidate is a student whose class has papers scheduled for this exam.
+  // A candidate is a student whose class has papers scheduled for this exam. A
+  // sitting scheduled for the whole class ("Class 6") or a specific section
+  // ("6-A") both count.
   const candidates = useMemo(() => {
     return students
       .map((s) => {
-        const subjects = subjectsByClass.get(classCode(s)) ?? [];
+        const subjects = [
+          ...(subjectsByClass.get(normClass(s.className)) ?? []),
+          ...(subjectsByClass.get(normClass(classCode(s))) ?? []),
+        ];
         const card: AdmitCardData & { feeCleared: boolean } = {
           id: s.id,
           studentName: fullName(s),

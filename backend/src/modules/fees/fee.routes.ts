@@ -10,6 +10,7 @@ import {
   type FeeAccountDoc,
   type PaymentDoc,
 } from "./fee.model.js";
+import { Student } from "../students/student.model.js";
 import { requireAuth, requireRole } from "../../middleware/auth.js";
 import { validate, parsed } from "../../middleware/validate.js";
 import { ApiError } from "../../utils/ApiError.js";
@@ -57,6 +58,88 @@ router.get("/accounts", validate(accountQuery, "query"), async (req, res, next) 
       data: filtered.map((d) => toPublic(d as FeeAccountDoc)),
       meta: { total: filtered.length, page: 1, limit: filtered.length, pages: 1 },
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * Opens (or updates) a student's fee account. Used by the "Register New Student"
+ * flow so an admin can set fees during admission, but reusable anywhere.
+ *
+ * The billed `heads` define what is owed. An optional `concession` is netted off
+ * the heads (oldest first) so the DERIVED balance already reflects it — the same
+ * convention the collection screen relies on, where the stored `concession` is
+ * shown for the record but is never re-subtracted from the balance.
+ *
+ * Idempotent per student + session: re-posting updates the same account instead
+ * of failing on the unique index, so setting fees twice can't 500.
+ */
+const feeAccountBody = z.object({
+  studentId: z.string().min(1),
+  heads: z
+    .array(z.object({ head: z.string().min(1), billed: z.coerce.number<number>().min(0) }))
+    .min(1, "Add at least one fee head"),
+  concession: z.coerce.number<number>().min(0).default(0),
+  lateFee: z.coerce.number<number>().min(0).default(0),
+  session: z.string().min(1).default("2025-26"),
+});
+
+/** Deducts a concession off the billed heads in order, so the balance nets it out. */
+function applyConcession(
+  heads: { head: string; billed: number }[],
+  concession: number
+): { head: string; billed: number }[] {
+  let left = Math.max(0, Math.round(concession));
+  return heads.map((h) => {
+    if (left <= 0) return h;
+    const cut = Math.min(h.billed, left);
+    left -= cut;
+    return { head: h.head, billed: h.billed - cut };
+  });
+}
+
+router.post("/accounts", canCollect, validate(feeAccountBody), async (req, res, next) => {
+  try {
+    const body = req.body as z.infer<typeof feeAccountBody>;
+    const schoolId = req.user!.schoolId;
+
+    const student = await Student.findOne({ _id: body.studentId, schoolId });
+    if (!student) throw ApiError.notFound("Student not found.");
+
+    // Concession can't exceed the gross bill; heads are stored net of it.
+    const gross = body.heads.reduce((sum, h) => sum + h.billed, 0);
+    const concession = Math.min(Math.round(body.concession), Math.round(gross));
+    const heads = applyConcession(
+      body.heads.map((h) => ({ head: h.head, billed: Math.round(h.billed) })),
+      concession
+    ).filter((h) => h.billed > 0);
+
+    const account = await FeeAccount.findOneAndUpdate(
+      { schoolId, studentId: student._id, session: body.session },
+      {
+        $set: {
+          admissionNo: student.admissionNo,
+          name: `${student.firstName} ${student.lastName}`.trim(),
+          className: student.className,
+          section: student.section,
+          rollNo: student.rollNo,
+          guardian: student.guardian.name,
+          guardianPhone: student.guardian.phone,
+          heads,
+          concession,
+          lateFee: Math.round(body.lateFee),
+        },
+      },
+      { new: true, upsert: true, setDefaultsOnInsert: true, runValidators: true }
+    );
+
+    // Keep the student's headline fee-due metric (shown on the profile & list)
+    // in step with the freshly-opened ledger.
+    student.feeDue = balanceOf(account as FeeAccountDoc);
+    await student.save();
+
+    res.status(201).json({ data: toPublic(account as FeeAccountDoc) });
   } catch (err) {
     next(err);
   }

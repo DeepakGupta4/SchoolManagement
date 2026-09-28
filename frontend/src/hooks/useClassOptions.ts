@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { classesApi, type SchoolClass } from "@/lib/api/classes";
+import { sortClasses } from "@/lib/classOrder";
 
 /** Sections used when a class defines none of its own, so a dropdown is never empty. */
 const DEFAULT_SECTIONS = ["A", "B", "C", "D"];
@@ -19,6 +20,9 @@ export interface ClassOptionsResult {
   sectionOptions: { label: string; value: string }[];
   /** Sections declared on a specific class, or the distinct fallback. */
   sectionsFor: (className: string) => string[];
+  /** Lowest grade in academic order (e.g. "Nursery"), or "" when none exist.
+   *  Use it to pre-select a sensible default class filter. */
+  defaultClass: string;
   loading: boolean;
 }
 
@@ -75,6 +79,7 @@ export function useClassOptions(): ClassOptionsResult {
       sections,
       sectionOptions: sections.map((s) => ({ label: s, value: s })),
       sectionsFor,
+      defaultClass: sortClasses(classNames)[0] ?? "",
       loading,
     };
   }, [classes, loading]);

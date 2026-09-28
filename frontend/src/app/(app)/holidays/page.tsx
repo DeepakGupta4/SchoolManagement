@@ -37,14 +37,89 @@ const todayIso = () => new Date().toISOString().slice(0, 10);
 const pad2 = (n: number) => String(n).padStart(2, "0");
 
 /**
- * Fixed-date national holidays (MM-DD → name). Shown as faint suggestions on
- * their dates. Lunar/festival dates shift each year, so they are not included.
+ * Fixed-date holidays (MM-DD → name) that land on the same Gregorian date every
+ * year. Applied to whatever year the calendar is showing.
  */
-const NATIONAL_HOLIDAYS: Record<string, string> = {
+const FIXED_HOLIDAYS: Record<string, string> = {
   "01-01": "New Year's Day",
   "01-26": "Republic Day",
+  "04-14": "Ambedkar Jayanti",
   "08-15": "Independence Day",
   "10-02": "Gandhi Jayanti",
+  "12-25": "Christmas",
+};
+
+/**
+ * Movable festivals by year (YYYY-MM-DD → name). Lunar/solar festivals fall on a
+ * different Gregorian date each year, so they are listed per year. These render
+ * as faded SUGGESTIONS the admin confirms before adding — best-known dates, so
+ * minor drift on lunar festivals is acceptable (later years are estimates). Add a
+ * new year's list to extend coverage; other years fall back to FIXED_HOLIDAYS.
+ */
+const FESTIVALS_BY_YEAR: Record<string, { date: string; name: string }[]> = {
+  "2025": [
+    { date: "2025-01-14", name: "Makar Sankranti / Pongal" },
+    { date: "2025-02-26", name: "Maha Shivaratri" },
+    { date: "2025-03-14", name: "Holi" },
+    { date: "2025-03-31", name: "Eid-ul-Fitr" },
+    { date: "2025-04-06", name: "Ram Navami" },
+    { date: "2025-04-10", name: "Mahavir Jayanti" },
+    { date: "2025-04-18", name: "Good Friday" },
+    { date: "2025-05-12", name: "Buddha Purnima" },
+    { date: "2025-06-07", name: "Bakrid (Eid-ul-Adha)" },
+    { date: "2025-07-06", name: "Muharram" },
+    { date: "2025-08-09", name: "Raksha Bandhan" },
+    { date: "2025-08-16", name: "Janmashtami" },
+    { date: "2025-08-27", name: "Ganesh Chaturthi" },
+    { date: "2025-09-05", name: "Milad-un-Nabi" },
+    { date: "2025-10-02", name: "Dussehra (Vijayadashami)" },
+    { date: "2025-10-20", name: "Diwali" },
+    { date: "2025-10-22", name: "Govardhan Puja" },
+    { date: "2025-10-23", name: "Bhai Dooj" },
+    { date: "2025-11-05", name: "Guru Nanak Jayanti" },
+  ],
+  "2026": [
+    { date: "2026-01-14", name: "Makar Sankranti / Pongal" },
+    { date: "2026-02-15", name: "Maha Shivaratri" },
+    { date: "2026-03-04", name: "Holi" },
+    { date: "2026-03-20", name: "Eid-ul-Fitr" },
+    { date: "2026-03-26", name: "Ram Navami" },
+    { date: "2026-03-31", name: "Mahavir Jayanti" },
+    { date: "2026-04-03", name: "Good Friday" },
+    { date: "2026-05-01", name: "Buddha Purnima" },
+    { date: "2026-05-27", name: "Bakrid (Eid-ul-Adha)" },
+    { date: "2026-06-26", name: "Muharram" },
+    { date: "2026-08-26", name: "Milad-un-Nabi" },
+    { date: "2026-08-28", name: "Raksha Bandhan" },
+    { date: "2026-09-04", name: "Janmashtami" },
+    { date: "2026-09-14", name: "Ganesh Chaturthi" },
+    { date: "2026-10-20", name: "Dussehra (Vijayadashami)" },
+    { date: "2026-11-08", name: "Diwali" },
+    { date: "2026-11-10", name: "Govardhan Puja" },
+    { date: "2026-11-11", name: "Bhai Dooj" },
+    { date: "2026-11-24", name: "Guru Nanak Jayanti" },
+  ],
+  "2027": [
+    { date: "2027-01-14", name: "Makar Sankranti / Pongal" },
+    { date: "2027-03-06", name: "Maha Shivaratri" },
+    { date: "2027-03-10", name: "Eid-ul-Fitr" },
+    { date: "2027-03-22", name: "Holi" },
+    { date: "2027-03-26", name: "Good Friday" },
+    { date: "2027-04-15", name: "Ram Navami" },
+    { date: "2027-04-19", name: "Mahavir Jayanti" },
+    { date: "2027-05-17", name: "Bakrid (Eid-ul-Adha)" },
+    { date: "2027-05-20", name: "Buddha Purnima" },
+    { date: "2027-06-16", name: "Muharram" },
+    { date: "2027-08-14", name: "Milad-un-Nabi" },
+    { date: "2027-08-17", name: "Raksha Bandhan" },
+    { date: "2027-08-25", name: "Janmashtami" },
+    { date: "2027-09-04", name: "Ganesh Chaturthi" },
+    { date: "2027-10-09", name: "Dussehra (Vijayadashami)" },
+    { date: "2027-10-29", name: "Diwali" },
+    { date: "2027-10-30", name: "Govardhan Puja" },
+    { date: "2027-11-01", name: "Bhai Dooj" },
+    { date: "2027-11-14", name: "Guru Nanak Jayanti" },
+  ],
 };
 
 const MONTH_NAMES = [
@@ -113,6 +188,16 @@ export default function HolidaysPage() {
     while (cells.length % 7 !== 0) cells.push(null);
     return cells;
   }, [cal]);
+
+  // Suggested holidays for the shown year: fixed-date ones applied to the year,
+  // plus that year's movable festivals. Any year without a festival list still
+  // gets the fixed-date suggestions. Fixed national days win a same-day tie.
+  const suggestionByDate = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const f of FESTIVALS_BY_YEAR[String(cal.year)] ?? []) map.set(f.date, f.name);
+    for (const [md, name] of Object.entries(FIXED_HOLIDAYS)) map.set(`${cal.year}-${md}`, name);
+    return map;
+  }, [cal.year]);
 
   const prevMonth = () =>
     setCal((c) => (c.month === 0 ? { year: c.year - 1, month: 11 } : { year: c.year, month: c.month - 1 }));
@@ -299,7 +384,7 @@ export default function HolidaysPage() {
               const isSunday = i % 7 === 0;
               const isToday = iso === today;
               const dayHoliday = holidayByDate.get(iso);
-              const suggestion = NATIONAL_HOLIDAYS[`${pad2(cal.month + 1)}-${pad2(day)}`];
+              const suggestion = suggestionByDate.get(iso);
 
               return (
                 <button
@@ -346,7 +431,7 @@ export default function HolidaysPage() {
 
           <p className="text-xs text-subtle">
             Sundays are weekly holidays. Click any day to add a holiday, a faded name to add a
-            suggested national holiday, or a holiday to edit it.
+            suggested holiday or festival, or a holiday to edit it.
           </p>
         </CardContent>
       </Card>

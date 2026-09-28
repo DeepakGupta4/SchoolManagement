@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CheckSquare, IdCard as IdCardIcon, Printer, Search, Square, Users } from "lucide-react";
 import {
   Badge, Button, Card, CardContent, EmptyState, Input, PageHeader, Select, Skeleton, StatCard, useToast,
@@ -33,13 +33,24 @@ function toHolder(s: Student): IdCardHolder {
 
 export default function StudentIdCardsPage() {
   const { toast } = useToast();
-  const { classOptions } = useClassOptions();
+  const { classOptions, defaultClass } = useClassOptions();
 
   const [search, setSearch] = useState("");
   const [className, setClassName] = useState("");
   // Stat-card quick filter for photo status, applied client-side before grouping.
   const [photo, setPhoto] = useState<"all" | "with" | "without">("all");
   const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  // Pre-select the lowest class (e.g. Nursery) once the class list resolves, so
+  // the sheet opens on one class rather than every student. Doesn't fight the
+  // user once they change or clear it.
+  const defaultedClass = useRef(false);
+  useEffect(() => {
+    if (defaultedClass.current || className || !defaultClass) return;
+    defaultedClass.current = true;
+    const t = setTimeout(() => setClassName(defaultClass), 0);
+    return () => clearTimeout(t);
+  }, [className, defaultClass]);
 
   // Sourced from the real students API, so a photo added on the student form
   // appears here on the card without any extra wiring.

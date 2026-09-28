@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
-import { ChevronDown, ChevronRight, CheckCircle, Circle, Clock, BookOpen, Download, Plus, Pencil, Trash2 } from "lucide-react";
-import { Badge, Button, Card, CardContent, ConfirmDialog, PageHeader, Select, useToast } from "@/components/ui";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { ChevronDown, ChevronRight, CheckCircle, Circle, Clock, BookOpen, Download, Plus, Pencil, Trash2, Eye, Search } from "lucide-react";
+import { Badge, Button, Card, CardContent, ConfirmDialog, EmptyState, Input, Loading, PageHeader, Select, useToast } from "@/components/ui";
+import { DetailModal } from "@/components/DetailModal";
 import { exportToCsv } from "@/lib/exportCsv";
 import { cn } from "@/lib/utils";
 import { useResource } from "@/hooks/useResource";
@@ -40,6 +41,12 @@ type ChapterRow = {
   chapter: Chapter;
 };
 
+/** Progress percentage for a chapter, guarded against a zero topic count. */
+function chapterPct(completed: number, topics: number): number {
+  if (topics <= 0) return 0;
+  return Math.min(100, Math.round((completed / topics) * 100));
+}
+
 /**
  * Rebuilds the per-subject syllabus tree from flat chapter rows: chapters are
  * grouped under their unit (in first-seen order) and units under their subject.
@@ -63,6 +70,8 @@ function buildSyllabus(rows: SyllabusChapter[]): SubjectSyllabus[] {
       subjectIndex.set(row.subject, subject);
       subjects.push(subject);
     }
+    // A subject with no teacher on its first row picks up the first teacher seen.
+    if (!subject.teacher && row.teacher) subject.teacher = row.teacher;
 
     const unitKey = `${row.subject}::${row.unit}`;
     let unit = unitIndex.get(unitKey);
@@ -111,6 +120,7 @@ const subjectTone: Record<string, { tile: string; bar: string; text: string }> =
 const FALLBACK_TONE = { tile: "gradient-indigo", bar: "bg-primary", text: "text-primary" };
 
 const ALL_SUBJECTS = "All Subjects";
+const ALL_YEARS = "All years";
 
 function StatusIcon({ status, className }: { status: string; className?: string }) {
   if (status === "completed") return <CheckCircle className={cn("text-success", className)} />;
@@ -121,10 +131,13 @@ function StatusIcon({ status, className }: { status: string; className?: string 
 export default function SyllabusPage() {
   const [selClass,   setSelClass]   = useState("");
   const [selSubject, setSelSubject] = useState(ALL_SUBJECTS);
+  const [selYear,    setSelYear]    = useState(ALL_YEARS);
+  const [search,     setSearch]     = useState("");
   const [openUnits,  setOpenUnits]  = useState<Record<string, boolean>>({});
   const [openSubjects, setOpenSubjects] = useState<Record<string, boolean>>({});
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<SyllabusChapter | null>(null);
+  const [viewing, setViewing] = useState<SyllabusChapter | null>(null);
   const [pendingDelete, setPendingDelete] = useState<SyllabusChapter | null>(null);
   const { toast } = useToast();
 
@@ -132,28 +145,62 @@ export default function SyllabusPage() {
 
   // The class list is the school's real classes (from Classes & Sections), so a
   // brand-new school can add syllabus even before any chapters exist.
-  const { classOptions } = useClassOptions();
+  const { classOptions, defaultClass } = useClassOptions();
 
-  // All syllabus rows for the school load once; the per-subject tree below is
-  // derived from them client-side.
-  const filters = useMemo(() => ({}), []);
+  // Default the class filter to the school's lowest class (academic order) once,
+  // after classes load. Ref-guarded so it never fights a later user selection,
+  // and deferred so setState never runs synchronously inside the effect.
+  const didDefaultClass = useRef(false);
+  useEffect(() => {
+    if (didDefaultClass.current || !defaultClass) return;
+    didDefaultClass.current = true;
+    const t = setTimeout(() => setSelClass(defaultClass), 0);
+    return () => clearTimeout(t);
+  }, [defaultClass]);
+
+  // A class that disappears (or an unset selection) falls back to the default —
+  // derived here rather than reset from an effect.
+  const activeClass = classOptions.some((c) => c.value === selClass)
+    ? selClass
+    : defaultClass || classOptions[0]?.value || "";
+
+  // Only the active class's rows load — scoped server-side so the list scales as
+  // the school adds classes/years and never silently hits the default row cap.
+  const filters = useMemo(() => ({ className: activeClass, limit: 500 }), [activeClass]);
   const { items, loading, error, refetch, save, remove, saving, deleting } = useResource(
     syllabusApi,
     filters,
     { label: "chapter", describe: (r) => r.chapter }
   );
 
-  // The selected class defaults to the first available class; a class that
-  // disappears (or an unset selection) falls back to the first — derived here
-  // rather than reset from an effect.
-  const activeClass = classOptions.some((c) => c.value === selClass)
-    ? selClass
-    : classOptions[0]?.value ?? "";
-
-  const syllabusData = useMemo(
-    () => buildSyllabus(items.filter((r) => r.className === activeClass)),
+  // Guard against the previous class's rows bleeding through during a refetch.
+  const classRows = useMemo(
+    () => items.filter((r) => r.className === activeClass),
     [items, activeClass]
   );
+
+  // Academic years are offered from the class's own data (newest first).
+  const yearOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of classRows) if (r.academicYear) set.add(r.academicYear);
+    return [ALL_YEARS, ...[...set].sort((a, b) => b.localeCompare(a))];
+  }, [classRows]);
+  const activeYear = yearOptions.includes(selYear) ? selYear : ALL_YEARS;
+
+  // Year + search narrow the flat rows before the tree is built, so every
+  // counter, card and tab below reflects exactly what is on screen.
+  const scopedRows = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return classRows.filter((r) => {
+      if (activeYear !== ALL_YEARS && (r.academicYear || "") !== activeYear) return false;
+      if (q && !`${r.chapter} ${r.unit} ${r.subject} ${r.teacher}`.toLowerCase().includes(q))
+        return false;
+      return true;
+    });
+  }, [classRows, activeYear, search]);
+
+  const syllabusData = useMemo(() => buildSyllabus(scopedRows), [scopedRows]);
+
   // The subject tabs come from the data, so a class never offers a subject it
   // has no syllabus for. A subject that vanishes on a class switch falls back
   // to "All Subjects" — derived here rather than reset from an effect.
@@ -175,6 +222,8 @@ export default function SyllabusPage() {
   const overallText =
     overallPct >= 75 ? "text-success-text" : overallPct >= 50 ? "text-warning-text" : "text-danger-text";
 
+  const hasFilters = Boolean(search.trim()) || activeYear !== ALL_YEARS || activeSubject !== ALL_SUBJECTS;
+
   /** Flattens the subjects currently on screen to one row per chapter. */
   const handleExport = () => {
     const rows: ChapterRow[] = filtered.flatMap((s) =>
@@ -191,7 +240,7 @@ export default function SyllabusPage() {
     if (rows.length === 0) {
       toast({
         title: "Nothing to export",
-        description: "No chapters match the selected class and subject.",
+        description: "No chapters match the selected class and filters.",
         variant: "warning",
       });
       return;
@@ -201,6 +250,7 @@ export default function SyllabusPage() {
       `syllabus-class-${activeClass}`,
       [
         { header: "Class", value: () => activeClass },
+        { header: "Academic Year", value: () => (activeYear === ALL_YEARS ? "" : activeYear) },
         { header: "Subject", value: (r) => r.subject },
         { header: "Teacher", value: (r) => r.teacher },
         { header: "Unit", value: (r) => r.unit },
@@ -209,9 +259,9 @@ export default function SyllabusPage() {
         { header: "Topics Completed", value: (r) => r.chapter.completedTopics },
         {
           header: "Progress (%)",
-          value: (r) => Math.round((r.chapter.completedTopics / r.chapter.topics) * 100),
+          value: (r) => chapterPct(r.chapter.completedTopics, r.chapter.topics),
         },
-        { header: "Status", value: (r) => statusConfig[r.chapter.status].label },
+        { header: "Status", value: (r) => statusConfig[r.chapter.status]?.label ?? r.chapter.status },
         { header: "Taught On", value: (r) => (r.chapter.date === "—" ? "" : r.chapter.date) },
       ],
       rows
@@ -247,6 +297,7 @@ export default function SyllabusPage() {
   };
 
   const hasClasses = classOptions.length > 0;
+  const showLoading = loading && scopedRows.length === 0;
 
   return (
     <div className="flex flex-col gap-5">
@@ -269,14 +320,34 @@ export default function SyllabusPage() {
 
       {hasClasses ? (
         <Card>
-          <CardContent className="flex flex-wrap items-center gap-3">
-            <div className="w-40">
-              <Select
-                value={activeClass}
-                onChange={(e) => setSelClass(e.target.value)}
-                options={classOptions}
-                aria-label="Select class"
-              />
+          <CardContent className="flex flex-col gap-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="w-40">
+                <Select
+                  value={activeClass}
+                  onChange={(e) => setSelClass(e.target.value)}
+                  options={classOptions}
+                  aria-label="Select class"
+                />
+              </div>
+              <div className="w-36">
+                <Select
+                  value={activeYear}
+                  onChange={(e) => setSelYear(e.target.value)}
+                  options={yearOptions.map((y) => ({ label: y, value: y }))}
+                  aria-label="Filter by academic year"
+                />
+              </div>
+              <div className="min-w-52 flex-1">
+                <Input
+                  type="search"
+                  placeholder="Search chapter, unit, subject or teacher…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  icon={<Search className="size-4" />}
+                  aria-label="Search syllabus"
+                />
+              </div>
               {loading && <span className="text-xs text-muted">Loading…</span>}
             </div>
             <div className="flex flex-wrap gap-1 rounded-md bg-surface-sunken p-1">
@@ -318,234 +389,332 @@ export default function SyllabusPage() {
         </Card>
       )}
 
-      <Card>
-        <CardContent>
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <p className="text-sm font-semibold text-text">
-              Syllabus Completion — Class {activeClass}
-              {activeSubject !== ALL_SUBJECTS && ` · ${activeSubject}`}
-            </p>
-            <span className={cn("text-xl font-semibold", overallText)}>{overallPct}%</span>
-          </div>
-          <div className="h-2.5 overflow-hidden rounded-full bg-surface-hover">
-            <div
-              className="h-full rounded-full bg-primary transition-all"
-              style={{ width: `${overallPct}%` }}
-            />
-          </div>
-          <div className="mt-3.5 flex flex-wrap gap-x-6 gap-y-2">
-            {[
-              { label: "Total Chapters", value: totalChapters,   dot: "bg-primary" },
-              { label: "Completed",      value: completedTotal,  dot: "bg-success" },
-              { label: "In Progress",    value: inProgressTotal, dot: "bg-warning" },
-              { label: "Pending",        value: pendingTotal,    dot: "bg-border-strong" },
-            ].map((s) => (
-              <span key={s.label} className="flex items-center gap-1.5 text-xs text-muted">
-                <span className={cn("size-2 rounded-full", s.dot)} />
-                {s.label}:
-                <span className="font-semibold text-text">{s.value}</span>
-              </span>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {filtered.map((s) => {
-          const pct = Math.round((s.completedChapters / s.totalChapters) * 100);
-          const tone = subjectTone[s.subject] ?? FALLBACK_TONE;
-          return (
-            <Card key={s.subject}>
-              <CardContent>
-                <div className="mb-3.5 flex items-center gap-3">
-                  <div
-                    className={cn(
-                      "flex size-11 shrink-0 items-center justify-center rounded-md text-white shadow-sm",
-                      tone.tile
-                    )}
-                  >
-                    <BookOpen className="size-5" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-text">{s.subject}</p>
-                    <p className="mt-0.5 truncate text-[11px] text-muted">{s.teacher}</p>
-                  </div>
-                  <span className={cn("text-base font-semibold", tone.text)}>{pct}%</span>
-                </div>
-                <div className="h-1.5 overflow-hidden rounded-full bg-surface-hover">
-                  <div
-                    className={cn("h-full rounded-full", tone.bar)}
-                    style={{ width: `${pct}%` }}
-                  />
-                </div>
-                <p className="mt-2 text-[11px] text-muted">
-                  {s.completedChapters} of {s.totalChapters} chapters completed
+      {hasClasses && !error && (
+        <>
+          <Card>
+            <CardContent>
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-semibold text-text">
+                  Syllabus Completion — Class {activeClass}
+                  {activeYear !== ALL_YEARS && ` · ${activeYear}`}
+                  {activeSubject !== ALL_SUBJECTS && ` · ${activeSubject}`}
                 </p>
+                <span className={cn("text-xl font-semibold", overallText)}>{overallPct}%</span>
+              </div>
+              <div className="h-2.5 overflow-hidden rounded-full bg-surface-hover">
+                <div
+                  className="h-full rounded-full bg-primary transition-all"
+                  style={{ width: `${overallPct}%` }}
+                />
+              </div>
+              <div className="mt-3.5 flex flex-wrap gap-x-6 gap-y-2">
+                {[
+                  { label: "Total Chapters", value: totalChapters,   dot: "bg-primary" },
+                  { label: "Completed",      value: completedTotal,  dot: "bg-success" },
+                  { label: "In Progress",    value: inProgressTotal, dot: "bg-warning" },
+                  { label: "Pending",        value: pendingTotal,    dot: "bg-border-strong" },
+                ].map((s) => (
+                  <span key={s.label} className="flex items-center gap-1.5 text-xs text-muted">
+                    <span className={cn("size-2 rounded-full", s.dot)} />
+                    {s.label}:
+                    <span className="font-semibold text-text">{s.value}</span>
+                  </span>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          {showLoading ? (
+            <Card>
+              <CardContent>
+                <Loading label="Loading syllabus…" />
               </CardContent>
             </Card>
-          );
-        })}
-      </div>
-
-      <div className="flex flex-col gap-3">
-        {filtered.map((subj, si) => {
-          // First subject of the list starts expanded until the user says otherwise.
-          const isSubjOpen = openSubjects[`${activeClass}-${subj.subject}`] ?? si === 0;
-          const pct = Math.round((subj.completedChapters / subj.totalChapters) * 100);
-          const tone = subjectTone[subj.subject] ?? FALLBACK_TONE;
-
-          return (
-            <Card key={subj.subject} className="overflow-hidden">
-              <button
-                onClick={() =>
-                  setOpenSubjects((p) => ({
-                    ...p,
-                    [`${activeClass}-${subj.subject}`]: !isSubjOpen,
-                  }))
-                }
-                aria-expanded={isSubjOpen}
-                className="focus-ring flex w-full items-center gap-3.5 px-5 py-4 text-left transition-colors hover:bg-surface-hover"
-              >
-                <div
-                  className={cn(
-                    "flex size-10 shrink-0 items-center justify-center rounded-md text-white",
-                    tone.tile
-                  )}
-                >
-                  <BookOpen className="size-4.5" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-text">{subj.subject}</p>
-                  <div className="mt-1 flex items-center gap-3">
-                    <div className="h-1.5 w-30 overflow-hidden rounded-full bg-surface-hover">
-                      <div
-                        className={cn("h-full rounded-full", tone.bar)}
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
-                    <span className="text-xs text-muted">
-                      {subj.completedChapters}/{subj.totalChapters} chapters · {pct}%
-                    </span>
-                  </div>
-                </div>
-                {isSubjOpen ? (
-                  <ChevronDown className="size-4.5 shrink-0 text-subtle" />
-                ) : (
-                  <ChevronRight className="size-4.5 shrink-0 text-subtle" />
-                )}
-              </button>
-
-              {isSubjOpen && (
-                <div className="border-t border-border">
-                  {subj.units.map((unit, ui) => {
-                    const unitKey = `${activeClass}-${subj.subject}-${ui}`;
-                    const isUnitOpen = openUnits[unitKey] !== false;
-                    const unitCompleted = unit.chapters.every((c) => c.status === "completed");
-                    const unitInProgress = unit.chapters.some((c) => c.status === "in-progress");
-                    const unitStatus = unitCompleted
-                      ? "completed"
-                      : unitInProgress
-                        ? "in-progress"
-                        : "pending";
-
-                    return (
-                      <div key={unitKey} className="border-b border-border last:border-0">
-                        <button
-                          onClick={() => toggleUnit(unitKey)}
-                          aria-expanded={isUnitOpen}
-                          className="focus-ring flex w-full items-center gap-2.5 bg-surface-sunken py-3.5 pl-7 pr-5 text-left transition-colors hover:bg-surface-hover"
-                        >
-                          <StatusIcon status={unitStatus} className="size-4 shrink-0" />
-                          <span className="min-w-0 flex-1 truncate text-sm font-medium text-text">
-                            {unit.unit}
-                          </span>
-                          <span className="shrink-0 text-[11px] text-subtle">
-                            {unit.chapters.length} chapters
-                          </span>
-                          {isUnitOpen ? (
-                            <ChevronDown className="size-3.5 shrink-0 text-subtle" />
-                          ) : (
-                            <ChevronRight className="size-3.5 shrink-0 text-subtle" />
-                          )}
-                        </button>
-
-                        {isUnitOpen && (
-                          <div>
-                            {unit.chapters.map((ch, ci) => {
-                              const sc = statusConfig[ch.status];
-                              const chPct = Math.round((ch.completedTopics / ch.topics) * 100);
-                              return (
-                                <div
-                                  key={`${unitKey}-${ci}`}
-                                  className="flex flex-wrap items-center gap-3 border-t border-border py-3 pl-13 pr-5 transition-colors hover:bg-surface-hover"
-                                >
-                                  <StatusIcon status={ch.status} className="size-4 shrink-0" />
-                                  <p className="min-w-0 flex-1 truncate text-sm text-text">
-                                    {ch.name}
-                                  </p>
-
-                                  <div className="flex items-center gap-2">
-                                    <div className="h-1 w-16 overflow-hidden rounded-full bg-surface-hover">
-                                      <div
-                                        className={cn("h-full rounded-full", sc.bar)}
-                                        style={{ width: `${chPct}%` }}
-                                      />
-                                    </div>
-                                    <span className="text-[11px] text-subtle">
-                                      {ch.completedTopics}/{ch.topics}
-                                    </span>
-                                  </div>
-
-                                  {ch.date !== "—" && (
-                                    <span className="w-13 text-right text-[11px] text-subtle">
-                                      {ch.date}
-                                    </span>
-                                  )}
-
-                                  <Badge variant={sc.variant}>{sc.label}</Badge>
-
-                                  <div className="flex items-center gap-1">
-                                    <button
-                                      onClick={() => openEdit(ch.id)}
-                                      aria-label={`Edit ${ch.name}`}
-                                      className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
-                                    >
-                                      <Pencil className="size-4" />
-                                    </button>
-                                    <button
-                                      onClick={() =>
-                                        setPendingDelete(
-                                          items.find((i) => i.id === ch.id) ?? null
-                                        )
-                                      }
-                                      aria-label={`Delete ${ch.name}`}
-                                      className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-danger-soft hover:text-danger"
-                                    >
-                                      <Trash2 className="size-4" />
-                                    </button>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+          ) : filtered.length === 0 ? (
+            <Card>
+              <CardContent>
+                <EmptyState
+                  icon={<BookOpen className="size-5" />}
+                  title={hasFilters ? "No chapters match your filters" : `No chapters yet for Class ${activeClass}`}
+                  description={
+                    hasFilters
+                      ? "Try clearing the search or picking a different subject or year."
+                      : "Add your first chapter to start tracking completion for this class."
+                  }
+                  action={
+                    hasFilters ? undefined : (
+                      <Button variant="outline" onClick={openCreate}>
+                        <Plus className="size-4" />
+                        Add Chapter
+                      </Button>
+                    )
+                  }
+                />
+              </CardContent>
             </Card>
-          );
-        })}
-      </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                {filtered.map((s) => {
+                  const pct = chapterPct(s.completedChapters, s.totalChapters);
+                  const tone = subjectTone[s.subject] ?? FALLBACK_TONE;
+                  return (
+                    <Card key={s.subject}>
+                      <CardContent>
+                        <div className="mb-3.5 flex items-center gap-3">
+                          <div
+                            className={cn(
+                              "flex size-11 shrink-0 items-center justify-center rounded-md text-white shadow-sm",
+                              tone.tile
+                            )}
+                          >
+                            <BookOpen className="size-5" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-semibold text-text">{s.subject}</p>
+                            <p className="mt-0.5 truncate text-[11px] text-muted">{s.teacher || "Unassigned"}</p>
+                          </div>
+                          <span className={cn("text-base font-semibold", tone.text)}>{pct}%</span>
+                        </div>
+                        <div className="h-1.5 overflow-hidden rounded-full bg-surface-hover">
+                          <div
+                            className={cn("h-full rounded-full", tone.bar)}
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                        <p className="mt-2 text-[11px] text-muted">
+                          {s.completedChapters} of {s.totalChapters} chapters completed
+                        </p>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+
+              <div className="flex flex-col gap-3">
+                {filtered.map((subj, si) => {
+                  // First subject of the list starts expanded until the user says otherwise.
+                  const isSubjOpen = openSubjects[`${activeClass}-${subj.subject}`] ?? si === 0;
+                  const pct = chapterPct(subj.completedChapters, subj.totalChapters);
+                  const tone = subjectTone[subj.subject] ?? FALLBACK_TONE;
+
+                  return (
+                    <Card key={subj.subject} className="overflow-hidden">
+                      <button
+                        onClick={() =>
+                          setOpenSubjects((p) => ({
+                            ...p,
+                            [`${activeClass}-${subj.subject}`]: !isSubjOpen,
+                          }))
+                        }
+                        aria-expanded={isSubjOpen}
+                        className="focus-ring flex w-full items-center gap-3.5 px-5 py-4 text-left transition-colors hover:bg-surface-hover"
+                      >
+                        <div
+                          className={cn(
+                            "flex size-10 shrink-0 items-center justify-center rounded-md text-white",
+                            tone.tile
+                          )}
+                        >
+                          <BookOpen className="size-4.5" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-semibold text-text">{subj.subject}</p>
+                          <div className="mt-1 flex items-center gap-3">
+                            <div className="h-1.5 w-30 overflow-hidden rounded-full bg-surface-hover">
+                              <div
+                                className={cn("h-full rounded-full", tone.bar)}
+                                style={{ width: `${pct}%` }}
+                              />
+                            </div>
+                            <span className="text-xs text-muted">
+                              {subj.completedChapters}/{subj.totalChapters} chapters · {pct}%
+                            </span>
+                          </div>
+                        </div>
+                        {isSubjOpen ? (
+                          <ChevronDown className="size-4.5 shrink-0 text-subtle" />
+                        ) : (
+                          <ChevronRight className="size-4.5 shrink-0 text-subtle" />
+                        )}
+                      </button>
+
+                      {isSubjOpen && (
+                        <div className="border-t border-border">
+                          {subj.units.map((unit, ui) => {
+                            const unitKey = `${activeClass}-${subj.subject}-${ui}`;
+                            const isUnitOpen = openUnits[unitKey] !== false;
+                            const unitCompleted = unit.chapters.every((c) => c.status === "completed");
+                            const unitInProgress = unit.chapters.some((c) => c.status === "in-progress");
+                            const unitStatus = unitCompleted
+                              ? "completed"
+                              : unitInProgress
+                                ? "in-progress"
+                                : "pending";
+
+                            return (
+                              <div key={unitKey} className="border-b border-border last:border-0">
+                                <button
+                                  onClick={() => toggleUnit(unitKey)}
+                                  aria-expanded={isUnitOpen}
+                                  className="focus-ring flex w-full items-center gap-2.5 bg-surface-sunken py-3.5 pl-7 pr-5 text-left transition-colors hover:bg-surface-hover"
+                                >
+                                  <StatusIcon status={unitStatus} className="size-4 shrink-0" />
+                                  <span className="min-w-0 flex-1 truncate text-sm font-medium text-text">
+                                    {unit.unit}
+                                  </span>
+                                  <span className="shrink-0 text-[11px] text-subtle">
+                                    {unit.chapters.length} chapters
+                                  </span>
+                                  {isUnitOpen ? (
+                                    <ChevronDown className="size-3.5 shrink-0 text-subtle" />
+                                  ) : (
+                                    <ChevronRight className="size-3.5 shrink-0 text-subtle" />
+                                  )}
+                                </button>
+
+                                {isUnitOpen && (
+                                  <div>
+                                    {unit.chapters.map((ch, ci) => {
+                                      const sc = statusConfig[ch.status] ?? statusConfig.pending;
+                                      const chPct = chapterPct(ch.completedTopics, ch.topics);
+                                      return (
+                                        <div
+                                          key={`${unitKey}-${ci}`}
+                                          className="flex flex-wrap items-center gap-3 border-t border-border py-3 pl-13 pr-5 transition-colors hover:bg-surface-hover"
+                                        >
+                                          <StatusIcon status={ch.status} className="size-4 shrink-0" />
+                                          <p className="min-w-0 flex-1 truncate text-sm text-text">
+                                            {ch.name}
+                                          </p>
+
+                                          <div className="flex items-center gap-2">
+                                            <div className="h-1 w-16 overflow-hidden rounded-full bg-surface-hover">
+                                              <div
+                                                className={cn("h-full rounded-full", sc.bar)}
+                                                style={{ width: `${chPct}%` }}
+                                              />
+                                            </div>
+                                            <span className="text-[11px] text-subtle">
+                                              {ch.completedTopics}/{ch.topics}
+                                            </span>
+                                          </div>
+
+                                          {ch.date !== "—" && (
+                                            <span className="w-13 text-right text-[11px] text-subtle">
+                                              {ch.date}
+                                            </span>
+                                          )}
+
+                                          <Badge variant={sc.variant}>{sc.label}</Badge>
+
+                                          <div className="flex items-center gap-1">
+                                            <button
+                                              onClick={() =>
+                                                setViewing(items.find((i) => i.id === ch.id) ?? null)
+                                              }
+                                              aria-label={`View ${ch.name}`}
+                                              className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+                                            >
+                                              <Eye className="size-4" />
+                                            </button>
+                                            <button
+                                              onClick={() => openEdit(ch.id)}
+                                              aria-label={`Edit ${ch.name}`}
+                                              className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+                                            >
+                                              <Pencil className="size-4" />
+                                            </button>
+                                            <button
+                                              onClick={() =>
+                                                setPendingDelete(
+                                                  items.find((i) => i.id === ch.id) ?? null
+                                                )
+                                              }
+                                              aria-label={`Delete ${ch.name}`}
+                                              className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-danger-soft hover:text-danger"
+                                            >
+                                              <Trash2 className="size-4" />
+                                            </button>
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </Card>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </>
+      )}
 
       <SyllabusFormModal
         open={formOpen}
         onOpenChange={setFormOpen}
         record={editing}
         defaultClass={activeClass}
+        defaultYear={activeYear !== ALL_YEARS ? activeYear : undefined}
         saving={saving}
         onSubmit={handleSubmit}
+      />
+
+      <DetailModal
+        open={Boolean(viewing)}
+        onOpenChange={(o) => !o && setViewing(null)}
+        title={viewing?.chapter ?? "Chapter"}
+        description={viewing ? `${viewing.subject} · Class ${viewing.className}` : ""}
+        footer={
+          viewing ? (
+            <Button
+              variant="outline"
+              onClick={() => {
+                const record = viewing;
+                setViewing(null);
+                setEditing(record);
+                setFormOpen(true);
+              }}
+            >
+              <Pencil className="size-4" />
+              Edit
+            </Button>
+          ) : undefined
+        }
+        rows={
+          viewing
+            ? [
+                { label: "Chapter", value: viewing.chapter },
+                { label: "Unit", value: viewing.unit },
+                { label: "Subject", value: viewing.subject },
+                { label: "Class", value: viewing.className },
+                { label: "Teacher", value: viewing.teacher || "Unassigned" },
+                { label: "Academic year", value: viewing.academicYear || "—" },
+                {
+                  label: "Progress",
+                  value: `${viewing.completedTopics}/${viewing.topics} topics · ${chapterPct(
+                    viewing.completedTopics,
+                    viewing.topics
+                  )}%`,
+                },
+                {
+                  label: "Status",
+                  value: (
+                    <Badge variant={(statusConfig[viewing.status] ?? statusConfig.pending).variant}>
+                      {(statusConfig[viewing.status] ?? statusConfig.pending).label}
+                    </Badge>
+                  ),
+                },
+                { label: "Taught on", value: viewing.date === "—" ? "—" : viewing.date },
+              ]
+            : []
+        }
       />
 
       <ConfirmDialog

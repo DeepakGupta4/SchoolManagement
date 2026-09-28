@@ -2,7 +2,9 @@ import { Router } from "express";
 import { z } from "zod";
 import { requireAuth, requireRole } from "../../middleware/auth.js";
 import { validate, parsed } from "../../middleware/validate.js";
+import { ApiError } from "../../utils/ApiError.js";
 import { Mark } from "./mark.model.js";
+import { Exam } from "../exams/exam.model.js";
 
 const router = Router();
 router.use(requireAuth);
@@ -65,6 +67,22 @@ router.post(
     try {
       const { examName, className, section, records } = req.body as z.infer<typeof saveBody>;
       const schoolId = req.user!.schoolId;
+
+      // Marks can't be entered before the exam has taken place. Enforce server-
+      // side (matching the UI lock) so the future-date guard can't be bypassed
+      // by calling the API directly. A date of today or in the past is allowed.
+      const exam = await Exam.findOne({ schoolId, name: examName });
+      const today = new Date().toISOString().slice(0, 10);
+      if (
+        exam &&
+        typeof exam.date === "string" &&
+        /^\d{4}-\d{2}-\d{2}$/.test(exam.date) &&
+        exam.date > today
+      ) {
+        throw ApiError.badRequest(
+          `Marks for "${examName}" can't be entered before the exam date (${exam.date}).`
+        );
+      }
 
       await Mark.bulkWrite(
         records.map((r) => ({

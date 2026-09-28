@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   CheckCircle2,
   Clock,
@@ -78,13 +78,24 @@ export default function StudentDocumentsPage() {
   const [page, setPage] = useState(1);
   const [bulkOpen, setBulkOpen] = useState(false);
   const { toast } = useToast();
-  const { classOptions } = useClassOptions();
+  const { classOptions, defaultClass } = useClassOptions();
   const { items, loading } = useResource(studentDocumentsApi, {}, { label: "student file" });
 
   const applyFilter = (setter: (value: string) => void) => (value: string) => {
     setter(value);
     setPage(1);
   };
+
+  // Pre-select the lowest class (e.g. Nursery) once the class list resolves, so
+  // the vault opens filtered to one class. Runs once; leaves the user's later
+  // choice (including clearing it) alone.
+  const defaultedClass = useRef(false);
+  useEffect(() => {
+    if (defaultedClass.current || className || !defaultClass) return;
+    defaultedClass.current = true;
+    const t = setTimeout(() => setClassName(defaultClass), 0);
+    return () => clearTimeout(t);
+  }, [className, defaultClass]);
 
   const query = search.trim().toLowerCase();
   const filtered = items.filter((r) => {

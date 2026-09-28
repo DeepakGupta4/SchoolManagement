@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowUpCircle,
   CheckCircle2,
@@ -103,7 +103,7 @@ function computeDefaults(rows: Row[], ordered: string[]): Record<string, Decisio
 
 export default function PromotionsPage() {
   const { toast } = useToast();
-  const { classOptions, classNames } = useClassOptions();
+  const { classOptions, classNames, defaultClass } = useClassOptions();
   const ordered = useMemo(() => sortClasses(classNames), [classNames]);
 
   const [session, setSession] = useState("2026-27");
@@ -118,6 +118,17 @@ export default function PromotionsPage() {
   // Which session was last committed — compared during render rather than
   // cleared from an effect when the session changes.
   const [appliedSession, setAppliedSession] = useState<string | null>(null);
+
+  // Default the class filter to the lowest class once the roster's classes
+  // resolve, so the batch opens focused rather than on "All classes". Runs once
+  // and steps aside if the user picks a different class.
+  const defaultedClass = useRef(false);
+  useEffect(() => {
+    if (defaultedClass.current || currentClass || !defaultClass) return;
+    defaultedClass.current = true;
+    const t = setTimeout(() => setCurrentClass(defaultClass), 0);
+    return () => clearTimeout(t);
+  }, [currentClass, defaultClass]);
 
   // Load the real roster for the selected class (all classes when unfiltered).
   useEffect(() => {

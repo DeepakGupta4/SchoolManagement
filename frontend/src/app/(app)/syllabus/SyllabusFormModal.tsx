@@ -8,7 +8,14 @@ import { useClassOptions } from "@/hooks/useClassOptions";
 import { useSubjectOptions } from "@/hooks/useSubjectOptions";
 import { listTeachers } from "@/lib/api/teachers";
 import { teacherName } from "@/types/teacher";
-import { syllabusSchema, deriveStatus, type SyllabusSchema } from "@/lib/schemas/syllabus";
+import { MIN_RECORD_DATE, TODAY_ISO } from "@/lib/dates";
+import {
+  syllabusSchema,
+  deriveStatus,
+  CURRENT_ACADEMIC_YEAR,
+  ACADEMIC_YEAR_OPTIONS,
+  type SyllabusSchema,
+} from "@/lib/schemas/syllabus";
 import type { SyllabusChapter } from "@/lib/api/syllabus";
 
 /** "Unit 1".."Unit 10" for the datalist — pick a common one or type your own. */
@@ -18,9 +25,10 @@ const emptyValues: SyllabusSchema = {
   className: "",
   subject: "",
   teacher: "",
+  academicYear: CURRENT_ACADEMIC_YEAR,
   unit: "",
   chapter: "",
-  topics: 0,
+  topics: 1,
   completedTopics: 0,
   date: "",
 };
@@ -32,6 +40,8 @@ interface SyllabusFormModalProps {
   record?: SyllabusChapter | null;
   /** Pre-selects this class in create mode so the row lands on the class in view. */
   defaultClass?: string;
+  /** Pre-selects this academic year in create mode (the one currently filtered). */
+  defaultYear?: string;
   saving?: boolean;
   onSubmit: (values: Omit<SyllabusChapter, "id">) => Promise<void>;
 }
@@ -41,6 +51,7 @@ export function SyllabusFormModal({
   onOpenChange,
   record,
   defaultClass,
+  defaultYear,
   saving,
   onSubmit,
 }: SyllabusFormModalProps) {
@@ -83,15 +94,20 @@ export function SyllabusFormModal({
             className: record.className,
             subject: record.subject,
             teacher: record.teacher,
+            academicYear: record.academicYear || CURRENT_ACADEMIC_YEAR,
             unit: record.unit,
             chapter: record.chapter,
-            topics: record.topics,
+            topics: record.topics || 1,
             completedTopics: record.completedTopics,
             date: record.date && record.date !== "—" ? record.date : "",
           }
-        : { ...emptyValues, className: defaultClass ?? "" }
+        : {
+            ...emptyValues,
+            className: defaultClass ?? "",
+            academicYear: defaultYear || CURRENT_ACADEMIC_YEAR,
+          }
     );
-  }, [open, record, defaultClass, reset]);
+  }, [open, record, defaultClass, defaultYear, reset]);
 
   // Status is derived, not chosen; date falls back to the server's "—" sentinel.
   const submit = handleSubmit((values) =>
@@ -149,6 +165,19 @@ export function SyllabusFormModal({
             error={errors.teacher?.message}
           />
           <Input
+            label="Academic year"
+            required
+            list="syllabus-years"
+            placeholder="e.g. 2026-27"
+            {...register("academicYear")}
+            error={errors.academicYear?.message}
+          />
+          <datalist id="syllabus-years">
+            {ACADEMIC_YEAR_OPTIONS.map((y) => (
+              <option key={y} value={y} />
+            ))}
+          </datalist>
+          <Input
             label="Unit"
             required
             list="syllabus-units"
@@ -171,7 +200,8 @@ export function SyllabusFormModal({
           <Input
             label="Total topics"
             type="number"
-            min={0}
+            min={1}
+            max={999}
             {...register("topics")}
             error={errors.topics?.message}
           />
@@ -179,12 +209,15 @@ export function SyllabusFormModal({
             label="Topics completed"
             type="number"
             min={0}
+            hint="Status is set automatically from this."
             {...register("completedTopics")}
             error={errors.completedTopics?.message}
           />
           <Input
             label="Taught on"
             type="date"
+            min={MIN_RECORD_DATE}
+            max={TODAY_ISO}
             hint="Optional"
             {...register("date")}
             error={errors.date?.message}

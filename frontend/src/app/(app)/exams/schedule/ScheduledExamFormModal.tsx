@@ -1,18 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ChangeEvent } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Modal, Button, Input, Select } from "@/components/ui";
 import { useClassOptions } from "@/hooks/useClassOptions";
 import { useSubjectOptions } from "@/hooks/useSubjectOptions";
+import { isValidDateString } from "@/lib/dates";
 import { scheduledExamSchema, type ScheduledExamSchema } from "@/lib/schemas/examSchedule";
+import { MIN_EXAM_DATE, MAX_EXAM_DATE } from "@/lib/schemas/exam";
 import {
   SCHEDULE_ROOM_OPTIONS,
   SCHEDULE_STATUS_OPTIONS,
   type ScheduledExam,
 } from "@/lib/api/examSchedule";
-import { examsApi } from "@/lib/api/exams";
+import { examsApi, type Exam } from "@/lib/api/exams";
 import { listTeachers } from "@/lib/api/teachers";
 import { teacherName } from "@/types/teacher";
 
@@ -57,7 +59,10 @@ export function ScheduledExamFormModal({
 
   // Real exams and teachers power the "which exam" and invigilator pickers so the
   // owner chooses from what they've actually created instead of static lists.
-  const [examNames, setExamNames] = useState<string[]>([]);
+  // Full exam records (not just names) so picking one can carry its own subject,
+  // date and marks into the sitting. Refetched every open so a just-created exam
+  // is always present.
+  const [exams, setExams] = useState<Exam[]>([]);
   const [teacherNames, setTeacherNames] = useState<string[]>([]);
 
   useEffect(() => {
@@ -65,8 +70,8 @@ export function ScheduledExamFormModal({
     let cancelled = false;
     examsApi
       .list()
-      .then((exams) => {
-        if (!cancelled) setExamNames(exams.map((e) => e.name));
+      .then((list) => {
+        if (!cancelled) setExams(list);
       })
       .catch(() => {});
     listTeachers()
@@ -83,11 +88,27 @@ export function ScheduledExamFormModal({
     register,
     handleSubmit,
     reset,
+    setValue,
     formState: { errors },
   } = useForm<ScheduledExamSchema>({
     resolver: zodResolver(scheduledExamSchema),
     defaultValues: emptyValues,
   });
+
+  // Picking an exam carries its own details into the sitting, so a freshly
+  // created exam (with its near-future date) can be scheduled in one step. Every
+  // field stays editable afterwards.
+  const examField = register("exam");
+  const onExamChange = (e: ChangeEvent<HTMLSelectElement>) => {
+    examField.onChange(e);
+    const picked = exams.find((x) => x.name === e.target.value);
+    if (!picked) return;
+    if (picked.subject) setValue("subject", picked.subject);
+    if (isValidDateString(picked.date)) setValue("date", picked.date);
+    if (picked.totalMarks) setValue("totalMarks", picked.totalMarks);
+    // The sitting is per single class; only auto-fill when the exam names one.
+    if (picked.classes?.length === 1) setValue("class", picked.classes[0]);
+  };
 
   // Repopulate on open so the previous record's values can't leak through.
   useEffect(() => {
@@ -137,8 +158,9 @@ export function ScheduledExamFormModal({
             label="Exam"
             required
             placeholder="Select exam"
-            options={examNames.map((e) => ({ label: e, value: e }))}
-            {...register("exam")}
+            options={exams.map((e) => ({ label: e.name, value: e.name }))}
+            {...examField}
+            onChange={onExamChange}
             error={errors.exam?.message}
           />
           <Select
@@ -161,6 +183,8 @@ export function ScheduledExamFormModal({
             label="Date"
             required
             type="date"
+            min={MIN_EXAM_DATE}
+            max={MAX_EXAM_DATE}
             {...register("date")}
             error={errors.date?.message}
           />

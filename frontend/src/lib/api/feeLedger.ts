@@ -162,6 +162,28 @@ export const feeAccountsApi = {
   },
 };
 
+export interface NewFeeAccountInput {
+  studentId: string;
+  /** Billed amount per fee head, e.g. [{ head: "Tuition", billed: 45000 }]. */
+  heads: { head: string; billed: number }[];
+  /** Optional scholarship / sibling discount, netted off the billed heads. */
+  concession?: number;
+  lateFee?: number;
+  session?: string;
+}
+
+/**
+ * Opens a fee account for a student — used by the "Register New Student" flow so
+ * fees can be set during admission. Safe to call more than once for the same
+ * student & session: the server updates the existing account in place.
+ */
+export async function createFeeAccount(input: NewFeeAccountInput): Promise<StudentFeeAccount> {
+  return apiRequest<StudentFeeAccount>("/api/fees/accounts", {
+    method: "POST",
+    body: input,
+  });
+}
+
 export interface PaymentFilters {
   search?: string;
   method?: string;

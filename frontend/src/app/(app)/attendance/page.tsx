@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Check, X, Clock, Download, Users, Loader2, UserX, PartyPopper } from "lucide-react";
 import {
   Badge,
@@ -40,7 +40,7 @@ const todayIso = () => new Date().toISOString().slice(0, 10);
 
 export default function AttendancePage() {
   const { toast } = useToast();
-  const { classOptions, sectionOptions } = useClassOptions();
+  const { classOptions, sectionOptions, defaultClass } = useClassOptions();
 
   const [className, setClassName] = useState("");
   const [section, setSection] = useState("");
@@ -54,6 +54,19 @@ export default function AttendancePage() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
+
+  // Pre-select the lowest class (e.g. Nursery) once it becomes known, but only
+  // while the user hasn't chosen one yet. Ref-guarded so it fires a single time,
+  // and deferred so we never call setState synchronously inside the effect. From
+  // there the roster/marking UI loads exactly as if the user had picked it, and
+  // a class the user later chooses is never overridden.
+  const didPreselectClass = useRef(false);
+  useEffect(() => {
+    if (didPreselectClass.current || className || !defaultClass) return;
+    didPreselectClass.current = true;
+    const t = setTimeout(() => setClassName(defaultClass), 0);
+    return () => clearTimeout(t);
+  }, [className, defaultClass]);
 
   // School holidays — a matching date closes the marking UI entirely.
   const [holidays, setHolidays] = useState<Holiday[]>([]);

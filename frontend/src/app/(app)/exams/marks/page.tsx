@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { CheckCircle, ClipboardList, Loader2, Percent, Save, Search, Users } from "lucide-react";
+import React, { useEffect, useMemo, useState } from "react";
+import { CalendarClock, CheckCircle, ClipboardList, Loader2, Percent, Save, Search, Users } from "lucide-react";
 import {
   Avatar,
   Badge,
@@ -20,8 +20,9 @@ import { cn } from "@/lib/utils";
 import { useClassOptions } from "@/hooks/useClassOptions";
 import { useSubjectOptions } from "@/hooks/useSubjectOptions";
 import { listStudents } from "@/lib/api/students";
-import { examsApi } from "@/lib/api/exams";
+import { examsApi, type Exam } from "@/lib/api/exams";
 import { getMarks, saveMarks, type MarkRecord } from "@/lib/api/marks";
+import { isValidDateString, TODAY_ISO } from "@/lib/dates";
 import type { Student as ApiStudent } from "@/types/student";
 
 type Row = { id: string; name: string; roll: number };
@@ -53,20 +54,22 @@ export default function MarkEntryPage() {
   const { classOptions, sectionOptions } = useClassOptions();
   const { subjectOptions } = useSubjectOptions();
 
-  // Real exams the school created power the exam picker.
-  const [examNames, setExamNames] = useState<string[]>([]);
+  // Real exams the school created power the exam picker. Full records are kept so
+  // the selected exam's own date can gate mark entry.
+  const [exams, setExams] = useState<Exam[]>([]);
   useEffect(() => {
     let cancelled = false;
     examsApi
       .list()
-      .then((exams) => {
-        if (!cancelled) setExamNames(exams.map((e) => e.name));
+      .then((list) => {
+        if (!cancelled) setExams(list);
       })
       .catch(() => {});
     return () => {
       cancelled = true;
     };
   }, []);
+  const examNames = useMemo(() => exams.map((e) => e.name), [exams]);
 
   const [selectedClass,   setSelectedClass]   = useState("");
   const [selectedSection, setSelectedSection] = useState("");
@@ -108,15 +111,24 @@ export default function MarkEntryPage() {
   // the API requires all three, so fetching with "All"/blank would 400.
   const ready = Boolean(selectedClass && selectedSection && selectedExam);
 
+  // Marks can't be entered before the exam has taken place. Read the selected
+  // exam's own date and block entry while it's still in the future (a date of
+  // today or in the past is allowed). The backend enforces the same rule.
+  const selectedExamDate = useMemo(
+    () => exams.find((e) => e.name === selectedExam)?.date ?? "",
+    [exams, selectedExam]
+  );
+  const examInFuture = isValidDateString(selectedExamDate) && selectedExamDate > TODAY_ISO;
+
   // Load the class roster (real students) + any saved marks for the exam-class.
   useEffect(() => {
     let cancelled = false;
     if (!ready) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setRoster([]);
       setLoading(false);
       return;
     }
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     Promise.all([
       listStudents({ className: selectedClass }),
@@ -164,6 +176,7 @@ export default function MarkEntryPage() {
   );
 
   const handleMark = (id: string, val: string) => {
+    if (examInFuture) return; // entry is locked until the exam date passes
     const num = parseInt(val);
     if (val === "" || (!isNaN(num) && num >= 0 && num <= totalMarks)) {
       setMarks((prev) => ({ ...prev, [markKey(id, selectedSubject)]: val }));
@@ -173,6 +186,14 @@ export default function MarkEntryPage() {
 
   const handleSave = async () => {
     if (roster.length === 0) return;
+    if (examInFuture) {
+      toast({
+        title: "Exam hasn't taken place yet",
+        description: `Marks for ${selectedExam} open after ${selectedExamDate}.`,
+        variant: "warning",
+      });
+      return;
+    }
     const records: MarkRecord[] = roster
       .filter((s) => markOf(s.id) !== "")
       .map((s) => ({
@@ -330,7 +351,10 @@ export default function MarkEntryPage() {
         title="Mark Entry"
         description="Enter and manage student marks"
         actions={
-          <Button onClick={handleSave} disabled={saving || loading || roster.length === 0}>
+          <Button
+            onClick={handleSave}
+            disabled={saving || loading || roster.length === 0 || examInFuture}
+          >
             {saving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
             Save Marks
           </Button>
@@ -428,6 +452,18 @@ export default function MarkEntryPage() {
           <span className="font-medium text-text">section</span>,{" "}
           <span className="font-medium text-text">subject</span> and{" "}
           <span className="font-medium text-text">exam</span> to start entering marks.
+        </div>
+      ) : examInFuture ? (
+        <div className="flex flex-col items-center gap-2 py-16 text-center">
+          <CalendarClock className="size-8 text-muted" />
+          <p className="text-sm font-semibold text-text">
+            Mark entry is locked until the exam date
+          </p>
+          <p className="max-w-md text-sm text-muted">
+            <span className="font-medium text-text">{selectedExam}</span> is scheduled for{" "}
+            <span className="font-medium text-text">{selectedExamDate}</span>. Marks can be entered
+            once that date has passed.
+          </p>
         </div>
       ) : loading ? (
         <div className="grid place-items-center py-16 text-muted">

@@ -14,6 +14,8 @@ import { fileToDataUrl } from "@/lib/image";
 import { AttachmentsField } from "@/components/AttachmentsField";
 import { SingleDocField } from "@/components/SingleDocField";
 import { uploadDocumentFiles, uploadLabeledDocument } from "@/lib/api/documents";
+import { feeStructuresApi, feeTotal, FEE_HEADS, type FeeStructure } from "@/lib/api/feeStructures";
+import { createFeeAccount } from "@/lib/api/feeLedger";
 import { MIN_STUDENT_DOB, MAX_STUDENT_DOB, MIN_RECORD_DATE, TODAY_ISO } from "@/lib/dates";
 import type { Student, StudentFormValues } from "@/types/student";
 
@@ -44,6 +46,25 @@ function nextRollNo(students: Student[], className: string, section: string): nu
     if (!Number.isNaN(n)) max = Math.max(max, n);
   }
   return max + 1;
+}
+
+type FeeMode = "none" | "structure" | "custom";
+
+/**
+ * The billed fee heads to open the account with — either every non-zero head of
+ * the chosen structure, or a single "Tuition Fee" head for a lump-sum total.
+ * The concession is applied server-side, so heads here are the gross amounts.
+ */
+function buildFeeHeads(mode: FeeMode, structure: FeeStructure | null, total: number) {
+  if (mode === "structure" && structure) {
+    return FEE_HEADS.map((h) => ({ head: h.label, billed: Number(structure[h.key]) || 0 })).filter(
+      (h) => h.billed > 0
+    );
+  }
+  if (mode === "custom" && total > 0) {
+    return [{ head: "Tuition Fee", billed: Math.round(total) }];
+  }
+  return [];
 }
 
 const toOptions = (values: readonly string[]) =>
@@ -120,6 +141,12 @@ export function StudentFormModal({
   const [savingDocs, setSavingDocs] = useState(false);
   // Existing students, used to auto-derive the next admission & roll numbers.
   const [existing, setExisting] = useState<Student[]>([]);
+  // Optional fees, set during admission (create mode only). "none" skips it.
+  const [feeMode, setFeeMode] = useState<FeeMode>("none");
+  const [feeStructures, setFeeStructures] = useState<FeeStructure[]>([]);
+  const [feeStructureId, setFeeStructureId] = useState("");
+  const [feeTotalInput, setFeeTotalInput] = useState("");
+  const [feeConcession, setFeeConcession] = useState("");
   // Classes/sections come from the Classes & Sections module — a single source
   // of truth, so a class added there shows up here automatically.
   const { classOptions, sectionOptions } = useClassOptions();
@@ -181,6 +208,10 @@ export function StudentFormModal({
       setDocError(null);
       setBirthCert(null);
       setAadhaar(null);
+      setFeeMode("none");
+      setFeeStructureId("");
+      setFeeTotalInput("");
+      setFeeConcession("");
     }, 0);
     return () => clearTimeout(t);
   }, [open, student, reset]);
@@ -198,6 +229,19 @@ export function StudentFormModal({
     };
   }, [open, isEdit]);
 
+  // Fee structures for the optional "set fees now" section (create mode only).
+  useEffect(() => {
+    if (!open || isEdit) return;
+    let cancelled = false;
+    feeStructuresApi
+      .list()
+      .then((all) => !cancelled && setFeeStructures(all))
+      .catch(() => !cancelled && setFeeStructures([]));
+    return () => {
+      cancelled = true;
+    };
+  }, [open, isEdit]);
+
   // Auto admission number (school-wide) once the roster is known.
   useEffect(() => {
     if (!open || isEdit) return;
@@ -209,6 +253,21 @@ export function StudentFormModal({
     if (!open || isEdit || !className || !section) return;
     setValue("rollNo", String(nextRollNo(existing, className, section)));
   }, [open, isEdit, existing, className, section, setValue]);
+
+  // Fee structures for the class picked above, and the derived amounts shown in
+  // the Fees section. Cheap to recompute; the React Compiler memoises it.
+  const classStructures = feeStructures.filter((s) => s.class === className);
+  const selectedStructure = classStructures.find((s) => s.id === feeStructureId) ?? null;
+  const feeGross =
+    feeMode === "structure"
+      ? selectedStructure
+        ? feeTotal(selectedStructure)
+        : 0
+      : feeMode === "custom"
+        ? Number(feeTotalInput) || 0
+        : 0;
+  const feeConcessionNum = Math.min(Number(feeConcession) || 0, feeGross);
+  const feeNet = Math.max(0, feeGross - feeConcessionNum);
 
   const submit = handleSubmit(async (values) => {
     // On create, a birth certificate and a government ID are mandatory.
@@ -230,6 +289,29 @@ export function StudentFormModal({
       const r = await uploadDocumentFiles("student", saved.id, name, attachments);
       failed += r.failed;
     }
+
+    // Optional: open a fee account so the student's dues show on their profile
+    // and across the Fees pages. Non-fatal — admission still succeeds without it.
+    if (!isEdit && feeMode !== "none") {
+      const heads = buildFeeHeads(feeMode, selectedStructure, Number(feeTotalInput) || 0);
+      if (heads.length > 0) {
+        try {
+          await createFeeAccount({
+            studentId: saved.id,
+            heads,
+            concession: Number(feeConcession) || 0,
+          });
+        } catch {
+          toast({
+            title: "Fees not set up",
+            description:
+              "The student was created, but their fee account couldn't be opened. You can add it from the Fees page.",
+            variant: "warning",
+          });
+        }
+      }
+    }
+
     setSavingDocs(false);
     if (failed) {
       toast({
@@ -366,6 +448,77 @@ export function StudentFormModal({
             <Textarea label="Medical notes" hint="Allergies, conditions, medication" {...register("medicalNotes")} error={errors.medicalNotes?.message} />
           </div>
         </section>
+
+        {!isEdit && (
+          <section>
+            <SectionTitle>Fees (optional)</SectionTitle>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Select
+                label="Set up fees now"
+                value={feeMode}
+                onChange={(e) => setFeeMode(e.target.value as FeeMode)}
+                options={[
+                  { label: "Skip for now", value: "none" },
+                  { label: "Use a fee structure", value: "structure" },
+                  { label: "Enter a total fee", value: "custom" },
+                ]}
+              />
+              {feeMode === "structure" && (
+                <Select
+                  label="Fee structure"
+                  placeholder={className ? "Select a structure" : "Pick a class first"}
+                  value={feeStructureId}
+                  onChange={(e) => setFeeStructureId(e.target.value)}
+                  options={classStructures.map((s) => ({
+                    label: `${s.code} — ₹${feeTotal(s).toLocaleString("en-IN")}`,
+                    value: s.id,
+                  }))}
+                />
+              )}
+              {feeMode === "custom" && (
+                <Input
+                  label="Total annual fee (₹)"
+                  inputMode="numeric"
+                  placeholder="e.g. 45000"
+                  value={feeTotalInput}
+                  onChange={(e) => setFeeTotalInput(e.target.value.replace(/[^\d]/g, ""))}
+                />
+              )}
+              {feeMode !== "none" && (
+                <Input
+                  label="Concession / discount (₹)"
+                  hint="Optional — scholarship or sibling discount"
+                  inputMode="numeric"
+                  placeholder="0"
+                  value={feeConcession}
+                  onChange={(e) => setFeeConcession(e.target.value.replace(/[^\d]/g, ""))}
+                />
+              )}
+            </div>
+            {feeMode === "structure" && className && classStructures.length === 0 && (
+              <p className="mt-3 rounded-md bg-warning-soft/50 px-3 py-2 text-xs text-warning-text">
+                No fee structure for <span className="font-semibold">{className}</span> yet — create one
+                in <span className="font-semibold">Fees &rarr; Fee Structure</span>, or enter a total fee
+                instead.
+              </p>
+            )}
+            {feeMode !== "none" && feeGross > 0 && (
+              <p className="mt-3 text-xs text-muted">
+                Billed <span className="font-medium text-text">₹{feeGross.toLocaleString("en-IN")}</span>
+                {feeConcessionNum > 0 && (
+                  <>
+                    {" · concession "}
+                    <span className="font-medium text-success-text">
+                      ₹{feeConcessionNum.toLocaleString("en-IN")}
+                    </span>
+                  </>
+                )}
+                {" · payable "}
+                <span className="font-medium text-text">₹{feeNet.toLocaleString("en-IN")}</span>
+              </p>
+            )}
+          </section>
+        )}
 
         <section>
           <SectionTitle>Documents{!isEdit ? " (required)" : ""}</SectionTitle>

@@ -8,7 +8,7 @@ import { useClassOptions } from "@/hooks/useClassOptions";
 import { useSubjectOptions } from "@/hooks/useSubjectOptions";
 import { listStudents } from "@/lib/api/students";
 import type { Student } from "@/types/student";
-import { examSchema, type ExamSchema } from "@/lib/schemas/exam";
+import { examSchema, MIN_EXAM_DATE, MAX_EXAM_DATE, type ExamSchema } from "@/lib/schemas/exam";
 import { EXAM_STATUS_OPTIONS, EXAM_TYPE_OPTIONS, type Exam } from "@/lib/api/exams";
 
 const EXAM_NAME_PRESETS = [
@@ -149,7 +149,15 @@ export function ExamFormModal({ open, onOpenChange, record, saving, onSubmit }: 
             {...register("subject")}
             error={errors.subject?.message}
           />
-          <Input label="Date" type="date" required {...register("date")} error={errors.date?.message} />
+          <Input
+            label="Date"
+            type="date"
+            required
+            min={MIN_EXAM_DATE}
+            max={MAX_EXAM_DATE}
+            {...register("date")}
+            error={errors.date?.message}
+          />
           <Input
             label="Start time"
             required

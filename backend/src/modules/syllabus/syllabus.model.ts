@@ -6,6 +6,9 @@ const syllabusSchema = new Schema(
     className: { type: String, required: true, trim: true },
     subject: { type: String, required: true, trim: true },
     teacher: { type: String, default: "" },
+    // Academic year the chapter is tracked under, e.g. "2026-27". Optional for
+    // backward compatibility with rows created before this field existed.
+    academicYear: { type: String, default: "", trim: true },
     unit: { type: String, required: true, trim: true },
     chapter: { type: String, required: true, trim: true },
     topics: { type: Number, default: 0 },

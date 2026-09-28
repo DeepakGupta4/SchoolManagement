@@ -6,6 +6,7 @@ const syllabusSchema = z.object({
   className: z.string().min(1),
   subject: z.string().min(1),
   teacher: z.string().default(""),
+  academicYear: z.string().default(""),
   unit: z.string().min(1),
   chapter: z.string().min(1),
   topics: z.coerce.number<number>().min(0).default(0),
@@ -18,5 +19,5 @@ export default createCrudRouter({
   model: Syllabus,
   createSchema: syllabusSchema,
   searchFields: ["subject", "teacher", "unit", "chapter"],
-  filterFields: ["className", "subject", "status"],
+  filterFields: ["className", "subject", "academicYear", "status"],
 });
