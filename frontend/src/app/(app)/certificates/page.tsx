@@ -1,9 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Clock,
-  Download,
   Eye,
   FileCheck2,
   FileText,
@@ -33,10 +32,12 @@ import {
   type Column,
 } from "@/components/ui";
 import { useResource } from "@/hooks/useResource";
+import { useClassOptions } from "@/hooks/useClassOptions";
 import {
   CERTIFICATE_STATUS_OPTIONS,
   CERTIFICATE_TYPE_OPTIONS,
   certificatesApi,
+  classLine,
   makeVerificationCode,
   todayIso,
   type Certificate,
@@ -44,8 +45,11 @@ import {
   type CertificateType,
 } from "@/lib/api/certificates";
 import type { CertificateSchema } from "@/lib/schemas/certificate";
+import { getMySchool } from "@/lib/api/schools";
+import { getMySubscription } from "@/lib/api/subscription";
 import { DetailModal } from "@/components/DetailModal";
 import { CertificateFormModal } from "./CertificateFormModal";
+import { CertificatePreviewModal } from "./CertificatePreviewModal";
 import { VerifyCodeModal } from "./VerifyCodeModal";
 
 const PAGE_SIZE = 8;
@@ -68,12 +72,29 @@ const formatDate = (iso: string) =>
   new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
 
 export default function CertificatesPage() {
+  const { classOptions, defaultClass } = useClassOptions();
+
   const [search, setSearch] = useState("");
   const [type, setType] = useState("");
   const [status, setStatus] = useState("");
+  const [className, setClassName] = useState("");
   const [page, setPage] = useState(1);
 
-  const filters = useMemo(() => ({ search, type, status }), [search, type, status]);
+  // Pre-select the lowest class (e.g. Nursery) once the class list resolves, so
+  // the table opens on one class rather than every certificate. Ref-guarded and
+  // deferred so it never fights the operator once they change or clear it.
+  const defaultedClass = useRef(false);
+  useEffect(() => {
+    if (defaultedClass.current || className || !defaultClass) return;
+    defaultedClass.current = true;
+    const t = setTimeout(() => setClassName(defaultClass), 0);
+    return () => clearTimeout(t);
+  }, [className, defaultClass]);
+
+  const filters = useMemo(
+    () => ({ search, type, status, className }),
+    [search, type, status, className]
+  );
 
   const { items, loading, error, refetch, save, remove, saving, deleting } = useResource(
     certificatesApi,
@@ -81,9 +102,30 @@ export default function CertificatesPage() {
     { label: "certificate request", describe: (c) => `${c.type} certificate for ${c.student}` }
   );
 
+  // School identity for the printed certificate — sourced from the live profile
+  // (subscription schoolName as the fallback), never hardcoded.
+  const [school, setSchool] = useState<{ name: string; address?: string }>({ name: "" });
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([getMySchool().catch(() => null), getMySubscription().catch(() => null)])
+      .then(([profile, sub]) => {
+        if (cancelled) return;
+        const name = profile?.name || sub?.schoolName || "";
+        const address = profile
+          ? [profile.address, profile.city, profile.state].filter(Boolean).join(", ")
+          : "";
+        setSchool({ name, address: address || undefined });
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Certificate | null>(null);
   const [viewing, setViewing] = useState<Certificate | null>(null);
+  const [previewing, setPreviewing] = useState<Certificate | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Certificate | null>(null);
   const [verifyOpen, setVerifyOpen] = useState(false);
 
@@ -159,8 +201,11 @@ export default function CertificatesPage() {
     setSearch("");
     setType("");
     setStatus("");
+    setClassName("");
     setPage(1);
   };
+
+  const hasFilters = Boolean(search || type || status || className);
 
   const columns: Column<Certificate>[] = [
     {
@@ -174,7 +219,7 @@ export default function CertificatesPage() {
           <div className="min-w-0">
             <p className="truncate font-medium text-text">{c.student}</p>
             <p className="truncate text-xs text-subtle">
-              {c.admissionNo} · {c.className}
+              {c.admissionNo} · {classLine(c)}
             </p>
           </div>
         </div>
@@ -244,12 +289,15 @@ export default function CertificatesPage() {
       align: "right",
       render: (c) => (
         <div className="flex items-center justify-end gap-1">
-          {c.status === "issued" ? (
-            <Button variant="outline" size="sm">
-              <Download className="size-3.5" />
-              PDF
-            </Button>
-          ) : c.status === "pending" || c.status === "in-review" ? (
+          <button
+            onClick={() => setPreviewing(c)}
+            aria-label={`Generate and preview ${c.type} certificate for ${c.student}`}
+            title="Generate, preview, print or download PDF"
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+          >
+            <FileText className="size-4" />
+          </button>
+          {c.status === "pending" || c.status === "in-review" ? (
             <Button variant="outline" size="sm" disabled={saving} onClick={() => issue(c)}>
               <Stamp className="size-3.5" />
               Issue
@@ -320,6 +368,15 @@ export default function CertificatesPage() {
         </div>
         <div className="w-44">
           <Select
+            value={className}
+            onChange={(e) => applyFilter(setClassName)(e.target.value)}
+            placeholder="All classes"
+            options={classOptions}
+            aria-label="Filter by class"
+          />
+        </div>
+        <div className="w-44">
+          <Select
             value={type}
             onChange={(e) => applyFilter(setType)(e.target.value)}
             placeholder="All types"
@@ -357,12 +414,12 @@ export default function CertificatesPage() {
             rowClassName={(c) => (c.status === "rejected" ? "opacity-60" : undefined)}
             emptyTitle="No certificate requests found"
             emptyDescription={
-              search || type || status
+              hasFilters
                 ? "Try clearing your filters to see more results."
                 : "Raise your first certificate request to get started."
             }
             emptyAction={
-              search || type || status ? (
+              hasFilters ? (
                 <Button variant="outline" onClick={clearFilters}>
                   Clear filters
                 </Button>
@@ -394,9 +451,11 @@ export default function CertificatesPage() {
             ? [
                 { label: "Student", value: viewing.student },
                 { label: "Admission no.", value: viewing.admissionNo },
-                { label: "Class", value: viewing.className },
+                { label: "Class", value: classLine(viewing) },
+                ...(viewing.rollNo ? [{ label: "Roll no.", value: viewing.rollNo }] : []),
                 { label: "Certificate type", value: viewing.type },
                 { label: "Reference code", value: viewing.code },
+                ...(viewing.session ? [{ label: "Session", value: viewing.session }] : []),
                 { label: "Requested by", value: viewing.requestedBy },
                 { label: "Requested on", value: formatDate(viewing.requestedOn) },
                 {
@@ -411,6 +470,13 @@ export default function CertificatesPage() {
               ]
             : []
         }
+      />
+
+      <CertificatePreviewModal
+        record={previewing}
+        schoolName={school.name || "Your School"}
+        schoolAddress={school.address}
+        onOpenChange={(o) => !o && setPreviewing(null)}
       />
 
       <VerifyCodeModal open={verifyOpen} onOpenChange={setVerifyOpen} />

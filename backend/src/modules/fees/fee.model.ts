@@ -1,5 +1,8 @@
 import mongoose, { Schema, type InferSchemaType } from "mongoose";
 
+/** The academic session every fee account and payment is scoped to for now. */
+export const CURRENT_SESSION = "2025-26";
+
 /**
  * Fee accounts and the payment register.
  *
@@ -39,6 +42,8 @@ const feeAccountSchema = new Schema(
     concession: { type: Number, default: 0, min: 0 },
     lateFee: { type: Number, default: 0, min: 0 },
     lastPaymentDate: { type: String, default: null },
+    /** Optional fee deadline; drives the "overdue" status when set. */
+    dueDate: { type: String, default: null },
   },
   { timestamps: true }
 );
@@ -108,18 +113,30 @@ export type PaymentDoc = mongoose.HydratedDocument<PaymentAttrs>;
 
 /* ------------------------------------------------------------------ */
 /* Derived totals — never stored, so they cannot drift out of sync      */
+/*                                                                      */
+/* Typed structurally (not against the Mongoose doc) so they work for   */
+/* both a loaded account document and a plain synthesised row alike.    */
 /* ------------------------------------------------------------------ */
 
-export const headBalance = (h: { billed: number; paid: number }) => Math.max(0, h.billed - h.paid);
+interface HeadLike {
+  billed: number;
+  paid: number;
+}
+interface AccountLike {
+  heads: HeadLike[];
+  lateFee: number;
+}
 
-export function totalBilled(a: Pick<FeeAccountAttrs, "heads" | "lateFee">) {
+export const headBalance = (h: HeadLike) => Math.max(0, h.billed - h.paid);
+
+export function totalBilled(a: AccountLike) {
   return a.heads.reduce((sum, h) => sum + h.billed, 0) + a.lateFee;
 }
 
-export function totalPaid(a: Pick<FeeAccountAttrs, "heads">) {
+export function totalPaid(a: Pick<AccountLike, "heads">) {
   return a.heads.reduce((sum, h) => sum + h.paid, 0);
 }
 
-export function balanceOf(a: Pick<FeeAccountAttrs, "heads" | "lateFee">) {
+export function balanceOf(a: AccountLike) {
   return Math.max(0, totalBilled(a) - totalPaid(a));
 }

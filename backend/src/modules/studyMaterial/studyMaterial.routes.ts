@@ -15,6 +15,10 @@ const materialSchema = z.object({
   description: z.string().default(""),
   tags: z.array(z.string()).default([]),
   url: z.string().default(""),
+  fileDataUrl: z.string().default(""),
+  fileName: z.string().default(""),
+  mimeType: z.string().default(""),
+  sizeLabel: z.string().default(""),
 });
 
 export default createCrudRouter({

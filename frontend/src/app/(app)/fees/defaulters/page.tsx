@@ -79,11 +79,11 @@ export default function DefaultersPage() {
 
   const handleExport = () => {
     if (rows.length === 0) {
-      toast({ title: "Nothing to export", description: "No defaulters match the filters.", variant: "warning" });
+      toast({ title: "Nothing to export", description: "No students with dues match the filters.", variant: "warning" });
       return;
     }
     exportToCsv<(typeof rows)[number]>(
-      "fee-defaulters",
+      "fee-dues",
       [
         { header: "Admission No", value: (r) => r.account.admissionNo },
         { header: "Name", value: (r) => r.account.name },
@@ -98,7 +98,7 @@ export default function DefaultersPage() {
       ],
       rows
     );
-    toast({ title: "Export ready", description: `${rows.length} defaulters exported.` });
+    toast({ title: "Export ready", description: `${rows.length} records exported.` });
   };
 
   type Row = (typeof rows)[number];
@@ -192,8 +192,8 @@ export default function DefaultersPage() {
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
-        title="Fee Defaulters"
-        description="Students with an outstanding balance, derived live from the ledger."
+        title="Fee Dues"
+        description="Students with outstanding fees, derived live from the ledger."
         actions={
           <Button variant="outline" onClick={handleExport}>
             <Download className="size-4" />
@@ -203,7 +203,7 @@ export default function DefaultersPage() {
       />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Total defaulters" value={stats.total} icon={Users} tone="rose" />
+        <StatCard label="Students with dues" value={stats.total} icon={Users} tone="rose" />
         <StatCard label="Total due" value={inr.format(stats.due)} icon={Wallet} tone="amber" />
         <StatCard label="Critical (≥ ₹15k)" value={stats.critical} icon={Siren} tone="rose" />
         <StatCard label="High (≥ ₹5k)" value={stats.high} icon={AlertTriangle} tone="amber" />
@@ -233,7 +233,7 @@ export default function DefaultersPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             icon={<Search className="size-4" />}
-            aria-label="Search defaulters"
+            aria-label="Search fee dues"
           />
         </div>
         <p className="text-xs text-muted">{rows.length} students</p>
@@ -254,8 +254,8 @@ export default function DefaultersPage() {
           rows={rows}
           rowKey={(r) => r.account.id}
           loading={loading}
-          emptyTitle="No defaulters found"
-          emptyDescription="Every listed student has cleared their dues. 🎉"
+          emptyTitle="No outstanding fees"
+          emptyDescription="Every student has cleared their dues. 🎉"
         />
       )}
     </div>

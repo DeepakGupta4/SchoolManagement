@@ -1,9 +1,11 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   BadgeIndianRupee,
+  CalendarClock,
   CheckCircle2,
+  History,
   Printer,
   Search,
   TriangleAlert,
@@ -34,13 +36,18 @@ import {
   CLEARS_LATER,
   collectPayment,
   feeAccountsApi,
+  FEE_STANDING_LABEL,
+  feeStandingOf,
   headBalance,
   isCleared,
+  isUnbilled,
   PAYMENT_METHODS,
+  paymentsApi,
   REFERENCE_LABEL,
   REFERENCE_REQUIRED,
   totalBilled,
   totalPaid,
+  type FeeStanding,
   type PaymentAllocation,
   type PaymentMethod,
   type Payment,
@@ -49,6 +56,20 @@ import {
 import { PaymentReceipt } from "./PaymentReceipt";
 
 const inr = (n: number) => `₹${n.toLocaleString("en-IN")}`;
+
+const formatDate = (iso: string) => {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime())
+    ? iso
+    : d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+};
+
+const STANDING_BADGE: Record<FeeStanding, "success" | "warning" | "danger" | "default"> = {
+  paid: "success",
+  partial: "warning",
+  overdue: "danger",
+  due: "default",
+};
 
 /** Quick amounts a clerk reaches for before typing a custom figure. */
 const QUICK_PRESETS = [
@@ -65,7 +86,9 @@ export default function CollectFeePage() {
 
   const [search, setSearch] = useState("");
   const [className, setClassName] = useState("");
-  const [standing, setStanding] = useState("due");
+  // Default to every student in the class — a clerk needs to find anyone to
+  // collect from, not only those already flagged with dues.
+  const [standing, setStanding] = useState("all");
 
   // Deps are the primitive filter values, so the fetcher only changes when a
   // filter actually changes — not on every unrelated render.
@@ -75,8 +98,11 @@ export default function CollectFeePage() {
   );
   const { items: accounts, loading, error, refetch } = useAsyncList<StudentFeeAccount>(fetcher);
 
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const selected = accounts.find((a) => a.id === selectedId) ?? null;
+  // Selection is keyed on the student, not the account id: a provisional row's
+  // id becomes a real account id after its first payment, and keying on the
+  // student keeps that student selected across the change.
+  const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
+  const selected = accounts.find((a) => a.studentId === selectedStudentId) ?? null;
 
   // Per-head amounts the clerk is collecting right now, keyed by head name.
   const [entered, setEntered] = useState<Record<string, string>>({});
@@ -87,7 +113,38 @@ export default function CollectFeePage() {
   const [submitting, setSubmitting] = useState(false);
   const [receipt, setReceipt] = useState<Payment | null>(null);
 
+  // The selected student's own receipts (their payment history).
+  const [history, setHistory] = useState<Payment[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyNonce, setHistoryNonce] = useState(0);
+
   const balance = selected ? balanceOf(selected) : 0;
+
+  // Load the student's history when the selection changes or a payment lands.
+  // Deferred with a 0ms timer so state isn't set synchronously inside the
+  // effect (react-hooks/set-state-in-effect).
+  useEffect(() => {
+    if (!selectedStudentId) return;
+    let cancelled = false;
+    const t = setTimeout(() => {
+      setHistoryLoading(true);
+      paymentsApi
+        .list({ studentId: selectedStudentId })
+        .then((rows) => {
+          if (!cancelled) setHistory(rows);
+        })
+        .catch(() => {
+          if (!cancelled) setHistory([]);
+        })
+        .finally(() => {
+          if (!cancelled) setHistoryLoading(false);
+        });
+    }, 0);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [selectedStudentId, historyNonce]);
 
   // Cheap to recompute each render; the React Compiler handles memoisation.
   const allocations: PaymentAllocation[] = !selected
@@ -102,7 +159,7 @@ export default function CollectFeePage() {
   const canSubmit = Boolean(selected) && collecting > 0 && !overpaying && !referenceMissing;
 
   const pickStudent = (account: StudentFeeAccount) => {
-    setSelectedId(account.id);
+    setSelectedStudentId(account.studentId);
     setEntered({});
     setReference("");
     setBank("");
@@ -141,6 +198,7 @@ export default function CollectFeePage() {
       setBank("");
       setRemarks("");
       refetch();
+      setHistoryNonce((n) => n + 1);
       toast({
         title: `Payment of ${inr(payment.amount)} recorded`,
         description: `Receipt ${payment.receiptNo} issued for ${payment.studentName}.`,
@@ -228,7 +286,7 @@ export default function CollectFeePage() {
               !error &&
               accounts.map((a) => {
                 const due = balanceOf(a);
-                const active = a.id === selectedId;
+                const active = a.studentId === selectedStudentId;
                 return (
                   <button
                     key={a.id}
@@ -273,7 +331,12 @@ export default function CollectFeePage() {
             <Card>
               <CardContent className="flex flex-wrap items-start justify-between gap-4">
                 <div className="min-w-0">
-                  <p className="text-base font-semibold text-text">{selected.name}</p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-base font-semibold text-text">{selected.name}</p>
+                    <Badge variant={STANDING_BADGE[feeStandingOf(selected)]}>
+                      {FEE_STANDING_LABEL[feeStandingOf(selected)]}
+                    </Badge>
+                  </div>
                   <p className="mt-0.5 text-sm text-muted">
                     {selected.admissionNo} · {selected.className} {selected.section} · Roll{" "}
                     {selected.rollNo}
@@ -281,12 +344,17 @@ export default function CollectFeePage() {
                   <p className="mt-0.5 text-xs text-subtle">
                     Guardian: {selected.guardian} · {selected.guardianPhone}
                   </p>
+                  <p className="mt-1 inline-flex items-center gap-1.5 text-xs text-subtle">
+                    <CalendarClock className="size-3.5" />
+                    Due date: {selected.dueDate ? formatDate(selected.dueDate) : "Not set"}
+                    {" · "}Session {selected.session}
+                  </p>
                 </div>
                 <div className="flex gap-6">
                   {[
-                    { label: "Billed", value: totalBilled(selected), tone: "text-text" },
+                    { label: "Total", value: totalBilled(selected), tone: "text-text" },
                     { label: "Paid", value: totalPaid(selected), tone: "text-success" },
-                    { label: "Balance", value: balance, tone: balance > 0 ? "text-danger" : "text-success" },
+                    { label: "Pending", value: balance, tone: balance > 0 ? "text-danger" : "text-success" },
                   ].map((s) => (
                     <div key={s.label}>
                       <p className="text-xs text-subtle">{s.label}</p>
@@ -297,7 +365,15 @@ export default function CollectFeePage() {
               </CardContent>
             </Card>
 
-            {isCleared(selected) ? (
+            {isUnbilled(selected) ? (
+              <Card>
+                <EmptyState
+                  icon={<Wallet className="size-5" />}
+                  title="No fees billed yet"
+                  description={`No fee structure is defined for ${selected.className}. Add one under Fees → Fee Structure, or set the student's fees from their profile, then collect here.`}
+                />
+              </Card>
+            ) : isCleared(selected) ? (
               <Card>
                 <EmptyState
                   icon={<CheckCircle2 className="size-5" />}
@@ -522,6 +598,71 @@ export default function CollectFeePage() {
                 </Card>
               </>
             )}
+
+            {/* Payment history — the student's own receipts */}
+            <Card>
+              <CardHeader>
+                <div className="min-w-0">
+                  <p className="inline-flex items-center gap-2 text-sm font-semibold text-text">
+                    <History className="size-4" />
+                    Payment history
+                  </p>
+                  <p className="mt-0.5 text-xs text-muted">Receipts recorded for {selected.name}.</p>
+                </div>
+              </CardHeader>
+              <div>
+                {historyLoading ? (
+                  <div className="flex flex-col gap-2 p-4">
+                    {[0, 1, 2].map((i) => (
+                      <Skeleton key={i} className="h-12" />
+                    ))}
+                  </div>
+                ) : history.length === 0 ? (
+                  <p className="px-5 py-8 text-center text-sm text-muted">No payments recorded yet.</p>
+                ) : (
+                  history.map((p) => (
+                    <div
+                      key={p.id}
+                      className="flex items-center gap-3 border-b border-border px-5 py-3 last:border-0"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-text">
+                          {p.receiptNo} · {formatDate(p.date)}
+                        </p>
+                        <p className="mt-0.5 truncate text-xs text-subtle">
+                          {p.method}
+                          {p.reference ? ` · ${p.reference}` : ""}
+                        </p>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <p
+                          className={cn(
+                            "text-sm font-semibold",
+                            p.status === "cancelled" || p.status === "bounced"
+                              ? "text-subtle line-through"
+                              : "text-text"
+                          )}
+                        >
+                          {inr(p.amount)}
+                        </p>
+                        <Badge
+                          variant={
+                            p.status === "paid"
+                              ? "success"
+                              : p.status === "pending-clearance"
+                                ? "warning"
+                                : "default"
+                          }
+                          className="mt-1"
+                        >
+                          {p.status === "pending-clearance" ? "pending" : p.status}
+                        </Badge>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </Card>
           </div>
         )}
       </div>

@@ -5,6 +5,8 @@ const scholarshipSchema = new Schema(
     schoolId: { type: String, required: true, default: "school_1", index: true },
     code: { type: String, required: true, trim: true },
     student: { type: String, required: true, trim: true },
+    /** Links the waiver to a real student so it can reduce their fee bill. */
+    studentId: { type: Schema.Types.ObjectId, ref: "Student", default: null, index: true },
     class: { type: String, default: "" },
     type: { type: String, default: "" },
     percentage: { type: Number, default: 0 },

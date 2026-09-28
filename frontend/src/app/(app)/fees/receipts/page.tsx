@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Ban,
   CheckCircle,
@@ -21,6 +21,7 @@ import {
   Input,
   PageHeader,
   Pagination,
+  Select,
   StatCard,
   Table,
   Textarea,
@@ -30,6 +31,7 @@ import {
 import { cn } from "@/lib/utils";
 import { exportToCsv } from "@/lib/exportCsv";
 import { useAsyncList } from "@/hooks/useAsyncList";
+import { useClassOptions } from "@/hooks/useClassOptions";
 import {
   paymentsApi,
   clearPayment,
@@ -71,11 +73,28 @@ type Reversal = { payment: Payment; kind: "bounce" | "cancel" };
 export default function ReceiptsPage() {
   const { toast } = useToast();
 
+  const { classOptions, defaultClass } = useClassOptions();
+
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
+  const [className, setClassName] = useState("");
   const [page, setPage] = useState(1);
 
-  const fetcher = useCallback(() => paymentsApi.list({ search, status }), [search, status]);
+  // Default to the lowest class once the class list resolves. Ref-guarded and
+  // deferred so it runs once and never fights a choice the user has made, and
+  // doesn't set state synchronously inside the effect.
+  const classInit = useRef(false);
+  useEffect(() => {
+    if (classInit.current || !defaultClass) return;
+    classInit.current = true;
+    const t = setTimeout(() => setClassName(defaultClass), 0);
+    return () => clearTimeout(t);
+  }, [defaultClass]);
+
+  const fetcher = useCallback(
+    () => paymentsApi.list({ search, status, className }),
+    [search, status, className]
+  );
   const { items, loading, error, refetch } = useAsyncList<Payment>(fetcher);
 
   const [reversal, setReversal] = useState<Reversal | null>(null);
@@ -315,6 +334,18 @@ export default function ReceiptsPage() {
               {tab.label}
             </button>
           ))}
+        </div>
+
+        <div className="min-w-44">
+          <Select
+            value={className}
+            onChange={(e) => {
+              setClassName(e.target.value);
+              setPage(1);
+            }}
+            options={[{ label: "All classes", value: "" }, ...classOptions]}
+            aria-label="Filter by class"
+          />
         </div>
 
         <div className="min-w-60 flex-1">

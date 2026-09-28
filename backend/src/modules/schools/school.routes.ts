@@ -86,6 +86,7 @@ const profileSchema = z.object({
   website: z.string().optional(),
   schoolType: z.string().optional(),
   logo: z.string().optional(),
+  signatureUrl: z.string().optional(),
   bellSchedule: z
     .array(z.object({ label: z.string(), time: z.string(), isBreak: z.boolean() }))
     .optional(),

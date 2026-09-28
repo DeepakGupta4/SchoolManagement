@@ -64,6 +64,37 @@ const FALLBACK_TYPE = {
 
 const formatSize = (mb: number) => (mb >= 1024 ? `${(mb / 1024).toFixed(1)} GB` : `${mb} MB`);
 
+/** Best size label: the captured one, else derived from MB, else a dash. */
+function sizeText(m: Material): string {
+  if (m.sizeLabel) return m.sizeLabel;
+  if (m.sizeMb > 0) return formatSize(m.sizeMb);
+  return "—";
+}
+
+/** Turns a base64 data URL back into a Blob so it can be opened/downloaded. */
+function dataUrlToBlob(dataUrl: string): Blob {
+  const [meta, b64] = dataUrl.split(",");
+  const mime = /:(.*?);/.exec(meta)?.[1] ?? "application/octet-stream";
+  const bytes = atob(b64);
+  const arr = new Uint8Array(bytes.length);
+  for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+  return new Blob([arr], { type: mime });
+}
+
+/** Downloads an uploaded material file (stored inline as a data URL). */
+function downloadMaterialFile(m: Material) {
+  if (!m.fileDataUrl) return;
+  const url = URL.createObjectURL(dataUrlToBlob(m.fileDataUrl));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = m.fileName || m.title;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  // Give the download a moment to start before releasing the object URL.
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
 export default function StudyMaterialPage() {
   const { classOptions } = useClassOptions();
   const { subjectOptions } = useSubjectOptions();
@@ -135,10 +166,12 @@ export default function StudyMaterialPage() {
         { header: "Class", value: (m) => m.klass },
         { header: "Uploaded By", value: (m) => m.uploader },
         { header: "Uploaded", value: (m) => m.uploaded },
-        { header: "Size (MB)", value: (m) => m.sizeMb },
+        { header: "Size", value: (m) => sizeText(m) },
         { header: "Downloads", value: (m) => m.downloads },
         { header: "Visibility", value: (m) => m.visibility },
         { header: "Tags", value: (m) => m.tags.join(" / ") },
+        { header: "Source", value: (m) => (m.fileDataUrl ? "File" : m.url ? "Link" : "—") },
+        { header: "File name", value: (m) => m.fileName ?? "" },
         { header: "Link", value: (m) => m.url },
         { header: "Description", value: (m) => m.description },
       ],
@@ -186,7 +219,9 @@ export default function StudyMaterialPage() {
             </div>
             <div className="min-w-0">
               <p className="truncate font-medium text-text">{m.title}</p>
-              <p className="truncate text-xs text-subtle">{formatSize(m.sizeMb)}</p>
+              <p className="truncate text-xs text-subtle">
+                {m.fileDataUrl ? sizeText(m) : m.url ? "External link" : sizeText(m)}
+              </p>
             </div>
           </div>
         );
@@ -254,8 +289,19 @@ export default function StudyMaterialPage() {
       align: "right",
       render: (m) => (
         <div className="flex items-center justify-end gap-1">
-          <Tooltip content={m.url ? `Open ${m.title}` : "No link attached"} side="left">
-            {m.url ? (
+          {m.fileDataUrl ? (
+            <Tooltip content={`Download ${m.fileName || m.title}`} side="left">
+              <button
+                type="button"
+                onClick={() => downloadMaterialFile(m)}
+                aria-label={`Download ${m.title}`}
+                className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+              >
+                <Download className="size-4" />
+              </button>
+            </Tooltip>
+          ) : m.url ? (
+            <Tooltip content={`Open ${m.title}`} side="left">
               <a
                 href={m.url}
                 target="_blank"
@@ -265,17 +311,19 @@ export default function StudyMaterialPage() {
               >
                 <Download className="size-4" />
               </a>
-            ) : (
+            </Tooltip>
+          ) : (
+            <Tooltip content="No file or link attached" side="left">
               <button
                 type="button"
                 disabled
-                aria-label={`No link for ${m.title}`}
+                aria-label={`No resource for ${m.title}`}
                 className="rounded-md p-1.5 text-subtle opacity-40"
               >
                 <Download className="size-4" />
               </button>
-            )}
-          </Tooltip>
+            </Tooltip>
+          )}
           <button
             onClick={() => setViewing(m)}
             aria-label={`View ${m.title}`}
@@ -445,12 +493,21 @@ export default function StudyMaterialPage() {
                 { label: "Class", value: viewing.klass },
                 { label: "Uploaded by", value: viewing.uploader },
                 { label: "Uploaded", value: viewing.uploaded },
-                { label: "Size", value: formatSize(viewing.sizeMb) },
+                { label: "Size", value: sizeText(viewing) },
                 { label: "Downloads", value: viewing.downloads },
                 { label: "Visibility", value: <span className="capitalize">{viewing.visibility}</span> },
                 {
-                  label: "Link",
-                  value: viewing.url ? (
+                  label: viewing.fileDataUrl ? "File" : "Link",
+                  value: viewing.fileDataUrl ? (
+                    <button
+                      type="button"
+                      onClick={() => downloadMaterialFile(viewing)}
+                      className="focus-ring inline-flex items-center gap-1.5 rounded-sm font-medium text-primary-text transition-colors hover:text-primary"
+                    >
+                      <Download className="size-3.5" />
+                      {viewing.fileName || "Download file"}
+                    </button>
+                  ) : viewing.url ? (
                     <a
                       href={viewing.url}
                       target="_blank"

@@ -11,6 +11,7 @@ import {
   CardContent,
   CardHeader,
   EmptyState,
+  Loading,
   PageHeader,
   StatCard,
 } from "@/components/ui";
@@ -26,8 +27,10 @@ const fetchMaterials = () => studyMaterialApi.list();
 const RECENT_LIMIT = 5;
 
 export default function LmsOverviewPage() {
-  const { items: classes, loading: loadingClasses } = useAsyncList<OnlineClass>(fetchClasses);
-  const { items: materials, loading: loadingMaterials } = useAsyncList<Material>(fetchMaterials);
+  const { items: classes, loading: loadingClasses, error: errorClasses } =
+    useAsyncList<OnlineClass>(fetchClasses);
+  const { items: materials, loading: loadingMaterials, error: errorMaterials } =
+    useAsyncList<Material>(fetchMaterials);
 
   const stats = useMemo(
     () => ({
@@ -125,7 +128,11 @@ export default function LmsOverviewPage() {
             </Link>
           </CardHeader>
           <CardContent className="flex flex-col gap-1">
-            {!loadingClasses && recentClasses.length === 0 ? (
+            {loadingClasses ? (
+              <Loading label="Loading classes…" size="md" />
+            ) : errorClasses ? (
+              <p className="px-2 py-10 text-center text-sm text-danger">{errorClasses}</p>
+            ) : recentClasses.length === 0 ? (
               <EmptyState
                 title="No classes yet"
                 description="Schedule a session to get started."
@@ -174,7 +181,11 @@ export default function LmsOverviewPage() {
             </Link>
           </CardHeader>
           <CardContent className="flex flex-col gap-1">
-            {!loadingMaterials && recentMaterials.length === 0 ? (
+            {loadingMaterials ? (
+              <Loading label="Loading material…" size="md" />
+            ) : errorMaterials ? (
+              <p className="px-2 py-10 text-center text-sm text-danger">{errorMaterials}</p>
+            ) : recentMaterials.length === 0 ? (
               <EmptyState
                 title="No material yet"
                 description="Upload a resource to build the library."

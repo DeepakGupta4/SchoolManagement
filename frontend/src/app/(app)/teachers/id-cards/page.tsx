@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { CheckSquare, IdCard as IdCardIcon, Printer, Search, Square, Users } from "lucide-react";
 import {
   Button, Card, EmptyState, Input, PageHeader, Select, Skeleton, StatCard, useToast,
@@ -8,6 +8,7 @@ import {
 import { IdCard, type IdCardHolder } from "@/components/cards/IdCard";
 import { useAsyncList } from "@/hooks/useAsyncList";
 import { listTeachers, DEPARTMENT_OPTIONS } from "@/lib/api/teachers";
+import { getMySchool } from "@/lib/api/schools";
 import { teacherName, type Teacher } from "@/types/teacher";
 
 /** Maps a teacher record onto the ID-card holder shape, photo included. */
@@ -19,6 +20,7 @@ function toHolder(t: Teacher): IdCardHolder {
     identifier: t.employeeId,
     identifierLabel: "Emp. ID",
     affiliation: t.department,
+    dob: t.dateOfBirth,
     phone: t.phone,
     guardianOrDesignation: t.qualification,
     guardianLabel: "Qualification",
@@ -36,6 +38,24 @@ export default function TeacherIdCardsPage() {
   // Stat-card quick filter for photo status, applied client-side to the cards.
   const [photo, setPhoto] = useState<"all" | "with" | "without">("all");
   const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  // Live school profile → the QR's school name and each card's signature image.
+  // Read once here so a signature uploaded in Settings shows on every card.
+  const [signatureUrl, setSignatureUrl] = useState("");
+  const [schoolName, setSchoolName] = useState("");
+  useEffect(() => {
+    let cancelled = false;
+    getMySchool()
+      .then((s) => {
+        if (cancelled || !s) return;
+        setSignatureUrl(s.signatureUrl || "");
+        setSchoolName(s.name || "");
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Sourced from the real teachers API, so a photo added on the teacher form
   // appears here on the card without any extra wiring.
@@ -204,7 +224,7 @@ export default function TeacherIdCardsPage() {
                     </span>
                   )}
                 </button>
-                <IdCard holder={holder} />
+                <IdCard holder={holder} signatureUrl={signatureUrl} schoolName={schoolName} />
               </div>
             );
           })}
@@ -212,7 +232,8 @@ export default function TeacherIdCardsPage() {
       )}
 
       <p className="print-hide text-xs text-subtle">
-        Cards render at CR80 size (85.6 × 54 mm). The QR block is a visual placeholder — it is not yet scannable.
+        Cards render at CR80 size (85.6 × 54 mm). Each card carries a scannable QR encoding the staff member&rsquo;s
+        verifiable identity (name, employee ID, department).
       </p>
     </div>
   );

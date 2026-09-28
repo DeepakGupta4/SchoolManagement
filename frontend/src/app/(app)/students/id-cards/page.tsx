@@ -9,6 +9,7 @@ import { IdCard, type IdCardHolder } from "@/components/cards/IdCard";
 import { useAsyncList } from "@/hooks/useAsyncList";
 import { useClassOptions } from "@/hooks/useClassOptions";
 import { listStudents } from "@/lib/api/students";
+import { getMySchool } from "@/lib/api/schools";
 import { classRank } from "@/lib/classOrder";
 import { fullName, type Student } from "@/types/student";
 
@@ -21,6 +22,8 @@ function toHolder(s: Student): IdCardHolder {
     identifier: s.admissionNo,
     identifierLabel: "Adm. No.",
     affiliation: `${s.className} · Section ${s.section}`,
+    rollNo: s.rollNo,
+    dob: s.dateOfBirth,
     bloodGroup: s.bloodGroup,
     phone: s.phone,
     guardianOrDesignation: s.guardian.name,
@@ -40,6 +43,25 @@ export default function StudentIdCardsPage() {
   // Stat-card quick filter for photo status, applied client-side before grouping.
   const [photo, setPhoto] = useState<"all" | "with" | "without">("all");
   const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  // Live school profile → the QR's school name and each card's signature image.
+  // Read once here so a signature uploaded in Settings shows on every card, and
+  // updating it there reflects on the next load of this page.
+  const [signatureUrl, setSignatureUrl] = useState("");
+  const [schoolName, setSchoolName] = useState("");
+  useEffect(() => {
+    let cancelled = false;
+    getMySchool()
+      .then((s) => {
+        if (cancelled || !s) return;
+        setSignatureUrl(s.signatureUrl || "");
+        setSchoolName(s.name || "");
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Pre-select the lowest class (e.g. Nursery) once the class list resolves, so
   // the sheet opens on one class rather than every student. Doesn't fight the
@@ -241,7 +263,7 @@ export default function StudentIdCardsPage() {
                           </span>
                         )}
                       </button>
-                      <IdCard holder={holder} />
+                      <IdCard holder={holder} signatureUrl={signatureUrl} schoolName={schoolName} />
                     </div>
                   );
                 })}

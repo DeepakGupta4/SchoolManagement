@@ -15,6 +15,13 @@ const studyMaterialSchema = new Schema(
     description: { type: String, default: "" },
     tags: { type: [String], default: [] },
     url: { type: String, default: "" },
+    // A resource is EITHER an uploaded file (stored inline as a base64 data URL)
+    // OR an external link (`url`). These stay optional/back-compatible.
+    fileDataUrl: { type: String, default: "" },
+    fileName: { type: String, default: "" },
+    mimeType: { type: String, default: "" },
+    // Human-readable size captured from the uploaded file, e.g. "12.4 MB".
+    sizeLabel: { type: String, default: "" },
   },
   { timestamps: true }
 );

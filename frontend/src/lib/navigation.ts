@@ -4,7 +4,7 @@ import {
   Bell, Settings, School, UserCheck, Award,
   FileText, BarChart3, MessageSquare, ShieldCheck, Cpu, Globe,
   Smartphone, Package, Utensils, HeartPulse, Trophy, Workflow,
-  IdCard, Building2, BookMarked, CalendarX, type LucideIcon,
+  IdCard, Building2, BookMarked, CalendarX, Contact, type LucideIcon,
 } from "lucide-react";
 import type { UserRole } from "@/types";
 
@@ -84,6 +84,7 @@ export const navGroups: NavGroup[] = [
           { title: "Performance", href: "/performance" },
         ],
       },
+      { title: "Parents", href: "/parents", icon: Contact },
     ],
   },
   {
@@ -142,7 +143,7 @@ export const navGroups: NavGroup[] = [
           { title: "Fee Structure", href: "/fees/structure" },
           { title: "Collect Fee", href: "/fees/collect" },
           { title: "Receipts", href: "/fees/receipts" },
-          { title: "Defaulters", href: "/fees/defaulters" },
+          { title: "Fee Dues", href: "/fees/defaulters" },
           { title: "Scholarships", href: "/fees/scholarships" },
         ],
       },

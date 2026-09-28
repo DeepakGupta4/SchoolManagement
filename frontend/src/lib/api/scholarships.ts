@@ -5,6 +5,8 @@ export interface Scholarship {
   /** Human-facing scholarship code, e.g. "SCH001". Must stay unique. */
   code: string;
   student: string;
+  /** Links the waiver to a real student so it reduces their fee bill. */
+  studentId?: string;
   class: string;
   type: string;
   percentage: number;

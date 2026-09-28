@@ -96,6 +96,8 @@ export interface SchoolProfile {
   website: string;
   schoolType: string;
   logo: string;
+  /** Authorised signatory image (data URL), printed on ID cards. */
+  signatureUrl?: string;
   bellSchedule?: { label: string; time: string; isBreak: boolean }[];
 }
 

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { CheckCircle2, Search, ShieldAlert, ShieldCheck } from "lucide-react";
 import { Button, Input, Modal } from "@/components/ui";
-import { certificatesApi, type Certificate } from "@/lib/api/certificates";
+import { certificatesApi, classLine, type Certificate } from "@/lib/api/certificates";
 
 type Result =
   | { kind: "idle" }
@@ -14,8 +14,10 @@ type Result =
 /**
  * Looks a certificate up by the verification code printed on it.
  *
- * Only certificates that were actually issued can verify — a pending or
- * rejected request must fail even if someone guesses its code.
+ * The code is passed as a server-side search term so the lookup works no matter
+ * how many certificates the school has issued (not just the first page). Only
+ * certificates that were actually issued can verify — a pending or rejected
+ * request must fail even if someone guesses its code.
  */
 export function VerifyCodeModal({
   open,
@@ -32,11 +34,16 @@ export function VerifyCodeModal({
     if (!query) return;
 
     setResult({ kind: "checking" });
-    const all = await certificatesApi.list();
-    const match = all.find(
-      (c) => c.status === "issued" && c.verificationCode?.toUpperCase() === query
-    );
-    setResult(match ? { kind: "valid", certificate: match } : { kind: "invalid", code: query });
+    try {
+      // Narrow to the matching code server-side, then confirm an exact, issued match.
+      const matches = await certificatesApi.list({ search: query });
+      const match = matches.find(
+        (c) => c.status === "issued" && c.verificationCode?.toUpperCase() === query
+      );
+      setResult(match ? { kind: "valid", certificate: match } : { kind: "invalid", code: query });
+    } catch {
+      setResult({ kind: "invalid", code: query });
+    }
   };
 
   // The modal unmounts its body between opens, but this component stays
@@ -96,7 +103,7 @@ export function VerifyCodeModal({
               {[
                 ["Student", result.certificate.student],
                 ["Admission no.", result.certificate.admissionNo],
-                ["Class", result.certificate.className],
+                ["Class", classLine(result.certificate)],
                 ["Type", `${result.certificate.type} Certificate`],
                 ["Issued on", result.certificate.issueDate ?? "—"],
                 ["Reference", result.certificate.code],

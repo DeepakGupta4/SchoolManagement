@@ -2,7 +2,9 @@ import { z } from "zod";
 
 export const scholarshipSchema = z.object({
   code: z.string().trim().min(2, "Scholarship ID is required"),
-  student: z.string().trim().min(2, "Student name is required"),
+  student: z.string().trim().min(2, "Select a student"),
+  /** Optional link to the student record; set when picked from the dropdown. */
+  studentId: z.string().optional(),
   class: z.string().trim().min(1, "Class is required"),
   type: z.string().trim().min(1, "Type is required"),
   percentage: z.coerce

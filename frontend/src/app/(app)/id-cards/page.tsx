@@ -148,11 +148,11 @@ export default function IdCardsOverviewPage() {
               ))}
             </dl>
 
-            <div className="mt-5 rounded-md bg-warning-soft px-3.5 py-3">
-              <p className="text-xs text-warning-text">
-                <span className="font-semibold">Note:</span> the QR block on every card is currently a visual
-                placeholder — it renders a deterministic pattern but encodes nothing and will not scan. A real
-                encoder must be wired in before cards are issued.
+            <div className="mt-5 rounded-md bg-info-soft px-3.5 py-3">
+              <p className="text-xs text-info-text">
+                <span className="font-semibold">QR verification:</span> every card carries a real, scannable QR
+                encoding the holder&rsquo;s verifiable identity — name, ID number, class/department and validity —
+                as a self-contained payload that reads offline, with no network lookup required.
               </p>
             </div>
           </CardContent>

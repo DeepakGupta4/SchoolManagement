@@ -37,6 +37,7 @@ import syllabusRoutes from "./syllabus/syllabus.routes.js";
 import messageRoutes from "./messages/message.routes.js";
 import workflowRoutes from "./workflows/workflow.routes.js";
 import holidayRoutes from "./holidays/holiday.routes.js";
+import parentRoutes from "./parents/parent.routes.js";
 
 /**
  * Tenant CRUD modules mounted uniformly under the subscription guard. Each is a
@@ -82,4 +83,5 @@ export const crudModules: { path: string; router: Router }[] = [
   { path: "/api/messages", router: messageRoutes },
   { path: "/api/workflows", router: workflowRoutes },
   { path: "/api/holidays", router: holidayRoutes },
+  { path: "/api/parents", router: parentRoutes },
 ];

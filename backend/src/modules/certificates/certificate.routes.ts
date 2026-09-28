@@ -6,6 +6,12 @@ const certificateSchema = z.object({
   student: z.string().min(1),
   admissionNo: z.string().default(""),
   className: z.string().default(""),
+  section: z.string().default(""),
+  rollNo: z.string().default(""),
+  studentId: z.string().default(""),
+  fatherName: z.string().default(""),
+  dob: z.string().default(""),
+  session: z.string().default(""),
   type: z.string().default(""),
   requestedBy: z.string().default(""),
   requestedOn: z.string().default(""),
@@ -17,8 +23,8 @@ const certificateSchema = z.object({
 export default createCrudRouter({
   model: Certificate,
   createSchema: certificateSchema,
-  searchFields: ["student", "admissionNo", "requestedBy", "verificationCode"],
-  filterFields: ["type", "status"],
+  searchFields: ["student", "admissionNo", "rollNo", "requestedBy", "verificationCode"],
+  filterFields: ["type", "status", "className"],
   // Reference numbers continue the per-school sequence rather than restarting.
   generate: (seq) => ({ code: `CR-${9000 + seq + 1}` }),
 });

@@ -1,4 +1,5 @@
 import { apiList, apiRequest } from "./client";
+import { TODAY_ISO } from "@/lib/dates";
 
 /**
  * Student fee accounts and the payment register.
@@ -44,6 +45,8 @@ export interface FeeHeadDue {
 
 export interface StudentFeeAccount {
   id: string;
+  /** The student this ledger belongs to — always present, even before an account exists. */
+  studentId: string;
   admissionNo: string;
   name: string;
   className: string;
@@ -58,7 +61,24 @@ export interface StudentFeeAccount {
   /** Accrued for overdue instalments. Collected alongside the heads. */
   lateFee: number;
   lastPaymentDate: string | null;
+  /** Optional fee deadline (yyyy-mm-dd); drives the "overdue" status when set. */
+  dueDate?: string | null;
+  /**
+   * True when no account is stored yet: the student is billed live from the
+   * class fee structure, and the account is created on first collection.
+   */
+  provisional?: boolean;
 }
+
+/** The lifecycle a student's fees are in, derived from the ledger. */
+export type FeeStanding = "paid" | "partial" | "overdue" | "due";
+
+export const FEE_STANDING_LABEL: Record<FeeStanding, string> = {
+  paid: "Paid",
+  partial: "Partially paid",
+  overdue: "Overdue",
+  due: "Due",
+};
 
 export interface PaymentAllocation {
   head: string;
@@ -116,6 +136,22 @@ export const balanceOf = (a: StudentFeeAccount) => Math.max(0, totalBilled(a) - 
 
 export const isCleared = (a: StudentFeeAccount) => balanceOf(a) === 0;
 
+/** A student with a bill but no stored account and no structure to bill from. */
+export const isUnbilled = (a: StudentFeeAccount) =>
+  Boolean(a.provisional) && a.heads.length === 0 && a.lateFee === 0;
+
+/**
+ * The student's current fee standing, derived from the ledger:
+ * cleared → paid; past the due date with a balance → overdue; some paid →
+ * partial; otherwise → due.
+ */
+export function feeStandingOf(a: StudentFeeAccount): FeeStanding {
+  if (balanceOf(a) === 0) return "paid";
+  if (a.dueDate && a.dueDate < TODAY_ISO) return "overdue";
+  if (totalPaid(a) > 0) return "partial";
+  return "due";
+}
+
 /**
  * Spreads an amount across the unpaid heads in order, filling each before
  * moving on. This is what a clerk does by hand: the money goes to the oldest
@@ -169,6 +205,8 @@ export interface NewFeeAccountInput {
   /** Optional scholarship / sibling discount, netted off the billed heads. */
   concession?: number;
   lateFee?: number;
+  /** Optional fee deadline (yyyy-mm-dd). */
+  dueDate?: string;
   session?: string;
 }
 
@@ -188,12 +226,22 @@ export interface PaymentFilters {
   search?: string;
   method?: string;
   status?: string;
+  /** Restrict to one student's receipts (their payment history). */
+  studentId?: string;
+  /** Restrict to a class, e.g. "Class 6" (matches "Class 6 · A" etc.). */
+  className?: string;
 }
 
 export const paymentsApi = {
   async list(filters: PaymentFilters = {}): Promise<Payment[]> {
     const result = await apiList<Payment>("/api/fees/payments", {
-      query: { search: filters.search, method: filters.method, status: filters.status },
+      query: {
+        search: filters.search,
+        method: filters.method,
+        status: filters.status,
+        studentId: filters.studentId,
+        className: filters.className,
+      },
     });
     return result.data;
   },
@@ -221,7 +269,17 @@ export async function collectPayment(input: {
 
   return apiRequest<Payment>("/api/fees/collect", {
     method: "POST",
-    body: { accountId: account.id, allocations, method, reference, bank, remarks },
+    body: {
+      // Always identify the student, so an account can be opened on demand when
+      // one doesn't exist yet. The account id is sent only when it's real.
+      studentId: account.studentId,
+      accountId: account.provisional ? undefined : account.id,
+      allocations,
+      method,
+      reference,
+      bank,
+      remarks,
+    },
   });
 }
 

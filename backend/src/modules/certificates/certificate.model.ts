@@ -7,6 +7,14 @@ const certificateSchema = new Schema(
     student: { type: String, required: true, trim: true },
     admissionNo: { type: String, default: "" },
     className: { type: String, default: "" },
+    // Optional, back-compatible fields that let a certificate be populated from a
+    // real student record and rendered without any hardcoded placeholder text.
+    section: { type: String, default: "" },
+    rollNo: { type: String, default: "" },
+    studentId: { type: String, default: "" },
+    fatherName: { type: String, default: "" },
+    dob: { type: String, default: "" },
+    session: { type: String, default: "" },
     type: { type: String, default: "" },
     requestedBy: { type: String, default: "" },
     requestedOn: { type: String, default: "" },

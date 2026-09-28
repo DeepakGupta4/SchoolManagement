@@ -66,6 +66,9 @@ const schoolSchema = new Schema(
     schoolType: { type: String, default: "" },
     website: { type: String, default: "" },
     logo: { type: String, default: "" },
+    // Authorised signatory image (data URL). Uploaded once by an admin and
+    // printed in the signature area of every student/staff ID card.
+    signatureUrl: { type: String, default: "" },
     // Suspension is separate from subscription state: an admin can freeze an
     // account regardless of whether its trial or plan is otherwise valid.
     status: { type: String, enum: ["active", "suspended"], default: "active" },
@@ -191,6 +194,7 @@ export function toPublicSchool(school: SchoolDoc) {
     schoolType: school.schoolType,
     website: school.website,
     logo: school.logo,
+    signatureUrl: school.signatureUrl ?? "",
     bellSchedule: (school.bellSchedule ?? []).map((p) => ({
       label: p.label ?? "",
       time: p.time ?? "",

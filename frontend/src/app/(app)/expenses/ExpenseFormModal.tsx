@@ -11,16 +11,29 @@ import {
   STATUS_OPTIONS,
   type Expense,
 } from "@/lib/api/expenses";
+import { MIN_RECORD_DATE, TODAY_ISO } from "@/lib/dates";
 
-const today = () =>
-  new Date().toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" });
+/**
+ * Normalises a stored date to the yyyy-mm-dd the native picker expects. New rows
+ * already use it; a legacy `"Mmm dd, yyyy"` row is converted so it opens cleanly
+ * in edit mode. Deterministic string parse — no clock read.
+ */
+function toIsoDate(value: string): string {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
 
 const emptyValues: ExpenseSchema = {
   voucherNo: "",
   title: "",
   category: CATEGORY_OPTIONS[0],
   amount: 0,
-  date: today(),
+  date: TODAY_ISO,
   paidTo: "",
   method: METHOD_OPTIONS[0],
   status: "pending",
@@ -62,8 +75,8 @@ export function ExpenseFormModal({
     if (!open) return;
     reset(
       record
-        ? { ...record, recurring: record.recurring ? "yes" : "no" }
-        : { ...emptyValues, date: today() }
+        ? { ...record, date: toIsoDate(record.date), recurring: record.recurring ? "yes" : "no" }
+        : emptyValues
     );
   }, [open, record, reset]);
 
@@ -118,6 +131,7 @@ export function ExpenseFormModal({
             label="Amount (₹)"
             type="number"
             min={1}
+            step="0.01"
             required
             {...register("amount")}
             error={errors.amount?.message}
@@ -125,7 +139,9 @@ export function ExpenseFormModal({
           <Input
             label="Date"
             required
-            placeholder="Jul 15, 2025"
+            type="date"
+            min={MIN_RECORD_DATE}
+            max={TODAY_ISO}
             {...register("date")}
             error={errors.date?.message}
           />

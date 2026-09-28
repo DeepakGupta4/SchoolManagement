@@ -6,11 +6,21 @@ import {
   Payment,
   CLEARS_LATER,
   PAYMENT_METHODS,
+  CURRENT_SESSION,
   balanceOf,
   type FeeAccountDoc,
   type PaymentDoc,
 } from "./fee.model.js";
 import { Student } from "../students/student.model.js";
+import { FeeStructure } from "../feeStructures/feeStructure.model.js";
+import { Scholarship } from "../scholarships/scholarship.model.js";
+import {
+  deriveGrossHeads,
+  matchStructure,
+  netHeadsFor,
+  provisionalAccountFor,
+  scholarshipConcessionFor,
+} from "./feeProvisioning.js";
 import { requireAuth, requireRole } from "../../middleware/auth.js";
 import { validate, parsed } from "../../middleware/validate.js";
 import { ApiError } from "../../utils/ApiError.js";
@@ -23,6 +33,118 @@ router.use(requireAuth);
 /** Collecting money is restricted — a librarian should not be issuing receipts. */
 const canCollect = requireRole("super_admin", "school_admin", "principal", "accountant");
 
+/* ------------------------------------------------------------------ */
+/* Student-centric fee rows                                             */
+/*                                                                     */
+/* The collection screen, dues list and dashboard all work from the    */
+/* class's real STUDENTS, not just the accounts that happen to exist.   */
+/* A student without a stored account is billed live from the class fee */
+/* structure (net of active scholarships) and marked provisional — the  */
+/* account itself is created the moment money is first collected.       */
+/* ------------------------------------------------------------------ */
+
+interface StudentFeeRow {
+  id: string;
+  studentId: string;
+  admissionNo: string;
+  name: string;
+  className: string;
+  section: string;
+  rollNo: string;
+  guardian: string;
+  guardianPhone: string;
+  session: string;
+  heads: { head: string; billed: number; paid: number }[];
+  concession: number;
+  lateFee: number;
+  lastPaymentDate: string | null;
+  dueDate: string | null;
+  provisional: boolean;
+}
+
+function publicAccount(doc: FeeAccountDoc): StudentFeeRow {
+  return {
+    id: String(doc._id),
+    studentId: String(doc.studentId),
+    admissionNo: doc.admissionNo,
+    name: doc.name,
+    className: doc.className,
+    section: doc.section,
+    rollNo: doc.rollNo,
+    guardian: doc.guardian,
+    guardianPhone: doc.guardianPhone,
+    session: doc.session,
+    heads: doc.heads.map((h) => ({ head: h.head, billed: h.billed, paid: h.paid })),
+    concession: doc.concession,
+    lateFee: doc.lateFee,
+    lastPaymentDate: doc.lastPaymentDate ?? null,
+    dueDate: doc.dueDate ?? null,
+    provisional: false,
+  };
+}
+
+/**
+ * Builds one fee row per active student, merging any stored account and
+ * synthesising the rest from the class fee structure + active scholarships.
+ * Optional class/search filters are applied to the student query.
+ */
+async function loadStudentFeeRows(
+  schoolId: string,
+  opts: { className?: string; search?: string } = {}
+): Promise<StudentFeeRow[]> {
+  const studentFilter: Record<string, unknown> = { schoolId, status: "active" };
+  if (opts.className) studentFilter.className = opts.className;
+
+  if (opts.search?.trim()) {
+    const safe = opts.search.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const rx = new RegExp(safe, "i");
+    studentFilter.$or = [
+      { firstName: rx },
+      { lastName: rx },
+      { admissionNo: rx },
+      { rollNo: rx },
+      { "guardian.name": rx },
+    ];
+  }
+
+  const students = await Student.find(studentFilter).sort({ firstName: 1, lastName: 1 });
+  if (students.length === 0) return [];
+
+  const ids = students.map((s) => s._id);
+  const [accounts, structures, scholarships] = await Promise.all([
+    FeeAccount.find({ schoolId, studentId: { $in: ids }, session: CURRENT_SESSION }),
+    FeeStructure.find({ schoolId }),
+    Scholarship.find({ schoolId, status: "active" }),
+  ]);
+
+  const accountByStudent = new Map(accounts.map((a) => [String(a.studentId), a]));
+
+  // First structure that covers each class (matched case-insensitively).
+  const structureByClass = new Map<string, (typeof structures)[number]>();
+  for (const st of structures) {
+    const key = st.class.trim().toLowerCase();
+    if (!structureByClass.has(key)) structureByClass.set(key, st);
+  }
+
+  // Summed active scholarship waiver per linked student.
+  const concessionByStudent = new Map<string, number>();
+  for (const sc of scholarships) {
+    if (!sc.studentId) continue;
+    const key = String(sc.studentId);
+    const amount = Math.max(0, Math.round(Number(sc.amount) || 0));
+    concessionByStudent.set(key, (concessionByStudent.get(key) ?? 0) + amount);
+  }
+
+  return students.map((student) => {
+    const existing = accountByStudent.get(String(student._id));
+    if (existing) return publicAccount(existing as FeeAccountDoc);
+    const structure = structureByClass.get(student.className.trim().toLowerCase());
+    const gross = deriveGrossHeads(structure);
+    const concession = concessionByStudent.get(String(student._id)) ?? 0;
+    return provisionalAccountFor(student, gross, concession);
+  });
+}
+
 const accountQuery = z.object({
   search: z.string().optional(),
   className: z.string().optional(),
@@ -34,28 +156,19 @@ router.get("/accounts", validate(accountQuery, "query"), async (req, res, next) 
   try {
     const { search, className, standing } = parsed<z.infer<typeof accountQuery>>(req, "query");
 
-    const filter: Record<string, unknown> = { schoolId: req.user!.schoolId };
-    if (className) filter.className = className;
+    const rows = await loadStudentFeeRows(req.user!.schoolId, { search, className });
 
-    if (search?.trim()) {
-      const safe = search.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      const rx = new RegExp(safe, "i");
-      filter.$or = [{ name: rx }, { admissionNo: rx }, { rollNo: rx }, { guardian: rx }];
-    }
-
-    const docs = await FeeAccount.find(filter).sort({ name: 1 });
-
-    // Standing depends on derived balance, so it can't be a database filter
+    // Standing depends on the derived balance, so it can't be a database filter
     // without storing a total that would drift. Applied here instead.
     const filtered =
       standing === "due"
-        ? docs.filter((d) => balanceOf(d) > 0)
+        ? rows.filter((r) => balanceOf(r) > 0)
         : standing === "cleared"
-          ? docs.filter((d) => balanceOf(d) === 0)
-          : docs;
+          ? rows.filter((r) => balanceOf(r) === 0)
+          : rows;
 
     res.json({
-      data: filtered.map((d) => toPublic(d as FeeAccountDoc)),
+      data: filtered,
       meta: { total: filtered.length, page: 1, limit: filtered.length, pages: 1 },
     });
   } catch (err) {
@@ -82,22 +195,9 @@ const feeAccountBody = z.object({
     .min(1, "Add at least one fee head"),
   concession: z.coerce.number<number>().min(0).default(0),
   lateFee: z.coerce.number<number>().min(0).default(0),
-  session: z.string().min(1).default("2025-26"),
+  dueDate: z.string().optional(),
+  session: z.string().min(1).default(CURRENT_SESSION),
 });
-
-/** Deducts a concession off the billed heads in order, so the balance nets it out. */
-function applyConcession(
-  heads: { head: string; billed: number }[],
-  concession: number
-): { head: string; billed: number }[] {
-  let left = Math.max(0, Math.round(concession));
-  return heads.map((h) => {
-    if (left <= 0) return h;
-    const cut = Math.min(h.billed, left);
-    left -= cut;
-    return { head: h.head, billed: h.billed - cut };
-  });
-}
 
 router.post("/accounts", canCollect, validate(feeAccountBody), async (req, res, next) => {
   try {
@@ -107,13 +207,9 @@ router.post("/accounts", canCollect, validate(feeAccountBody), async (req, res, 
     const student = await Student.findOne({ _id: body.studentId, schoolId });
     if (!student) throw ApiError.notFound("Student not found.");
 
-    // Concession can't exceed the gross bill; heads are stored net of it.
-    const gross = body.heads.reduce((sum, h) => sum + h.billed, 0);
-    const concession = Math.min(Math.round(body.concession), Math.round(gross));
-    const heads = applyConcession(
-      body.heads.map((h) => ({ head: h.head, billed: Math.round(h.billed) })),
-      concession
-    ).filter((h) => h.billed > 0);
+    // Heads are stored net of the concession; the concession can't exceed the bill.
+    const gross = body.heads.map((h) => ({ head: h.head, billed: Math.round(h.billed) }));
+    const net = netHeadsFor(gross, body.concession);
 
     const account = await FeeAccount.findOneAndUpdate(
       { schoolId, studentId: student._id, session: body.session },
@@ -126,9 +222,10 @@ router.post("/accounts", canCollect, validate(feeAccountBody), async (req, res, 
           rollNo: student.rollNo,
           guardian: student.guardian.name,
           guardianPhone: student.guardian.phone,
-          heads,
-          concession,
+          heads: net.heads,
+          concession: net.concession,
           lateFee: Math.round(body.lateFee),
+          dueDate: body.dueDate?.trim() ? body.dueDate.trim() : null,
         },
       },
       { new: true, upsert: true, setDefaultsOnInsert: true, runValidators: true }
@@ -149,15 +246,28 @@ const paymentQuery = z.object({
   search: z.string().optional(),
   method: z.string().optional(),
   status: z.string().optional(),
+  studentId: z.string().optional(),
+  className: z.string().optional(),
 });
 
 router.get("/payments", validate(paymentQuery, "query"), async (req, res, next) => {
   try {
-    const { search, method, status } = parsed<z.infer<typeof paymentQuery>>(req, "query");
+    const { search, method, status, studentId, className } = parsed<z.infer<typeof paymentQuery>>(
+      req,
+      "query"
+    );
 
     const filter: Record<string, unknown> = { schoolId: req.user!.schoolId };
     if (method) filter.method = method;
     if (status) filter.status = status;
+    if (studentId && mongoose.isValidObjectId(studentId)) filter.studentId = studentId;
+
+    if (className?.trim()) {
+      // Stored as "Class 6 · A"; anchor to the class name up to a word boundary
+      // so "Class 1" doesn't also match "Class 10".
+      const safe = className.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      filter.className = new RegExp(`^${safe}(\\s|·|$)`);
+    }
 
     if (search?.trim()) {
       const safe = search.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -175,36 +285,97 @@ router.get("/payments", validate(paymentQuery, "query"), async (req, res, next) 
   }
 });
 
-const collectBody = z.object({
-  accountId: z.string().min(1),
-  allocations: z
-    .array(z.object({ head: z.string().min(1), amount: z.coerce.number<number>().positive() }))
-    .min(1, "Enter at least one amount"),
-  method: z.enum(PAYMENT_METHODS),
-  reference: z.string().default(""),
-  bank: z.string().default(""),
-  remarks: z.string().default(""),
-});
+const collectBody = z
+  .object({
+    accountId: z.string().optional(),
+    studentId: z.string().optional(),
+    allocations: z
+      .array(z.object({ head: z.string().min(1), amount: z.coerce.number<number>().positive() }))
+      .min(1, "Enter at least one amount"),
+    method: z.enum(PAYMENT_METHODS),
+    reference: z.string().default(""),
+    bank: z.string().default(""),
+    remarks: z.string().default(""),
+  })
+  .refine((b) => Boolean(b.accountId || b.studentId), {
+    message: "A student or account is required.",
+    path: ["studentId"],
+  });
+
+/**
+ * Creates a student's fee account on demand, billed from the class fee structure
+ * net of any active scholarship. Runs inside the collection transaction so a
+ * first-time payment and the account it posts to land together.
+ */
+async function provisionAccount(
+  schoolId: string,
+  studentId: string,
+  session: mongoose.ClientSession
+): Promise<FeeAccountDoc> {
+  const student = await Student.findOne({ _id: studentId, schoolId }).session(session);
+  if (!student) throw ApiError.notFound("Student not found.");
+
+  const structure = await matchStructure(schoolId, student.className);
+  const gross = deriveGrossHeads(structure);
+  const concession = await scholarshipConcessionFor(schoolId, studentId);
+  const net = netHeadsFor(gross, concession);
+
+  const [created] = await FeeAccount.create(
+    [
+      {
+        schoolId,
+        studentId: student._id,
+        admissionNo: student.admissionNo,
+        name: `${student.firstName} ${student.lastName}`.trim(),
+        className: student.className,
+        section: student.section,
+        rollNo: student.rollNo,
+        guardian: student.guardian.name,
+        guardianPhone: student.guardian.phone,
+        session: CURRENT_SESSION,
+        heads: net.heads.map((h) => ({ head: h.head, billed: h.billed, paid: 0 })),
+        concession: net.concession,
+        lateFee: 0,
+      },
+    ],
+    { session }
+  );
+  return created as FeeAccountDoc;
+}
 
 /**
  * Records a payment and posts it to the student's ledger.
  *
  * Both writes happen inside one transaction: a receipt without its ledger
  * posting (or the reverse) is a reconciliation problem nobody can fix from
- * the UI, so a partial success must not be possible.
+ * the UI, so a partial success must not be possible. If the student has no
+ * account yet, it is created here from the class fee structure first.
  */
 router.post("/collect", canCollect, validate(collectBody), async (req, res, next) => {
   const body = req.body as z.infer<typeof collectBody>;
+  const schoolId = req.user!.schoolId;
   const session = await mongoose.startSession();
 
   try {
     let receipt: PaymentDoc | null = null;
 
     await session.withTransaction(async () => {
-      const account = await FeeAccount.findOne({
-        _id: body.accountId,
-        schoolId: req.user!.schoolId,
-      }).session(session);
+      let account: FeeAccountDoc | null = null;
+
+      if (body.accountId && mongoose.isValidObjectId(body.accountId)) {
+        account = await FeeAccount.findOne({ _id: body.accountId, schoolId }).session(session);
+      }
+
+      // No stored account (a provisional row, or a stale id) — resolve or open
+      // one for the student so historical students can still be collected from.
+      if (!account && body.studentId && mongoose.isValidObjectId(body.studentId)) {
+        account = await FeeAccount.findOne({
+          schoolId,
+          studentId: body.studentId,
+          session: CURRENT_SESSION,
+        }).session(session);
+        if (!account) account = await provisionAccount(schoolId, body.studentId, session);
+      }
 
       if (!account) throw ApiError.notFound("Fee account not found.");
 
@@ -222,14 +393,14 @@ router.post("/collect", canCollect, validate(collectBody), async (req, res, next
 
       // Receipt numbers come from a per-school count that only moves forward,
       // so a deleted receipt never has its number reissued.
-      const issued = await Payment.countDocuments({ schoolId: req.user!.schoolId }).session(session);
+      const issued = await Payment.countDocuments({ schoolId }).session(session);
       const receiptNo = `RCP-${25000 + issued + 1}`;
       const today = new Date().toISOString().slice(0, 10);
 
       const [created] = await Payment.create(
         [
           {
-            schoolId: req.user!.schoolId,
+            schoolId,
             receiptNo,
             studentId: account.studentId,
             studentName: account.name,
@@ -260,12 +431,18 @@ router.post("/collect", canCollect, validate(collectBody), async (req, res, next
       account.lastPaymentDate = today;
       await account.save({ session });
 
+      // Keep the student's headline fee-due metric in step with the ledger.
+      await Student.updateOne(
+        { _id: account.studentId, schoolId },
+        { $set: { feeDue: balanceOf(account) } }
+      ).session(session);
+
       receipt = created as PaymentDoc;
     });
 
     if (receipt) {
       const r: PaymentDoc = receipt;
-      void notifySchool(req.user!.schoolId, {
+      void notifySchool(schoolId, {
         type: "fee",
         title: "Fee payment received",
         body: `₹${r.amount.toLocaleString("en-IN")} from ${r.studentName} · ${r.receiptNo}`,
@@ -307,6 +484,10 @@ async function reverseAllocations(
     if (back) head.paid = Math.max(0, head.paid - back);
   }
   await account.save({ session });
+  await Student.updateOne(
+    { _id: account.studentId, schoolId },
+    { $set: { feeDue: balanceOf(account) } }
+  ).session(session);
 }
 
 /** Marks a cheque/DD as realised. No ledger change — it was already counted. */
@@ -400,15 +581,15 @@ router.post(
 /**
  * The accountant's day-book: today's collection broken down by mode, plus the
  * headline figures the fee dashboard needs. All derived from the register and
- * ledger — never stored, so it can't drift.
+ * the student-centric ledger — never stored, so it can't drift.
  */
 router.get("/summary", async (req, res, next) => {
   try {
     const schoolId = req.user!.schoolId;
     const today = new Date().toISOString().slice(0, 10);
 
-    const [accounts, payments] = await Promise.all([
-      FeeAccount.find({ schoolId }),
+    const [rows, payments] = await Promise.all([
+      loadStudentFeeRows(schoolId),
       Payment.find({ schoolId }),
     ]);
 
@@ -425,8 +606,8 @@ router.get("/summary", async (req, res, next) => {
     }
 
     const totalCollected = live.reduce((sum, p) => sum + p.amount, 0);
-    const outstanding = accounts.reduce((sum, a) => sum + balanceOf(a), 0);
-    const defaulters = accounts.filter((a) => balanceOf(a) > 0).length;
+    const outstanding = rows.reduce((sum, r) => sum + balanceOf(r), 0);
+    const defaulters = rows.filter((r) => balanceOf(r) > 0).length;
     const pendingClearance = payments.filter((p) => p.status === "pending-clearance").length;
 
     res.json({
@@ -437,7 +618,7 @@ router.get("/summary", async (req, res, next) => {
         outstanding,
         defaulters,
         pendingClearance,
-        accounts: accounts.length,
+        accounts: rows.length,
         receipts: live.length,
       },
     });

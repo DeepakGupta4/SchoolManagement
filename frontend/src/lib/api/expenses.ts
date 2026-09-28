@@ -47,21 +47,34 @@ export const STATUS_OPTIONS = [
   { label: "Pending", value: "pending" },
 ];
 
-/** Chronological month order, used to sort the derived trend chart. */
-export const MONTH_ORDER = [
+/** Short month labels, index 0 = Jan. */
+export const MONTHS_SHORT = [
   "Jan", "Feb", "Mar", "Apr", "May", "Jun",
   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
 ];
 
 /**
- * Closed months carried over from the previous ledger. Live months are computed
- * from the expense rows themselves so the trend reacts to new entries.
+ * Resolves an expense date to a sortable month bucket. Handles both the native
+ * `yyyy-mm-dd` inputs the form now writes and any legacy `"Mmm dd, yyyy"` rows,
+ * so the trend chart and the month filter stay correct across old and new
+ * records. Returns null for an unparseable date. `new Date(date)` is a
+ * deterministic parse of a given string — not a clock read — so it is safe.
  */
-export const MONTHLY_BASELINE = [
-  { month: "Feb", amount: 180000 },
-  { month: "Mar", amount: 210000 },
-  { month: "Apr", amount: 195000 },
-  { month: "May", amount: 225000 },
-];
+export function expenseMonthBucket(
+  date: string
+): { key: string; year: number; month: number } | null {
+  const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+  if (iso) {
+    const year = Number(iso[1]);
+    const month = Number(iso[2]) - 1;
+    if (month < 0 || month > 11) return null;
+    return { key: `${iso[1]}-${iso[2]}`, year, month };
+  }
+  const parsed = new Date(date);
+  if (Number.isNaN(parsed.getTime())) return null;
+  const year = parsed.getFullYear();
+  const month = parsed.getMonth();
+  return { key: `${year}-${String(month + 1).padStart(2, "0")}`, year, month };
+}
 
 export const expensesApi = createApiResource<Expense, ExpenseFilters>("/api/expenses");

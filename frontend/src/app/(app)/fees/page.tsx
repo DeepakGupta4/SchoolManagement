@@ -36,7 +36,7 @@ const quickLinks: { title: string; desc: string; href: string; icon: LucideIcon;
   { title: "Fee Structure", desc: "Define class-wise fee heads", href: "/fees/structure", icon: BookOpen, gradient: "gradient-indigo" },
   { title: "Collect Fee", desc: "Record new fee payments", href: "/fees/collect", icon: CreditCard, gradient: "gradient-emerald" },
   { title: "Receipts", desc: "Register, clearances & reversals", href: "/fees/receipts", icon: Receipt, gradient: "gradient-cyan" },
-  { title: "Defaulters", desc: "Students with pending dues", href: "/fees/defaulters", icon: AlertTriangle, gradient: "gradient-rose" },
+  { title: "Fee Dues", desc: "Students with pending dues", href: "/fees/defaulters", icon: AlertTriangle, gradient: "gradient-rose" },
   { title: "Scholarships", desc: "Manage fee concessions", href: "/fees/scholarships", icon: Award, gradient: "gradient-violet" },
 ];
 
@@ -76,7 +76,7 @@ export default function FeesPage() {
     ? [
         { label: "Collected today", value: inr.format(summary.collectedToday), sub: "Across all modes", icon: Banknote, gradient: "gradient-emerald" },
         { label: "Total collected", value: inr.format(summary.totalCollected), sub: `${summary.receipts} receipts`, icon: Wallet, gradient: "gradient-indigo" },
-        { label: "Outstanding", value: inr.format(summary.outstanding), sub: `${summary.defaulters} defaulters`, icon: AlertTriangle, gradient: "gradient-rose" },
+        { label: "Outstanding", value: inr.format(summary.outstanding), sub: `${summary.defaulters} with dues`, icon: AlertTriangle, gradient: "gradient-rose" },
         { label: "Pending clearance", value: String(summary.pendingClearance), sub: "Cheques / DDs", icon: Clock, gradient: "gradient-amber" },
       ]
     : [];

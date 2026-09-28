@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { getMySchool, updateMySchool, resetSchoolData } from "@/lib/api/schools";
+import { fileToDataUrl } from "@/lib/image";
 import {
   AlertTriangle,
   Bell,
@@ -14,6 +15,8 @@ import {
   Save,
   ShieldCheck,
   Trash2,
+  Upload,
+  X,
 } from "lucide-react";
 import {
   Badge,
@@ -53,6 +56,7 @@ const PROFILE_DEFAULTS = {
   board: "cbse",
   medium: "english",
   address: "",
+  signatureUrl: "",
 };
 
 const BRANDING_DEFAULTS = {
@@ -111,6 +115,43 @@ export default function SettingsPage() {
 
   const activeTab = TABS.find((t) => t.id === tab) ?? TABS[0];
   const [saving, setSaving] = useState(false);
+  const [uploadingSig, setUploadingSig] = useState(false);
+
+  // Accepts an image only, caps the raw file size, then downscales to a compact
+  // data URL. Held in profile state and persisted with the School Profile save,
+  // so one upload reflects on every student and staff ID card.
+  const handleSignature = async (file: File | undefined) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast({
+        title: "Not an image",
+        description: "Please choose a PNG or JPG signature image.",
+        variant: "error",
+      });
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast({
+        title: "Image too large",
+        description: "Please choose a signature image under 5 MB.",
+        variant: "error",
+      });
+      return;
+    }
+    setUploadingSig(true);
+    try {
+      const dataUrl = await fileToDataUrl(file, 400);
+      setProfile((prev) => ({ ...prev, signatureUrl: dataUrl }));
+    } catch (e) {
+      toast({
+        title: "Could not add signature",
+        description: e instanceof Error ? e.message : "Please try another image.",
+        variant: "error",
+      });
+    } finally {
+      setUploadingSig(false);
+    }
+  };
 
   // Danger zone — wipe all school data for a clean slate.
   const [resetOpen, setResetOpen] = useState(false);
@@ -152,6 +193,7 @@ export default function SettingsPage() {
             email: s.email || prev.email,
             phone: s.phone || prev.phone,
             address: s.address || prev.address,
+            signatureUrl: s.signatureUrl || prev.signatureUrl,
           }));
         })
         .catch(() => {});
@@ -176,6 +218,7 @@ export default function SettingsPage() {
           ownerName: profile.principal,
           phone: profile.phone,
           address: profile.address,
+          signatureUrl: profile.signatureUrl,
         });
         toast({ title: "School profile saved", description: "Your changes are live.", variant: "success" });
       } catch (e) {
@@ -334,6 +377,59 @@ export default function SettingsPage() {
                 value={profile.address}
                 onChange={(e) => setProfile({ ...profile, address: e.target.value })}
               />
+            </div>
+            <div className="lg:col-span-2">
+              <Field
+                label="Authorised signature"
+                hint="Printed in the signature area of every student and staff ID card. A PNG or JPG on a white background works best. Max 5 MB."
+              >
+                <div className="flex items-center gap-4">
+                  <div className="flex h-16 w-32 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border bg-white">
+                    {profile.signatureUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={profile.signatureUrl}
+                        alt="School signature"
+                        className="max-h-full max-w-full object-contain"
+                      />
+                    ) : (
+                      <span className="text-xs text-subtle">No signature</span>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <label className="focus-within:outline-none">
+                      <span className="focus-ring inline-flex cursor-pointer items-center gap-2 rounded-md border border-border px-4 py-2 text-sm font-medium text-text transition-colors hover:border-border-strong hover:bg-surface-hover">
+                        <Upload className="size-4" />
+                        {uploadingSig
+                          ? "Processing…"
+                          : profile.signatureUrl
+                            ? "Change signature"
+                            : "Upload signature"}
+                      </span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="sr-only"
+                        disabled={uploadingSig}
+                        onChange={(e) => {
+                          handleSignature(e.target.files?.[0]);
+                          e.target.value = ""; // allow re-selecting the same file
+                        }}
+                      />
+                    </label>
+                    {profile.signatureUrl && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={() => setProfile({ ...profile, signatureUrl: "" })}
+                      >
+                        <X className="size-4" />
+                        Remove
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </Field>
             </div>
           </CardContent>
         </Card>

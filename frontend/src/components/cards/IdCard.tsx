@@ -14,6 +14,10 @@ export interface IdCardHolder {
   identifierLabel: string;
   /** Class + section, or department. */
   affiliation: string;
+  /** Roll number (students only) — folded into the QR identity payload. */
+  rollNo?: string;
+  /** Date of birth (ISO yyyy-mm-dd) — folded into the QR identity payload. */
+  dob?: string;
   bloodGroup?: string;
   phone?: string;
   guardianOrDesignation?: string;
@@ -22,6 +26,31 @@ export interface IdCardHolder {
   photo?: string;
   /** Home address for the "if found" strip. */
   address?: string;
+}
+
+/**
+ * The string encoded in the card's QR: a compact, self-contained identity
+ * record. No public verify route exists, so rather than a URL the QR carries
+ * the holder's verifiable details directly — a generic scanner reads them
+ * offline, with no network dependency. The identifier (admission no. / employee
+ * ID) makes every payload unique per holder, for students and staff alike.
+ *
+ * Pure: derived only from its arguments, so it is safe to call in render.
+ */
+export function idCardPayload(holder: IdCardHolder, schoolName?: string): string {
+  const record: Record<string, string> = {
+    typ: "SCHOOLDECK-ID",
+    role: holder.role,
+    name: holder.name,
+    id: holder.identifier,
+    idType: holder.identifierLabel,
+    for: holder.affiliation,
+    valid: holder.validTill,
+  };
+  if (schoolName) record.school = schoolName;
+  if (holder.rollNo) record.roll = holder.rollNo;
+  if (holder.dob) record.dob = holder.dob;
+  return JSON.stringify(record);
 }
 
 /** One detail row in the card body. */
@@ -49,7 +78,17 @@ function Row({ label, value, accent }: { label: string; value: string; accent?: 
  * Colours are fixed rather than themed: a printed card must look identical
  * regardless of the operator's light/dark preference.
  */
-export function IdCard({ holder }: { holder: IdCardHolder }) {
+export function IdCard({
+  holder,
+  signatureUrl,
+  schoolName,
+}: {
+  holder: IdCardHolder;
+  /** Authorised signature image (data URL) from the live school profile. */
+  signatureUrl?: string;
+  /** School name, folded into the QR identity payload when available. */
+  schoolName?: string;
+}) {
   return (
     <div className="id-card relative mx-auto flex w-full max-w-75 flex-col overflow-hidden rounded-2xl bg-white text-slate-900 shadow-lg ring-1 ring-slate-200">
       {/* Header crest band */}
@@ -104,11 +143,20 @@ export function IdCard({ holder }: { holder: IdCardHolder }) {
         {/* QR + signature */}
         <div className="mt-2.5 flex items-end justify-between">
           <div className="flex flex-col items-center gap-0.5">
-            <QrCode value={`${holder.identifier}|${holder.name}`} className="size-12" />
+            <QrCode value={idCardPayload(holder, schoolName)} className="size-12" />
             <span className="text-[5.5px] font-medium uppercase tracking-wide text-slate-400">Scan to verify</span>
           </div>
           <div className="text-center">
-            <div className="h-5 w-16 border-b border-slate-300" />
+            {signatureUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={signatureUrl}
+                alt="Authorised signature"
+                className="mx-auto h-5 w-16 object-contain"
+              />
+            ) : (
+              <div className="h-5 w-16 border-b border-slate-300" />
+            )}
             <p className="mt-0.5 text-[6.5px] italic text-slate-400">Principal</p>
           </div>
         </div>
