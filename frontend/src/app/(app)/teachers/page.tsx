@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import {
   Eye,
+  FileText,
   Pencil,
   Plus,
   Search,
@@ -41,6 +42,7 @@ import {
   type TeacherFormValues,
   type TeacherStatus,
 } from "@/types/teacher";
+import { exportTablePdf } from "@/lib/exportPdf";
 import { TeacherFormModal } from "./TeacherFormModal";
 
 const PAGE_SIZE = 8;
@@ -148,6 +150,46 @@ export default function TeachersPage() {
   const openCreate = () => {
     setEditing(null);
     setFormOpen(true);
+  };
+
+  /** Exports exactly the rows the filters are showing (all pages, not just this one). */
+  const handleExportPdf = () => {
+    if (filtered.length === 0) {
+      toast({
+        title: "Nothing to export",
+        description: "No teachers match the current filters.",
+        variant: "warning",
+      });
+      return;
+    }
+    const parts = [
+      subject,
+      status,
+      quick !== "all" ? quick : "",
+      search ? `“${search}”` : "",
+    ].filter(Boolean);
+    const ok = exportTablePdf({
+      title: "Teachers",
+      subtitle: parts.length ? `Filtered by ${parts.join(" · ")}` : "All teachers",
+      columns: ["Emp ID", "Name", "Department", "Subjects", "Classes", "Status", "Phone", "Email"],
+      rows: filtered.map((t) => [
+        t.employeeId,
+        teacherName(t),
+        t.department,
+        t.subjects.join(", "),
+        t.classes.join(", "),
+        t.status,
+        t.phone,
+        t.email,
+      ]),
+    });
+    if (!ok) {
+      toast({
+        title: "Pop-up blocked",
+        description: "Allow pop-ups for this site to export a PDF.",
+        variant: "error",
+      });
+    }
   };
 
   const openEdit = (teacher: Teacher) => {
@@ -319,10 +361,16 @@ export default function TeachersPage() {
             Manage teaching staff, subjects and class assignments.
           </p>
         </div>
-        <Button onClick={openCreate}>
-          <Plus className="size-4" />
-          Add teacher
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" onClick={handleExportPdf}>
+            <FileText className="size-4" />
+            Export PDF
+          </Button>
+          <Button onClick={openCreate}>
+            <Plus className="size-4" />
+            Add teacher
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">

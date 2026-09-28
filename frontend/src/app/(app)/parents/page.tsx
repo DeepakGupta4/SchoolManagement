@@ -5,6 +5,7 @@ import {
   Search,
   Plus,
   Download,
+  FileText,
   Eye,
   Pencil,
   Trash2,
@@ -32,6 +33,7 @@ import {
   type Column,
 } from "@/components/ui";
 import { exportToCsv } from "@/lib/exportCsv";
+import { exportTablePdf } from "@/lib/exportPdf";
 import { useResource } from "@/hooks/useResource";
 import { parentApi, RELATION_OPTIONS, type Parent } from "@/lib/api/parent";
 import type { ParentSchema } from "@/lib/schemas/parent";
@@ -136,6 +138,35 @@ export default function ParentsPage() {
       title: "Export ready",
       description: `${visible.length} parent${visible.length === 1 ? "" : "s"} exported to CSV.`,
     });
+  };
+
+  /** PDF of exactly the rows the table is showing, filters included. */
+  const handleExportPdf = () => {
+    if (visible.length === 0) {
+      toast({
+        title: "Nothing to export",
+        description: "No parents match the current filters.",
+        variant: "warning",
+      });
+      return;
+    }
+    const parts = [
+      relationFilter !== "All" ? relationFilter : "",
+      search ? `“${search}”` : "",
+    ].filter(Boolean);
+    const ok = exportTablePdf({
+      title: "Parents & Guardians",
+      subtitle: parts.length ? `Filtered by ${parts.join(" · ")}` : "All parents & guardians",
+      columns: ["Name", "Relation", "Phone", "Email", "Linked students"],
+      rows: visible.map((p) => [p.name, p.relation, p.phone, p.email, childrenOf(p).length]),
+    });
+    if (!ok) {
+      toast({
+        title: "Pop-up blocked",
+        description: "Allow pop-ups for this site to export a PDF.",
+        variant: "error",
+      });
+    }
   };
 
   const openCreate = () => {
@@ -260,6 +291,10 @@ export default function ParentsPage() {
             <Button variant="outline" onClick={handleExport}>
               <Download className="size-4" />
               Export
+            </Button>
+            <Button variant="outline" onClick={handleExportPdf}>
+              <FileText className="size-4" />
+              Export PDF
             </Button>
             <Button onClick={openCreate}>
               <Plus className="size-4" />

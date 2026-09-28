@@ -1,4 +1,5 @@
 import { createApiResource } from "./createApiResource";
+import { isValidDateString, TODAY_ISO } from "@/lib/dates";
 
 export interface Exam {
   id: string;
@@ -56,5 +57,19 @@ export const EXAM_SUBJECT_OPTIONS = [
   "Geography",
   "Computer Science",
 ];
+
+/**
+ * The exam's effective status, derived from its date so it stays truthful as
+ * time passes: a past exam is "completed", today's is "ongoing", a future one
+ * is "upcoming". A manually "cancelled" exam keeps that status. Falls back to
+ * the stored status when the date is missing/invalid.
+ */
+export function examStatus(exam: Pick<Exam, "date" | "status">): string {
+  if (exam.status === "cancelled") return "cancelled";
+  if (!isValidDateString(exam.date)) return exam.status || "upcoming";
+  if (exam.date > TODAY_ISO) return "upcoming";
+  if (exam.date === TODAY_ISO) return "ongoing";
+  return "completed";
+}
 
 export const examsApi = createApiResource<Exam, ExamFilters>("/api/exams");

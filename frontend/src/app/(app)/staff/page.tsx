@@ -6,6 +6,7 @@ import {
   Search,
   Plus,
   Download,
+  FileText,
   Eye,
   Pencil,
   Trash2,
@@ -32,6 +33,7 @@ import {
   type Column,
 } from "@/components/ui";
 import { exportToCsv } from "@/lib/exportCsv";
+import { exportTablePdf } from "@/lib/exportPdf";
 import { useResource } from "@/hooks/useResource";
 import {
   staffApi,
@@ -157,6 +159,45 @@ export default function StaffPage() {
       title: "Export ready",
       description: `${visible.length} staff member${visible.length === 1 ? "" : "s"} exported to CSV.`,
     });
+  };
+
+  /** PDF of exactly the rows the table is showing, filters included. */
+  const handleExportPdf = () => {
+    if (visible.length === 0) {
+      toast({
+        title: "Nothing to export",
+        description: "No staff match the current filters.",
+        variant: "warning",
+      });
+      return;
+    }
+    const parts = [
+      deptFilter !== "All" ? deptFilter : "",
+      typeFilter !== "All" ? typeFilter : "",
+      statusFilter !== "All" ? STATUS_META[statusFilter]?.label ?? statusFilter : "",
+      search ? `“${search}”` : "",
+    ].filter(Boolean);
+    const ok = exportTablePdf({
+      title: "Staff",
+      subtitle: parts.length ? `Filtered by ${parts.join(" · ")}` : "All staff",
+      columns: ["Emp ID", "Name", "Role", "Department", "Status", "Phone", "Email"],
+      rows: visible.map((s) => [
+        s.employeeId,
+        s.name,
+        s.role,
+        s.dept,
+        STATUS_META[s.status]?.label ?? s.status,
+        s.phone,
+        s.email,
+      ]),
+    });
+    if (!ok) {
+      toast({
+        title: "Pop-up blocked",
+        description: "Allow pop-ups for this site to export a PDF.",
+        variant: "error",
+      });
+    }
   };
 
   const openCreate = () => {
@@ -311,6 +352,10 @@ export default function StaffPage() {
             <Button variant="outline" onClick={handleExport}>
               <Download className="size-4" />
               Export
+            </Button>
+            <Button variant="outline" onClick={handleExportPdf}>
+              <FileText className="size-4" />
+              Export PDF
             </Button>
             <Button onClick={openCreate}>
               <Plus className="size-4" />

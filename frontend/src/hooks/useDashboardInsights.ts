@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { listStudents } from "@/lib/api/students";
 import { listTeachers } from "@/lib/api/teachers";
 import { admissionsApi } from "@/lib/api/admissions";
-import { examsApi } from "@/lib/api/exams";
+import { examsApi, examStatus } from "@/lib/api/exams";
 import { feeAccountsApi, balanceOf } from "@/lib/api/feeLedger";
 import { classesApi } from "@/lib/api/classes";
 import { subjectsApi } from "@/lib/api/subjects";
@@ -89,7 +89,7 @@ export function useDashboardInsights() {
           reason: r.factors[0] ?? "Flagged by risk model",
         }));
 
-      const upcoming = exams.filter((e) => e.status === "upcoming");
+      const upcoming = exams.filter((e) => examStatus(e) === "upcoming");
       const feesPending = accounts.reduce((sum, a) => sum + balanceOf(a), 0);
 
       setData({

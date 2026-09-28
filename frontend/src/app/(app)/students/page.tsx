@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { Eye, Pencil, Plus, Search, Trash2, Users, UserCheck, IndianRupee, TrendingDown } from "lucide-react";
+import { Eye, FileText, Pencil, Plus, Search, Trash2, Users, UsersRound, UserCheck, IndianRupee, TrendingDown } from "lucide-react";
 import {
   Avatar,
   Badge,
@@ -20,7 +20,9 @@ import { useStudents } from "@/hooks/useStudents";
 import { useClassOptions } from "@/hooks/useClassOptions";
 import { createStudent, deleteStudent, updateStudent } from "@/lib/api/students";
 import { fullName, type Student, type StudentFormValues, type StudentStatus } from "@/types/student";
+import { exportTablePdf } from "@/lib/exportPdf";
 import { StudentFormModal } from "./StudentFormModal";
+import { BulkAddStudentsModal } from "./BulkAddStudentsModal";
 
 const STATUS_VARIANT: Record<StudentStatus, "success" | "default" | "info" | "warning"> = {
   active: "success",
@@ -104,6 +106,7 @@ export default function StudentsPage() {
   }, [students, quick]);
 
   const [formOpen, setFormOpen] = useState(false);
+  const [bulkOpen, setBulkOpen] = useState(false);
   const [editing, setEditing] = useState<Student | null>(null);
   const [deleting, setDeleting] = useState<Student | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -118,6 +121,46 @@ export default function StudentsPage() {
   const openCreate = () => {
     setEditing(null);
     setFormOpen(true);
+  };
+
+  /** Exports exactly the rows the table is showing, filters included. */
+  const handleExportPdf = () => {
+    if (displayed.length === 0) {
+      toast({
+        title: "Nothing to export",
+        description: "No students match the current filters.",
+        variant: "warning",
+      });
+      return;
+    }
+    const parts = [
+      className,
+      status,
+      quick === "fees" ? "Fees pending" : quick === "low" ? "Attendance < 75%" : "",
+      search ? `“${search}”` : "",
+    ].filter(Boolean);
+    const ok = exportTablePdf({
+      title: "Students",
+      subtitle: parts.length ? `Filtered by ${parts.join(" · ")}` : "All students",
+      columns: ["Adm No", "Name", "Class", "Section", "Roll", "Status", "Guardian", "Phone"],
+      rows: displayed.map((s) => [
+        s.admissionNo,
+        fullName(s),
+        s.className,
+        s.section,
+        s.rollNo,
+        s.status,
+        s.guardian.name,
+        s.guardian.phone,
+      ]),
+    });
+    if (!ok) {
+      toast({
+        title: "Pop-up blocked",
+        description: "Allow pop-ups for this site to export a PDF.",
+        variant: "error",
+      });
+    }
   };
 
   const openEdit = (student: Student) => {
@@ -273,10 +316,20 @@ export default function StudentsPage() {
             Manage enrolment, records and academic profiles.
           </p>
         </div>
-        <Button onClick={openCreate}>
-          <Plus className="size-4" />
-          Add student
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" onClick={handleExportPdf}>
+            <FileText className="size-4" />
+            Export PDF
+          </Button>
+          <Button variant="outline" onClick={() => setBulkOpen(true)}>
+            <UsersRound className="size-4" />
+            Bulk add
+          </Button>
+          <Button onClick={openCreate}>
+            <Plus className="size-4" />
+            Add student
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -397,6 +450,8 @@ export default function StudentsPage() {
         student={editing}
         onSubmit={handleSubmit}
       />
+
+      <BulkAddStudentsModal open={bulkOpen} onOpenChange={setBulkOpen} onSaved={refetch} />
 
       <ConfirmDialog
         open={Boolean(deleting)}

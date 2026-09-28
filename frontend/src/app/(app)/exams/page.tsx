@@ -36,7 +36,7 @@ import {
 import { cn } from "@/lib/utils";
 import { exportToCsv } from "@/lib/exportCsv";
 import { useResource } from "@/hooks/useResource";
-import { examsApi, type Exam } from "@/lib/api/exams";
+import { examsApi, examStatus, type Exam } from "@/lib/api/exams";
 import type { ExamSchema } from "@/lib/schemas/exam";
 import { DetailModal } from "@/components/DetailModal";
 import { ExamFormModal } from "./ExamFormModal";
@@ -106,7 +106,7 @@ export default function ExamsPage() {
     () =>
       activeTab === "All"
         ? items
-        : items.filter((e) => e.status === activeTab.toLowerCase()),
+        : items.filter((e) => examStatus(e) === activeTab.toLowerCase()),
     [items, activeTab]
   );
 
@@ -143,7 +143,7 @@ export default function ExamsPage() {
         { header: "Duration", value: (e) => e.duration },
         { header: "Total Marks", value: (e) => e.totalMarks },
         { header: "Students", value: (e) => e.students },
-        { header: "Status", value: (e) => e.status },
+        { header: "Status", value: (e) => examStatus(e) },
       ],
       visible
     );
@@ -156,14 +156,14 @@ export default function ExamsPage() {
   const counts = useMemo(
     () => ({
       total: items.length,
-      upcoming: items.filter((e) => e.status === "upcoming").length,
-      ongoing: items.filter((e) => e.status === "ongoing").length,
-      completed: items.filter((e) => e.status === "completed").length,
+      upcoming: items.filter((e) => examStatus(e) === "upcoming").length,
+      ongoing: items.filter((e) => examStatus(e) === "ongoing").length,
+      completed: items.filter((e) => examStatus(e) === "completed").length,
     }),
     [items]
   );
 
-  const upcomingExams = useMemo(() => items.filter((e) => e.status === "upcoming"), [items]);
+  const upcomingExams = useMemo(() => items.filter((e) => examStatus(e) === "upcoming"), [items]);
 
   const openCreate = () => {
     setEditing(null);
@@ -286,7 +286,7 @@ export default function ExamsPage() {
       header: "Status",
       sortable: true,
       render: (exam) => {
-        const sc = statusConfig[exam.status] ?? fallbackStatus;
+        const sc = statusConfig[examStatus(exam)] ?? fallbackStatus;
         const StatusIcon = sc.icon;
         return (
           <Badge variant={sc.variant} className="gap-1">
@@ -526,7 +526,7 @@ export default function ExamsPage() {
         title={viewing?.name ?? "Exam"}
         description={
           viewing
-            ? `${viewing.code} · ${(statusConfig[viewing.status] ?? fallbackStatus).label}`
+            ? `${viewing.code} · ${(statusConfig[examStatus(viewing)] ?? fallbackStatus).label}`
             : ""
         }
         rows={
@@ -541,7 +541,7 @@ export default function ExamsPage() {
                 { label: "Duration", value: viewing.duration },
                 { label: "Total marks", value: viewing.totalMarks },
                 { label: "Students", value: viewing.students.toLocaleString() },
-                { label: "Status", value: (statusConfig[viewing.status] ?? fallbackStatus).label },
+                { label: "Status", value: (statusConfig[examStatus(viewing)] ?? fallbackStatus).label },
                 {
                   label: "Classes",
                   value: viewing.classes.length ? viewing.classes.join(", ") : "—",
