@@ -15,117 +15,172 @@ function niceDate(s?: string): string {
   return `${m[3]} ${months[parseInt(m[2], 10) - 1]} ${m[1]}`;
 }
 
-function field(label: string, value: unknown): string {
-  const v = String(value ?? "").trim() || "—";
-  return `<div class="f"><span class="l">${esc(label)}</span><span class="v">${esc(v)}</span></div>`;
+/** Academic session like "2026-27" from an ISO/admission date (April rollover). */
+function sessionFrom(iso?: string): string {
+  const m = iso && /^(\d{4})-(\d{2})/.exec(iso);
+  if (!m) return "";
+  const y = parseInt(m[1], 10);
+  const mon = parseInt(m[2], 10);
+  const start = mon >= 4 ? y : y - 1;
+  return `${start}-${String((start + 1) % 100).padStart(2, "0")}`;
 }
 
-/**
- * Opens a print-ready A4 window with a proper school admission form filled from
- * the student (and guardian) record, with photo and signature spaces. The user
- * prints or "Save as PDF". Returns false if the popup was blocked.
- */
 export function printAdmissionForm(student: Student, school?: SchoolProfile | null): boolean {
   const w = window.open("", "_blank", "width=900,height=1040");
   if (!w) return false;
-
-  const schoolName = school?.name || "Your School";
-  const addr = [school?.address, school?.city, school?.state].filter(Boolean).join(", ");
-  const contact = [school?.phone, school?.email].filter(Boolean).join("  ·  ");
-  const cls = `${student.className || "—"}${student.section ? " - " + student.section : ""}`;
-  const name = `${student.firstName} ${student.lastName}`.trim();
-
-  const logo = school?.logo ? `<img class="logo" src="${esc(school.logo)}" alt=""/>` : "";
-  const photo = student.avatar
-    ? `<img class="photo" src="${esc(student.avatar)}" alt="Student photo"/>`
-    : `<div class="photo ph">Affix recent<br/>photograph</div>`;
-  const sign = school?.signatureUrl ? `<img class="sig" src="${esc(school.signatureUrl)}" alt=""/>` : "";
-
-  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Admission Form — ${esc(name)}</title>
-<style>
-  @page { size: A4; margin: 14mm 14mm; }
-  * { box-sizing: border-box; }
-  body { font-family: 'Segoe UI', Arial, sans-serif; color: #0F172A; margin: 0; padding: 20px; font-size: 13px; }
-  .head { display: flex; align-items: center; gap: 14px; border-bottom: 2px solid #0F172A; padding-bottom: 12px; }
-  .logo { width: 56px; height: 56px; object-fit: contain; }
-  .sname { font-size: 24px; font-weight: 800; letter-spacing: .3px; }
-  .saddr { font-size: 12px; color: #475569; margin-top: 2px; }
-  .title { text-align: center; font-size: 16px; font-weight: 800; letter-spacing: 2px; margin: 16px 0 4px; text-transform: uppercase; }
-  .title small { display:block; font-size: 11px; font-weight: 600; letter-spacing: 1px; color:#64748B; margin-top:2px;}
-  .top { display: flex; gap: 16px; margin-top: 12px; }
-  .top .meta { flex: 1; }
-  .photo { width: 120px; height: 150px; object-fit: cover; border: 1.5px solid #334155; border-radius: 4px; }
-  .photo.ph { display:flex; align-items:center; justify-content:center; text-align:center; color:#94A3B8; font-size:11px; border-style:dashed; }
-  .sec { margin-top: 16px; }
-  .sec h3 { font-size: 12.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: #4F46E5; background:#EEF0FF; padding:6px 10px; border-radius:6px; margin:0 0 10px; }
-  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 26px; }
-  .f { display:flex; gap:8px; align-items:flex-end; border-bottom:1px dotted #94A3B8; padding:3px 0; }
-  .f.full { grid-column: 1 / -1; }
-  .l { color:#64748B; font-weight:600; min-width:118px; }
-  .v { color:#0F172A; font-weight:600; flex:1; }
-  .decl { margin-top:16px; font-size:11.5px; color:#475569; line-height:1.5; border:1px solid #E2E8F0; border-radius:8px; padding:10px 12px; }
-  .signs { display:flex; justify-content:space-between; margin-top:38px; gap:20px; }
-  .sb { flex:1; text-align:center; }
-  .sb .line { border-top:1.5px solid #334155; margin-top:44px; padding-top:6px; font-size:11.5px; font-weight:600; color:#334155; }
-  .sb .sig { height:42px; object-fit:contain; display:block; margin:0 auto -6px; }
-  .foot { margin-top:22px; text-align:center; font-size:10.5px; color:#94A3B8; border-top:1px solid #E2E8F0; padding-top:8px; }
-  .noprint { text-align:center; margin:18px 0; }
-  button { padding:9px 18px; font-size:13px; border:1px solid #333; border-radius:6px; background:#f3f3f3; cursor:pointer; }
-  @media print { .noprint { display:none; } body { padding:0; } }
-</style></head><body>
-  <div class="head">${logo}<div><div class="sname">${esc(schoolName)}</div>${addr ? `<div class="saddr">${esc(addr)}</div>` : ""}${contact ? `<div class="saddr">${esc(contact)}</div>` : ""}</div></div>
-  <div class="title">Student Admission Form<small>Academic record · ${esc(cls)}</small></div>
-
-  <div class="top">
-    <div class="meta grid">
-      ${field("Admission No.", student.admissionNo)}
-      ${field("Roll No.", student.rollNo)}
-      ${field("Class & Section", cls)}
-      ${field("Admission Date", niceDate(student.admissionDate))}
-      ${field("Status", student.status)}
-      ${field("Blood Group", student.bloodGroup)}
-    </div>
-    <div>${photo}</div>
-  </div>
-
-  <div class="sec">
-    <h3>Student Details</h3>
-    <div class="grid">
-      ${field("Full Name", name)}
-      ${field("Date of Birth", niceDate(student.dateOfBirth))}
-      ${field("Gender", student.gender)}
-      ${field("Phone", student.phone)}
-      ${field("Email", student.email)}
-      ${field("Class", student.className)}
-      <div class="f full"><span class="l">Address</span><span class="v">${esc(student.address || "—")}</span></div>
-      ${student.medicalNotes ? `<div class="f full"><span class="l">Medical Notes</span><span class="v">${esc(student.medicalNotes)}</span></div>` : ""}
-    </div>
-  </div>
-
-  <div class="sec">
-    <h3>Parent / Guardian Details</h3>
-    <div class="grid">
-      ${field("Guardian Name", student.guardian?.name)}
-      ${field("Relation", student.guardian?.relation)}
-      ${field("Phone", student.guardian?.phone)}
-      ${field("Email", student.guardian?.email)}
-      ${field("Occupation", student.guardian?.occupation)}
-    </div>
-  </div>
-
-  <div class="decl">I hereby declare that the information provided above is true and correct to the best of my knowledge, and I agree to abide by the rules and regulations of the school.</div>
-
-  <div class="signs">
-    <div class="sb"><div class="line">Student's Signature</div></div>
-    <div class="sb"><div class="line">Parent / Guardian's Signature</div></div>
-    <div class="sb">${sign ? `<img class="sig" src="${esc(school?.signatureUrl)}" alt=""/>` : ""}<div class="line">Principal / Authorised Signatory</div></div>
-  </div>
-
-  <div class="foot">Generated on ${esc(niceDate(new Date().toISOString().slice(0, 10)))} · ${esc(schoolName)} · SchoolDeck</div>
-  <div class="noprint"><button onclick="window.print()">Print / Save as PDF</button></div>
-</body></html>`);
+  w.document.write(buildAdmissionFormHtml(student, school));
   w.document.close();
   w.focus();
   setTimeout(() => { try { w.print(); } catch { /* button remains */ } }, 400);
   return true;
+}
+
+/** Builds the full admission-form HTML document (pure; renderable anywhere). */
+export function buildAdmissionFormHtml(student: Student, school?: SchoolProfile | null): string {
+  const schoolName = school?.name || "Your School";
+  const addr = [school?.address, school?.city, school?.state].filter(Boolean).join(", ");
+  const contact = [school?.phone, school?.email, school?.website].filter(Boolean).join("  ·  ");
+  const cls = `${student.className || ""}${student.section ? " - " + student.section : ""}`;
+  const name = `${student.firstName} ${student.lastName}`.trim();
+  const rel = (student.guardian?.relation || "").toLowerCase();
+  const gName = student.guardian?.name || "";
+  const gPhone = student.guardian?.phone || "";
+  const gOcc = student.guardian?.occupation || "";
+  const isFather = rel.includes("father");
+  const isMother = rel.includes("mother");
+
+  const logo = school?.logo ? `<img class="logo" src="${esc(school.logo)}" alt=""/>` : `<div class="logo ph"></div>`;
+  const photo = student.avatar
+    ? `<img class="photo" src="${esc(student.avatar)}" alt="Photo"/>`
+    : `<div class="photo ph">Affix recent<br/>passport-size<br/>photograph</div>`;
+  const sign = school?.signatureUrl ? `<img class="osign" src="${esc(school.signatureUrl)}" alt=""/>` : "";
+
+  // one label/value cell pair; blank value renders as a fillable line
+  const V = (v: unknown) => (String(v ?? "").trim() ? `<b>${esc(v)}</b>` : "");
+  const chk = (label: string, on = false) =>
+    `<span class="chk"><span class="box">${on ? "✓" : ""}</span>${esc(label)}</span>`;
+
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Admission Form — ${esc(name)}</title>
+<style>
+  @page { size: A4; margin: 10mm 10mm; }
+  * { box-sizing: border-box; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; color:#111827; margin:0; padding:14px; font-size:11.5px; }
+  .sheet { border:1.5px solid #111827; }
+  .head { display:flex; align-items:center; gap:12px; padding:10px 14px; border-bottom:1.5px solid #111827; }
+  .logo { width:52px; height:52px; object-fit:contain; }
+  .logo.ph { border:1px dashed #9CA3AF; border-radius:6px; }
+  .head .mid { flex:1; text-align:center; }
+  .sname { font-size:22px; font-weight:800; letter-spacing:.3px; }
+  .saddr { font-size:10.5px; color:#374151; margin-top:1px; }
+  .head .right { font-size:10px; text-align:right; min-width:120px; }
+  .head .right div { margin-bottom:3px; }
+  .u { display:inline-block; min-width:70px; border-bottom:1px solid #6B7280; padding:0 4px; font-weight:700; }
+  .titlebar { text-align:center; font-size:13px; font-weight:800; letter-spacing:2px; padding:5px; background:#111827; color:#fff; text-transform:uppercase; }
+  .applied { display:flex; }
+  .applied .l { flex:1; padding:8px 14px; border-right:1.5px solid #111827; }
+  .applied .ph { width:118px; padding:6px; display:flex; align-items:center; justify-content:center; }
+  .photo { width:104px; height:124px; object-fit:cover; border:1px solid #374151; }
+  .photo.ph { width:104px; height:124px; border:1px dashed #9CA3AF; display:flex; align-items:center; justify-content:center; text-align:center; color:#9CA3AF; font-size:9.5px; line-height:1.4; }
+  .sec-h { background:#EEF0FF; color:#312E81; font-weight:800; font-size:11px; letter-spacing:.8px; text-transform:uppercase; padding:5px 14px; border-top:1.5px solid #111827; border-bottom:1px solid #C7CBF5; }
+  table.grid { width:100%; border-collapse:collapse; }
+  table.grid td { border:1px solid #D1D5DB; padding:6px 10px; vertical-align:top; height:26px; }
+  td.lab { background:#F8FAFC; color:#475569; font-weight:600; width:22%; white-space:nowrap; }
+  td.val { width:28%; }
+  td.val b { font-weight:700; color:#0F172A; }
+  .chk { display:inline-block; margin-right:14px; white-space:nowrap; }
+  .box { display:inline-block; width:13px; height:13px; border:1.2px solid #374151; margin-right:5px; text-align:center; line-height:12px; font-weight:800; vertical-align:-2px; }
+  .decl { padding:8px 14px; font-size:10.5px; color:#374151; line-height:1.5; border-top:1.5px solid #111827; }
+  .signs { display:flex; border-top:1px solid #D1D5DB; }
+  .signs .sb { flex:1; text-align:center; padding:30px 10px 8px; font-weight:700; font-size:10.5px; border-right:1px solid #D1D5DB; }
+  .signs .sb:last-child { border-right:none; }
+  .office { border-top:1.5px solid #111827; }
+  .office .oh { background:#111827; color:#fff; font-weight:800; font-size:10.5px; letter-spacing:1px; padding:4px 14px; text-transform:uppercase; }
+  .osign { height:34px; object-fit:contain; display:block; margin:0 auto 2px; }
+  .foot { text-align:center; font-size:9.5px; color:#9CA3AF; margin-top:8px; }
+  .noprint { text-align:center; margin:14px 0; }
+  button { padding:9px 18px; font-size:13px; border:1px solid #333; border-radius:6px; background:#f3f3f3; cursor:pointer; }
+  @media print { .noprint { display:none; } body { padding:0; } }
+</style></head><body>
+<div class="sheet">
+  <div class="head">
+    ${logo}
+    <div class="mid"><div class="sname">${esc(schoolName)}</div>${addr ? `<div class="saddr">${esc(addr)}</div>` : ""}${contact ? `<div class="saddr">${esc(contact)}</div>` : ""}</div>
+    <div class="right"><div>Form No: <span class="u">${esc(student.admissionNo || "")}</span></div><div>Session: <span class="u">${esc(sessionFrom(student.admissionDate) || sessionFrom(new Date().toISOString()))}</span></div></div>
+  </div>
+  <div class="titlebar">Application for Admission</div>
+
+  <div class="applied">
+    <div class="l">
+      Class applied for: <span class="u">${esc(student.className || "")}</span>
+      &nbsp;&nbsp;Section: <span class="u">${esc(student.section || "")}</span><br/><br/>
+      Admission No: <span class="u">${esc(student.admissionNo || "")}</span>
+      &nbsp;&nbsp;Roll No: <span class="u">${esc(student.rollNo || "")}</span><br/><br/>
+      Date of Admission: <span class="u">${esc(niceDate(student.admissionDate))}</span>
+    </div>
+    <div class="ph">${photo}</div>
+  </div>
+
+  <div class="sec-h">1. Student's Particulars</div>
+  <table class="grid">
+    <tr><td class="lab">Full Name</td><td class="val" colspan="3"><b>${esc(name)}</b></td></tr>
+    <tr><td class="lab">Date of Birth</td><td class="val">${V(niceDate(student.dateOfBirth))}</td><td class="lab">Gender</td><td class="val">${V(student.gender)}</td></tr>
+    <tr><td class="lab">Blood Group</td><td class="val">${V(student.bloodGroup)}</td><td class="lab">Nationality</td><td class="val"></td></tr>
+    <tr><td class="lab">Religion</td><td class="val"></td><td class="lab">Mother Tongue</td><td class="val"></td></tr>
+    <tr><td class="lab">Category</td><td class="val" colspan="3">${chk("General")}${chk("OBC")}${chk("SC")}${chk("ST")}${chk("Other")}</td></tr>
+    <tr><td class="lab">Aadhaar No.</td><td class="val"></td><td class="lab">Place of Birth</td><td class="val"></td></tr>
+  </table>
+
+  <div class="sec-h">2. Parent / Guardian Details</div>
+  <table class="grid">
+    <tr><td class="lab">Father's Name</td><td class="val">${V(isFather ? gName : "")}</td><td class="lab">Occupation</td><td class="val">${V(isFather ? gOcc : "")}</td></tr>
+    <tr><td class="lab">Father's Mobile</td><td class="val">${V(isFather ? gPhone : "")}</td><td class="lab">Father's Email</td><td class="val">${V(isFather ? student.guardian?.email : "")}</td></tr>
+    <tr><td class="lab">Mother's Name</td><td class="val">${V(isMother ? gName : "")}</td><td class="lab">Occupation</td><td class="val">${V(isMother ? gOcc : "")}</td></tr>
+    <tr><td class="lab">Mother's Mobile</td><td class="val">${V(isMother ? gPhone : "")}</td><td class="lab">Mother's Email</td><td class="val">${V(isMother ? student.guardian?.email : "")}</td></tr>
+    <tr><td class="lab">Guardian (if any)</td><td class="val">${V(!isFather && !isMother ? gName : "")}</td><td class="lab">Relation / Mobile</td><td class="val">${V(!isFather && !isMother && gName ? `${student.guardian?.relation || ""}  ${gPhone}` : "")}</td></tr>
+    <tr><td class="lab">Annual Income</td><td class="val"></td><td class="lab">Student Mobile</td><td class="val">${V(student.phone)}</td></tr>
+  </table>
+
+  <div class="sec-h">3. Contact &amp; Address</div>
+  <table class="grid">
+    <tr><td class="lab">Permanent Address</td><td class="val" colspan="3"><b>${esc(student.address || "")}</b></td></tr>
+    <tr><td class="lab">Correspondence Address</td><td class="val" colspan="3"></td></tr>
+    <tr><td class="lab">Email</td><td class="val"><b>${esc(student.email || "")}</b></td><td class="lab">Emergency Contact</td><td class="val"></td></tr>
+  </table>
+
+  <div class="sec-h">4. Previous School (if applicable)</div>
+  <table class="grid">
+    <tr><td class="lab">Last School Attended</td><td class="val" colspan="3"></td></tr>
+    <tr><td class="lab">Class Passed</td><td class="val"></td><td class="lab">Board</td><td class="val"></td></tr>
+    <tr><td class="lab">T.C. Number</td><td class="val"></td><td class="lab">Result / %</td><td class="val"></td></tr>
+  </table>
+
+  <div class="sec-h">5. Transport, Medical &amp; Documents Enclosed</div>
+  <table class="grid">
+    <tr><td class="lab">Transport Required</td><td class="val">${chk("Yes")}${chk("No")}</td><td class="lab">Pick-up Point / Route</td><td class="val"></td></tr>
+    <tr><td class="lab">Medical Conditions</td><td class="val" colspan="3"><b>${esc(student.medicalNotes || "")}</b></td></tr>
+    <tr><td class="lab">Documents</td><td class="val" colspan="3">${chk("Birth Certificate")}${chk("Aadhaar Card")}${chk("Transfer Certificate")}${chk("Prev. Marksheet")}${chk("Photographs")}${chk("Caste Certificate")}</td></tr>
+  </table>
+
+  <div class="decl">
+    <b>Declaration:</b> I hereby declare that the information furnished above is true and correct to the best of my knowledge and belief. I undertake that my ward will abide by the rules and regulations of the school. I shall not hold the school responsible for any mis-statement made by me.
+  </div>
+  <div class="signs">
+    <div class="sb"><br/>Student's Signature</div>
+    <div class="sb"><br/>Parent / Guardian's Signature</div>
+    <div class="sb"><br/>Date</div>
+  </div>
+
+  <div class="office">
+    <div class="oh">For Office Use Only</div>
+    <table class="grid">
+      <tr><td class="lab">Class &amp; Section Allotted</td><td class="val">${V(cls)}</td><td class="lab">Roll No.</td><td class="val">${V(student.rollNo)}</td></tr>
+      <tr><td class="lab">Admission No.</td><td class="val">${V(student.admissionNo)}</td><td class="lab">Fee Received (₹)</td><td class="val"></td></tr>
+      <tr><td class="lab">Remarks</td><td class="val" colspan="3"></td></tr>
+      <tr><td class="lab">Verified By</td><td class="val"></td><td class="lab" style="text-align:center">Principal / Authorised Signatory</td><td class="val" style="text-align:center">${sign}</td></tr>
+    </table>
+  </div>
+</div>
+<div class="foot">Generated on ${esc(niceDate(new Date().toISOString().slice(0, 10)))} · ${esc(schoolName)} · SchoolDeck</div>
+<div class="noprint"><button onclick="window.print()">Print / Save as PDF</button></div>
+</body></html>`;
 }
