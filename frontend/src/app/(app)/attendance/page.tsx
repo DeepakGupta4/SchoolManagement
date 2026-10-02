@@ -4,7 +4,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   Check,
   X,
-  Clock,
   Download,
   Users,
   Loader2,
@@ -12,6 +11,7 @@ import {
   PartyPopper,
   CalendarDays,
   FileText,
+  Bell,
 } from "lucide-react";
 import {
   Badge,
@@ -34,6 +34,7 @@ import {
   getAttendance,
   getAttendanceSummary,
   saveAttendance,
+  notifyAbsentees,
   type AttendanceStatus,
   type AttendanceMark,
   type AttendanceStudentSummary,
@@ -47,9 +48,18 @@ const statusConfig: Record<AttendanceStatus, { tone: string; bar: string; label:
   present: { tone: "bg-success-soft text-success-text", bar: "bg-success", label: "Present" },
   absent: { tone: "bg-danger-soft text-danger-text", bar: "bg-danger", label: "Absent" },
   late: { tone: "bg-warning-soft text-warning-text", bar: "bg-warning", label: "Late" },
+  "half-day": { tone: "bg-info-soft text-info-text", bar: "bg-info", label: "Half-day" },
+  leave: { tone: "bg-violet-soft text-violet-text", bar: "bg-violet", label: "Leave" },
 };
 
-const statusIcon: Record<AttendanceStatus, typeof Check> = { present: Check, absent: X, late: Clock };
+/** Options for the per-student status <Select>. Order matches statusConfig. */
+const STATUS_OPTIONS: { label: string; value: AttendanceStatus }[] = [
+  { label: "Present", value: "present" },
+  { label: "Absent", value: "absent" },
+  { label: "Late", value: "late" },
+  { label: "Half-day", value: "half-day" },
+  { label: "Leave", value: "leave" },
+];
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
 
@@ -110,8 +120,12 @@ export default function AttendancePage() {
   // Students that already have a saved record for the date — used to know who is
   // still "unmarked" (the ones the auto-absent rule targets).
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
+  // How many of those saved records are "absent" — gates the "Notify parents"
+  // action, which alerts based on what is persisted, not the live toggles.
+  const [savedAbsentCount, setSavedAbsentCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [notifying, setNotifying] = useState(false);
   const [dirty, setDirty] = useState(false);
 
   // Bumped after a successful save so the real-data views (weekly overview,
@@ -201,6 +215,7 @@ export default function AttendancePage() {
           setRoster(rows);
           setAttendance(marks);
           setSavedIds(new Set(savedMap.keys()));
+          setSavedAbsentCount(saved.filter((m) => m.status === "absent").length);
           setDirty(false);
         })
         .catch(() => {
@@ -293,6 +308,8 @@ export default function AttendancePage() {
   const present = statuses.filter((v) => v === "present").length;
   const absent = statuses.filter((v) => v === "absent").length;
   const late = statuses.filter((v) => v === "late").length;
+  const halfDay = statuses.filter((v) => v === "half-day").length;
+  const leave = statuses.filter((v) => v === "leave").length;
   const pct = roster.length > 0 ? Math.round((present / roster.length) * 100) : 0;
 
   const mark = (id: string, status: AttendanceStatus) => {
@@ -317,6 +334,7 @@ export default function AttendancePage() {
       }));
       await saveAttendance({ className, section, date, records });
       setSavedIds(new Set(roster.map((r) => r.id)));
+      setSavedAbsentCount(records.filter((r) => r.status === "absent").length);
       setDirty(false);
       setSummaryRefresh((n) => n + 1);
       toast({ title: "Attendance saved", description: `${className} · ${section} · ${date}` });
@@ -353,6 +371,7 @@ export default function AttendancePage() {
       await saveAttendance({ className, section, date, records });
       setAttendance(next);
       setSavedIds(new Set(roster.map((r) => r.id)));
+      setSavedAbsentCount(records.filter((r) => r.status === "absent").length);
       setDirty(false);
       setSummaryRefresh((n) => n + 1);
       toast({
@@ -369,6 +388,38 @@ export default function AttendancePage() {
       setSaving(false);
     }
   }, [holiday, unmarked, attendance, roster, className, section, date, toast]);
+
+  /**
+   * Explicitly email the parents of today's SAVED absentees. Best-effort — the
+   * toast reports honestly what the server actually did (how many were emailed,
+   * how many had no email, or that email isn't configured at all).
+   */
+  const handleNotify = useCallback(async () => {
+    if (holiday || savedAbsentCount === 0) return;
+    setNotifying(true);
+    try {
+      const res = await notifyAbsentees(className, section, date);
+      if (!res.emailConfigured) {
+        toast({
+          title: "Email isn't set up on the server — ask admin to add it",
+          description: `${res.total} absentee(s) on ${date} · no alerts were sent.`,
+          variant: "warning",
+        });
+      } else {
+        const parts = [`Alerted ${res.emailed} parent${res.emailed === 1 ? "" : "s"}`];
+        if (res.noContact > 0) parts.push(`${res.noContact} had no email`);
+        toast({ title: parts.join(" · "), description: `${res.total} absentee(s) on ${date}.` });
+      }
+    } catch (e) {
+      toast({
+        title: "Could not notify parents",
+        description: e instanceof Error ? e.message : "Please try again.",
+        variant: "error",
+      });
+    } finally {
+      setNotifying(false);
+    }
+  }, [holiday, savedAbsentCount, className, section, date, toast]);
 
   const pctVariant = pct >= 90 ? "success" : pct >= 75 ? "warning" : "danger";
 
@@ -407,6 +458,8 @@ export default function AttendancePage() {
         { header: "Present", value: (s) => s.present },
         { header: "Absent", value: (s) => s.absent },
         { header: "Late", value: (s) => s.late },
+        { header: "Half-day", value: (s) => s.halfDay },
+        { header: "Leave", value: (s) => s.leave },
         { header: "Total", value: (s) => s.total },
         { header: "Attendance %", value: (s) => s.percent },
       ],
@@ -423,8 +476,18 @@ export default function AttendancePage() {
     const ok = exportTablePdf({
       title: `Attendance Register — ${monthTitle(reportMonth)}`,
       subtitle: reportSubtitle,
-      columns: ["Roll", "Student", "Present", "Absent", "Late", "Total", "%"],
-      rows: reportRows.map((s) => [s.roll, s.studentName, s.present, s.absent, s.late, s.total, `${s.percent}%`]),
+      columns: ["Roll", "Student", "Present", "Absent", "Late", "Half-day", "Leave", "Total", "%"],
+      rows: reportRows.map((s) => [
+        s.roll,
+        s.studentName,
+        s.present,
+        s.absent,
+        s.late,
+        s.halfDay,
+        s.leave,
+        s.total,
+        `${s.percent}%`,
+      ]),
     });
     if (!ok) {
       toast({
@@ -441,19 +504,31 @@ export default function AttendancePage() {
       present: a.present + s.present,
       absent: a.absent + s.absent,
       late: a.late + s.late,
+      halfDay: a.halfDay + s.halfDay,
+      leave: a.leave + s.leave,
       total: a.total + s.total,
     }),
-    { present: 0, absent: 0, late: 0, total: 0 }
+    { present: 0, absent: 0, late: 0, halfDay: 0, leave: 0, total: 0 }
   );
+  // Same fair formula as the per-student rows: present + late + half-day/2 over
+  // present + absent + late + half-day; leave excused.
+  const reportGradeable =
+    reportTotals.present + reportTotals.absent + reportTotals.late + reportTotals.halfDay;
   const reportOverallPct =
-    reportTotals.total > 0
-      ? Math.round(((reportTotals.present + reportTotals.late) / reportTotals.total) * 100)
+    reportGradeable > 0
+      ? Math.round(
+          ((reportTotals.present + reportTotals.late + 0.5 * reportTotals.halfDay) /
+            reportGradeable) *
+            100
+        )
       : 0;
 
   const summary: { key: AttendanceStatus; label: string; value: number }[] = [
     { key: "present", label: "Present", value: present },
     { key: "absent", label: "Absent", value: absent },
     { key: "late", label: "Late", value: late },
+    { key: "half-day", label: "Half-day", value: halfDay },
+    { key: "leave", label: "Leave", value: leave },
   ];
 
   return (
@@ -647,25 +722,19 @@ export default function AttendancePage() {
                     <p className="truncate text-sm font-medium text-text">{s.name}</p>
                     <p className="mt-0.5 text-[11px] text-subtle">Roll #{s.roll}</p>
                   </div>
-                  <div className="flex gap-1">
-                    {(["present", "absent", "late"] as AttendanceStatus[]).map((status) => {
-                      const Icon = statusIcon[status];
-                      const isActive = st === status;
-                      return (
-                        <button
-                          key={status}
-                          onClick={() => mark(s.id, status)}
-                          aria-label={`Mark ${s.name} ${statusConfig[status].label}`}
-                          aria-pressed={isActive}
-                          className={cn(
-                            "focus-ring flex size-7 items-center justify-center rounded-sm transition-colors",
-                            isActive ? statusConfig[status].tone : "bg-surface-sunken text-subtle hover:bg-surface-hover hover:text-text"
-                          )}
-                        >
-                          <Icon className="size-3.5" />
-                        </button>
-                      );
-                    })}
+                  <div className="flex shrink-0 items-center gap-2">
+                    <span
+                      className={cn("size-2 shrink-0 rounded-full", statusConfig[st].bar)}
+                      aria-hidden
+                    />
+                    <div className="w-32">
+                      <Select
+                        value={st}
+                        onChange={(e) => mark(s.id, e.target.value as AttendanceStatus)}
+                        options={STATUS_OPTIONS}
+                        aria-label={`Attendance status for ${s.name}`}
+                      />
+                    </div>
                   </div>
                 </div>
               );
@@ -674,13 +743,26 @@ export default function AttendancePage() {
         )}
 
         {!holiday && (
-          <div className="flex items-center justify-end gap-3 px-5 py-4">
+          <div className="flex flex-wrap items-center justify-end gap-3 px-5 py-4">
             {!dirty && !loading && roster.length > 0 && (
               <p className="flex items-center gap-1.5 text-sm font-medium text-success-text">
                 <Check className="size-4" />
                 Saved
               </p>
             )}
+            <Button
+              variant="outline"
+              onClick={handleNotify}
+              disabled={notifying || saving || loading || savedAbsentCount === 0}
+              title={
+                savedAbsentCount === 0
+                  ? "No saved absentees to notify"
+                  : "Email the parents of today's saved absentees"
+              }
+            >
+              {notifying ? <Loader2 className="size-4 animate-spin" /> : <Bell className="size-4" />}
+              Notify parents{savedAbsentCount > 0 ? ` (${savedAbsentCount})` : ""}
+            </Button>
             <Button onClick={handleSave} disabled={saving || loading || roster.length === 0}>
               {saving ? <Loader2 className="size-4 animate-spin" /> : null}
               Save Attendance
@@ -768,6 +850,8 @@ export default function AttendancePage() {
                     <th className="px-3 py-2.5 text-center font-semibold">Present</th>
                     <th className="px-3 py-2.5 text-center font-semibold">Absent</th>
                     <th className="px-3 py-2.5 text-center font-semibold">Late</th>
+                    <th className="px-3 py-2.5 text-center font-semibold">Half-day</th>
+                    <th className="px-3 py-2.5 text-center font-semibold">Leave</th>
                     <th className="px-3 py-2.5 text-center font-semibold">Total</th>
                     <th className="px-3 py-2.5 text-right font-semibold">%</th>
                   </tr>
@@ -780,6 +864,8 @@ export default function AttendancePage() {
                       <td className="px-3 py-2 text-center text-success-text">{s.present}</td>
                       <td className="px-3 py-2 text-center text-danger-text">{s.absent}</td>
                       <td className="px-3 py-2 text-center text-warning-text">{s.late}</td>
+                      <td className="px-3 py-2 text-center text-info-text">{s.halfDay}</td>
+                      <td className="px-3 py-2 text-center text-violet-text">{s.leave}</td>
                       <td className="px-3 py-2 text-center text-muted">{s.total}</td>
                       <td className="px-3 py-2 text-right font-semibold text-text">{s.percent}%</td>
                     </tr>
@@ -793,6 +879,8 @@ export default function AttendancePage() {
                     <td className="px-3 py-2.5 text-center">{reportTotals.present}</td>
                     <td className="px-3 py-2.5 text-center">{reportTotals.absent}</td>
                     <td className="px-3 py-2.5 text-center">{reportTotals.late}</td>
+                    <td className="px-3 py-2.5 text-center">{reportTotals.halfDay}</td>
+                    <td className="px-3 py-2.5 text-center">{reportTotals.leave}</td>
                     <td className="px-3 py-2.5 text-center">{reportTotals.total}</td>
                     <td className="px-3 py-2.5 text-right">{reportOverallPct}%</td>
                   </tr>

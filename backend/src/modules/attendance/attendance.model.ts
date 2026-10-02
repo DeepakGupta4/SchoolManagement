@@ -5,7 +5,7 @@ import mongoose, { Schema, type InferSchemaType } from "mongoose";
  * the set of records sharing (schoolId, className, section, date); the unique
  * index makes saving idempotent — re-saving updates rather than duplicates.
  */
-export const ATTENDANCE_STATUSES = ["present", "absent", "late"] as const;
+export const ATTENDANCE_STATUSES = ["present", "absent", "late", "half-day", "leave"] as const;
 export type AttendanceStatus = (typeof ATTENDANCE_STATUSES)[number];
 
 const attendanceSchema = new Schema(

@@ -1,6 +1,6 @@
 import { apiRequest } from "./client";
 
-export type AttendanceStatus = "present" | "absent" | "late";
+export type AttendanceStatus = "present" | "absent" | "late" | "half-day" | "leave";
 
 export interface AttendanceMark {
   studentId: string;
@@ -37,8 +37,11 @@ export interface AttendanceStudentSummary {
   present: number;
   absent: number;
   late: number;
+  halfDay: number;
+  leave: number;
   total: number;
-  /** round((present + late) / total * 100); 0 when total is 0. */
+  /** Fair attendance %: round((present + late + 0.5*half-day) / (present +
+   *  absent + late + half-day) * 100). Leave is excused. 0 when denominator 0. */
   percent: number;
 }
 
@@ -48,6 +51,8 @@ export interface AttendanceDaySummary {
   present: number;
   absent: number;
   late: number;
+  halfDay: number;
+  leave: number;
   total: number;
   /** round(present / total * 100); 0 when total is 0. */
   presentPercent: number;
@@ -71,5 +76,33 @@ export async function getAttendanceSummary(
 ): Promise<AttendanceSummary> {
   return apiRequest<AttendanceSummary>("/api/attendance/summary", {
     query: { className, section, from, to },
+  });
+}
+
+/** Outcome of an explicit absence-alert run (all best-effort counts). */
+export interface NotifyAbsenteesResult {
+  /** Students saved as absent on the date. */
+  total: number;
+  /** Guardians an email was actually delivered to. */
+  emailed: number;
+  /** Absentees with no usable email address on file. */
+  noContact: number;
+  /** Whether the server has a mailer configured at all. */
+  emailConfigured: boolean;
+}
+
+/**
+ * Explicitly email the guardians of every student SAVED as absent on the given
+ * class-day. Best-effort — the result reports honestly how many were emailed vs.
+ * had no contact, and whether email is configured on the server.
+ */
+export async function notifyAbsentees(
+  className: string,
+  section: string,
+  date: string
+): Promise<NotifyAbsenteesResult> {
+  return apiRequest<NotifyAbsenteesResult>("/api/attendance/notify-absentees", {
+    method: "POST",
+    body: { className, section, date },
   });
 }

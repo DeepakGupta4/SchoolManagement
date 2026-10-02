@@ -7,7 +7,12 @@ import { Modal, Button, Input, Select } from "@/components/ui";
 import { holidaySchema, type HolidaySchema } from "@/lib/schemas/holiday";
 import { HOLIDAY_TYPE_OPTIONS, type Holiday } from "@/lib/api/holidays";
 
-const todayIso = () => new Date().toISOString().slice(0, 10);
+// Local calendar date (not UTC) so a new holiday defaults to the admin's day.
+const todayIso = () => {
+  const d = new Date();
+  const pad2 = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+};
 
 const emptyValues = (): HolidaySchema => ({
   date: todayIso(),

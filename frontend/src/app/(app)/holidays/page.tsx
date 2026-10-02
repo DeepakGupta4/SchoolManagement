@@ -7,6 +7,7 @@ import {
   CalendarCheck,
   ChevronLeft,
   ChevronRight,
+  Download,
   Eye,
   Pencil,
   Plus,
@@ -23,18 +24,31 @@ import {
   PageHeader,
   StatCard,
   Table,
+  useToast,
   type Column,
 } from "@/components/ui";
 import { cn } from "@/lib/utils";
+import { exportToCsv } from "@/lib/exportCsv";
 import { useResource } from "@/hooks/useResource";
 import { holidaysApi, type Holiday } from "@/lib/api/holidays";
 import type { HolidaySchema } from "@/lib/schemas/holiday";
 import { DetailModal } from "@/components/DetailModal";
 import { HolidayFormModal } from "./HolidayFormModal";
 
-const todayIso = () => new Date().toISOString().slice(0, 10);
-
 const pad2 = (n: number) => String(n).padStart(2, "0");
+
+/**
+ * Today as YYYY-MM-DD in the admin's LOCAL time. Built from local date parts
+ * rather than `toISOString()` (which is UTC): in IST the UTC date lags by up to
+ * 5.5 hours, so a UTC "today" would keep a holiday reading as "Upcoming" until
+ * mid-morning on the day after it has passed. Called fresh each render so the
+ * derived status is never stale, and consistent with the calendar cells, which
+ * are also built from local date parts.
+ */
+const todayIso = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+};
 
 /**
  * Fixed-date holidays (MM-DD → name) that land on the same Gregorian date every
@@ -143,8 +157,34 @@ const typeVariant: Record<string, "info" | "success" | "warning" | "default"> = 
   Event: "default",
 };
 
+/** A holiday's time-state, derived from its date vs today — never stored. */
+type TimeState = "Upcoming" | "Today" | "Past";
+
+/**
+ * Derive the time-state from the holiday date vs today. Dates are zero-padded
+ * YYYY-MM-DD, so plain string comparison is chronological.
+ */
+function timeStateOf(date: string, today: string): TimeState {
+  if (date < today) return "Past";
+  if (date === today) return "Today";
+  return "Upcoming";
+}
+
+/** Badge styling per state: green = ahead, amber = today, muted = over. */
+const statusVariant: Record<TimeState, "success" | "warning" | "default"> = {
+  Upcoming: "success",
+  Today: "warning",
+  Past: "default",
+};
+
+/** Status-filter chips. "All" is a pseudo-state meaning "no status filter". */
+const STATUS_FILTERS = ["All", "Upcoming", "Today", "Past"] as const;
+type StatusFilter = (typeof STATUS_FILTERS)[number];
+
 export default function HolidaysPage() {
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("All");
+  const { toast } = useToast();
 
   const filters = useMemo(() => ({ search }), [search]);
 
@@ -209,15 +249,38 @@ export default function HolidaysPage() {
   };
 
   const stats = useMemo(() => {
-    const upcoming = items.filter((h) => h.date >= today).length;
+    // "Upcoming" is strictly the future; a holiday today is counted separately.
+    const upcoming = items.filter((h) => h.date > today).length;
+    const todayCount = items.filter((h) => h.date === today).length;
     const thisYear = items.filter((h) => h.date.slice(0, 4) === today.slice(0, 4)).length;
-    return { total: items.length, upcoming, thisYear };
+    return { total: items.length, upcoming, todayCount, thisYear };
   }, [items, today]);
 
-  // Show soonest-first: upcoming dates ascending, then past ones.
+  // Soonest-first by date; time-state is derived per row from the date vs today.
   const sorted = useMemo(
     () => [...items].sort((a, b) => a.date.localeCompare(b.date)),
     [items]
+  );
+
+  // Counts per status for the filter chips (reflect the fetched + searched set).
+  const statusCounts = useMemo(() => {
+    const counts: Record<StatusFilter, number> = {
+      All: sorted.length,
+      Upcoming: 0,
+      Today: 0,
+      Past: 0,
+    };
+    for (const h of sorted) counts[timeStateOf(h.date, today)] += 1;
+    return counts;
+  }, [sorted, today]);
+
+  // Rows actually shown: the search result narrowed by the status chip.
+  const visible = useMemo(
+    () =>
+      statusFilter === "All"
+        ? sorted
+        : sorted.filter((h) => timeStateOf(h.date, today) === statusFilter),
+    [sorted, statusFilter, today]
   );
 
   const openCreate = () => {
@@ -254,26 +317,58 @@ export default function HolidaysPage() {
     if (ok) setPendingDelete(null);
   };
 
+  const clearFilters = () => {
+    setSearch("");
+    setStatusFilter("All");
+  };
+
+  /** Exports the whole filtered set (search + status), not just a visible page. */
+  const handleExport = () => {
+    if (visible.length === 0) {
+      toast({
+        title: "Nothing to export",
+        description: "No holidays match the current filters.",
+        variant: "warning",
+      });
+      return;
+    }
+    exportToCsv<Holiday>(
+      "holidays",
+      [
+        { header: "Date", value: (h) => h.date },
+        { header: "Name", value: (h) => h.name },
+        { header: "Type", value: (h) => h.type || "" },
+        { header: "Status", value: (h) => timeStateOf(h.date, today) },
+      ],
+      visible
+    );
+    toast({
+      title: "Export ready",
+      description: `${visible.length} holiday${visible.length === 1 ? "" : "s"} exported to CSV.`,
+    });
+  };
+
   const columns: Column<Holiday>[] = [
     {
       key: "date",
       header: "Date",
       sortable: true,
-      render: (h) => (
-        <div className="flex items-center gap-3">
-          <div className="flex size-9 shrink-0 items-center justify-center rounded-md gradient-indigo text-white">
-            <CalendarX className="size-4" />
+      render: (h) => {
+        const state = timeStateOf(h.date, today);
+        return (
+          <div className="flex items-center gap-3">
+            <div className="flex size-9 shrink-0 items-center justify-center rounded-md gradient-indigo text-white">
+              <CalendarX className="size-4" />
+            </div>
+            <div className="min-w-0">
+              <p className="truncate font-medium text-text">{formatDate(h.date)}</p>
+              <Badge variant={statusVariant[state]} className="mt-1">
+                {state}
+              </Badge>
+            </div>
           </div>
-          <div className="min-w-0">
-            <p className="truncate font-medium text-text">{formatDate(h.date)}</p>
-            {h.date >= today ? (
-              <p className="truncate text-xs text-success-text">Upcoming</p>
-            ) : (
-              <p className="truncate text-xs text-subtle">Past</p>
-            )}
-          </div>
-        </div>
-      ),
+        );
+      },
     },
     {
       key: "name",
@@ -324,22 +419,40 @@ export default function HolidaysPage() {
     },
   ];
 
+  const viewingState = viewing ? timeStateOf(viewing.date, today) : null;
+
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
         title="Holidays"
         description="Mark the days the school is closed. Attendance is skipped on these dates."
         actions={
-          <Button onClick={openCreate}>
-            <Plus className="size-4" />
-            Add holiday
-          </Button>
+          <>
+            <Button variant="outline" onClick={handleExport}>
+              <Download className="size-4" />
+              Export CSV
+            </Button>
+            <Button onClick={openCreate}>
+              <Plus className="size-4" />
+              Add holiday
+            </Button>
+          </>
         }
       />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <StatCard label="Total holidays" value={stats.total} icon={CalendarX} tone="indigo" />
-        <StatCard label="Upcoming" value={stats.upcoming} icon={CalendarClock} tone="violet" />
+        <StatCard
+          label="Upcoming"
+          value={stats.upcoming}
+          icon={CalendarClock}
+          tone="violet"
+          sub={
+            stats.todayCount > 0
+              ? `${stats.todayCount} holiday${stats.todayCount === 1 ? "" : "s"} today`
+              : undefined
+          }
+        />
         <StatCard label="This year" value={stats.thisYear} icon={CalendarCheck} tone="emerald" />
       </div>
 
@@ -447,6 +560,34 @@ export default function HolidaysPage() {
             aria-label="Search holidays"
           />
         </div>
+        <div
+          role="group"
+          aria-label="Filter by status"
+          className="flex flex-wrap items-center gap-1.5"
+        >
+          {STATUS_FILTERS.map((s) => {
+            const isActive = statusFilter === s;
+            return (
+              <button
+                key={s}
+                type="button"
+                onClick={() => setStatusFilter(s)}
+                aria-pressed={isActive}
+                className={cn(
+                  "focus-ring inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors",
+                  isActive
+                    ? "bg-primary text-white"
+                    : "bg-surface-sunken text-subtle hover:bg-surface-hover hover:text-text"
+                )}
+              >
+                {s}
+                <span className={cn("text-xs font-semibold", isActive ? "text-white/80" : "text-subtle")}>
+                  {statusCounts[s]}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {error ? (
@@ -461,20 +602,26 @@ export default function HolidaysPage() {
       ) : (
         <Table
           columns={columns}
-          rows={sorted}
+          rows={visible}
           rowKey={(h) => h.id}
           loading={loading}
-          emptyTitle="No holidays yet"
+          emptyTitle={search || statusFilter !== "All" ? "No holidays found" : "No holidays yet"}
           emptyDescription={
-            search
-              ? "Try clearing your search to see more results."
+            search || statusFilter !== "All"
+              ? "Try clearing your search or status filter to see more results."
               : "Add your first holiday to keep attendance accurate."
           }
           emptyAction={
-            <Button variant="outline" onClick={openCreate}>
-              <Plus className="size-4" />
-              Add holiday
-            </Button>
+            search || statusFilter !== "All" ? (
+              <Button variant="outline" onClick={clearFilters}>
+                Clear filters
+              </Button>
+            ) : (
+              <Button variant="outline" onClick={openCreate}>
+                <Plus className="size-4" />
+                Add holiday
+              </Button>
+            )
           }
         />
       )}
@@ -500,6 +647,14 @@ export default function HolidaysPage() {
                 { label: "Name", value: viewing.name },
                 { label: "Date", value: formatDate(viewing.date) },
                 { label: "Type", value: viewing.type || "—" },
+                {
+                  label: "Status",
+                  value: viewingState ? (
+                    <Badge variant={statusVariant[viewingState]}>{viewingState}</Badge>
+                  ) : (
+                    "—"
+                  ),
+                },
               ]
             : []
         }
