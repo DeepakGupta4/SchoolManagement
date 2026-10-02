@@ -1,12 +1,13 @@
 "use client";
 
-import { Fragment, useEffect, useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { Fragment, useEffect, useRef, useState } from "react";
+import { ClipboardPaste, Download, Plus, Trash2, Upload } from "lucide-react";
 import { Modal, Button, Input, Select, useToast } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import { useClassOptions } from "@/hooks/useClassOptions";
 import { createStudent, listStudents } from "@/lib/api/students";
 import { digitsOnly10, PHONE_REGEX } from "@/lib/phone";
+import { parseTable, toCsv, downloadTextFile, normalizeDate } from "@/lib/csv";
 import {
   isValidDateString,
   isWithin,
@@ -65,6 +66,52 @@ function makeBlankRow(): BulkRow {
 
 function makeBlankRows(count: number): BulkRow[] {
   return Array.from({ length: count }, makeBlankRow);
+}
+
+/** Columns in the downloadable CSV template. */
+const TEMPLATE_HEADERS = ["First Name", "Last Name", "Gender", "Date of Birth (YYYY-MM-DD)", "Guardian Name", "Guardian Phone"];
+
+/** Heuristic: does this parsed row look like a header (not data)? */
+function looksLikeHeader(row: string[]): boolean {
+  return (
+    row.some((c) => /first|last|surname|gender|sex|birth|dob|guardian|parent|father|mother|phone|mobile|name/i.test(c)) &&
+    !row.some((c) => /^\d{4}-\d{2}-\d{2}$/.test(c) || /^\d{6,}$/.test(c))
+  );
+}
+
+/** Maps a parsed CSV/TSV grid into bulk rows — header-aware, else positional. */
+function mapTableToRows(table: string[][]): BulkRow[] {
+  if (table.length === 0) return [];
+  let header: string[] | null = null;
+  let dataRows = table;
+  if (looksLikeHeader(table[0])) {
+    header = table[0].map((h) => h.toLowerCase());
+    dataRows = table.slice(1);
+  }
+  const idx = (re: RegExp, fallback: number) => {
+    if (!header) return fallback;
+    const i = header.findIndex((h) => re.test(h));
+    return i >= 0 ? i : fallback;
+  };
+  const iFirst = idx(/first/, 0);
+  const iLast = idx(/last|surname/, 1);
+  const iGender = idx(/gender|sex/, 2);
+  const iDob = idx(/dob|birth/, 3);
+  const iGName = idx(/guardian|parent|father|mother/, 4);
+  const iGPhone = idx(/phone|mobile|contact/, 5);
+  return dataRows.map((r) => {
+    const g = (r[iGender] ?? "").trim().toLowerCase();
+    const gender: Gender = g.startsWith("m") ? "male" : g.startsWith("f") ? "female" : g ? "other" : "male";
+    return {
+      id: newRowId(),
+      firstName: (r[iFirst] ?? "").trim(),
+      lastName: (r[iLast] ?? "").trim(),
+      gender,
+      dateOfBirth: normalizeDate(r[iDob] ?? ""),
+      guardianName: (r[iGName] ?? "").trim(),
+      guardianPhone: (r[iGPhone] ?? "").replace(/\D/g, "").slice(0, 10),
+    };
+  });
 }
 
 /** A row is skipped entirely when the user left every meaningful field blank. */
@@ -193,6 +240,9 @@ export function BulkAddStudentsModal({ open, onOpenChange, onSaved }: BulkAddStu
   const [rosterReady, setRosterReady] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  const [pasteOpen, setPasteOpen] = useState(false);
+  const [pasteText, setPasteText] = useState("");
+  const fileRef = useRef<HTMLInputElement | null>(null);
 
   // Reset the form each time the modal opens, and pull a fresh roster.
   useEffect(() => {
@@ -213,6 +263,8 @@ export function BulkAddStudentsModal({ open, onOpenChange, onSaved }: BulkAddStu
       setRowErrors({});
       setProgress(null);
       setSubmitting(false);
+      setPasteOpen(false);
+      setPasteText("");
     }, 0);
 
     listStudents()
@@ -248,6 +300,51 @@ export function BulkAddStudentsModal({ open, onOpenChange, onSaved }: BulkAddStu
 
   const removeRow = (id: string) =>
     setRows((prev) => (prev.length <= 1 ? prev : prev.filter((r) => r.id !== id)));
+
+  const addRows = (n: number) => setRows((prev) => [...prev, ...makeBlankRows(n)]);
+
+  const downloadTemplate = () => {
+    downloadTextFile(
+      "students-bulk-template.csv",
+      toCsv([
+        TEMPLATE_HEADERS,
+        ["Aarav", "Sharma", "Male", "2021-05-14", "Rajesh Sharma", "9876543210"],
+        ["Diya", "Patel", "Female", "2021-08-02", "Suresh Patel", "9811122233"],
+      ])
+    );
+    toast({ title: "Template downloaded", description: "Fill it in Excel, then upload or paste it back here." });
+  };
+
+  // Shared by file-upload and paste: parse → map → load into the grid.
+  const importRows = (text: string, source: string) => {
+    const mapped = mapTableToRows(parseTable(text));
+    if (mapped.length === 0) {
+      toast({ title: "Nothing to import", description: `No student rows found in the ${source}.`, variant: "warning" });
+      return;
+    }
+    setRows(mapped.concat(makeBlankRows(1)));
+    setRowErrors({});
+    toast({
+      title: `${mapped.length} row${mapped.length === 1 ? "" : "s"} loaded`,
+      description: "Review the grid below, then Add students.",
+    });
+  };
+
+  const handleFile = async (file: File | undefined) => {
+    if (!file) return;
+    try {
+      importRows(await file.text(), "file");
+    } catch {
+      toast({ title: "Could not read the file", variant: "error" });
+    }
+  };
+
+  const applyPaste = () => {
+    if (!pasteText.trim()) { setPasteOpen(false); return; }
+    importRows(pasteText, "pasted text");
+    setPasteText("");
+    setPasteOpen(false);
+  };
 
   const noClasses = classOptions.length === 0;
 
@@ -390,7 +487,7 @@ export function BulkAddStudentsModal({ open, onOpenChange, onSaved }: BulkAddStu
       open={open}
       onOpenChange={onOpenChange}
       title="Bulk add students"
-      description="Add several students at once. The whole batch shares one class and section; admission and roll numbers are assigned automatically."
+      description="Add many students at once — upload a CSV, paste from Excel, or type rows. The whole batch shares one class and section; admission and roll numbers are assigned automatically."
       size="xl"
       footer={
         <>
@@ -449,7 +546,65 @@ export function BulkAddStudentsModal({ open, onOpenChange, onSaved }: BulkAddStu
             </span>
           </div>
 
-          <div className="overflow-x-auto rounded-lg border border-border">
+          {/* Import toolbar — the industry way: template → fill in Excel → upload/paste */}
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={downloadTemplate} disabled={submitting}>
+              <Download className="size-4" />
+              Template
+            </Button>
+            <label className="focus-within:outline-none">
+              <span
+                className={cn(
+                  "focus-ring inline-flex cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-1.5 text-sm font-medium text-text transition-colors hover:border-border-strong hover:bg-surface-hover",
+                  submitting && "pointer-events-none opacity-50"
+                )}
+              >
+                <Upload className="size-4" />
+                Upload CSV
+              </span>
+              <input
+                ref={fileRef}
+                type="file"
+                accept=".csv,text/csv,text/plain"
+                className="sr-only"
+                disabled={submitting}
+                onChange={(e) => {
+                  handleFile(e.target.files?.[0]);
+                  e.target.value = "";
+                }}
+              />
+            </label>
+            <Button type="button" variant="outline" size="sm" onClick={() => setPasteOpen((o) => !o)} disabled={submitting}>
+              <ClipboardPaste className="size-4" />
+              Paste from Excel
+            </Button>
+            <Button type="button" variant="outline" size="sm" onClick={() => addRows(10)} disabled={submitting}>
+              <Plus className="size-4" />
+              Add 10 rows
+            </Button>
+          </div>
+
+          {pasteOpen && (
+            <div className="mb-3 rounded-lg border border-border bg-surface-sunken p-3">
+              <textarea
+                value={pasteText}
+                onChange={(e) => setPasteText(e.target.value)}
+                rows={5}
+                placeholder="Paste rows copied from Excel / Google Sheets — columns: First name, Last name, Gender, Date of birth, Guardian name, Guardian phone (a header row is optional)."
+                className="focus-ring w-full resize-y rounded-md border border-border bg-surface px-3 py-2 text-sm text-text placeholder:text-subtle"
+              />
+              <div className="mt-2 flex justify-end gap-2">
+                <Button type="button" variant="ghost" size="sm" onClick={() => { setPasteOpen(false); setPasteText(""); }}>
+                  Cancel
+                </Button>
+                <Button type="button" size="sm" onClick={applyPaste} disabled={!pasteText.trim()}>
+                  Load rows
+                </Button>
+              </div>
+            </div>
+          )}
+
+          <div className="max-h-[42vh] overflow-auto rounded-lg border border-border">
             <table className="w-full border-collapse text-sm">
               <thead>
                 <tr className="border-b border-border bg-surface-sunken">
@@ -572,9 +727,11 @@ export function BulkAddStudentsModal({ open, onOpenChange, onSaved }: BulkAddStu
           </div>
 
           <p className="mt-3 text-xs text-subtle">
+            Tip: download the <span className="font-medium text-text">Template</span>, fill it in Excel, then{" "}
+            <span className="font-medium text-text">Upload CSV</span> or <span className="font-medium text-text">Paste from Excel</span>.
             Empty rows are skipped. Admission no., roll no. and a placeholder e-mail are generated
-            automatically; the guardian phone is used as the student&apos;s contact number. You can
-            edit any detail later from the student&apos;s profile.
+            automatically; the guardian phone is used as the student&apos;s contact number. Any detail
+            can be edited later from the student&apos;s profile.
           </p>
         </section>
       </div>
