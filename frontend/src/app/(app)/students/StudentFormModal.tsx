@@ -7,7 +7,7 @@ import { Upload, X } from "lucide-react";
 import { Modal, Button, Input, Textarea, Select, useToast } from "@/components/ui";
 import { PhotoFrame } from "@/components/cards/PhotoFrame";
 import { studentSchema, type StudentSchema } from "@/lib/schemas/student";
-import { digitsOnly10 } from "@/lib/phone";
+import { digitsOnly10, PHONE_REGEX } from "@/lib/phone";
 import { listStudents } from "@/lib/api/students";
 import { useClassOptions } from "@/hooks/useClassOptions";
 import { fileToDataUrl } from "@/lib/image";
@@ -166,6 +166,10 @@ export function StudentFormModal({
   const [aadhaar, setAadhaar] = useState<File | null>(null);
   const [docError, setDocError] = useState<string | null>(null);
   const [savingDocs, setSavingDocs] = useState(false);
+  // Who the school's primary contact is — drives the saved guardian record, so
+  // we never ask for "guardian" and "father" as two separate things.
+  const [primaryContact, setPrimaryContact] = useState<"father" | "mother" | "other">("father");
+  const [contactError, setContactError] = useState<string | null>(null);
   // Existing students, used to auto-derive the next admission & roll numbers.
   const [existing, setExisting] = useState<Student[]>([]);
   // Optional fees, set during admission (create mode only). "none" skips it.
@@ -259,6 +263,10 @@ export function StudentFormModal({
     // react-hooks/set-state-in-effect rule.
     const t = setTimeout(() => {
       setDocError(null);
+      setContactError(null);
+      // Edit: keep the saved guardian visible (Other) so nothing is lost.
+      // Create: default the main contact to Father.
+      setPrimaryContact(student ? "other" : "father");
       setBirthCert(null);
       setAadhaar(null);
       setFeeMode("none");
@@ -330,7 +338,31 @@ export function StudentFormModal({
     }
     setDocError(null);
 
-    const saved = await onSubmit(values as StudentFormValues);
+    // Derive the saved guardian from the chosen primary contact, so the school
+    // stores one contact — not "guardian" and "father" as duplicate people.
+    const pick = {
+      father: { name: values.fatherName, relation: "Father", phone: values.fatherPhone, email: values.fatherEmail, occupation: values.fatherOccupation },
+      mother: { name: values.motherName, relation: "Mother", phone: values.motherPhone, email: values.motherEmail, occupation: values.motherOccupation },
+      other: { name: values.guardian?.name, relation: values.guardian?.relation || "Guardian", phone: values.guardian?.phone, email: values.guardian?.email, occupation: values.guardian?.occupation },
+    }[primaryContact];
+    const gName = (pick.name || "").trim();
+    const gPhone = (pick.phone || "").trim();
+    if (gName.length < 2 || !PHONE_REGEX.test(gPhone)) {
+      setContactError(
+        primaryContact === "other"
+          ? "Enter the guardian's name and a 10-digit phone number."
+          : `Enter the ${primaryContact}'s name and a 10-digit phone number — it's the primary contact.`
+      );
+      return;
+    }
+    setContactError(null);
+
+    const finalValues = {
+      ...values,
+      guardian: { name: gName, relation: pick.relation || "Guardian", phone: gPhone, email: pick.email || "", occupation: pick.occupation || "" },
+    };
+
+    const saved = await onSubmit(finalValues as StudentFormValues);
     if (!saved) return; // save failed — keep the form open (error already shown)
 
     setSavingDocs(true);
@@ -482,17 +514,6 @@ export function StudentFormModal({
         </section>
 
         <section>
-          <SectionTitle>Guardian</SectionTitle>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Input label="Guardian name" required {...register("guardian.name")} error={errors.guardian?.name?.message} />
-            <Input label="Relation" required {...register("guardian.relation")} error={errors.guardian?.relation?.message} />
-            <Input label="Guardian phone" required inputMode="numeric" maxLength={10} placeholder="9876543210" {...register("guardian.phone", { onChange: digitsOnly10 })} error={errors.guardian?.phone?.message} />
-            <Input label="Guardian email" type="email" {...register("guardian.email")} error={errors.guardian?.email?.message} />
-            <Input label="Occupation" {...register("guardian.occupation")} error={errors.guardian?.occupation?.message} />
-          </div>
-        </section>
-
-        <section>
           <SectionTitle>Medical</SectionTitle>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Select label="Blood group" placeholder="Not recorded" options={BLOOD_OPTIONS} {...register("bloodGroup")} error={errors.bloodGroup?.message} />
@@ -503,17 +524,50 @@ export function StudentFormModal({
         </section>
 
         <section>
-          <SectionTitle>Parents&apos; Details (optional)</SectionTitle>
+          <SectionTitle>Parent / Guardian Details</SectionTitle>
+
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-subtle">Father</p>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Input label="Father's name" {...register("fatherName")} error={errors.fatherName?.message} />
             <Input label="Father's occupation" {...register("fatherOccupation")} error={errors.fatherOccupation?.message} />
-            <Input label="Father's phone" inputMode="tel" placeholder="9876543210" {...register("fatherPhone")} error={errors.fatherPhone?.message} />
+            <Input label="Father's phone" inputMode="numeric" maxLength={10} placeholder="9876543210" {...register("fatherPhone", { onChange: digitsOnly10 })} error={errors.fatherPhone?.message} />
             <Input label="Father's email" type="email" {...register("fatherEmail")} error={errors.fatherEmail?.message} />
+          </div>
+
+          <p className="mb-2 mt-4 text-xs font-semibold uppercase tracking-wide text-subtle">Mother</p>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Input label="Mother's name" {...register("motherName")} error={errors.motherName?.message} />
             <Input label="Mother's occupation" {...register("motherOccupation")} error={errors.motherOccupation?.message} />
-            <Input label="Mother's phone" inputMode="tel" placeholder="9876543210" {...register("motherPhone")} error={errors.motherPhone?.message} />
+            <Input label="Mother's phone" inputMode="numeric" maxLength={10} placeholder="9876543210" {...register("motherPhone", { onChange: digitsOnly10 })} error={errors.motherPhone?.message} />
             <Input label="Mother's email" type="email" {...register("motherEmail")} error={errors.motherEmail?.message} />
           </div>
+
+          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Select
+              label="Primary contact"
+              required
+              hint="Whose number receives school updates &amp; is saved as the guardian"
+              value={primaryContact}
+              onChange={(e) => setPrimaryContact(e.target.value as "father" | "mother" | "other")}
+              options={[
+                { label: "Father", value: "father" },
+                { label: "Mother", value: "mother" },
+                { label: "Other guardian", value: "other" },
+              ]}
+            />
+          </div>
+
+          {primaryContact === "other" && (
+            <div className="mt-3 grid grid-cols-1 gap-4 rounded-md border border-border bg-surface-sunken p-3 sm:grid-cols-2">
+              <Input label="Guardian name" required {...register("guardian.name")} error={errors.guardian?.name?.message} />
+              <Input label="Relation" required placeholder="e.g. Uncle, Grandfather" {...register("guardian.relation")} error={errors.guardian?.relation?.message} />
+              <Input label="Guardian phone" required inputMode="numeric" maxLength={10} placeholder="9876543210" {...register("guardian.phone", { onChange: digitsOnly10 })} error={errors.guardian?.phone?.message} />
+              <Input label="Guardian email" type="email" {...register("guardian.email")} error={errors.guardian?.email?.message} />
+              <Input label="Guardian occupation" {...register("guardian.occupation")} error={errors.guardian?.occupation?.message} />
+            </div>
+          )}
+
+          {contactError && <p className="mt-2 text-xs text-danger">{contactError}</p>}
         </section>
 
         <section>

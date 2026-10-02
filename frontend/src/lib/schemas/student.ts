@@ -2,6 +2,12 @@ import { z } from "zod";
 import { PHONE_REGEX, PHONE_MESSAGE } from "@/lib/phone";
 import { isValidDateString, isWithin, MIN_STUDENT_DOB, MAX_STUDENT_DOB, MIN_RECORD_DATE, TODAY_ISO } from "@/lib/dates";
 
+/** Optional phone: empty is fine, but a value must be a 10-digit number. */
+const optionalPhone = z
+  .string()
+  .optional()
+  .refine((v) => !v || PHONE_REGEX.test(v), PHONE_MESSAGE);
+
 export const studentSchema = z.object({
   admissionNo: z.string().min(1, "Admission number is required"),
   rollNo: z.string().min(1, "Roll number is required"),
@@ -25,10 +31,13 @@ export const studentSchema = z.object({
     .refine(isValidDateString, "Enter a valid date")
     .refine((d) => isWithin(d, MIN_RECORD_DATE, TODAY_ISO), "Admission date can't be in the future"),
   address: z.string().min(5, "Address must be at least 5 characters"),
+  // The saved guardian is DERIVED from the chosen primary contact (father /
+  // mother / other) in the form, so these stay lenient here — the form enforces
+  // a valid name + 10-digit phone for whichever contact is primary.
   guardian: z.object({
-    name: z.string().min(2, "Guardian name is required"),
-    relation: z.string().min(1, "Relation is required"),
-    phone: z.string().regex(PHONE_REGEX, PHONE_MESSAGE),
+    name: z.string().optional(),
+    relation: z.string().optional(),
+    phone: optionalPhone,
     email: z.union([z.email("Enter a valid email address"), z.literal("")]).optional(),
     occupation: z.string().optional(),
   }),
@@ -41,11 +50,11 @@ export const studentSchema = z.object({
   // low-friction and accept empty values.
   fatherName: z.string().optional(),
   fatherOccupation: z.string().optional(),
-  fatherPhone: z.string().optional(),
+  fatherPhone: optionalPhone,
   fatherEmail: z.union([z.email("Enter a valid email address"), z.literal("")]).optional(),
   motherName: z.string().optional(),
   motherOccupation: z.string().optional(),
-  motherPhone: z.string().optional(),
+  motherPhone: optionalPhone,
   motherEmail: z.union([z.email("Enter a valid email address"), z.literal("")]).optional(),
   nationality: z.string().optional(),
   religion: z.string().optional(),
