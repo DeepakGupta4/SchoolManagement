@@ -34,6 +34,37 @@ export interface Student {
   performancePercent: number;
   feeDue: number;
   medicalNotes?: string;
+
+  // --- Optional admission-form details (all backward-compatible) ---
+  // Parents, kept separate from the required `guardian` above.
+  fatherName?: string;
+  fatherOccupation?: string;
+  fatherPhone?: string;
+  fatherEmail?: string;
+  motherName?: string;
+  motherOccupation?: string;
+  motherPhone?: string;
+  motherEmail?: string;
+  // Other particulars.
+  nationality?: string;
+  religion?: string;
+  category?: string;
+  motherTongue?: string;
+  aadhaarNo?: string;
+  placeOfBirth?: string;
+  annualIncome?: string;
+  // Contact extras.
+  correspondenceAddress?: string;
+  emergencyContact?: string;
+  // Previous school.
+  previousSchool?: string;
+  previousClass?: string;
+  previousBoard?: string;
+  tcNumber?: string;
+  previousResult?: string;
+  // Transport.
+  transportRequired?: boolean;
+  pickupPoint?: string;
 }
 
 /**

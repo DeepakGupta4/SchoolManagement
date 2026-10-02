@@ -35,6 +35,34 @@ export const studentSchema = z.object({
   medicalNotes: z.string().optional(),
   /** Uploaded photo as a data URL, or empty when none. */
   avatar: z.string().optional(),
+
+  // --- Optional admission-form details (all backward-compatible) ---
+  // Phone-like fields are plain strings (no 10-digit regex) so they stay
+  // low-friction and accept empty values.
+  fatherName: z.string().optional(),
+  fatherOccupation: z.string().optional(),
+  fatherPhone: z.string().optional(),
+  fatherEmail: z.union([z.email("Enter a valid email address"), z.literal("")]).optional(),
+  motherName: z.string().optional(),
+  motherOccupation: z.string().optional(),
+  motherPhone: z.string().optional(),
+  motherEmail: z.union([z.email("Enter a valid email address"), z.literal("")]).optional(),
+  nationality: z.string().optional(),
+  religion: z.string().optional(),
+  category: z.string().optional(),
+  motherTongue: z.string().optional(),
+  aadhaarNo: z.string().optional(),
+  placeOfBirth: z.string().optional(),
+  annualIncome: z.string().optional(),
+  correspondenceAddress: z.string().optional(),
+  emergencyContact: z.string().optional(),
+  previousSchool: z.string().optional(),
+  previousClass: z.string().optional(),
+  previousBoard: z.string().optional(),
+  tcNumber: z.string().optional(),
+  previousResult: z.string().optional(),
+  transportRequired: z.boolean().optional(),
+  pickupPoint: z.string().optional(),
 });
 
 export type StudentSchema = z.infer<typeof studentSchema>;

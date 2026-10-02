@@ -34,6 +34,33 @@ const studentSchema = z.object({
   guardian: guardianSchema,
   avatar: z.string().optional(),
   medicalNotes: z.string().optional(),
+
+  // Optional admission-form details — all backward-compatible. Phone-like
+  // fields are plain strings (no 10-digit regex) so they accept any input.
+  fatherName: z.string().optional(),
+  fatherOccupation: z.string().optional(),
+  fatherPhone: z.string().optional(),
+  fatherEmail: z.union([z.email(), z.literal("")]).optional(),
+  motherName: z.string().optional(),
+  motherOccupation: z.string().optional(),
+  motherPhone: z.string().optional(),
+  motherEmail: z.union([z.email(), z.literal("")]).optional(),
+  nationality: z.string().optional(),
+  religion: z.string().optional(),
+  category: z.string().optional(),
+  motherTongue: z.string().optional(),
+  aadhaarNo: z.string().optional(),
+  placeOfBirth: z.string().optional(),
+  annualIncome: z.string().optional(),
+  correspondenceAddress: z.string().optional(),
+  emergencyContact: z.string().optional(),
+  previousSchool: z.string().optional(),
+  previousClass: z.string().optional(),
+  previousBoard: z.string().optional(),
+  tcNumber: z.string().optional(),
+  previousResult: z.string().optional(),
+  transportRequired: z.boolean().optional(),
+  pickupPoint: z.string().optional(),
 });
 
 // End-of-session class promotion. Each decision is applied individually and

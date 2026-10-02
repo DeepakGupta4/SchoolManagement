@@ -85,6 +85,8 @@ const STATUS_OPTIONS = [
 
 const BLOOD_OPTIONS = toOptions(["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"]);
 
+const CATEGORY_OPTIONS = toOptions(["General", "OBC", "SC", "ST", "Other"]);
+
 const emptyValues: StudentSchema = {
   admissionNo: "",
   rollNo: "",
@@ -103,6 +105,31 @@ const emptyValues: StudentSchema = {
   guardian: { name: "", relation: "Father", phone: "", email: "", occupation: "" },
   medicalNotes: "",
   avatar: "",
+  // Optional admission-form details.
+  fatherName: "",
+  fatherOccupation: "",
+  fatherPhone: "",
+  fatherEmail: "",
+  motherName: "",
+  motherOccupation: "",
+  motherPhone: "",
+  motherEmail: "",
+  nationality: "",
+  religion: "",
+  category: "",
+  motherTongue: "",
+  aadhaarNo: "",
+  placeOfBirth: "",
+  annualIncome: "",
+  correspondenceAddress: "",
+  emergencyContact: "",
+  previousSchool: "",
+  previousClass: "",
+  previousBoard: "",
+  tcNumber: "",
+  previousResult: "",
+  transportRequired: false,
+  pickupPoint: "",
 };
 
 interface StudentFormModalProps {
@@ -197,6 +224,32 @@ export function StudentFormModal({
             ...student,
             guardian: { ...student.guardian, email: student.guardian.email ?? "", occupation: student.guardian.occupation ?? "" },
             medicalNotes: student.medicalNotes ?? "",
+            // Coalesce optional admission-form fields so inputs stay controlled
+            // even for older records saved before these fields existed.
+            fatherName: student.fatherName ?? "",
+            fatherOccupation: student.fatherOccupation ?? "",
+            fatherPhone: student.fatherPhone ?? "",
+            fatherEmail: student.fatherEmail ?? "",
+            motherName: student.motherName ?? "",
+            motherOccupation: student.motherOccupation ?? "",
+            motherPhone: student.motherPhone ?? "",
+            motherEmail: student.motherEmail ?? "",
+            nationality: student.nationality ?? "",
+            religion: student.religion ?? "",
+            category: student.category ?? "",
+            motherTongue: student.motherTongue ?? "",
+            aadhaarNo: student.aadhaarNo ?? "",
+            placeOfBirth: student.placeOfBirth ?? "",
+            annualIncome: student.annualIncome ?? "",
+            correspondenceAddress: student.correspondenceAddress ?? "",
+            emergencyContact: student.emergencyContact ?? "",
+            previousSchool: student.previousSchool ?? "",
+            previousClass: student.previousClass ?? "",
+            previousBoard: student.previousBoard ?? "",
+            tcNumber: student.tcNumber ?? "",
+            previousResult: student.previousResult ?? "",
+            transportRequired: student.transportRequired ?? false,
+            pickupPoint: student.pickupPoint ?? "",
           }
         : emptyValues
     );
@@ -446,6 +499,63 @@ export function StudentFormModal({
           </div>
           <div className="mt-4">
             <Textarea label="Medical notes" hint="Allergies, conditions, medication" {...register("medicalNotes")} error={errors.medicalNotes?.message} />
+          </div>
+        </section>
+
+        <section>
+          <SectionTitle>Parents&apos; Details (optional)</SectionTitle>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Input label="Father's name" {...register("fatherName")} error={errors.fatherName?.message} />
+            <Input label="Father's occupation" {...register("fatherOccupation")} error={errors.fatherOccupation?.message} />
+            <Input label="Father's phone" inputMode="tel" placeholder="9876543210" {...register("fatherPhone")} error={errors.fatherPhone?.message} />
+            <Input label="Father's email" type="email" {...register("fatherEmail")} error={errors.fatherEmail?.message} />
+            <Input label="Mother's name" {...register("motherName")} error={errors.motherName?.message} />
+            <Input label="Mother's occupation" {...register("motherOccupation")} error={errors.motherOccupation?.message} />
+            <Input label="Mother's phone" inputMode="tel" placeholder="9876543210" {...register("motherPhone")} error={errors.motherPhone?.message} />
+            <Input label="Mother's email" type="email" {...register("motherEmail")} error={errors.motherEmail?.message} />
+          </div>
+        </section>
+
+        <section>
+          <SectionTitle>Other Particulars (optional)</SectionTitle>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Input label="Nationality" placeholder="e.g. Indian" {...register("nationality")} error={errors.nationality?.message} />
+            <Input label="Religion" {...register("religion")} error={errors.religion?.message} />
+            <Select label="Category" placeholder="Select category" options={CATEGORY_OPTIONS} {...register("category")} error={errors.category?.message} />
+            <Input label="Mother tongue" {...register("motherTongue")} error={errors.motherTongue?.message} />
+            <Input label="Aadhaar no." inputMode="numeric" {...register("aadhaarNo")} error={errors.aadhaarNo?.message} />
+            <Input label="Place of birth" {...register("placeOfBirth")} error={errors.placeOfBirth?.message} />
+            <Input label="Annual income (₹)" inputMode="numeric" placeholder="e.g. 500000" {...register("annualIncome")} error={errors.annualIncome?.message} />
+          </div>
+        </section>
+
+        <section>
+          <SectionTitle>Previous School (optional)</SectionTitle>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Input label="Last school attended" {...register("previousSchool")} error={errors.previousSchool?.message} />
+            <Input label="Class passed" {...register("previousClass")} error={errors.previousClass?.message} />
+            <Input label="Board" placeholder="e.g. CBSE" {...register("previousBoard")} error={errors.previousBoard?.message} />
+            <Input label="T.C. number" {...register("tcNumber")} error={errors.tcNumber?.message} />
+            <Input label="Result / %" {...register("previousResult")} error={errors.previousResult?.message} />
+          </div>
+        </section>
+
+        <section>
+          <SectionTitle>Transport &amp; Emergency (optional)</SectionTitle>
+          <label className="flex cursor-pointer items-center gap-2.5">
+            <input
+              type="checkbox"
+              {...register("transportRequired")}
+              className="focus-ring size-4 cursor-pointer rounded-sm accent-primary"
+            />
+            <span className="text-sm text-text">Transport required</span>
+          </label>
+          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Input label="Pick-up point / route" {...register("pickupPoint")} error={errors.pickupPoint?.message} />
+            <Input label="Emergency contact" hint="Name &amp; phone" {...register("emergencyContact")} error={errors.emergencyContact?.message} />
+          </div>
+          <div className="mt-4">
+            <Textarea label="Correspondence address" hint="If different from the address above" {...register("correspondenceAddress")} error={errors.correspondenceAddress?.message} />
           </div>
         </section>
 

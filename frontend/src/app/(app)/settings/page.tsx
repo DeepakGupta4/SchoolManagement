@@ -56,6 +56,10 @@ const PROFILE_DEFAULTS = {
   board: "cbse",
   medium: "english",
   address: "",
+  city: "",
+  state: "",
+  website: "",
+  logo: "",
   signatureUrl: "",
 };
 
@@ -116,6 +120,7 @@ export default function SettingsPage() {
   const activeTab = TABS.find((t) => t.id === tab) ?? TABS[0];
   const [saving, setSaving] = useState(false);
   const [uploadingSig, setUploadingSig] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
 
   // Accepts an image only, caps the raw file size, then downscales to a compact
   // data URL. Held in profile state and persisted with the School Profile save,
@@ -150,6 +155,42 @@ export default function SettingsPage() {
       });
     } finally {
       setUploadingSig(false);
+    }
+  };
+
+  // School logo — image only, capped at ~2 MB raw, then downscaled to a compact
+  // data URL. Held in profile state and persisted with the School Profile save,
+  // so the real logo flows to the admission form, ID cards and certificates.
+  const handleLogo = async (file: File | undefined) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast({
+        title: "Not an image",
+        description: "Please choose a PNG or JPG logo image.",
+        variant: "error",
+      });
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      toast({
+        title: "Image too large",
+        description: "Please choose a logo image under 2 MB.",
+        variant: "error",
+      });
+      return;
+    }
+    setUploadingLogo(true);
+    try {
+      const dataUrl = await fileToDataUrl(file, 400);
+      setProfile((prev) => ({ ...prev, logo: dataUrl }));
+    } catch (e) {
+      toast({
+        title: "Could not add logo",
+        description: e instanceof Error ? e.message : "Please try another image.",
+        variant: "error",
+      });
+    } finally {
+      setUploadingLogo(false);
     }
   };
 
@@ -193,6 +234,10 @@ export default function SettingsPage() {
             email: s.email || prev.email,
             phone: s.phone || prev.phone,
             address: s.address || prev.address,
+            city: s.city || prev.city,
+            state: s.state || prev.state,
+            website: s.website || prev.website,
+            logo: s.logo || prev.logo,
             signatureUrl: s.signatureUrl || prev.signatureUrl,
           }));
         })
@@ -218,6 +263,10 @@ export default function SettingsPage() {
           ownerName: profile.principal,
           phone: profile.phone,
           address: profile.address,
+          city: profile.city,
+          state: profile.state,
+          website: profile.website,
+          logo: profile.logo,
           signatureUrl: profile.signatureUrl,
         });
         toast({ title: "School profile saved", description: "Your changes are live.", variant: "success" });
@@ -370,6 +419,24 @@ export default function SettingsPage() {
                 { label: "Bilingual", value: "bilingual" },
               ]}
             />
+            <Input
+              label="City"
+              value={profile.city}
+              onChange={(e) => setProfile({ ...profile, city: e.target.value })}
+            />
+            <Input
+              label="State"
+              value={profile.state}
+              onChange={(e) => setProfile({ ...profile, state: e.target.value })}
+            />
+            <div className="lg:col-span-2">
+              <Input
+                label="Website"
+                value={profile.website}
+                onChange={(e) => setProfile({ ...profile, website: e.target.value })}
+                hint="Shown on the admission form, ID cards and certificates."
+              />
+            </div>
             <div className="lg:col-span-2">
               <Textarea
                 label="Registered address"
@@ -377,6 +444,59 @@ export default function SettingsPage() {
                 value={profile.address}
                 onChange={(e) => setProfile({ ...profile, address: e.target.value })}
               />
+            </div>
+            <div className="lg:col-span-2">
+              <Field
+                label="School logo"
+                hint="Appears on the admission form, ID cards and certificates. A square PNG or JPG works best. Max 2 MB."
+              >
+                <div className="flex items-center gap-4">
+                  <div className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border bg-white">
+                    {profile.logo ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={profile.logo}
+                        alt="School logo"
+                        className="max-h-full max-w-full object-contain"
+                      />
+                    ) : (
+                      <span className="px-1 text-center text-xs text-subtle">No logo</span>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <label className="focus-within:outline-none">
+                      <span className="focus-ring inline-flex cursor-pointer items-center gap-2 rounded-md border border-border px-4 py-2 text-sm font-medium text-text transition-colors hover:border-border-strong hover:bg-surface-hover">
+                        <Upload className="size-4" />
+                        {uploadingLogo
+                          ? "Processing…"
+                          : profile.logo
+                            ? "Change logo"
+                            : "Upload logo"}
+                      </span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="sr-only"
+                        disabled={uploadingLogo}
+                        onChange={(e) => {
+                          handleLogo(e.target.files?.[0]);
+                          e.target.value = ""; // allow re-selecting the same file
+                        }}
+                      />
+                    </label>
+                    {profile.logo && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={() => setProfile({ ...profile, logo: "" })}
+                      >
+                        <X className="size-4" />
+                        Remove
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </Field>
             </div>
             <div className="lg:col-span-2">
               <Field

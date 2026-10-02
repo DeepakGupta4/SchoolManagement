@@ -48,6 +48,17 @@ export function buildAdmissionFormHtml(student: Student, school?: SchoolProfile 
   const gOcc = student.guardian?.occupation || "";
   const isFather = rel.includes("father");
   const isMother = rel.includes("mother");
+  // Prefer the explicit parent fields; fall back to the guardian-by-relation
+  // values when a given father/mother field is empty.
+  const fatherName = student.fatherName || (isFather ? gName : "");
+  const fatherOcc = student.fatherOccupation || (isFather ? gOcc : "");
+  const fatherPhone = student.fatherPhone || (isFather ? gPhone : "");
+  const fatherEmail = student.fatherEmail || (isFather ? student.guardian?.email : "");
+  const motherName = student.motherName || (isMother ? gName : "");
+  const motherOcc = student.motherOccupation || (isMother ? gOcc : "");
+  const motherPhone = student.motherPhone || (isMother ? gPhone : "");
+  const motherEmail = student.motherEmail || (isMother ? student.guardian?.email : "");
+  const cat = (student.category || "").trim().toLowerCase();
 
   const logo = school?.logo ? `<img class="logo" src="${esc(school.logo)}" alt=""/>` : `<div class="logo ph"></div>`;
   const photo = student.avatar
@@ -124,39 +135,39 @@ export function buildAdmissionFormHtml(student: Student, school?: SchoolProfile 
   <table class="grid">
     <tr><td class="lab">Full Name</td><td class="val" colspan="3"><b>${esc(name)}</b></td></tr>
     <tr><td class="lab">Date of Birth</td><td class="val">${V(niceDate(student.dateOfBirth))}</td><td class="lab">Gender</td><td class="val">${V(student.gender)}</td></tr>
-    <tr><td class="lab">Blood Group</td><td class="val">${V(student.bloodGroup)}</td><td class="lab">Nationality</td><td class="val"></td></tr>
-    <tr><td class="lab">Religion</td><td class="val"></td><td class="lab">Mother Tongue</td><td class="val"></td></tr>
-    <tr><td class="lab">Category</td><td class="val" colspan="3">${chk("General")}${chk("OBC")}${chk("SC")}${chk("ST")}${chk("Other")}</td></tr>
-    <tr><td class="lab">Aadhaar No.</td><td class="val"></td><td class="lab">Place of Birth</td><td class="val"></td></tr>
+    <tr><td class="lab">Blood Group</td><td class="val">${V(student.bloodGroup)}</td><td class="lab">Nationality</td><td class="val">${V(student.nationality)}</td></tr>
+    <tr><td class="lab">Religion</td><td class="val">${V(student.religion)}</td><td class="lab">Mother Tongue</td><td class="val">${V(student.motherTongue)}</td></tr>
+    <tr><td class="lab">Category</td><td class="val" colspan="3">${chk("General", cat === "general")}${chk("OBC", cat === "obc")}${chk("SC", cat === "sc")}${chk("ST", cat === "st")}${chk("Other", cat === "other")}</td></tr>
+    <tr><td class="lab">Aadhaar No.</td><td class="val">${V(student.aadhaarNo)}</td><td class="lab">Place of Birth</td><td class="val">${V(student.placeOfBirth)}</td></tr>
   </table>
 
   <div class="sec-h">2. Parent / Guardian Details</div>
   <table class="grid">
-    <tr><td class="lab">Father's Name</td><td class="val">${V(isFather ? gName : "")}</td><td class="lab">Occupation</td><td class="val">${V(isFather ? gOcc : "")}</td></tr>
-    <tr><td class="lab">Father's Mobile</td><td class="val">${V(isFather ? gPhone : "")}</td><td class="lab">Father's Email</td><td class="val">${V(isFather ? student.guardian?.email : "")}</td></tr>
-    <tr><td class="lab">Mother's Name</td><td class="val">${V(isMother ? gName : "")}</td><td class="lab">Occupation</td><td class="val">${V(isMother ? gOcc : "")}</td></tr>
-    <tr><td class="lab">Mother's Mobile</td><td class="val">${V(isMother ? gPhone : "")}</td><td class="lab">Mother's Email</td><td class="val">${V(isMother ? student.guardian?.email : "")}</td></tr>
+    <tr><td class="lab">Father's Name</td><td class="val">${V(fatherName)}</td><td class="lab">Occupation</td><td class="val">${V(fatherOcc)}</td></tr>
+    <tr><td class="lab">Father's Mobile</td><td class="val">${V(fatherPhone)}</td><td class="lab">Father's Email</td><td class="val">${V(fatherEmail)}</td></tr>
+    <tr><td class="lab">Mother's Name</td><td class="val">${V(motherName)}</td><td class="lab">Occupation</td><td class="val">${V(motherOcc)}</td></tr>
+    <tr><td class="lab">Mother's Mobile</td><td class="val">${V(motherPhone)}</td><td class="lab">Mother's Email</td><td class="val">${V(motherEmail)}</td></tr>
     <tr><td class="lab">Guardian (if any)</td><td class="val">${V(!isFather && !isMother ? gName : "")}</td><td class="lab">Relation / Mobile</td><td class="val">${V(!isFather && !isMother && gName ? `${student.guardian?.relation || ""}  ${gPhone}` : "")}</td></tr>
-    <tr><td class="lab">Annual Income</td><td class="val"></td><td class="lab">Student Mobile</td><td class="val">${V(student.phone)}</td></tr>
+    <tr><td class="lab">Annual Income</td><td class="val">${V(student.annualIncome)}</td><td class="lab">Student Mobile</td><td class="val">${V(student.phone)}</td></tr>
   </table>
 
   <div class="sec-h">3. Contact &amp; Address</div>
   <table class="grid">
     <tr><td class="lab">Permanent Address</td><td class="val" colspan="3"><b>${esc(student.address || "")}</b></td></tr>
-    <tr><td class="lab">Correspondence Address</td><td class="val" colspan="3"></td></tr>
-    <tr><td class="lab">Email</td><td class="val"><b>${esc(student.email || "")}</b></td><td class="lab">Emergency Contact</td><td class="val"></td></tr>
+    <tr><td class="lab">Correspondence Address</td><td class="val" colspan="3">${V(student.correspondenceAddress)}</td></tr>
+    <tr><td class="lab">Email</td><td class="val"><b>${esc(student.email || "")}</b></td><td class="lab">Emergency Contact</td><td class="val">${V(student.emergencyContact)}</td></tr>
   </table>
 
   <div class="sec-h">4. Previous School (if applicable)</div>
   <table class="grid">
-    <tr><td class="lab">Last School Attended</td><td class="val" colspan="3"></td></tr>
-    <tr><td class="lab">Class Passed</td><td class="val"></td><td class="lab">Board</td><td class="val"></td></tr>
-    <tr><td class="lab">T.C. Number</td><td class="val"></td><td class="lab">Result / %</td><td class="val"></td></tr>
+    <tr><td class="lab">Last School Attended</td><td class="val" colspan="3">${V(student.previousSchool)}</td></tr>
+    <tr><td class="lab">Class Passed</td><td class="val">${V(student.previousClass)}</td><td class="lab">Board</td><td class="val">${V(student.previousBoard)}</td></tr>
+    <tr><td class="lab">T.C. Number</td><td class="val">${V(student.tcNumber)}</td><td class="lab">Result / %</td><td class="val">${V(student.previousResult)}</td></tr>
   </table>
 
   <div class="sec-h">5. Transport, Medical &amp; Documents Enclosed</div>
   <table class="grid">
-    <tr><td class="lab">Transport Required</td><td class="val">${chk("Yes")}${chk("No")}</td><td class="lab">Pick-up Point / Route</td><td class="val"></td></tr>
+    <tr><td class="lab">Transport Required</td><td class="val">${chk("Yes", student.transportRequired === true)}${chk("No", student.transportRequired === false)}</td><td class="lab">Pick-up Point / Route</td><td class="val">${V(student.pickupPoint)}</td></tr>
     <tr><td class="lab">Medical Conditions</td><td class="val" colspan="3"><b>${esc(student.medicalNotes || "")}</b></td></tr>
     <tr><td class="lab">Documents</td><td class="val" colspan="3">${chk("Birth Certificate")}${chk("Aadhaar Card")}${chk("Transfer Certificate")}${chk("Prev. Marksheet")}${chk("Photographs")}${chk("Caste Certificate")}</td></tr>
   </table>

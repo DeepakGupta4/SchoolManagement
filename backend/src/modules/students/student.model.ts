@@ -44,6 +44,45 @@ const studentSchema = new Schema(
     avatar: { type: String, default: "" },
     medicalNotes: { type: String, default: "" },
 
+    // --- Optional admission-form details ---------------------------------
+    // All optional (default "" / false) so existing records and the required
+    // `guardian` above keep working unchanged. Captured at registration so the
+    // printable admission form comes out fully filled.
+
+    // Parents (separate from the required `guardian`).
+    fatherName: { type: String, default: "" },
+    fatherOccupation: { type: String, default: "" },
+    fatherPhone: { type: String, default: "" },
+    fatherEmail: { type: String, default: "" },
+    motherName: { type: String, default: "" },
+    motherOccupation: { type: String, default: "" },
+    motherPhone: { type: String, default: "" },
+    motherEmail: { type: String, default: "" },
+
+    // Other particulars.
+    nationality: { type: String, default: "" },
+    religion: { type: String, default: "" },
+    category: { type: String, default: "" },
+    motherTongue: { type: String, default: "" },
+    aadhaarNo: { type: String, default: "" },
+    placeOfBirth: { type: String, default: "" },
+    annualIncome: { type: String, default: "" },
+
+    // Contact extras.
+    correspondenceAddress: { type: String, default: "" },
+    emergencyContact: { type: String, default: "" },
+
+    // Previous school.
+    previousSchool: { type: String, default: "" },
+    previousClass: { type: String, default: "" },
+    previousBoard: { type: String, default: "" },
+    tcNumber: { type: String, default: "" },
+    previousResult: { type: String, default: "" },
+
+    // Transport.
+    transportRequired: { type: Boolean, default: false },
+    pickupPoint: { type: String, default: "" },
+
     // Server-owned metrics — clients never set these directly.
     attendancePercent: { type: Number, default: 100, min: 0, max: 100 },
     performancePercent: { type: Number, default: 0, min: 0, max: 100 },
