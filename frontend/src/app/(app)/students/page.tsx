@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { Eye, FileText, Pencil, Plus, Search, Trash2, Users, UsersRound, UserCheck, IndianRupee, TrendingDown } from "lucide-react";
+import { Download, Eye, FileText, Pencil, Plus, Search, Trash2, Users, UsersRound, UserCheck, IndianRupee, TrendingDown } from "lucide-react";
 import {
   Avatar,
   Badge,
@@ -19,6 +19,8 @@ import {
 import { useStudents } from "@/hooks/useStudents";
 import { useClassOptions } from "@/hooks/useClassOptions";
 import { createStudent, deleteStudent, updateStudent } from "@/lib/api/students";
+import { getMySchool, type SchoolProfile } from "@/lib/api/schools";
+import { printAdmissionForm } from "@/lib/admissionForm";
 import { fullName, type Student, type StudentFormValues, type StudentStatus } from "@/types/student";
 import { exportTablePdf } from "@/lib/exportPdf";
 import { StudentFormModal } from "./StudentFormModal";
@@ -110,6 +112,14 @@ export default function StudentsPage() {
   const [editing, setEditing] = useState<Student | null>(null);
   const [deleting, setDeleting] = useState<Student | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [school, setSchool] = useState<SchoolProfile | null>(null);
+
+  // School profile for the printable admission form (header + signature).
+  useEffect(() => {
+    let cancelled = false;
+    getMySchool().then((s) => !cancelled && setSchool(s)).catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   const stats = useMemo(() => {
     const active = students.filter((s) => s.status === "active").length;
@@ -288,6 +298,14 @@ export default function StudentsPage() {
           >
             <Eye className="size-4" />
           </Link>
+          <button
+            onClick={() => printAdmissionForm(s, school)}
+            aria-label={`Download admission form for ${fullName(s)}`}
+            title="Download admission form"
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+          >
+            <Download className="size-4" />
+          </button>
           <button
             onClick={() => openEdit(s)}
             aria-label={`Edit ${fullName(s)}`}

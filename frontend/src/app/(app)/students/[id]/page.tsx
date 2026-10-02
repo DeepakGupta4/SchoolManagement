@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
   CalendarDays,
+  Download,
   Droplet,
   Mail,
   MapPin,
@@ -29,6 +30,8 @@ import {
   useToast,
 } from "@/components/ui";
 import { getStudent, deleteStudent, updateStudent } from "@/lib/api/students";
+import { getMySchool, type SchoolProfile } from "@/lib/api/schools";
+import { printAdmissionForm } from "@/lib/admissionForm";
 import { fullName, type Student, type StudentFormValues, type StudentStatus } from "@/types/student";
 import { assessStudent, RISK_META } from "@/lib/insights";
 import { getStudentRisk, generateRemark, type AiRisk } from "@/lib/api/ai";
@@ -266,10 +269,25 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
   const { toast } = useToast();
 
   const [student, setStudent] = useState<Student | null>(null);
+  const [school, setSchool] = useState<SchoolProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // School profile (name, address, signature) for the printable admission form.
+  useEffect(() => {
+    let cancelled = false;
+    getMySchool().then((s) => !cancelled && setSchool(s)).catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
+  const downloadForm = () => {
+    if (!student) return;
+    if (!printAdmissionForm(student, school)) {
+      toast({ title: "Popup blocked", description: "Allow popups to download the form.", variant: "error" });
+    }
+  };
 
   useEffect(() => {
     // `cancelled` keeps a response for a previous id from overwriting the
@@ -355,6 +373,10 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
           Back to students
         </Link>
         <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={downloadForm}>
+            <Download className="size-4" />
+            Download form
+          </Button>
           <Button variant="outline" onClick={() => setEditOpen(true)}>
             <Pencil className="size-4" />
             Edit
