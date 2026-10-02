@@ -100,12 +100,26 @@ router.patch(
   async (req, res, next) => {
     try {
       const updates = req.body as z.infer<typeof profileSchema>;
-      const school = await School.findOneAndUpdate(
-        { schoolId: req.user!.schoolId },
-        { $set: updates },
-        { new: true, runValidators: true }
-      );
-      if (!school) throw ApiError.notFound("No school profile for this account.");
+      const schoolId = req.user!.schoolId;
+
+      let school = await School.findOne({ schoolId });
+      if (school) {
+        // Existing tenant — apply the edited profile fields and save.
+        Object.assign(school, updates);
+        await school.save();
+      } else {
+        // No profile row yet (e.g. a seeded/legacy admin). Create one so the
+        // Settings page can save. Granted free access so simply filling in the
+        // profile never flips the account into a locked/expired state.
+        school = await School.create({
+          schoolId,
+          email: req.user!.email,
+          name: updates.name || "My School",
+          ownerName: updates.ownerName || "Administrator",
+          ...updates,
+          subscription: { freeAccess: true, status: "active", plan: "trial" },
+        });
+      }
       res.json({ data: toPublicSchool(school) });
     } catch (err) {
       next(err);
