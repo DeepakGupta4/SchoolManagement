@@ -60,7 +60,7 @@ export const studentSchema = z.object({
   religion: z.string().optional(),
   category: z.string().optional(),
   motherTongue: z.string().optional(),
-  aadhaarNo: z.string().optional(),
+  aadhaarNo: z.string().optional().refine((v) => !v || /^\d{12}$/.test(v), "Aadhaar must be a 12-digit number"),
   placeOfBirth: z.string().optional(),
   annualIncome: z.string().optional(),
   correspondenceAddress: z.string().optional(),

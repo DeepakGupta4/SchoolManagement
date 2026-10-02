@@ -87,6 +87,15 @@ const BLOOD_OPTIONS = toOptions(["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-
 
 const CATEGORY_OPTIONS = toOptions(["General", "OBC", "SC", "ST", "Other"]);
 
+// Datalist suggestions — pick or type, so forms stay low-typing but flexible.
+const NATIONALITY_SUGGESTIONS = ["Indian", "Nepali", "Bhutanese", "Bangladeshi", "Other"];
+const RELIGION_SUGGESTIONS = ["Hindu", "Muslim", "Christian", "Sikh", "Buddhist", "Jain", "Parsi", "Jewish", "Other"];
+const OCCUPATION_SUGGESTIONS = [
+  "Business", "Service / Job", "Government Service", "Private Service", "Self-employed",
+  "Farmer", "Teacher", "Doctor", "Engineer", "Lawyer", "Accountant", "Shopkeeper",
+  "Driver", "Labourer", "Homemaker", "Retired", "Other",
+];
+
 const emptyValues: StudentSchema = {
   admissionNo: "",
   rollNo: "",
@@ -114,7 +123,7 @@ const emptyValues: StudentSchema = {
   motherOccupation: "",
   motherPhone: "",
   motherEmail: "",
-  nationality: "",
+  nationality: "Indian",
   religion: "",
   category: "",
   motherTongue: "",
@@ -238,7 +247,7 @@ export function StudentFormModal({
             motherOccupation: student.motherOccupation ?? "",
             motherPhone: student.motherPhone ?? "",
             motherEmail: student.motherEmail ?? "",
-            nationality: student.nationality ?? "",
+            nationality: student.nationality || "Indian",
             religion: student.religion ?? "",
             category: student.category ?? "",
             motherTongue: student.motherTongue ?? "",
@@ -529,7 +538,7 @@ export function StudentFormModal({
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-subtle">Father</p>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Input label="Father's name" {...register("fatherName")} error={errors.fatherName?.message} />
-            <Input label="Father's occupation" {...register("fatherOccupation")} error={errors.fatherOccupation?.message} />
+            <Input label="Father's occupation" list="occupation-list" placeholder="Pick or type" {...register("fatherOccupation")} error={errors.fatherOccupation?.message} />
             <Input label="Father's phone" inputMode="numeric" maxLength={10} placeholder="9876543210" {...register("fatherPhone", { onChange: digitsOnly10 })} error={errors.fatherPhone?.message} />
             <Input label="Father's email" type="email" {...register("fatherEmail")} error={errors.fatherEmail?.message} />
           </div>
@@ -537,7 +546,8 @@ export function StudentFormModal({
           <p className="mb-2 mt-4 text-xs font-semibold uppercase tracking-wide text-subtle">Mother</p>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Input label="Mother's name" {...register("motherName")} error={errors.motherName?.message} />
-            <Input label="Mother's occupation" {...register("motherOccupation")} error={errors.motherOccupation?.message} />
+            <Input label="Mother's occupation" list="occupation-list" placeholder="Pick or type" {...register("motherOccupation")} error={errors.motherOccupation?.message} />
+            <datalist id="occupation-list">{OCCUPATION_SUGGESTIONS.map((o) => <option key={o} value={o} />)}</datalist>
             <Input label="Mother's phone" inputMode="numeric" maxLength={10} placeholder="9876543210" {...register("motherPhone", { onChange: digitsOnly10 })} error={errors.motherPhone?.message} />
             <Input label="Mother's email" type="email" {...register("motherEmail")} error={errors.motherEmail?.message} />
           </div>
@@ -573,11 +583,20 @@ export function StudentFormModal({
         <section>
           <SectionTitle>Other Particulars (optional)</SectionTitle>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Input label="Nationality" placeholder="e.g. Indian" {...register("nationality")} error={errors.nationality?.message} />
-            <Input label="Religion" {...register("religion")} error={errors.religion?.message} />
+            <Input label="Nationality" list="nationality-list" hint="Defaults to Indian — change if needed" {...register("nationality")} error={errors.nationality?.message} />
+            <datalist id="nationality-list">{NATIONALITY_SUGGESTIONS.map((n) => <option key={n} value={n} />)}</datalist>
+            <Input label="Religion" list="religion-list" placeholder="Pick or type" {...register("religion")} error={errors.religion?.message} />
+            <datalist id="religion-list">{RELIGION_SUGGESTIONS.map((r) => <option key={r} value={r} />)}</datalist>
             <Select label="Category" placeholder="Select category" options={CATEGORY_OPTIONS} {...register("category")} error={errors.category?.message} />
             <Input label="Mother tongue" {...register("motherTongue")} error={errors.motherTongue?.message} />
-            <Input label="Aadhaar no." inputMode="numeric" {...register("aadhaarNo")} error={errors.aadhaarNo?.message} />
+            <Input
+              label="Aadhaar no."
+              inputMode="numeric"
+              maxLength={12}
+              placeholder="12-digit number"
+              {...register("aadhaarNo", { onChange: (e) => { e.target.value = e.target.value.replace(/\D/g, "").slice(0, 12); } })}
+              error={errors.aadhaarNo?.message}
+            />
             <Input label="Place of birth" {...register("placeOfBirth")} error={errors.placeOfBirth?.message} />
             <Input label="Annual income (₹)" inputMode="numeric" placeholder="e.g. 500000" {...register("annualIncome")} error={errors.annualIncome?.message} />
           </div>
