@@ -94,7 +94,7 @@ function StatCard({
   );
 }
 
-export default function TeachersPage() {
+function TeachersPageInner() {
   const { toast } = useToast();
 
   const [search, setSearch] = useState("");
@@ -104,16 +104,15 @@ export default function TeachersPage() {
   // Quick client-side filter driven by the stat cards.
   const [quick, setQuick] = useState<"all" | "active" | "fulltime" | "onleave">("all");
 
-  // Deep-link from the dashboard "Teachers on leave" tile (?status=on-leave).
-  const appliedDrill = useRef(false);
+  // Deep-link from the dashboard "Teachers on leave" tile — read reactively so a
+  // cached-page navigation still applies it (App Router won't remount the page).
+  const searchParams = useSearchParams();
   useEffect(() => {
-    if (appliedDrill.current) return;
-    appliedDrill.current = true;
-    const s = new URLSearchParams(window.location.search).get("status");
+    const s = searchParams.get("status");
     if (!s) return;
     const t = setTimeout(() => setStatus(s), 0);
     return () => clearTimeout(t);
-  }, []);
+  }, [searchParams]);
 
   const { teachers, loading, error, refetch } = useTeachers({ search, subject, status });
 
@@ -528,5 +527,14 @@ export default function TeachersPage() {
         onConfirm={handleDelete}
       />
     </div>
+  );
+}
+
+// useSearchParams must sit under a Suspense boundary for the static build.
+export default function TeachersPage() {
+  return (
+    <Suspense fallback={null}>
+      <TeachersPageInner />
+    </Suspense>
   );
 }

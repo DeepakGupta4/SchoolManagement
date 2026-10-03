@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   CalendarDays,
   CheckCircle2,
@@ -51,7 +52,7 @@ import { AdmissionFormModal } from "./AdmissionFormModal";
 
 const PAGE_SIZE = 10;
 
-export default function AdmissionsPage() {
+function AdmissionsPageInner() {
   const [search, setSearch] = useState("");
   const [stage, setStage] = useState("");
   const [classApplied, setClassApplied] = useState("");
@@ -79,16 +80,15 @@ export default function AdmissionsPage() {
   const [pendingDelete, setPendingDelete] = useState<Application | null>(null);
   const { toast } = useToast();
 
-  // Deep-link from the dashboard "Admissions waiting" tile (?stage=pending).
-  const appliedDrill = useRef(false);
+  // Deep-link from the dashboard "Admissions waiting" tile — read reactively so a
+  // cached-page navigation still applies it (App Router won't remount the page).
+  const searchParams = useSearchParams();
   useEffect(() => {
-    if (appliedDrill.current) return;
-    appliedDrill.current = true;
-    const s = new URLSearchParams(window.location.search).get("stage");
+    const s = searchParams.get("stage");
     if (!s) return;
     const t = setTimeout(() => setStage(s), 0);
     return () => clearTimeout(t);
-  }, []);
+  }, [searchParams]);
 
   // Narrowing a filter can strand you past the last page, so reset on change.
   const applyFilter = (setter: (value: string) => void) => (value: string) => {
@@ -534,5 +534,14 @@ export default function AdmissionsPage() {
         onConfirm={handleDelete}
       />
     </div>
+  );
+}
+
+// useSearchParams must sit under a Suspense boundary for the static build.
+export default function AdmissionsPage() {
+  return (
+    <Suspense fallback={null}>
+      <AdmissionsPageInner />
+    </Suspense>
   );
 }

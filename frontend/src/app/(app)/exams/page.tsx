@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { Suspense, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   AlertCircle,
   Calendar,
@@ -67,7 +68,7 @@ const fallbackType = { variant: "default" as BadgeVariant, gradient: "gradient-i
 
 const tabs = ["All", "Upcoming", "Ongoing", "Completed"];
 
-export default function ExamsPage() {
+function ExamsPageInner() {
   const [activeTab, setActiveTab] = useState("All");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -89,12 +90,11 @@ export default function ExamsPage() {
   const [pendingDelete, setPendingDelete] = useState<Exam | null>(null);
   const { toast } = useToast();
 
-  // Deep-link from the dashboard "Upcoming exams" tile (?status=upcoming).
-  const appliedDrill = useRef(false);
+  // Deep-link from the dashboard "Upcoming exams" tile — read reactively so a
+  // cached-page navigation still applies it (App Router won't remount the page).
+  const searchParams = useSearchParams();
   useEffect(() => {
-    if (appliedDrill.current) return;
-    appliedDrill.current = true;
-    const s = new URLSearchParams(window.location.search).get("status");
+    const s = searchParams.get("status");
     if (!s) return;
     const tab = s.charAt(0).toUpperCase() + s.slice(1);
     const t = setTimeout(() => {
@@ -102,7 +102,7 @@ export default function ExamsPage() {
       setPage(1);
     }, 0);
     return () => clearTimeout(t);
-  }, []);
+  }, [searchParams]);
 
   // A narrowed filter can strand you past the last page, so every filter
   // change resets to page 1.
@@ -582,5 +582,14 @@ export default function ExamsPage() {
         onConfirm={handleDelete}
       />
     </div>
+  );
+}
+
+// useSearchParams must sit under a Suspense boundary for the static build.
+export default function ExamsPage() {
+  return (
+    <Suspense fallback={null}>
+      <ExamsPageInner />
+    </Suspense>
   );
 }
