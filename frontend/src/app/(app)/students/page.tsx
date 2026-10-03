@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { Download, Eye, FileText, Pencil, Plus, Search, Trash2, Users, UsersRound, UserCheck, IndianRupee, TrendingDown } from "lucide-react";
+import { Cake, Download, Eye, FileText, Pencil, Plus, Search, Trash2, Users, UsersRound, UserCheck, IndianRupee, TrendingDown } from "lucide-react";
 import {
   Avatar,
   Badge,
@@ -38,6 +38,11 @@ const inr = new Intl.NumberFormat("en-IN", {
   currency: "INR",
   maximumFractionDigits: 0,
 });
+
+const MONTH_NAMES = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
 
 function StatCard({
   label,
@@ -455,6 +460,21 @@ export default function StudentsPage() {
           />
         </div>
       </div>
+
+      {birthdayMonth && (
+        <div className="flex items-center gap-2 rounded-lg border border-violet/25 bg-violet/10 px-3.5 py-2 text-sm">
+          <Cake className="size-4 text-violet" />
+          <span className="font-medium text-text">
+            Showing birthdays in {MONTH_NAMES[Number(birthdayMonth) - 1] ?? "this month"}
+          </span>
+          <button
+            onClick={() => setBirthdayMonth("")}
+            className="focus-ring ml-auto rounded-md px-2 py-0.5 text-xs font-semibold text-violet transition-colors hover:bg-violet/10"
+          >
+            Clear
+          </button>
+        </div>
+      )}
 
       {error ? (
         <Card>

@@ -96,7 +96,7 @@ export function AttendanceChart({
       />
       <CardContent>
         {loading ? (
-          <Skeleton className="w-full" style={{ height: CHART_H }} />
+          <Skeleton className="h-[170px] w-full" />
         ) : error ? (
           <ChartMessage
             icon={<AlertTriangle className="size-5 text-warning-text" />}
@@ -166,7 +166,7 @@ export function FeeCollectionChart({
       />
       <CardContent>
         {loading ? (
-          <Skeleton className="w-full" style={{ height: CHART_H }} />
+          <Skeleton className="h-[170px] w-full" />
         ) : error ? (
           <ChartMessage
             icon={<AlertTriangle className="size-5 text-warning-text" />}

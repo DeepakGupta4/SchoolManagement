@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertCircle,
   Calendar,
@@ -88,6 +88,21 @@ export default function ExamsPage() {
   const [viewing, setViewing] = useState<Exam | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Exam | null>(null);
   const { toast } = useToast();
+
+  // Deep-link from the dashboard "Upcoming exams" tile (?status=upcoming).
+  const appliedDrill = useRef(false);
+  useEffect(() => {
+    if (appliedDrill.current) return;
+    appliedDrill.current = true;
+    const s = new URLSearchParams(window.location.search).get("status");
+    if (!s) return;
+    const tab = s.charAt(0).toUpperCase() + s.slice(1);
+    const t = setTimeout(() => {
+      setActiveTab(tab);
+      setPage(1);
+    }, 0);
+    return () => clearTimeout(t);
+  }, []);
 
   // A narrowed filter can strand you past the last page, so every filter
   // change resets to page 1.

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   Eye,
@@ -102,6 +102,17 @@ export default function TeachersPage() {
   const [page, setPage] = useState(1);
   // Quick client-side filter driven by the stat cards.
   const [quick, setQuick] = useState<"all" | "active" | "fulltime" | "onleave">("all");
+
+  // Deep-link from the dashboard "Teachers on leave" tile (?status=on-leave).
+  const appliedDrill = useRef(false);
+  useEffect(() => {
+    if (appliedDrill.current) return;
+    appliedDrill.current = true;
+    const s = new URLSearchParams(window.location.search).get("status");
+    if (!s) return;
+    const t = setTimeout(() => setStatus(s), 0);
+    return () => clearTimeout(t);
+  }, []);
 
   const { teachers, loading, error, refetch } = useTeachers({ search, subject, status });
 

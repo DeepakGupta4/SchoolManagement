@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CalendarDays,
   CheckCircle2,
@@ -79,6 +79,17 @@ export default function AdmissionsPage() {
   const [pendingDelete, setPendingDelete] = useState<Application | null>(null);
   const { toast } = useToast();
 
+  // Deep-link from the dashboard "Admissions waiting" tile (?stage=pending).
+  const appliedDrill = useRef(false);
+  useEffect(() => {
+    if (appliedDrill.current) return;
+    appliedDrill.current = true;
+    const s = new URLSearchParams(window.location.search).get("stage");
+    if (!s) return;
+    const t = setTimeout(() => setStage(s), 0);
+    return () => clearTimeout(t);
+  }, []);
+
   // Narrowing a filter can strand you past the last page, so reset on change.
   const applyFilter = (setter: (value: string) => void) => (value: string) => {
     setter(value);
@@ -89,6 +100,11 @@ export default function AdmissionsPage() {
     // "in-process" is a synthetic filter used by the top stat card.
     if (stage === "in-process") {
       return items.filter((a) => a.stage === "applied" || a.stage === "interview");
+    }
+    // "pending" = everything still waiting (not yet approved/rejected) — matches
+    // the dashboard "Admissions waiting" count exactly.
+    if (stage === "pending") {
+      return items.filter((a) => a.stage !== "approved" && a.stage !== "rejected");
     }
     return stage ? items.filter((a) => a.stage === stage) : items;
   }, [items, stage]);
