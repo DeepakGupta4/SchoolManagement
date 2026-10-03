@@ -2,6 +2,7 @@
 
 import { Printer, School } from "lucide-react";
 import { Button, Modal } from "@/components/ui";
+import type { SchoolIdentity } from "@/lib/schoolIdentity";
 
 export interface PayrollEmployee {
   id: string;
@@ -28,9 +29,11 @@ function payPeriod() {
 export function PayslipModal({
   employee,
   onOpenChange,
+  school,
 }: {
   employee: PayrollEmployee | null;
   onOpenChange: (open: boolean) => void;
+  school?: SchoolIdentity;
 }) {
   const gross = employee ? employee.basic + employee.hra + employee.ta : 0;
   // PF + professional tax split shown so deductions aren't one opaque number.
@@ -65,10 +68,12 @@ export function PayslipModal({
                 <School className="size-5" />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-bold uppercase tracking-wide">Springdale School</p>
-                <p className="truncate text-[11px] text-slate-500">
-                  Mayur Vihar, New Delhi 110091
-                </p>
+                <p className="truncate text-sm font-bold uppercase tracking-wide">{school?.name || "Your School"}</p>
+                {(school?.addressLine || school?.affiliation) && (
+                  <p className="truncate text-[11px] text-slate-500">
+                    {[school?.addressLine, school?.affiliation].filter(Boolean).join(" · ")}
+                  </p>
+                )}
               </div>
               <div className="shrink-0 text-right">
                 <p className="text-[10px] uppercase tracking-wide text-slate-500">Salary Slip</p>

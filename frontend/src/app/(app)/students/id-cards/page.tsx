@@ -10,6 +10,7 @@ import { useAsyncList } from "@/hooks/useAsyncList";
 import { useClassOptions } from "@/hooks/useClassOptions";
 import { listStudents } from "@/lib/api/students";
 import { getMySchool } from "@/lib/api/schools";
+import { schoolIdentity, FALLBACK_SCHOOL_IDENTITY, type SchoolIdentity } from "@/lib/schoolIdentity";
 import { classRank } from "@/lib/classOrder";
 import { fullName, type Student } from "@/types/student";
 
@@ -48,14 +49,14 @@ export default function StudentIdCardsPage() {
   // Read once here so a signature uploaded in Settings shows on every card, and
   // updating it there reflects on the next load of this page.
   const [signatureUrl, setSignatureUrl] = useState("");
-  const [schoolName, setSchoolName] = useState("");
+  const [identity, setIdentity] = useState<SchoolIdentity>(FALLBACK_SCHOOL_IDENTITY);
   useEffect(() => {
     let cancelled = false;
     getMySchool()
       .then((s) => {
         if (cancelled || !s) return;
         setSignatureUrl(s.signatureUrl || "");
-        setSchoolName(s.name || "");
+        setIdentity(schoolIdentity(s));
       })
       .catch(() => {});
     return () => {
@@ -263,7 +264,7 @@ export default function StudentIdCardsPage() {
                           </span>
                         )}
                       </button>
-                      <IdCard holder={holder} signatureUrl={signatureUrl} schoolName={schoolName} />
+                      <IdCard holder={holder} signatureUrl={signatureUrl} school={identity} />
                     </div>
                   );
                 })}

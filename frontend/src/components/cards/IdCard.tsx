@@ -3,6 +3,7 @@
 import { GraduationCap, MapPin, Phone } from "lucide-react";
 import { PhotoFrame } from "./PhotoFrame";
 import { QrCode } from "./QrCode";
+import type { SchoolIdentity } from "@/lib/schoolIdentity";
 
 export interface IdCardHolder {
   id: string;
@@ -81,13 +82,13 @@ function Row({ label, value, accent }: { label: string; value: string; accent?: 
 export function IdCard({
   holder,
   signatureUrl,
-  schoolName,
+  school,
 }: {
   holder: IdCardHolder;
   /** Authorised signature image (data URL) from the live school profile. */
   signatureUrl?: string;
-  /** School name, folded into the QR identity payload when available. */
-  schoolName?: string;
+  /** Live school identity for the masthead, footer and QR payload. */
+  school?: SchoolIdentity;
 }) {
   return (
     <div className="id-card relative mx-auto flex w-full max-w-75 flex-col overflow-hidden rounded-2xl bg-white text-slate-900 shadow-lg ring-1 ring-slate-200">
@@ -101,8 +102,12 @@ export function IdCard({
             <GraduationCap className="size-5" />
           </div>
           <div className="min-w-0 leading-tight">
-            <p className="truncate text-[12px] font-extrabold uppercase tracking-wide">Springdale School</p>
-            <p className="truncate text-[7px] font-medium opacity-85">Mayur Vihar, New Delhi · CBSE 2730123</p>
+            <p className="truncate text-[12px] font-extrabold uppercase tracking-wide">{school?.name || "Your School"}</p>
+            {(school?.addressLine || school?.affiliation) && (
+              <p className="truncate text-[7px] font-medium opacity-85">
+                {[school?.addressLine, school?.affiliation].filter(Boolean).join(" · ")}
+              </p>
+            )}
           </div>
         </div>
       </div>
@@ -143,7 +148,7 @@ export function IdCard({
         {/* QR + signature */}
         <div className="mt-2.5 flex items-end justify-between">
           <div className="flex flex-col items-center gap-0.5">
-            <QrCode value={idCardPayload(holder, schoolName)} className="size-12" />
+            <QrCode value={idCardPayload(holder, school?.name)} className="size-12" />
             <span className="text-[5.5px] font-medium uppercase tracking-wide text-slate-400">Scan to verify</span>
           </div>
           <div className="text-center">
@@ -167,13 +172,16 @@ export function IdCard({
         <p className="flex items-center gap-1 text-[6.5px] opacity-90">
           <MapPin className="size-2 shrink-0" />
           <span className="truncate">
-            If found, return to Springdale School, Mayur Vihar, New Delhi 110091
+            If found, return to {school?.name || "the school"}
+            {school?.addressLine ? `, ${school.addressLine}` : ""}
           </span>
         </p>
-        <p className="flex items-center gap-1 text-[6.5px] opacity-90">
-          <Phone className="size-2 shrink-0" />
-          011-2345-6789
-        </p>
+        {school?.phone && (
+          <p className="flex items-center gap-1 text-[6.5px] opacity-90">
+            <Phone className="size-2 shrink-0" />
+            {school.phone}
+          </p>
+        )}
       </div>
     </div>
   );

@@ -3,6 +3,7 @@
 import { GraduationCap } from "lucide-react";
 import { PhotoFrame } from "./PhotoFrame";
 import { QrCode } from "./QrCode";
+import type { SchoolIdentity } from "@/lib/schoolIdentity";
 
 export interface AdmitCardSubject {
   subject: string;
@@ -42,7 +43,7 @@ const INSTRUCTIONS = [
  * Like IdCard, colours are fixed rather than themed — the printed artefact
  * must not change with the operator's light/dark preference.
  */
-export function AdmitCard({ data }: { data: AdmitCardData }) {
+export function AdmitCard({ data, school }: { data: AdmitCardData; school?: SchoolIdentity }) {
   return (
     <div
       className="admit-card flex w-full flex-col overflow-hidden rounded-lg bg-white text-slate-900 shadow-md ring-1 ring-slate-200"
@@ -55,13 +56,17 @@ export function AdmitCard({ data }: { data: AdmitCardData }) {
             <GraduationCap className="size-6" />
           </div>
           <div className="min-w-0 flex-1 leading-tight">
-            <p className="truncate text-base font-bold uppercase tracking-wide">Springdale School</p>
-            <p className="truncate text-[9px] text-slate-500">
-              Mayur Vihar, New Delhi 110091 · CBSE Affiliation No. 2730123
-            </p>
-            <p className="truncate text-[8px] text-slate-400">
-              Ph: 011-2345-6789 · www.springdale.edu
-            </p>
+            <p className="truncate text-base font-bold uppercase tracking-wide">{school?.name || "Your School"}</p>
+            {(school?.addressLine || school?.affiliation) && (
+              <p className="truncate text-[9px] text-slate-500">
+                {[school?.addressLine, school?.affiliation].filter(Boolean).join(" · ")}
+              </p>
+            )}
+            {(school?.phone || school?.website) && (
+              <p className="truncate text-[8px] text-slate-400">
+                {[school?.phone ? `Ph: ${school.phone}` : "", school?.website].filter(Boolean).join(" · ")}
+              </p>
+            )}
           </div>
         </div>
         <div className="flex items-center justify-center gap-2 bg-slate-900 py-1 text-white">

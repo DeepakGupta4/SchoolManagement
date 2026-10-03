@@ -3,6 +3,7 @@
 import { GraduationCap } from "lucide-react";
 import { PhotoFrame } from "./PhotoFrame";
 import { QrCode } from "./QrCode";
+import type { SchoolIdentity } from "@/lib/schoolIdentity";
 
 export interface ReportCardSubject {
   subject: string;
@@ -56,7 +57,7 @@ const inr0 = (n: number) => n.toLocaleString("en-IN");
  * Colours are fixed rather than themed — a printed report card must look
  * identical regardless of the operator's light/dark preference.
  */
-export function ReportCard({ data }: { data: ReportCardData }) {
+export function ReportCard({ data, school }: { data: ReportCardData; school?: SchoolIdentity }) {
   const totalMax = data.subjects.reduce((s, x) => s + x.maxMarks, 0);
   const totalObtained = data.subjects.reduce((s, x) => s + x.obtained, 0);
   const pct = totalMax ? Math.round((totalObtained / totalMax) * 100) : 0;
@@ -74,10 +75,12 @@ export function ReportCard({ data }: { data: ReportCardData }) {
             <GraduationCap className="size-7" />
           </div>
           <div className="text-center leading-tight">
-            <p className="text-lg font-bold uppercase tracking-wide">Springdale School</p>
-            <p className="text-[10px] text-slate-500">
-              Mayur Vihar, New Delhi 110091 · CBSE Affiliation No. 2730123
-            </p>
+            <p className="text-lg font-bold uppercase tracking-wide">{school?.name || "Your School"}</p>
+            {(school?.addressLine || school?.affiliation) && (
+              <p className="text-[10px] text-slate-500">
+                {[school?.addressLine, school?.affiliation].filter(Boolean).join(" · ")}
+              </p>
+            )}
           </div>
         </div>
         <p className="mt-2 text-center text-[11px] font-bold uppercase tracking-[0.25em] text-indigo-700">

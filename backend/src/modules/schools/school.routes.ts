@@ -85,6 +85,7 @@ const profileSchema = z.object({
   country: z.string().optional(),
   website: z.string().optional(),
   schoolType: z.string().optional(),
+  affiliation: z.string().optional(),
   logo: z.string().optional(),
   signatureUrl: z.string().optional(),
   bellSchedule: z

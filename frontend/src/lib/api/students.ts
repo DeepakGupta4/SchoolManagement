@@ -30,6 +30,24 @@ export async function listStudents(filters: StudentFilters = {}): Promise<Studen
   return result.data;
 }
 
+/**
+ * Server-side COUNT of students matching the filters, read from the list meta
+ * (not the rows). Used where only a total is needed — e.g. the teacher
+ * dashboard's per-class tallies — so no roster is shipped to the browser and the
+ * count is never truncated by a page limit.
+ */
+export async function countStudents(filters: StudentFilters = {}): Promise<number> {
+  const result = await apiList<Student>("/api/students", {
+    query: {
+      search: filters.search,
+      className: filters.className,
+      status: filters.status,
+      limit: 1,
+    },
+  });
+  return result.meta?.total ?? result.data.length;
+}
+
 export async function getStudent(id: string): Promise<Student | null> {
   try {
     return await apiRequest<Student>(`/api/students/${id}`);

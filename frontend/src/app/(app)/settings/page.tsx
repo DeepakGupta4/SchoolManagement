@@ -2,6 +2,8 @@
 
 import React, { useEffect, useState } from "react";
 import { getMySchool, updateMySchool, resetSchoolData } from "@/lib/api/schools";
+import { updateMyName } from "@/lib/api/auth";
+import { useAuthStore } from "@/store";
 import { fileToDataUrl } from "@/lib/image";
 import {
   AlertTriangle,
@@ -109,6 +111,16 @@ const INTEGRATIONS: Integration[] = [];
 
 export default function SettingsPage() {
   const { toast } = useToast();
+  const { user, updateUser } = useAuthStore();
+
+  // The signed-in user's own display name (header + dashboard greeting).
+  const [accountName, setAccountName] = useState("");
+  useEffect(() => {
+    if (!user?.name) return;
+    // Deferred to keep setState out of the effect body (cascading-render rule).
+    const t = setTimeout(() => setAccountName(user.name), 0);
+    return () => clearTimeout(t);
+  }, [user?.name]);
 
   const [tab, setTab] = useState<TabId>("profile");
   const [profile, setProfile] = useState(PROFILE_DEFAULTS);
@@ -237,6 +249,7 @@ export default function SettingsPage() {
             city: s.city || prev.city,
             state: s.state || prev.state,
             website: s.website || prev.website,
+            affiliation: s.affiliation || prev.affiliation,
             logo: s.logo || prev.logo,
             signatureUrl: s.signatureUrl || prev.signatureUrl,
           }));
@@ -266,10 +279,23 @@ export default function SettingsPage() {
           city: profile.city,
           state: profile.state,
           website: profile.website,
+          affiliation: profile.affiliation,
           logo: profile.logo,
           signatureUrl: profile.signatureUrl,
         });
-        toast({ title: "School profile saved", description: "Your changes are live.", variant: "success" });
+        // Persist the signed-in user's own name too, and reflect it immediately
+        // in the header/greeting. Best-effort so an older backend without this
+        // route doesn't fail the whole save.
+        const newName = accountName.trim();
+        if (newName && newName !== (user?.name ?? "")) {
+          try {
+            const updated = await updateMyName(newName);
+            updateUser({ name: updated.name });
+          } catch {
+            /* name endpoint may be unavailable on an older deployment */
+          }
+        }
+        toast({ title: "Profile saved", description: "Your changes are live.", variant: "success" });
       } catch (e) {
         toast({
           title: "Could not save",
@@ -355,6 +381,27 @@ export default function SettingsPage() {
       </div>
 
       {tab === "profile" && (
+       <>
+        <Card>
+          <CardHeader>
+            <div>
+              <h2 className="text-sm font-semibold text-text">Your account</h2>
+              <p className="mt-0.5 text-xs text-muted">
+                Shown in the top bar and the dashboard greeting.
+              </p>
+            </div>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <Input
+              label="Your name"
+              value={accountName}
+              onChange={(e) => setAccountName(e.target.value)}
+              hint="This is you — separate from the principal's name below."
+            />
+            <Input label="Login email" value={user?.email ?? ""} disabled hint="Your sign-in email can't be changed here." />
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader>
             <div>
@@ -553,6 +600,7 @@ export default function SettingsPage() {
             </div>
           </CardContent>
         </Card>
+       </>
       )}
 
       {tab === "branding" && (

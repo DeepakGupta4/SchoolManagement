@@ -22,6 +22,15 @@ export async function login(email: string, password: string): Promise<User> {
   return result.user;
 }
 
+/** Updates the signed-in user's own display name; returns the refreshed user. */
+export async function updateMyName(name: string): Promise<User> {
+  const result = await apiRequest<{ user: User }>("/api/auth/me", {
+    method: "PATCH",
+    body: { name },
+  });
+  return result.user;
+}
+
 /** Resolves the signed-in user from a stored token, or null if it's invalid. */
 export async function fetchCurrentUser(): Promise<User | null> {
   try {

@@ -35,6 +35,7 @@ import {
 } from "@/components/ui";
 import { QrCode as QrCodeSvg } from "@/components/cards/QrCode";
 import { useResource } from "@/hooks/useResource";
+import { useSchoolIdentity } from "@/lib/schoolIdentity";
 import {
   VISITOR_PURPOSE_OPTIONS,
   VISITOR_STATUS_OPTIONS,
@@ -68,6 +69,7 @@ const PURPOSE_VARIANT: Record<VisitorPurpose, "info" | "warning" | "danger" | "d
 };
 
 export default function VisitorsPage() {
+  const { identity } = useSchoolIdentity();
   const [search, setSearch] = useState("");
   const [purpose, setPurpose] = useState("");
   const [status, setStatus] = useState("");
@@ -455,7 +457,7 @@ export default function VisitorsPage() {
       >
         {passVisitor && (
           <div className="print-sheet mx-auto w-full max-w-xs rounded-xl border border-slate-200 bg-white p-5 text-center text-slate-900">
-            <p className="text-sm font-bold tracking-wide">SPRINGDALE SCHOOL</p>
+            <p className="text-sm font-bold uppercase tracking-wide">{identity.name}</p>
             <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">
               Visitor Gate Pass
             </p>

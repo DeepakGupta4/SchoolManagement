@@ -95,6 +95,8 @@ export interface SchoolProfile {
   country: string;
   website: string;
   schoolType: string;
+  /** Board/affiliation line for official documents, e.g. "CBSE Affiliation No. 2730123". */
+  affiliation?: string;
   logo: string;
   /** Authorised signatory image (data URL), printed on ID cards. */
   signatureUrl?: string;

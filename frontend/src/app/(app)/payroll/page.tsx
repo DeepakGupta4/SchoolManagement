@@ -33,6 +33,7 @@ import { exportToCsv } from "@/lib/exportCsv";
 import { PayslipModal, type PayrollEmployee } from "./PayslipModal";
 import { useResource } from "@/hooks/useResource";
 import { payrollApi, type PayrollRecord } from "@/lib/api/payroll";
+import { useSchoolIdentity } from "@/lib/schoolIdentity";
 
 type Employee = PayrollRecord;
 
@@ -76,6 +77,7 @@ export default function PayrollPage() {
   const [roleFilter, setRoleFilter] = useState("All");
   const [payslipFor, setPayslipFor] = useState<PayrollEmployee | null>(null);
   const { toast } = useToast();
+  const { identity } = useSchoolIdentity();
   const { items, loading } = useResource(payrollApi, {}, { label: "employee" });
 
   /** One employee's row exported as their payslip line. */
@@ -375,7 +377,7 @@ export default function PayrollPage() {
         </p>
       </div>
 
-      <PayslipModal employee={payslipFor} onOpenChange={(open) => !open && setPayslipFor(null)} />
+      <PayslipModal employee={payslipFor} onOpenChange={(open) => !open && setPayslipFor(null)} school={identity} />
     </div>
   );
 }

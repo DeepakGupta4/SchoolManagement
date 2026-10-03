@@ -43,6 +43,7 @@ import type { TransferSchema } from "@/lib/schemas/transfer";
 import { DetailModal } from "@/components/DetailModal";
 import { TransferFormModal } from "./TransferFormModal";
 import { TransferCertificate } from "./TransferCertificate";
+import { useSchoolIdentity } from "@/lib/schoolIdentity";
 
 const PAGE_SIZE = 10;
 
@@ -53,6 +54,7 @@ const inr = new Intl.NumberFormat("en-IN", {
 });
 
 export default function TransfersPage() {
+  const { identity } = useSchoolIdentity();
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
   const [type, setType] = useState("");
@@ -380,7 +382,7 @@ export default function TransfersPage() {
 
       {/* Off-screen certificate — the only thing that prints */}
       <div className="hidden print:block">
-        {printing && <TransferCertificate record={printing} />}
+        {printing && <TransferCertificate record={printing} school={identity} />}
       </div>
 
       <TransferFormModal

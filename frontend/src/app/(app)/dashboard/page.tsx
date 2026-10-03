@@ -62,6 +62,16 @@ const toneClasses: Record<OverviewItem["tone"], string> = {
   cyan: "bg-info-soft text-info-text",
 };
 
+/** Solid tone for the thin accent strip along the top of each overview tile. */
+const accentClasses: Record<OverviewItem["tone"], string> = {
+  indigo: "bg-primary",
+  rose: "bg-danger",
+  amber: "bg-warning",
+  emerald: "bg-success",
+  violet: "bg-violet",
+  cyan: "bg-info",
+};
+
 function buildOverview(d: DashboardInsights): OverviewItem[] {
   return [
     { label: "Teachers on leave", value: d.teachersOnLeave, icon: CalendarOff, tone: "amber", href: "/leave" },
@@ -100,14 +110,14 @@ function quickActionsFor(role: string | undefined): QuickAction[] {
 function QuickActions({ role }: { role: string | undefined }) {
   const actions = quickActionsFor(role);
   return (
-    <div className="flex flex-wrap gap-2.5">
+    <div className="grid grid-cols-2 gap-2.5 sm:flex sm:flex-wrap">
       {actions.map((a) => (
         <Link
           key={a.label}
           href={a.href}
-          className="focus-ring card-hover inline-flex items-center gap-2 rounded-lg border border-border bg-surface px-3.5 py-2 text-sm font-medium text-text"
+          className="focus-ring group inline-flex items-center gap-2.5 rounded-xl border border-border bg-surface px-4 py-2.5 text-sm font-semibold text-text shadow-sm transition-all hover:-translate-y-0.5 hover:border-border-strong hover:shadow-md"
         >
-          <span className={cn("flex size-7 items-center justify-center rounded-md", toneClasses[a.tone])}>
+          <span className={cn("flex size-8 items-center justify-center rounded-lg transition-transform group-hover:scale-110", toneClasses[a.tone])}>
             <a.icon className="size-4" />
           </span>
           {a.label}
@@ -289,31 +299,37 @@ export default function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-5">
-      {/* Greeting */}
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-3">
-          {data?.schoolLogo && (
-            // Logo is a user-uploaded data URL / remote URL — a plain img avoids
-            // next/image remote-host config and is fine at this small size.
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={data.schoolLogo}
-              alt=""
-              className="size-10 shrink-0 rounded-md object-cover ring-1 ring-border"
-            />
-          )}
-          <div className="min-w-0">
-            <h1 className="text-xl font-semibold text-text">
-              {getGreeting()}, {user?.name?.split(" ")[0]} 👋
-            </h1>
-            <p className="mt-0.5 text-sm text-muted">
-              {today}
-              {schoolName ? ` · ${schoolName}` : ""}
-            </p>
+      {/* Greeting hero */}
+      <Card className="overflow-hidden">
+        <CardContent className="flex flex-wrap items-center justify-between gap-4 bg-linear-to-br from-primary-soft/70 via-surface to-violet-soft/25 py-5">
+          <div className="flex min-w-0 items-center gap-3.5">
+            {data?.schoolLogo ? (
+              // Logo is a user-uploaded data URL / remote URL — a plain img avoids
+              // next/image remote-host config and is fine at this small size.
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={data.schoolLogo}
+                alt=""
+                className="size-12 shrink-0 rounded-xl object-cover shadow-sm ring-1 ring-border"
+              />
+            ) : (
+              <div className="gradient-indigo flex size-12 shrink-0 items-center justify-center rounded-xl text-white shadow-sm">
+                <School className="size-6" />
+              </div>
+            )}
+            <div className="min-w-0">
+              <h1 className="truncate text-xl font-bold text-text sm:text-2xl">
+                {getGreeting()}, {user?.name?.split(" ")[0]} 👋
+              </h1>
+              <p className="mt-0.5 truncate text-sm text-muted">
+                {today}
+                {schoolName ? ` · ${schoolName}` : ""}
+              </p>
+            </div>
           </div>
-        </div>
-        <SchoolStatusBadge status={data?.schoolOpen} loading={loading} />
-      </div>
+          <SchoolStatusBadge status={data?.schoolOpen} loading={loading} />
+        </CardContent>
+      </Card>
 
       {user?.role === "teacher" ? (
         <TeacherDashboard />
@@ -352,7 +368,8 @@ export default function DashboardPage() {
                 className="focus-ring group rounded-lg"
                 style={{ animationDelay: `${i * 60}ms` }}
               >
-                <Card className="card-hover h-full">
+                <Card className="card-hover relative h-full overflow-hidden">
+                  <span className={cn("absolute inset-x-0 top-0 h-0.5", accentClasses[item.tone])} />
                   <CardContent className="flex h-full flex-col gap-2.5">
                     <div className="flex items-start justify-between">
                       <div className={cn("flex size-9 items-center justify-center rounded-md", toneClasses[item.tone])}>

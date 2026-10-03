@@ -9,6 +9,7 @@ import { IdCard, type IdCardHolder } from "@/components/cards/IdCard";
 import { useAsyncList } from "@/hooks/useAsyncList";
 import { listTeachers, DEPARTMENT_OPTIONS } from "@/lib/api/teachers";
 import { getMySchool } from "@/lib/api/schools";
+import { schoolIdentity, FALLBACK_SCHOOL_IDENTITY, type SchoolIdentity } from "@/lib/schoolIdentity";
 import { teacherName, type Teacher } from "@/types/teacher";
 
 /** Maps a teacher record onto the ID-card holder shape, photo included. */
@@ -42,14 +43,14 @@ export default function TeacherIdCardsPage() {
   // Live school profile → the QR's school name and each card's signature image.
   // Read once here so a signature uploaded in Settings shows on every card.
   const [signatureUrl, setSignatureUrl] = useState("");
-  const [schoolName, setSchoolName] = useState("");
+  const [identity, setIdentity] = useState<SchoolIdentity>(FALLBACK_SCHOOL_IDENTITY);
   useEffect(() => {
     let cancelled = false;
     getMySchool()
       .then((s) => {
         if (cancelled || !s) return;
         setSignatureUrl(s.signatureUrl || "");
-        setSchoolName(s.name || "");
+        setIdentity(schoolIdentity(s));
       })
       .catch(() => {});
     return () => {
@@ -224,7 +225,7 @@ export default function TeacherIdCardsPage() {
                     </span>
                   )}
                 </button>
-                <IdCard holder={holder} signatureUrl={signatureUrl} schoolName={schoolName} />
+                <IdCard holder={holder} signatureUrl={signatureUrl} school={identity} />
               </div>
             );
           })}

@@ -16,6 +16,8 @@ interface AuthStore {
   signIn: (user: User) => void;
   signOut: () => void;
   setGuest: () => void;
+  /** Merge fields into the signed-in user in place (e.g. after editing name). */
+  updateUser: (patch: Partial<User>) => void;
 }
 
 export const useAuthStore = create<AuthStore>((set) => ({
@@ -25,6 +27,7 @@ export const useAuthStore = create<AuthStore>((set) => ({
   signIn: (user) => set({ user, status: "authenticated", isAuthenticated: true }),
   signOut: () => set({ user: null, status: "guest", isAuthenticated: false }),
   setGuest: () => set({ user: null, status: "guest", isAuthenticated: false }),
+  updateUser: (patch) => set((s) => (s.user ? { user: { ...s.user, ...patch } } : {})),
 }));
 
 interface SidebarStore {

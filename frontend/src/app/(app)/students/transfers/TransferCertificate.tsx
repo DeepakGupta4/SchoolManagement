@@ -1,4 +1,5 @@
 import type { TransferRequest } from "@/lib/api/transfers";
+import type { SchoolIdentity } from "@/lib/schoolIdentity";
 
 const inr = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 });
 
@@ -8,7 +9,7 @@ const inr = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR",
  * thing that prints (the global @media print rules show `.print-sheet` only).
  * Fixed colours so it looks identical regardless of the operator's theme.
  */
-export function TransferCertificate({ record }: { record: TransferRequest }) {
+export function TransferCertificate({ record, school }: { record: TransferRequest; school?: SchoolIdentity }) {
   const today = new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" });
   const typeLabel = record.type.charAt(0).toUpperCase() + record.type.slice(1);
 
@@ -17,8 +18,12 @@ export function TransferCertificate({ record }: { record: TransferRequest }) {
       <div className="mx-auto max-w-[720px] bg-white p-10 text-slate-900">
         {/* Header */}
         <div className="border-b-2 border-slate-800 pb-4 text-center">
-          <h1 className="text-2xl font-extrabold uppercase tracking-wide text-indigo-700">Springdale School</h1>
-          <p className="mt-1 text-xs text-slate-600">Mayur Vihar, New Delhi 110091 · CBSE Affiliation No. 2730123</p>
+          <h1 className="text-2xl font-extrabold uppercase tracking-wide text-indigo-700">{school?.name || "Your School"}</h1>
+          {(school?.addressLine || school?.affiliation) && (
+            <p className="mt-1 text-xs text-slate-600">
+              {[school?.addressLine, school?.affiliation].filter(Boolean).join(" · ")}
+            </p>
+          )}
         </div>
 
         <h2 className="mt-8 text-center text-lg font-bold uppercase tracking-[0.2em] text-slate-800">
@@ -66,7 +71,7 @@ export function TransferCertificate({ record }: { record: TransferRequest }) {
         </div>
 
         <p className="mt-10 text-center text-[10px] text-slate-400">
-          This is a computer-generated certificate issued by Springdale School.
+          This is a computer-generated certificate issued by {school?.name || "the school"}.
         </p>
       </div>
     </div>

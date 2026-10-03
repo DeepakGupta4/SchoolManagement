@@ -28,6 +28,7 @@ import {
 } from "@/components/ui";
 import { useAsyncList } from "@/hooks/useAsyncList";
 import { useClassOptions } from "@/hooks/useClassOptions";
+import { useSchoolIdentity } from "@/lib/schoolIdentity";
 import { useAuthStore } from "@/store";
 import { cn } from "@/lib/utils";
 import {
@@ -83,6 +84,7 @@ export default function CollectFeePage() {
   const { toast } = useToast();
   const { classOptions } = useClassOptions();
   const collector = useAuthStore((s) => s.user?.name ?? "Front Desk");
+  const { identity } = useSchoolIdentity();
 
   const [search, setSearch] = useState("");
   const [className, setClassName] = useState("");
@@ -686,7 +688,7 @@ export default function CollectFeePage() {
             </div>
           </div>
           <div className="mx-auto w-full max-w-2xl">
-            <PaymentReceipt payment={receipt} />
+            <PaymentReceipt payment={receipt} school={identity} />
           </div>
         </div>
       )}

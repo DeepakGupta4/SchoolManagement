@@ -3,6 +3,7 @@
 import { Printer } from "lucide-react";
 import { Button, Modal } from "@/components/ui";
 import { ReportCard, type ReportCardData } from "@/components/cards/ReportCard";
+import { useSchoolIdentity } from "@/lib/schoolIdentity";
 
 export function ReportCardModal({
   data,
@@ -11,6 +12,7 @@ export function ReportCardModal({
   data: ReportCardData | null;
   onOpenChange: (open: boolean) => void;
 }) {
+  const { identity } = useSchoolIdentity();
   return (
     <Modal
       open={Boolean(data)}
@@ -32,7 +34,7 @@ export function ReportCardModal({
     >
       {data && (
         <div className="print-sheet mx-auto max-w-xl">
-          <ReportCard data={data} />
+          <ReportCard data={data} school={identity} />
         </div>
       )}
     </Modal>

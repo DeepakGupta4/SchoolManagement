@@ -91,4 +91,20 @@ router.get("/me", requireAuth, async (req, res, next) => {
   }
 });
 
+const updateMeSchema = z.object({ name: z.string().min(2, "Name must be at least 2 characters") });
+
+/** The signed-in user edits their OWN display name (shown in the header/greeting). */
+router.patch("/me", requireAuth, validate(updateMeSchema), async (req, res, next) => {
+  try {
+    const { name } = req.body as z.infer<typeof updateMeSchema>;
+    const user = await User.findById(req.user!.id);
+    if (!user) throw ApiError.unauthorized("This account no longer exists.");
+    user.name = name.trim();
+    await user.save();
+    res.json({ user: toPublicUser(user) });
+  } catch (err) {
+    next(err);
+  }
+});
+
 export default router;

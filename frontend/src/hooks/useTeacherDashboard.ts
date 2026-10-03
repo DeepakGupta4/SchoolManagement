@@ -2,11 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { listTeachers } from "@/lib/api/teachers";
-import { listStudents } from "@/lib/api/students";
+import { countStudents } from "@/lib/api/students";
 import { timetableApi, type TimetableEntry } from "@/lib/api/timetable";
 import { assignmentsApi, type Assignment } from "@/lib/api/assignments";
 import { teacherName, type Teacher } from "@/types/teacher";
-import type { Student } from "@/types/student";
 
 export interface TeacherClassRoster {
   className: string;
@@ -26,8 +25,6 @@ export interface TeacherDashboardData {
   classRoster: TeacherClassRoster[];
   /** e.g. "Class 10 - A" when this teacher is a class teacher. */
   classTeacherOf: string | null;
-  /** Students in this teacher's classes, for the roster view. */
-  students: Student[];
 }
 
 const WEEKDAY = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -49,13 +46,11 @@ export function useTeacherDashboard(email: string | undefined) {
       let teachers: Teacher[];
       let timetable: TimetableEntry[];
       let assignments: Assignment[];
-      let students: Student[];
       try {
-        [teachers, timetable, assignments, students] = await Promise.all([
+        [teachers, timetable, assignments] = await Promise.all([
           listTeachers(),
           timetableApi.list(),
           assignmentsApi.list(),
-          listStudents(),
         ]);
       } catch (e) {
         if (cancelled) return;
@@ -68,8 +63,7 @@ export function useTeacherDashboard(email: string | undefined) {
       const self =
         teachers.find((t) => email && t.email.toLowerCase() === email.toLowerCase()) ?? null;
       const name = self ? teacherName(self) : "";
-      const classes = self?.classes ?? [];
-      const classSet = new Set(classes);
+      const classes = [...new Set(self?.classes ?? [])];
 
       const mine = timetable.filter((e) => e.teacher === name);
       const today = WEEKDAY[new Date().getDay()];
@@ -79,10 +73,22 @@ export function useTeacherDashboard(email: string | undefined) {
 
       const myAssignments = assignments.filter((a) => a.teacher === name);
 
-      const roster = students.filter((s) => classSet.has(s.className));
-      const counts = new Map<string, number>();
-      for (const s of roster) counts.set(s.className, (counts.get(s.className) ?? 0) + 1);
-      const classRoster = classes.map((c) => ({ className: c, count: counts.get(c) ?? 0 }));
+      // Per-class student tallies counted SERVER-side (one count per class), so
+      // no roster is shipped to the browser and the totals are never truncated by
+      // a page limit. Counts are non-critical — on failure, show zeros rather
+      // than failing the whole dashboard.
+      let classRoster: TeacherClassRoster[] = classes.map((c) => ({ className: c, count: 0 }));
+      let studentCount = 0;
+      if (classes.length > 0) {
+        try {
+          const counts = await Promise.all(classes.map((c) => countStudents({ className: c })));
+          if (cancelled) return;
+          classRoster = classes.map((c, i) => ({ className: c, count: counts[i] ?? 0 }));
+          studentCount = counts.reduce((sum, n) => sum + n, 0);
+        } catch {
+          /* keep the zeroed classRoster */
+        }
+      }
 
       const classTeacherOf =
         self?.isClassTeacher && self.classTeacherOf
@@ -96,10 +102,9 @@ export function useTeacherDashboard(email: string | undefined) {
         todaysPeriods,
         weeklyPeriodCount: mine.length,
         myAssignments,
-        studentCount: roster.length,
+        studentCount,
         classRoster,
         classTeacherOf,
-        students: roster,
       });
       setLoading(false);
     })();

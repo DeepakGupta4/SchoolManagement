@@ -65,6 +65,9 @@ const schoolSchema = new Schema(
     teacherCount: { type: Number, default: 0 },
     schoolType: { type: String, default: "" },
     website: { type: String, default: "" },
+    // Board/affiliation line printed on official documents (report cards, ID
+    // cards, admit cards, certificates), e.g. "CBSE Affiliation No. 2730123".
+    affiliation: { type: String, default: "" },
     logo: { type: String, default: "" },
     // Authorised signatory image (data URL). Uploaded once by an admin and
     // printed in the signature area of every student/staff ID card.
@@ -193,6 +196,7 @@ export function toPublicSchool(school: SchoolDoc) {
     teacherCount: school.teacherCount,
     schoolType: school.schoolType,
     website: school.website,
+    affiliation: school.affiliation ?? "",
     logo: school.logo,
     signatureUrl: school.signatureUrl ?? "",
     bellSchedule: (school.bellSchedule ?? []).map((p) => ({

@@ -2,6 +2,7 @@
 
 import { School } from "lucide-react";
 import type { Payment } from "@/lib/api/feeLedger";
+import type { SchoolIdentity } from "@/lib/schoolIdentity";
 
 const inr = (n: number) => `₹${n.toLocaleString("en-IN")}`;
 
@@ -51,7 +52,7 @@ function amountInWords(value: number): string {
  * Colours are fixed rather than themed — the printed artefact must not change
  * with the clerk's light/dark preference. Same reasoning as the ID cards.
  */
-export function PaymentReceipt({ payment }: { payment: Payment }) {
+export function PaymentReceipt({ payment, school }: { payment: Payment; school?: SchoolIdentity }) {
   const unconfirmed = payment.status === "pending-clearance";
 
   return (
@@ -66,10 +67,12 @@ export function PaymentReceipt({ payment }: { payment: Payment }) {
             <School className="size-5" />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-bold uppercase tracking-wide">Springdale School</p>
-            <p className="truncate text-[9px] text-slate-500">
-              Mayur Vihar, New Delhi 110091 · CBSE Affiliation No. 2730123
-            </p>
+            <p className="truncate text-sm font-bold uppercase tracking-wide">{school?.name || "Your School"}</p>
+            {(school?.addressLine || school?.affiliation) && (
+              <p className="truncate text-[9px] text-slate-500">
+                {[school?.addressLine, school?.affiliation].filter(Boolean).join(" · ")}
+              </p>
+            )}
           </div>
           <div className="shrink-0 text-right">
             <p className="text-[9px] uppercase tracking-wide text-slate-500">Fee Receipt</p>

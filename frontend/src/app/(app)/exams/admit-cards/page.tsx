@@ -12,11 +12,11 @@ import { listStudents } from "@/lib/api/students";
 import { examsApi } from "@/lib/api/exams";
 import { examScheduleApi, type ScheduledExam } from "@/lib/api/examSchedule";
 import { fullName, type Student } from "@/types/student";
+import { useSchoolIdentity } from "@/lib/schoolIdentity";
 
 // School-level constants shown on every card — not per-student data.
 const SESSION = "2025-26";
 const CENTRE_CODE = "DL-0731";
-const CENTRE_NAME = "Springdale School, Mayur Vihar";
 
 /** Maps a student's class + section onto the schedule's class code, e.g. "10-A". */
 function classCode(s: Student) {
@@ -59,6 +59,9 @@ export default function AdmitCardsPage() {
   const [exam, setExam] = useState("");
   const [onlyEligible, setOnlyEligible] = useState(true);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  // Live school identity → the card masthead and the printed exam-centre line.
+  const { identity } = useSchoolIdentity();
 
   // Default the class filter to the lowest class once the classes load. Ref-
   // guarded so it resolves only once (the first time a default is available) and
@@ -128,6 +131,9 @@ export default function AdmitCardsPage() {
   // sitting scheduled for the whole class ("Class 6") or a specific section
   // ("6-A") both count.
   const candidates = useMemo(() => {
+    const centreName = identity.addressLine
+      ? `${identity.name}, ${identity.addressLine}`
+      : identity.name;
     return students
       .map((s) => {
         const subjects = [
@@ -144,7 +150,7 @@ export default function AdmitCardsPage() {
           examName: exam,
           session: SESSION,
           centreCode: CENTRE_CODE,
-          centreName: CENTRE_NAME,
+          centreName,
           fatherName: s.guardian.name,
           photo: s.avatar || undefined,
           subjects,
@@ -154,7 +160,7 @@ export default function AdmitCardsPage() {
         return card;
       })
       .filter((c) => c.subjects.length > 0);
-  }, [students, subjectsByClass, exam]);
+  }, [students, subjectsByClass, exam, identity]);
 
   const filtered = useMemo(
     () => (onlyEligible ? candidates.filter((c) => c.feeCleared) : candidates),
@@ -324,7 +330,7 @@ export default function AdmitCardsPage() {
                     </Badge>
                   )}
                 </button>
-                <AdmitCard data={{ ...c, examName: exam }} />
+                <AdmitCard data={{ ...c, examName: exam }} school={identity} />
               </div>
             );
           })}
