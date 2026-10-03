@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Cake, Download, Eye, FileText, Pencil, Plus, Search, Trash2, Users, UsersRound, UserCheck, IndianRupee, TrendingDown } from "lucide-react";
 import {
   Avatar,
@@ -83,9 +84,10 @@ function StatCard({
   );
 }
 
-export default function StudentsPage() {
+function StudentsPageInner() {
   const { toast } = useToast();
   const { classOptions, defaultClass } = useClassOptions();
+  const searchParams = useSearchParams();
 
   const [search, setSearch] = useState("");
   const [className, setClassName] = useState("");
@@ -96,26 +98,24 @@ export default function StudentsPage() {
   const [birthdayMonth, setBirthdayMonth] = useState("");
 
   const defaultedClass = useRef(false);
-  const appliedDrill = useRef(false);
 
-  // Apply a dashboard deep-link (e.g. ?birthdayMonth=10 or ?attendance=below75)
-  // once, on mount. Read from window so this client page needs no Suspense
-  // boundary. A drill suppresses the lowest-class auto-select below so the whole
-  // school is shown, not just one class.
+  // Apply dashboard deep-links (?birthdayMonth=10 / ?attendance=below75)
+  // REACTIVELY. App Router reuses this page's component when only the query
+  // changes (no remount), so a mount-only effect would never fire on a click
+  // from the dashboard — this must depend on searchParams. A drill shows the
+  // whole school (clears the lowest-class auto-select).
   useEffect(() => {
-    if (appliedDrill.current) return;
-    appliedDrill.current = true;
-    const params = new URLSearchParams(window.location.search);
-    const low = params.get("attendance") === "below75";
-    const bm = params.get("birthdayMonth") ?? "";
+    const low = searchParams.get("attendance") === "below75";
+    const bm = searchParams.get("birthdayMonth") ?? "";
     if (!low && !bm) return;
     defaultedClass.current = true;
     const t = setTimeout(() => {
-      if (low) setQuick("low");
-      if (bm) setBirthdayMonth(bm);
+      setClassName("");
+      setQuick(low ? "low" : "all");
+      setBirthdayMonth(bm);
     }, 0);
     return () => clearTimeout(t);
-  }, []);
+  }, [searchParams]);
 
   // Pre-select the lowest class (e.g. Nursery) once the class list resolves — but
   // never fight a user who later clears it, and skip it entirely for a drill.
@@ -533,5 +533,14 @@ export default function StudentsPage() {
         onConfirm={handleDelete}
       />
     </div>
+  );
+}
+
+// useSearchParams must sit under a Suspense boundary for the static build.
+export default function StudentsPage() {
+  return (
+    <Suspense fallback={null}>
+      <StudentsPageInner />
+    </Suspense>
   );
 }

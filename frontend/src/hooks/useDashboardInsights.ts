@@ -32,6 +32,7 @@ export interface DashboardInsights {
   attention: AttentionStudent[];
   attendanceBands: { band: string; students: number }[];
   totalStudents: number;
+  activeStudents: number;
   totalTeachers: number;
   totalClasses: number;
   totalSubjects: number;
@@ -133,6 +134,7 @@ async function buildFromLegacy(
       students: active.filter((s) => s.attendancePercent >= b.min && s.attendancePercent < b.max).length,
     })),
     totalStudents: students.length,
+    activeStudents: active.length,
     totalTeachers: teachers.length,
     totalClasses: classes.length,
     totalSubjects: subjects.length,
@@ -185,6 +187,7 @@ export function useDashboardInsights() {
           attention: topAttention(insights.attention),
           attendanceBands: insights.attendanceBands,
           totalStudents: insights.counts.students,
+          activeStudents: insights.counts.activeStudents,
           totalTeachers: insights.counts.teachers,
           totalClasses: insights.counts.classes,
           totalSubjects: insights.counts.subjects,
