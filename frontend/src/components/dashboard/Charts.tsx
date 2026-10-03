@@ -5,11 +5,14 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, BarChart, Bar, Cell,
 } from "recharts";
-import { AlertTriangle } from "lucide-react";
-import { Card, CardContent, CardHeader, Skeleton, EmptyState } from "@/components/ui";
+import { AlertTriangle, BarChart3 } from "lucide-react";
+import { Card, CardContent, CardHeader, Skeleton } from "@/components/ui";
 import { useChartTheme, toneClass, type ChartTone } from "@/hooks/useChartTheme";
 import { cn } from "@/lib/utils";
 import { type FeeSummary } from "@/lib/api/feeLedger";
+
+/** Fixed height for the plot area so loading/empty/error/chart all stay compact. */
+const CHART_H = 170;
 
 function ChartHeader({
   title,
@@ -42,14 +45,27 @@ function ChartHeader({
   );
 }
 
-/** Shared "this chart couldn't load" state — distinct from genuinely empty data. */
-function ChartError({ what }: { what: string }) {
+/** Compact centred message (error / empty) sized to the plot area. */
+function ChartMessage({
+  icon,
+  title,
+  description,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+}) {
   return (
-    <EmptyState
-      icon={<AlertTriangle className="size-5 text-warning-text" />}
-      title={`Couldn't load the ${what}`}
-      description="There was a problem reaching the server. Reload the page to try again."
-    />
+    <div
+      className="flex flex-col items-center justify-center gap-2 text-center"
+      style={{ height: CHART_H }}
+    >
+      <div className="flex size-10 items-center justify-center rounded-full bg-surface-hover">{icon}</div>
+      <div>
+        <p className="text-sm font-medium text-text">{title}</p>
+        <p className="mt-0.5 text-xs text-muted">{description}</p>
+      </div>
+    </div>
   );
 }
 
@@ -69,8 +85,7 @@ export function AttendanceChart({
   const t = useChartTheme();
   const hasData = bands.some((d) => d.students > 0);
   const summaryLabel =
-    "Active students by attendance band — " +
-    bands.map((b) => `${b.students} ${b.band}`).join(", ");
+    "Active students by attendance band — " + bands.map((b) => `${b.students} ${b.band}`).join(", ");
 
   return (
     <Card>
@@ -81,21 +96,26 @@ export function AttendanceChart({
       />
       <CardContent>
         {loading ? (
-          <Skeleton className="h-[210px] w-full" />
+          <Skeleton className="w-full" style={{ height: CHART_H }} />
         ) : error ? (
-          <ChartError what="attendance chart" />
+          <ChartMessage
+            icon={<AlertTriangle className="size-5 text-warning-text" />}
+            title="Couldn't load the attendance chart"
+            description="There was a problem reaching the server. Reload to try again."
+          />
         ) : !hasData ? (
-          <EmptyState
+          <ChartMessage
+            icon={<BarChart3 className="size-5 text-subtle" />}
             title="No attendance data yet"
-            description="This chart fills in once attendance is marked for your students."
+            description="This fills in once attendance is marked."
           />
         ) : (
           <div role="img" aria-label={summaryLabel}>
-            <ResponsiveContainer width="100%" height={210}>
-              <BarChart data={bands} barSize={28} barGap={4}>
+            <ResponsiveContainer width="100%" height={CHART_H}>
+              <BarChart data={bands} barSize={26} barGap={4}>
                 <CartesianGrid strokeDasharray="3 3" stroke={t.grid} vertical={false} />
                 <XAxis dataKey="band" tick={{ fontSize: 12, fill: t.axis }} axisLine={false} tickLine={false} />
-                <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: t.axis }} axisLine={false} tickLine={false} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: t.axis }} axisLine={false} tickLine={false} width={28} />
                 <Tooltip contentStyle={t.tooltip} cursor={{ fill: t.cursor, radius: 6 }} />
                 <Bar dataKey="students" fill={t.series.primary} radius={[6, 6, 0, 0]} name="Students" />
               </BarChart>
@@ -146,24 +166,30 @@ export function FeeCollectionChart({
       />
       <CardContent>
         {loading ? (
-          <Skeleton className="h-[210px] w-full" />
+          <Skeleton className="w-full" style={{ height: CHART_H }} />
         ) : error ? (
-          <ChartError what="fee chart" />
+          <ChartMessage
+            icon={<AlertTriangle className="size-5 text-warning-text" />}
+            title="Couldn't load the fee chart"
+            description="There was a problem reaching the server. Reload to try again."
+          />
         ) : !hasData ? (
-          <EmptyState
+          <ChartMessage
+            icon={<BarChart3 className="size-5 text-subtle" />}
             title="No collection data yet"
-            description="Collection figures will appear once fees are billed and collected."
+            description="Appears once fees are billed and collected."
           />
         ) : (
           <div role="img" aria-label={summaryLabel}>
-            <ResponsiveContainer width="100%" height={210}>
-              <BarChart data={feeData} barSize={56}>
+            <ResponsiveContainer width="100%" height={CHART_H}>
+              <BarChart data={feeData} barSize={52}>
                 <CartesianGrid strokeDasharray="3 3" stroke={t.grid} vertical={false} />
                 <XAxis dataKey="label" tick={{ fontSize: 12, fill: t.axis }} axisLine={false} tickLine={false} />
                 <YAxis
                   tick={{ fontSize: 11, fill: t.axis }}
                   axisLine={false}
                   tickLine={false}
+                  width={44}
                   tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`}
                 />
                 <Tooltip

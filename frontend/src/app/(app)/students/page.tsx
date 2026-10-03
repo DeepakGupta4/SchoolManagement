@@ -87,10 +87,33 @@ export default function StudentsPage() {
   const [status, setStatus] = useState("");
   // Quick client-side filter driven by the stat cards (fees due / low attendance).
   const [quick, setQuick] = useState<"all" | "fees" | "low">("all");
+  // Birthday-month filter ("10" = October), set when arriving from the dashboard.
+  const [birthdayMonth, setBirthdayMonth] = useState("");
 
-  // Pre-select the lowest class (e.g. Nursery) once, the first time the class
-  // list resolves — but never fight a user who later clears or changes it.
   const defaultedClass = useRef(false);
+  const appliedDrill = useRef(false);
+
+  // Apply a dashboard deep-link (e.g. ?birthdayMonth=10 or ?attendance=below75)
+  // once, on mount. Read from window so this client page needs no Suspense
+  // boundary. A drill suppresses the lowest-class auto-select below so the whole
+  // school is shown, not just one class.
+  useEffect(() => {
+    if (appliedDrill.current) return;
+    appliedDrill.current = true;
+    const params = new URLSearchParams(window.location.search);
+    const low = params.get("attendance") === "below75";
+    const bm = params.get("birthdayMonth") ?? "";
+    if (!low && !bm) return;
+    defaultedClass.current = true;
+    const t = setTimeout(() => {
+      if (low) setQuick("low");
+      if (bm) setBirthdayMonth(bm);
+    }, 0);
+    return () => clearTimeout(t);
+  }, []);
+
+  // Pre-select the lowest class (e.g. Nursery) once the class list resolves — but
+  // never fight a user who later clears it, and skip it entirely for a drill.
   useEffect(() => {
     if (defaultedClass.current || className || !defaultClass) return;
     defaultedClass.current = true;
@@ -102,10 +125,14 @@ export default function StudentsPage() {
 
   // Rows shown in the table, after the stat-card quick filter.
   const displayed = useMemo(() => {
-    if (quick === "fees") return students.filter((s) => s.feeDue > 0);
-    if (quick === "low") return students.filter((s) => s.attendancePercent < 75);
-    return students;
-  }, [students, quick]);
+    let rows = students;
+    if (quick === "fees") rows = rows.filter((s) => s.feeDue > 0);
+    else if (quick === "low") rows = rows.filter((s) => s.attendancePercent < 75);
+    if (birthdayMonth) {
+      rows = rows.filter((s) => (s.dateOfBirth || "").slice(5, 7) === birthdayMonth);
+    }
+    return rows;
+  }, [students, quick, birthdayMonth]);
 
   const [formOpen, setFormOpen] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);

@@ -16,17 +16,18 @@ import { TeacherDashboard } from "@/components/dashboard/TeacherDashboard";
 import { useAuthStore } from "@/store";
 import { useDashboardInsights, type DashboardInsights } from "@/hooks/useDashboardInsights";
 import { fullName } from "@/types/student";
+import { todayIso } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 
 // Recharts is heavy; keep it out of the dashboard's initial JS and load it on the
 // client once the page is interactive. Each chart renders its own skeleton anyway.
 const AttendanceChart = dynamic(
   () => import("@/components/dashboard/Charts").then((m) => m.AttendanceChart),
-  { ssr: false, loading: () => <Skeleton className="h-[290px] w-full" /> }
+  { ssr: false, loading: () => <Skeleton className="h-[240px] w-full" /> }
 );
 const FeeCollectionChart = dynamic(
   () => import("@/components/dashboard/Charts").then((m) => m.FeeCollectionChart),
-  { ssr: false, loading: () => <Skeleton className="h-[290px] w-full" /> }
+  { ssr: false, loading: () => <Skeleton className="h-[240px] w-full" /> }
 );
 
 const inrShort = (n: number) => {
@@ -62,7 +63,7 @@ const toneClasses: Record<OverviewItem["tone"], string> = {
   cyan: "bg-info-soft text-info-text",
 };
 
-/** Solid tone for the thin accent strip along the top of each overview tile. */
+/** Solid tone for the icon chip on each overview tile. */
 const accentClasses: Record<OverviewItem["tone"], string> = {
   indigo: "bg-primary",
   rose: "bg-danger",
@@ -72,14 +73,26 @@ const accentClasses: Record<OverviewItem["tone"], string> = {
   cyan: "bg-info",
 };
 
+/** Soft tinted card background + border per tone — makes the board colourful. */
+const tileClasses: Record<OverviewItem["tone"], string> = {
+  indigo: "border-primary/20 bg-primary-soft/40",
+  rose: "border-danger/20 bg-danger-soft/40",
+  amber: "border-warning/20 bg-warning-soft/40",
+  emerald: "border-success/20 bg-success-soft/40",
+  violet: "border-violet/25 bg-violet/10",
+  cyan: "border-info/20 bg-info-soft/40",
+};
+
 function buildOverview(d: DashboardInsights): OverviewItem[] {
+  // Current month ("10") so the Birthdays tile deep-links to exactly that month.
+  const month = todayIso().slice(5, 7);
   return [
-    { label: "Teachers on leave", value: d.teachersOnLeave, icon: CalendarOff, tone: "amber", href: "/leave" },
-    { label: "Low attendance", value: d.lowAttendance, icon: TrendingDown, tone: "rose", href: "/attendance", hint: "below 75%" },
+    { label: "Teachers on leave", value: d.teachersOnLeave, icon: CalendarOff, tone: "amber", href: "/teachers?status=on-leave" },
+    { label: "Low attendance", value: d.lowAttendance, icon: TrendingDown, tone: "rose", href: "/students?attendance=below75", hint: "below 75%" },
     { label: "Fees pending", value: d.feesPending, display: d.feeError ? "—" : inrShort(d.feesPending), icon: BadgeIndianRupee, tone: "rose", href: "/fees/defaulters", hint: d.feeError ? "unavailable" : `${d.feeDefaulters} students` },
-    { label: "Admissions waiting", value: d.admissionsWaiting, icon: GraduationCap, tone: "indigo", href: "/students/admissions" },
-    { label: "Birthdays this month", value: d.birthdaysThisMonth, icon: Cake, tone: "violet", href: "/students" },
-    { label: "Upcoming exams", value: d.upcomingExams, icon: CalendarClock, tone: "cyan", href: "/exams", hint: d.nextExamName ?? undefined },
+    { label: "Admissions waiting", value: d.admissionsWaiting, icon: GraduationCap, tone: "indigo", href: "/students/admissions?stage=pending" },
+    { label: "Birthdays this month", value: d.birthdaysThisMonth, icon: Cake, tone: "violet", href: `/students?birthdayMonth=${month}` },
+    { label: "Upcoming exams", value: d.upcomingExams, icon: CalendarClock, tone: "cyan", href: "/exams?status=upcoming", hint: d.nextExamName ?? undefined },
   ];
 }
 
@@ -368,25 +381,24 @@ export default function DashboardPage() {
                 className="focus-ring group rounded-lg"
                 style={{ animationDelay: `${i * 60}ms` }}
               >
-                <Card className="card-hover relative h-full overflow-hidden">
-                  <span className={cn("absolute inset-x-0 top-0 h-0.5", accentClasses[item.tone])} />
-                  <CardContent className="flex h-full flex-col gap-2.5">
+                <Card className={cn("card-hover h-full border", tileClasses[item.tone])}>
+                  <CardContent className="flex h-full flex-col gap-2.5 p-4">
                     <div className="flex items-start justify-between">
-                      <div className={cn("flex size-9 items-center justify-center rounded-md", toneClasses[item.tone])}>
+                      <div className={cn("flex size-9 items-center justify-center rounded-lg text-white shadow-sm", accentClasses[item.tone])}>
                         <item.icon className="size-4" />
                       </div>
-                      <ArrowUpRight className="size-4 text-subtle transition-colors group-hover:text-primary" />
+                      <ArrowUpRight className="size-4 text-subtle transition-colors group-hover:text-text" />
                     </div>
                     <div>
-                      <p className="text-2xl font-semibold leading-none text-text">
+                      <p className="text-2xl font-bold leading-none text-text">
                         {item.display ? (
                           <CountUp value={item.value} format={() => item.display!} />
                         ) : (
                           <CountUp value={item.value} />
                         )}
                       </p>
-                      <p className="mt-1.5 text-xs text-muted">{item.label}</p>
-                      {item.hint && <p className="mt-0.5 text-[11px] text-muted">{item.hint}</p>}
+                      <p className="mt-1.5 text-xs font-medium text-muted">{item.label}</p>
+                      {item.hint && <p className="mt-0.5 text-[11px] text-subtle">{item.hint}</p>}
                     </div>
                   </CardContent>
                 </Card>
