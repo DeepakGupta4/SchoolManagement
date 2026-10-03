@@ -1,19 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { listStudents } from "@/lib/api/students";
-import { listTeachers } from "@/lib/api/teachers";
-import { admissionsApi } from "@/lib/api/admissions";
-import { examsApi, examStatus } from "@/lib/api/exams";
-import { feeAccountsApi, balanceOf } from "@/lib/api/feeLedger";
-import { classesApi } from "@/lib/api/classes";
-import { subjectsApi } from "@/lib/api/subjects";
-import { timetableApi } from "@/lib/api/timetable";
+import { getDashboardInsights, type DashboardAttentionCandidate } from "@/lib/api/dashboard";
+import { getFeeSummary, type FeeSummary } from "@/lib/api/feeLedger";
+import { getMySchool } from "@/lib/api/schools";
 import { assessStudent } from "@/lib/insights";
-import type { Student } from "@/types/student";
 
 export interface AttentionStudent {
-  student: Student;
+  student: DashboardAttentionCandidate;
   score: number;
   reason: string;
 }
@@ -28,21 +22,33 @@ export interface DashboardInsights {
   nextExamName: string | null;
   lowAttendance: number;
   attention: AttentionStudent[];
+  /** Live distribution of active students across attendance bands (for the chart). */
+  attendanceBands: { band: string; students: number }[];
   /** Totals used to detect a brand-new (empty) school for onboarding. */
   totalStudents: number;
   totalTeachers: number;
   totalClasses: number;
   totalSubjects: number;
   totalTimetableEntries: number;
+  /** Real tenant identity, for the header (null while unknown). */
+  schoolName: string | null;
+  schoolLogo: string | null;
+  /** Derived open/closed state for today (Sunday / holiday aware). */
+  schoolOpen: { open: boolean; reason: string | null };
+  /** Fee day-book figures for the Fee Collection chart (null if it failed to load). */
+  feeSummary: FeeSummary | null;
+  /** True when the fee figures couldn't be fetched (vs. genuinely zero). */
+  feeError: boolean;
 }
 
 /**
- * Derives the Principal's "Today's Overview" from the same mock resources the
- * rest of the app uses, so every headline number is traceable — click a card
- * and the page it opens shows exactly those records.
- *
- * All figures are real derivations over the seed data, not literals. When a
- * backend lands, only the fetch calls change.
+ * Derives the Principal's "Overview" from ONE server-side aggregate endpoint
+ * (every count is over the whole school, not a truncated page) plus the fee
+ * summary and the school profile. Each source is awaited with allSettled so a
+ * single slow/failing call degrades only its own slice — the board no longer
+ * blanks wholesale when one request fails. The risk candidates come back capped
+ * and are re-scored here with the shared `assessStudent`, so the ranking and the
+ * reason strings stay the single source of truth on the client.
  */
 export function useDashboardInsights() {
   const [data, setData] = useState<DashboardInsights | null>(null);
@@ -53,64 +59,60 @@ export function useDashboardInsights() {
     let cancelled = false;
 
     (async () => {
-      let students, teachers, admissions, exams, accounts, classes, subjects, timetable;
-      try {
-        // Students now come over the network, so a failure here is a real
-        // possibility — without this the dashboard would spin forever.
-        [students, teachers, admissions, exams, accounts, classes, subjects, timetable] =
-          await Promise.all([
-            listStudents(),
-            listTeachers(),
-            admissionsApi.list(),
-            examsApi.list(),
-            feeAccountsApi.list(),
-            classesApi.list(),
-            subjectsApi.list(),
-            timetableApi.list(),
-          ]);
-      } catch (e) {
-        if (cancelled) return;
+      const [insightsR, feeR, schoolR] = await Promise.allSettled([
+        getDashboardInsights(),
+        getFeeSummary(),
+        getMySchool(),
+      ]);
+      if (cancelled) return;
+
+      // The counts ARE the dashboard — if that core call fails, surface it.
+      if (insightsR.status !== "fulfilled") {
+        const e = insightsR.reason;
         setError(e instanceof Error ? e.message : "Could not load dashboard data.");
         setLoading(false);
         return;
       }
-      if (cancelled) return;
+      const insights = insightsR.value;
 
-      const thisMonth = new Date().getMonth();
+      const feeSummary = feeR.status === "fulfilled" ? feeR.value : null;
+      const feeError = feeR.status !== "fulfilled";
+      const school = schoolR.status === "fulfilled" ? schoolR.value : null;
 
-      const attention = students
-        .map((student) => ({ student, ...assessStudent(student) }))
-        .filter((r) => r.level !== "low")
-        .sort((a, b) => b.score - a.score)
+      // Re-score the capped candidate set with the shared rule engine, then keep
+      // the genuinely-flagged top 5 — identical logic to the student profile.
+      const attention: AttentionStudent[] = insights.attention
+        .map((student) => ({ student, assessment: assessStudent(student) }))
+        .filter((r) => r.assessment.level !== "low")
+        .sort((a, b) => b.assessment.score - a.assessment.score)
         .slice(0, 5)
         .map((r) => ({
           student: r.student,
-          score: r.score,
-          reason: r.factors[0] ?? "Flagged by risk model",
+          score: r.assessment.score,
+          reason: r.assessment.factors[0] ?? "Flagged by risk model",
         }));
 
-      const upcoming = exams.filter((e) => examStatus(e) === "upcoming");
-      const feesPending = accounts.reduce((sum, a) => sum + balanceOf(a), 0);
-
       setData({
-        teachersOnLeave: teachers.filter((t) => t.status === "on-leave").length,
-        feesPending,
-        feeDefaulters: accounts.filter((a) => balanceOf(a) > 0).length,
-        admissionsWaiting: admissions.filter(
-          (a) => a.stage !== "approved" && a.stage !== "rejected"
-        ).length,
-        birthdaysThisMonth: students.filter(
-          (s) => new Date(s.dateOfBirth).getMonth() === thisMonth
-        ).length,
-        upcomingExams: upcoming.length,
-        nextExamName: upcoming[0]?.name ?? null,
-        lowAttendance: students.filter((s) => s.attendancePercent < 75).length,
+        teachersOnLeave: insights.teachersOnLeave,
+        feesPending: feeSummary?.outstanding ?? 0,
+        feeDefaulters: feeSummary?.defaulters ?? 0,
+        admissionsWaiting: insights.admissionsWaiting,
+        birthdaysThisMonth: insights.birthdaysThisMonth,
+        upcomingExams: insights.upcomingExams,
+        nextExamName: insights.nextExam?.name ?? null,
+        lowAttendance: insights.lowAttendance,
         attention,
-        totalStudents: students.length,
-        totalTeachers: teachers.length,
-        totalClasses: classes.length,
-        totalSubjects: subjects.length,
-        totalTimetableEntries: timetable.length,
+        attendanceBands: insights.attendanceBands,
+        totalStudents: insights.counts.students,
+        totalTeachers: insights.counts.teachers,
+        totalClasses: insights.counts.classes,
+        totalSubjects: insights.counts.subjects,
+        totalTimetableEntries: insights.counts.timetableEntries,
+        schoolName: school?.name?.trim() || null,
+        schoolLogo: school?.logo?.trim() || null,
+        schoolOpen: insights.schoolOpen,
+        feeSummary,
+        feeError,
       });
       setLoading(false);
     })();

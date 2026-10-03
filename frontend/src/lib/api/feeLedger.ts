@@ -1,5 +1,5 @@
 import { apiList, apiRequest } from "./client";
-import { TODAY_ISO } from "@/lib/dates";
+import { todayIso } from "@/lib/dates";
 
 /**
  * Student fee accounts and the payment register.
@@ -147,7 +147,7 @@ export const isUnbilled = (a: StudentFeeAccount) =>
  */
 export function feeStandingOf(a: StudentFeeAccount): FeeStanding {
   if (balanceOf(a) === 0) return "paid";
-  if (a.dueDate && a.dueDate < TODAY_ISO) return "overdue";
+  if (a.dueDate && a.dueDate < todayIso()) return "overdue";
   if (totalPaid(a) > 0) return "partial";
   return "due";
 }

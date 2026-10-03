@@ -52,15 +52,20 @@ function ruleRisk(s: {
     factors.push(`attendance slipping (${s.attendancePercent}%)`);
   }
 
-  if (s.performancePercent < 40) {
-    score += 35;
-    factors.push(`failing average (${s.performancePercent}%)`);
-  } else if (s.performancePercent < 55) {
-    score += 20;
-    factors.push(`weak performance (${s.performancePercent}%)`);
-  } else if (s.performancePercent < 65) {
-    score += 8;
-    factors.push(`performance below expectation (${s.performancePercent}%)`);
+  // performancePercent 0 means "no marks entered yet", not a real zero average,
+  // so only score it once the student has actually been assessed — otherwise a
+  // brand-new student is wrongly flagged "failing average (0%)".
+  if (s.performancePercent > 0) {
+    if (s.performancePercent < 40) {
+      score += 35;
+      factors.push(`failing average (${s.performancePercent}%)`);
+    } else if (s.performancePercent < 55) {
+      score += 20;
+      factors.push(`weak performance (${s.performancePercent}%)`);
+    } else if (s.performancePercent < 65) {
+      score += 8;
+      factors.push(`performance below expectation (${s.performancePercent}%)`);
+    }
   }
 
   if (s.feeDue > 8000) {
@@ -207,13 +212,17 @@ router.post("/remarks", async (req, res, next) => {
     const attendance = doc.attendancePercent ?? 0;
     const performance = doc.performancePercent ?? 0;
 
-    const fallback = `${doc.firstName} has maintained ${attendance}% attendance with an average of ${performance}%. ${
-      performance >= 65
-        ? "A consistent and sincere student; keep up the good work."
-        : performance >= 45
-          ? "Shows potential; more regular practice will lift results."
-          : "Needs focused support and regular revision to improve outcomes."
-    }`;
+    // performance 0 == not yet assessed, so don't invent a "0% average" remark.
+    const fallback =
+      performance > 0
+        ? `${doc.firstName} has maintained ${attendance}% attendance with an average of ${performance}%. ${
+            performance >= 65
+              ? "A consistent and sincere student; keep up the good work."
+              : performance >= 45
+                ? "Shows potential; more regular practice will lift results."
+                : "Needs focused support and regular revision to improve outcomes."
+          }`
+        : `${doc.firstName} has maintained ${attendance}% attendance. Marks are not recorded yet, so an academic remark will follow once exam results are entered.`;
 
     if (!isLLMConfigured()) return res.json({ data: { remark: fallback, source: "rule" } });
 

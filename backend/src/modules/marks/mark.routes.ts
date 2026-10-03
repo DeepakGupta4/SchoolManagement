@@ -1,13 +1,57 @@
 import { Router } from "express";
+import mongoose from "mongoose";
 import { z } from "zod";
 import { requireAuth, requireRole } from "../../middleware/auth.js";
 import { validate, parsed } from "../../middleware/validate.js";
 import { ApiError } from "../../utils/ApiError.js";
 import { Mark } from "./mark.model.js";
 import { Exam } from "../exams/exam.model.js";
+import { Student } from "../students/student.model.js";
 
 const router = Router();
 router.use(requireAuth);
+
+/**
+ * Recomputes each given student's stored `performancePercent` from ALL their
+ * marks: the average of (marks / maxMarks) across every subject of every exam,
+ * as a 0–100 percentage. This is what makes the figure REAL — without it the
+ * field stays at its 0 default and the dashboard risk engine wrongly flags
+ * every student as "failing at 0%". Best-effort: callers ignore any rejection,
+ * and a student with no marks is simply left untouched (stays 0 = "not yet
+ * assessed", which the risk engine skips).
+ */
+async function recomputePerformancePercent(schoolId: string, studentIds: string[]): Promise<void> {
+  const ids = [...new Set(studentIds)].filter((id) => mongoose.isValidObjectId(id));
+  if (ids.length === 0) return;
+
+  const agg = await Mark.aggregate([
+    { $match: { schoolId, studentId: { $in: ids } } },
+    {
+      $group: {
+        _id: "$studentId",
+        pct: {
+          $avg: {
+            $cond: [
+              { $gt: ["$maxMarks", 0] },
+              { $multiply: [{ $divide: ["$marks", "$maxMarks"] }, 100] },
+              0,
+            ],
+          },
+        },
+      },
+    },
+  ]);
+  if (agg.length === 0) return;
+
+  await Student.bulkWrite(
+    agg.map((a) => ({
+      updateOne: {
+        filter: { _id: new mongoose.Types.ObjectId(String(a._id)), schoolId },
+        update: { $set: { performancePercent: Math.max(0, Math.min(100, Math.round(a.pct ?? 0))) } },
+      },
+    }))
+  );
+}
 
 const listQuery = z.object({
   examName: z.string().min(1),
@@ -100,6 +144,18 @@ router.post(
           },
         }))
       );
+
+      // Keep each student's stored performance % in step with their marks, so
+      // the profile/dashboard/risk views reflect real academics. Best-effort:
+      // a failure here must never fail the save response.
+      try {
+        await recomputePerformancePercent(
+          schoolId,
+          records.map((r) => r.studentId)
+        );
+      } catch (err) {
+        console.error("Performance %, recompute failed:", err);
+      }
 
       res.json({ data: { saved: records.length } });
     } catch (err) {

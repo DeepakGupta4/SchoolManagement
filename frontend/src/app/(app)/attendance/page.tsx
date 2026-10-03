@@ -61,10 +61,19 @@ const STATUS_OPTIONS: { label: string; value: AttendanceStatus }[] = [
   { label: "Leave", value: "leave" },
 ];
 
-const todayIso = () => new Date().toISOString().slice(0, 10);
+/** Today as yyyy-mm-dd in LOCAL time — UTC would read yesterday in the IST
+ *  morning and default the roll-call to the wrong day. */
+const todayIso = () => {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+};
 
-/** Current month as "YYYY-MM", for the report month picker default. */
-const currentMonth = () => new Date().toISOString().slice(0, 7);
+/** Current month as "YYYY-MM" (local), for the report month picker default. */
+const currentMonth = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+};
 
 const MONTH_NAMES = [
   "January", "February", "March", "April", "May", "June",

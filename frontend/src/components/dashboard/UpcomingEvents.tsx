@@ -5,6 +5,7 @@ import Link from "next/link";
 import { MapPin } from "lucide-react";
 import { Badge, Card, CardHeader, Skeleton } from "@/components/ui";
 import { eventsApi, type SchoolEvent, type EventCategory } from "@/lib/api/events";
+import { todayIso } from "@/lib/dates";
 
 const categoryVariant: Record<EventCategory, "info" | "warning" | "danger" | "success"> = {
   Cultural: "info",
@@ -27,6 +28,7 @@ function parseDate(iso: string): { month: string; day: string } {
 
 export function UpcomingEvents() {
   const [events, setEvents] = useState<SchoolEvent[] | null>(null);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -35,14 +37,27 @@ export function UpcomingEvents() {
         .list()
         .then((all) => {
           if (cancelled) return;
-          const today = new Date().toISOString().slice(0, 10);
+          setError(false);
+          // Local "today" (not UTC): a yesterday event shouldn't linger as
+          // "upcoming" during the early-morning IST window.
+          const today = todayIso();
           const upcoming = all
-            .filter((e) => e.status !== "completed" && e.status !== "cancelled" && (!e.date || e.date >= today))
-            .sort((a, b) => (a.date < b.date ? -1 : 1))
+            .filter(
+              (e) =>
+                e.status !== "completed" &&
+                e.status !== "cancelled" &&
+                (!e.date || e.date >= today)
+            )
+            // Stable sort; undated events sort last rather than jumping to the top.
+            .sort((a, b) => (a.date || "9999-99-99").localeCompare(b.date || "9999-99-99"))
             .slice(0, 5);
           setEvents(upcoming);
         })
-        .catch(() => !cancelled && setEvents([]));
+        .catch(() => {
+          if (cancelled) return;
+          setError(true);
+          setEvents([]);
+        });
     }, 0);
     return () => {
       cancelled = true;
@@ -57,7 +72,10 @@ export function UpcomingEvents() {
           <p className="text-sm font-semibold text-text">Upcoming Events</p>
           <p className="mt-0.5 text-xs text-muted">Next scheduled activities</p>
         </div>
-        <Link href="/events" className="focus-ring shrink-0 rounded-md text-xs font-semibold text-primary transition-colors hover:text-primary-hover">
+        <Link
+          href="/events"
+          className="focus-ring inline-flex min-h-[24px] shrink-0 items-center rounded-md px-1 text-xs font-semibold text-primary transition-colors hover:text-primary-hover"
+        >
           View all
         </Link>
       </CardHeader>
@@ -67,6 +85,10 @@ export function UpcomingEvents() {
           <div className="flex flex-col gap-2 p-4">
             {[0, 1, 2].map((i) => <Skeleton key={i} className="h-14" />)}
           </div>
+        ) : error ? (
+          <p className="px-5 py-10 text-center text-sm text-muted">
+            Couldn&apos;t load events. Reload the page to try again.
+          </p>
         ) : events.length === 0 ? (
           <p className="px-5 py-10 text-center text-sm text-muted">No upcoming events.</p>
         ) : (
@@ -75,14 +97,14 @@ export function UpcomingEvents() {
             return (
               <div key={e.id} className="flex items-center gap-3 border-b border-border px-5 py-3 transition-colors last:border-0 hover:bg-surface-hover">
                 <div className={`flex h-11 w-10 shrink-0 flex-col items-center justify-center rounded-md text-white shadow-sm ${dateGradients[i % dateGradients.length]}`}>
-                  <span className="text-[9px] font-semibold uppercase leading-none opacity-80">{month}</span>
+                  <span className="text-[11px] font-semibold uppercase leading-none">{month || "—"}</span>
                   <span className="text-base font-bold leading-tight">{day}</span>
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-[13px] font-semibold text-text">{e.name}</p>
-                  <span className="mt-0.5 flex items-center gap-1 text-[11px] text-subtle">
+                  <span className="mt-0.5 flex items-center gap-1 text-[11px] text-muted">
                     <MapPin className="size-2.5" />
-                    {e.venue || "Campus"}
+                    {e.venue || "Venue TBD"}
                   </span>
                 </div>
                 <Badge variant={categoryVariant[e.category] ?? "info"} className="shrink-0">

@@ -1,5 +1,5 @@
 import { createApiResource } from "./createApiResource";
-import { isValidDateString, TODAY_ISO } from "@/lib/dates";
+import { isValidDateString, todayIso } from "@/lib/dates";
 
 export interface Exam {
   id: string;
@@ -67,8 +67,9 @@ export const EXAM_SUBJECT_OPTIONS = [
 export function examStatus(exam: Pick<Exam, "date" | "status">): string {
   if (exam.status === "cancelled") return "cancelled";
   if (!isValidDateString(exam.date)) return exam.status || "upcoming";
-  if (exam.date > TODAY_ISO) return "upcoming";
-  if (exam.date === TODAY_ISO) return "ongoing";
+  const today = todayIso();
+  if (exam.date > today) return "upcoming";
+  if (exam.date === today) return "ongoing";
   return "completed";
 }
 

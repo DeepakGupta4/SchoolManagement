@@ -3,18 +3,37 @@
  *
  * A native date input otherwise accepts up to a 6-digit year (e.g. 444444),
  * so every date field gets a min/max bound in the UI plus a matching schema
- * check here. The bounds are computed once at module load — good enough, since
- * they only shift by a day.
+ * check here.
  */
 
-/** Today as yyyy-mm-dd (local). */
-export const TODAY_ISO = new Date().toISOString().slice(0, 10);
+const pad2 = (n: number) => String(n).padStart(2, "0");
 
-/** yyyy-mm-dd for `years` before today. */
+/**
+ * Today as yyyy-mm-dd in LOCAL time, re-evaluated on every call.
+ *
+ * `toISOString()` is UTC: for an IST user (UTC+5:30), between local midnight and
+ * 05:30 it reports YESTERDAY's date — which would mark today's exam "upcoming",
+ * a fee due today "not overdue", and reject a today-dated record as "in the
+ * future". Computing from the local calendar fixes that, and being a FUNCTION
+ * (not a frozen const) means a tab left open past midnight rolls over correctly.
+ */
+export function todayIso(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
+/**
+ * Today as yyyy-mm-dd (local), captured at module load. Fine for `<input>`
+ * min/max bounds and form defaults; for freshness-critical comparisons (exam /
+ * fee / assignment status, future-date validation) call `todayIso()` instead.
+ */
+export const TODAY_ISO = todayIso();
+
+/** yyyy-mm-dd for `years` before today, in local time. */
 export function isoYearsAgo(years: number): string {
   const d = new Date();
   d.setFullYear(d.getFullYear() - years);
-  return d.toISOString().slice(0, 10);
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 }
 
 /** DOB bounds for an adult (teacher / staff): 18–100 years old. */

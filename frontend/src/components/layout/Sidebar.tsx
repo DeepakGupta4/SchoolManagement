@@ -165,7 +165,7 @@ function NavBranch({
 /* Sidebar                                                             */
 /* ------------------------------------------------------------------ */
 
-export function Sidebar() {
+export function Sidebar({ schoolName }: { schoolName?: string | null }) {
   const { isCollapsed, toggle, isMobileOpen, closeMobile } = useSidebarStore();
   const pathname = usePathname();
 
@@ -241,7 +241,7 @@ export function Sidebar() {
           {(!isCollapsed || isMobileOpen) && (
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-semibold text-text">SchoolDeck</p>
-              <p className="truncate text-[11px] text-subtle">Springdale School</p>
+              <p className="truncate text-[11px] text-subtle">{schoolName || "Your school"}</p>
             </div>
           )}
           <button

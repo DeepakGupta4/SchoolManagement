@@ -26,7 +26,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-bg">
-      <Sidebar />
+      <Sidebar schoolName={sub?.schoolName ?? null} />
       <Topbar />
       <main
         className="min-h-screen pt-16 lg:ml-[var(--rail)]"

@@ -77,4 +77,5 @@ export type StudentFormValues = Omit<
   "id" | "attendancePercent" | "performancePercent" | "feeDue"
 >;
 
-export const fullName = (s: Student) => `${s.firstName} ${s.lastName}`;
+export const fullName = (s: Pick<Student, "firstName" | "lastName">) =>
+  `${s.firstName} ${s.lastName}`;

@@ -53,8 +53,13 @@ export const CERTIFICATE_STATUS_OPTIONS: { label: string; value: CertificateStat
   { label: "Rejected", value: "rejected" },
 ];
 
-/** "2026-07-21" — the ISO form every certificate date is stored in. */
-export const todayIso = () => new Date().toISOString().slice(0, 10);
+/** "2026-07-21" — the ISO form every certificate date is stored in. Local time
+ *  (not UTC), so the issue date is never a day behind in the IST morning. */
+export const todayIso = () => {
+  const d = new Date();
+  const pad2 = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+};
 
 /**
  * Academic session like "2025-26". Indian sessions roll over in April, so a date

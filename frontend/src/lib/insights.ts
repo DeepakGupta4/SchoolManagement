@@ -21,7 +21,10 @@ export interface RiskAssessment {
   recommendation: string | null;
 }
 
-export function assessStudent(student: Student): RiskAssessment {
+/** The only fields the score reads — so callers can pass a lightweight record. */
+export type RiskInput = Pick<Student, "attendancePercent" | "performancePercent" | "feeDue">;
+
+export function assessStudent(student: RiskInput): RiskAssessment {
   const factors: string[] = [];
   let score = 0;
 
@@ -37,16 +40,21 @@ export function assessStudent(student: Student): RiskAssessment {
     factors.push(`Attendance slipping (${student.attendancePercent}%)`);
   }
 
-  // Academic performance.
-  if (student.performancePercent < 40) {
-    score += 35;
-    factors.push(`Failing average at ${student.performancePercent}%`);
-  } else if (student.performancePercent < 55) {
-    score += 20;
-    factors.push(`Academic performance weak (${student.performancePercent}%)`);
-  } else if (student.performancePercent < 65) {
-    score += 8;
-    factors.push(`Performance below class expectation (${student.performancePercent}%)`);
+  // Academic performance. A performancePercent of 0 means "no marks entered
+  // yet", NOT a genuine zero average — so we only score it once the student has
+  // actually been assessed. Otherwise every brand-new student would be flagged
+  // "Failing average at 0%".
+  if (student.performancePercent > 0) {
+    if (student.performancePercent < 40) {
+      score += 35;
+      factors.push(`Failing average at ${student.performancePercent}%`);
+    } else if (student.performancePercent < 55) {
+      score += 20;
+      factors.push(`Academic performance weak (${student.performancePercent}%)`);
+    } else if (student.performancePercent < 65) {
+      score += 8;
+      factors.push(`Performance below class expectation (${student.performancePercent}%)`);
+    }
   }
 
   // Fee dues can signal disengagement or hardship worth a conversation.

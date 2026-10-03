@@ -1,5 +1,5 @@
 import { createApiResource } from "./createApiResource";
-import { isValidDateString, TODAY_ISO } from "@/lib/dates";
+import { isValidDateString, todayIso } from "@/lib/dates";
 
 export interface Assignment {
   id: string;
@@ -73,8 +73,9 @@ export function deriveAssignmentStatus(
   completed: boolean
 ): AssignmentStatus {
   if (completed) return "completed";
-  if (isValidDateString(given) && given > TODAY_ISO) return "upcoming";
-  if (isValidDateString(due) && due < TODAY_ISO) return "overdue";
+  const today = todayIso();
+  if (isValidDateString(given) && given > today) return "upcoming";
+  if (isValidDateString(due) && due < today) return "overdue";
   return "active";
 }
 

@@ -55,13 +55,23 @@ function relativeTime(iso: string): string {
 export function RecentActivity() {
   const router = useRouter();
   const [items, setItems] = useState<AppNotification[] | null>(null);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     const t = setTimeout(() => {
       getNotifications()
-        .then(({ items }) => !cancelled && setItems(items.slice(0, 8)))
-        .catch(() => !cancelled && setItems([]));
+        .then(({ items }) => {
+          if (cancelled) return;
+          setError(false);
+          setItems(items.slice(0, 8));
+        })
+        .catch(() => {
+          if (cancelled) return;
+          // A fetch failure is NOT "no activity" — say so, don't imply it's empty.
+          setError(true);
+          setItems([]);
+        });
     }, 0);
     return () => {
       cancelled = true;
@@ -83,24 +93,26 @@ export function RecentActivity() {
           <div className="flex flex-col gap-2 p-4">
             {[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-12" />)}
           </div>
+        ) : error ? (
+          <p className="px-5 py-10 text-center text-sm text-muted">
+            Couldn&apos;t load recent activity. Reload the page to try again.
+          </p>
         ) : items.length === 0 ? (
           <p className="px-5 py-10 text-center text-sm text-muted">No recent activity yet.</p>
         ) : (
           items.map((a) => {
             const m = meta(a.type);
             const Icon = m.icon;
-            return (
-              <button
-                key={a.id}
-                onClick={() => a.link && router.push(a.link)}
-                className="flex w-full items-center gap-3 border-b border-border px-5 py-3 text-left transition-colors last:border-0 hover:bg-surface-hover"
-              >
+            const rowClass =
+              "flex w-full items-center gap-3 border-b border-border px-5 py-3 text-left last:border-0";
+            const body = (
+              <>
                 <div className={cn("flex size-9 shrink-0 items-center justify-center rounded-md", iconTone[m.tone])}>
                   <Icon className="size-4" />
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-[13px] font-medium text-text">{a.title}</p>
-                  <span className="mt-0.5 flex items-center gap-1 text-[11px] text-subtle">
+                  <span className="mt-0.5 flex items-center gap-1 text-[11px] text-muted">
                     <Clock className="size-2.5" />
                     {relativeTime(a.createdAt)}
                     {a.body ? ` · ${a.body}` : ""}
@@ -109,7 +121,22 @@ export function RecentActivity() {
                 <Badge variant={m.tone === "info" ? "info" : m.tone} className="shrink-0 capitalize">
                   {m.label}
                 </Badge>
+              </>
+            );
+            // Only rows that actually go somewhere are focusable buttons; the rest
+            // render as plain, non-interactive rows (no dead focus stop).
+            return a.link ? (
+              <button
+                key={a.id}
+                onClick={() => router.push(a.link)}
+                className={cn("focus-ring transition-colors hover:bg-surface-hover", rowClass)}
+              >
+                {body}
               </button>
+            ) : (
+              <div key={a.id} className={rowClass}>
+                {body}
+              </div>
             );
           })
         )}

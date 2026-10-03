@@ -2,14 +2,14 @@
 
 import React from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import {
   ArrowRight, ArrowUpRight, BadgeIndianRupee, BookMarked, Cake, CalendarClock,
-  CalendarDays, CalendarOff, Check, GraduationCap, School, Sparkles, TrendingDown,
-  UserRound, Users, type LucideIcon,
+  CalendarDays, CalendarOff, Check, ClipboardList, GraduationCap, Megaphone, Receipt,
+  School, Sparkles, TrendingDown, UserPlus, UserRound, Users, Wallet, type LucideIcon,
 } from "lucide-react";
 import { Avatar, Badge, Card, CardContent, CardHeader, CountUp, Skeleton } from "@/components/ui";
-import { AttendanceChart, FeeCollectionChart } from "@/components/dashboard/Charts";
 import { RecentActivity } from "@/components/dashboard/RecentActivity";
 import { UpcomingEvents } from "@/components/dashboard/UpcomingEvents";
 import { TeacherDashboard } from "@/components/dashboard/TeacherDashboard";
@@ -17,6 +17,17 @@ import { useAuthStore } from "@/store";
 import { useDashboardInsights, type DashboardInsights } from "@/hooks/useDashboardInsights";
 import { fullName } from "@/types/student";
 import { cn } from "@/lib/utils";
+
+// Recharts is heavy; keep it out of the dashboard's initial JS and load it on the
+// client once the page is interactive. Each chart renders its own skeleton anyway.
+const AttendanceChart = dynamic(
+  () => import("@/components/dashboard/Charts").then((m) => m.AttendanceChart),
+  { ssr: false, loading: () => <Skeleton className="h-[290px] w-full" /> }
+);
+const FeeCollectionChart = dynamic(
+  () => import("@/components/dashboard/Charts").then((m) => m.FeeCollectionChart),
+  { ssr: false, loading: () => <Skeleton className="h-[290px] w-full" /> }
+);
 
 const inrShort = (n: number) => {
   if (n >= 100000) return `₹${(n / 100000).toFixed(2)}L`;
@@ -31,7 +42,7 @@ function getGreeting() {
   return "Good evening";
 }
 
-/** One tile in the "Today's Overview" board. Each links to its source page. */
+/** One tile in the overview board. Each links to its source page. */
 interface OverviewItem {
   label: string;
   value: number;
@@ -55,11 +66,82 @@ function buildOverview(d: DashboardInsights): OverviewItem[] {
   return [
     { label: "Teachers on leave", value: d.teachersOnLeave, icon: CalendarOff, tone: "amber", href: "/leave" },
     { label: "Low attendance", value: d.lowAttendance, icon: TrendingDown, tone: "rose", href: "/attendance", hint: "below 75%" },
-    { label: "Fees pending", value: d.feesPending, display: inrShort(d.feesPending), icon: BadgeIndianRupee, tone: "rose", href: "/fees/defaulters", hint: `${d.feeDefaulters} students` },
+    { label: "Fees pending", value: d.feesPending, display: d.feeError ? "—" : inrShort(d.feesPending), icon: BadgeIndianRupee, tone: "rose", href: "/fees/defaulters", hint: d.feeError ? "unavailable" : `${d.feeDefaulters} students` },
     { label: "Admissions waiting", value: d.admissionsWaiting, icon: GraduationCap, tone: "indigo", href: "/students/admissions" },
     { label: "Birthdays this month", value: d.birthdaysThisMonth, icon: Cake, tone: "violet", href: "/students" },
     { label: "Upcoming exams", value: d.upcomingExams, icon: CalendarClock, tone: "cyan", href: "/exams", hint: d.nextExamName ?? undefined },
   ];
+}
+
+/** Quick actions for the admin's most frequent create tasks (role-aware). */
+interface QuickAction {
+  label: string;
+  icon: LucideIcon;
+  href: string;
+  tone: OverviewItem["tone"];
+}
+
+function quickActionsFor(role: string | undefined): QuickAction[] {
+  if (role === "accountant") {
+    return [
+      { label: "Collect fee", icon: Wallet, href: "/fees/collect", tone: "emerald" },
+      { label: "Fee dues", icon: TrendingDown, href: "/fees/defaulters", tone: "rose" },
+      { label: "Receipts", icon: Receipt, href: "/fees/receipts", tone: "indigo" },
+    ];
+  }
+  return [
+    { label: "Add student", icon: UserPlus, href: "/students", tone: "indigo" },
+    { label: "Collect fee", icon: Wallet, href: "/fees/collect", tone: "emerald" },
+    { label: "Mark attendance", icon: ClipboardList, href: "/attendance", tone: "cyan" },
+    { label: "Post notice", icon: Megaphone, href: "/notices", tone: "violet" },
+  ];
+}
+
+function QuickActions({ role }: { role: string | undefined }) {
+  const actions = quickActionsFor(role);
+  return (
+    <div className="flex flex-wrap gap-2.5">
+      {actions.map((a) => (
+        <Link
+          key={a.label}
+          href={a.href}
+          className="focus-ring card-hover inline-flex items-center gap-2 rounded-lg border border-border bg-surface px-3.5 py-2 text-sm font-medium text-text"
+        >
+          <span className={cn("flex size-7 items-center justify-center rounded-md", toneClasses[a.tone])}>
+            <a.icon className="size-4" />
+          </span>
+          {a.label}
+        </Link>
+      ))}
+    </div>
+  );
+}
+
+/** Today's open/closed state, derived server-side from weekday + holidays. */
+function SchoolStatusBadge({
+  status,
+  loading,
+}: {
+  status: DashboardInsights["schoolOpen"] | undefined;
+  loading: boolean;
+}) {
+  if (loading || !status) {
+    return <Skeleton className="h-7 w-28 rounded-full" />;
+  }
+  if (status.open) {
+    return (
+      <span className="inline-flex shrink-0 items-center gap-2 rounded-full bg-success-soft px-3.5 py-1.5 text-xs font-semibold text-success-text">
+        <span className="size-1.5 rounded-full bg-success" />
+        School is Open
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex shrink-0 items-center gap-2 rounded-full bg-surface-hover px-3.5 py-1.5 text-xs font-semibold text-muted">
+      <span className="size-1.5 rounded-full bg-current opacity-70" />
+      Closed{status.reason ? ` · ${status.reason}` : ""}
+    </span>
+  );
 }
 
 /**
@@ -199,6 +281,7 @@ export default function DashboardPage() {
   });
 
   const overview = data ? buildOverview(data) : [];
+  const schoolName = data?.schoolName ?? null;
   // Guided setup stays up until every step is ticked off; each step tracks its
   // own completion from live data, so finished steps show as Done and the whole
   // board disappears once the school is fully set up.
@@ -208,16 +291,28 @@ export default function DashboardPage() {
     <div className="flex flex-col gap-5">
       {/* Greeting */}
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="text-xl font-semibold text-text">
-            {getGreeting()}, {user?.name?.split(" ")[0]} 👋
-          </h1>
-          <p className="mt-0.5 text-sm text-muted">{today} · Springdale School</p>
+        <div className="flex min-w-0 items-center gap-3">
+          {data?.schoolLogo && (
+            // Logo is a user-uploaded data URL / remote URL — a plain img avoids
+            // next/image remote-host config and is fine at this small size.
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={data.schoolLogo}
+              alt=""
+              className="size-10 shrink-0 rounded-md object-cover ring-1 ring-border"
+            />
+          )}
+          <div className="min-w-0">
+            <h1 className="text-xl font-semibold text-text">
+              {getGreeting()}, {user?.name?.split(" ")[0]} 👋
+            </h1>
+            <p className="mt-0.5 text-sm text-muted">
+              {today}
+              {schoolName ? ` · ${schoolName}` : ""}
+            </p>
+          </div>
         </div>
-        <span className="inline-flex shrink-0 items-center gap-2 rounded-full bg-success-soft px-3.5 py-1.5 text-xs font-semibold text-success-text">
-          <span className="size-1.5 rounded-full bg-success" />
-          School is Open
-        </span>
+        <SchoolStatusBadge status={data?.schoolOpen} loading={loading} />
       </div>
 
       {user?.role === "teacher" ? (
@@ -226,12 +321,15 @@ export default function DashboardPage() {
         <Onboarding name={user?.name?.split(" ")[0]} data={data} />
       ) : (
        <>
-      {/* Today's Overview — the insight board */}
+      {/* Quick actions — the admin's most frequent create tasks */}
+      <QuickActions role={user?.role} />
+
+      {/* Overview — the insight board */}
       <section>
         <div className="mb-3 flex items-center gap-2">
           <Sparkles className="size-4 text-primary" />
-          <h2 className="text-sm font-semibold text-text">Today&apos;s Overview</h2>
-          <span className="text-xs text-subtle">· live from your data</span>
+          <h2 className="text-sm font-semibold text-text">School Overview</h2>
+          <span className="text-xs text-muted">· live from your data</span>
         </div>
 
         {error ? (
@@ -271,7 +369,7 @@ export default function DashboardPage() {
                         )}
                       </p>
                       <p className="mt-1.5 text-xs text-muted">{item.label}</p>
-                      {item.hint && <p className="mt-0.5 text-[11px] text-subtle">{item.hint}</p>}
+                      {item.hint && <p className="mt-0.5 text-[11px] text-muted">{item.hint}</p>}
                     </div>
                   </CardContent>
                 </Card>
@@ -291,13 +389,17 @@ export default function DashboardPage() {
           </div>
           <Link
             href="/students"
-            className="focus-ring inline-flex items-center gap-1 rounded-md text-xs font-semibold text-primary transition-colors hover:text-primary-hover"
+            className="focus-ring inline-flex min-h-[24px] items-center gap-1 rounded-md text-xs font-semibold text-primary transition-colors hover:text-primary-hover"
           >
             View all <ArrowRight className="size-3.5" />
           </Link>
         </CardHeader>
         <CardContent className="p-0">
-          {loading || !data ? (
+          {error ? (
+            <p className="px-5 py-8 text-center text-sm text-muted">
+              Couldn&apos;t load this list. Reload the page to try again.
+            </p>
+          ) : loading || !data ? (
             <div className="flex flex-col gap-2 p-4">
               {[0, 1, 2].map((i) => (
                 <Skeleton key={i} className="h-14" />
@@ -317,7 +419,7 @@ export default function DashboardPage() {
                 <Avatar name={fullName(student)} size="sm" />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium text-text">{fullName(student)}</p>
-                  <p className="truncate text-xs text-subtle">
+                  <p className="truncate text-xs text-muted">
                     {student.className} · {reason}
                   </p>
                 </div>
@@ -340,8 +442,12 @@ export default function DashboardPage() {
 
       {/* Charts */}
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        <AttendanceChart />
-        <FeeCollectionChart />
+        <AttendanceChart bands={data?.attendanceBands ?? []} loading={loading} error={!!error} />
+        <FeeCollectionChart
+          summary={data?.feeSummary ?? null}
+          loading={loading}
+          error={!!error || !!data?.feeError}
+        />
       </div>
 
       {/* Feeds */}
