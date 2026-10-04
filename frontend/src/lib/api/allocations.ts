@@ -16,8 +16,12 @@ export interface Allocation {
 export interface AllocationFilters {
   search?: string;
   dept?: string;
+  /** Applied client-side (array membership), not a server field. */
   klass?: string;
+  /** Applied client-side (derived from periods), not a server field. */
   load?: string;
+  /** Browse page size; raised from the 200 default so client-side filters see more. */
+  limit?: number;
 }
 
 /** Periods a full-time teacher is contracted for in a week. */

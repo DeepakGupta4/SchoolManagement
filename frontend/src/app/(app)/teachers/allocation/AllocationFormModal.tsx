@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ChangeEvent } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Modal, Button, Input, MultiSelect, Select } from "@/components/ui";
 import { allocationSchema, type AllocationSchema } from "@/lib/schemas/allocation";
 import { useClassOptions } from "@/hooks/useClassOptions";
 import { useSubjectOptions } from "@/hooks/useSubjectOptions";
-import { listTeachers } from "@/lib/api/teachers";
+import { fetchAllTeachers } from "@/lib/api/teachers";
 import { teacherName, type Teacher } from "@/types/teacher";
 import {
   ALLOCATION_DEPT_OPTIONS,
@@ -54,7 +54,7 @@ export function AllocationFormModal({
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    listTeachers()
+    fetchAllTeachers()
       .then((data) => {
         if (!cancelled) setTeachers(data);
       })
@@ -82,6 +82,7 @@ export function AllocationFormModal({
     handleSubmit,
     reset,
     control,
+    setValue,
     formState: { errors },
   } = useForm<AllocationSchema>({
     resolver: zodResolver(allocationSchema),
@@ -93,6 +94,17 @@ export function AllocationFormModal({
     if (!open) return;
     reset(record ? { ...record } : emptyValues);
   }, [open, record, reset]);
+
+  // Picking a teacher auto-fills their employee ID (and department when it's one
+  // of the allocation departments), so the two fields can't drift apart.
+  const onTeacherChange = (e: ChangeEvent<HTMLSelectElement>) => {
+    const t = teachers.find((x) => teacherName(x) === e.target.value);
+    if (!t) return;
+    setValue("empId", t.employeeId, { shouldValidate: true });
+    if (t.department && ALLOCATION_DEPT_OPTIONS.includes(t.department)) {
+      setValue("dept", t.department, { shouldValidate: true });
+    }
+  };
 
   const submit = handleSubmit(onSubmit);
 
@@ -119,8 +131,8 @@ export function AllocationFormModal({
     >
       <form onSubmit={submit} className="flex flex-col gap-4">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Select label="Teacher" required placeholder="Select teacher" options={teacherOptions} {...register("teacher")} error={errors.teacher?.message} />
-          <Input label="Employee ID" required placeholder="TCH-1041" {...register("empId")} error={errors.empId?.message} />
+          <Select label="Teacher" required placeholder="Select teacher" options={teacherOptions} {...register("teacher", { onChange: onTeacherChange })} error={errors.teacher?.message} />
+          <Input label="Employee ID" required placeholder="TCH-1041" hint="Auto-filled from the selected teacher" {...register("empId")} error={errors.empId?.message} />
           <Select label="Department" required placeholder="Select department" options={DEPT_SELECT_OPTIONS} {...register("dept")} error={errors.dept?.message} />
           <Select label="Subject" required placeholder="Select subject" options={subjectOptions} {...register("subject")} error={errors.subject?.message} />
           <Input label="Periods / week" type="number" min={0} max={MAX_PERIODS} {...register("periods")} error={errors.periods?.message} />

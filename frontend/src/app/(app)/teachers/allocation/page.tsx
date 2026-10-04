@@ -87,12 +87,26 @@ export default function AllocationPage() {
   const [load, setLoad] = useState("");
   const [page, setPage] = useState(1);
 
-  const filters = useMemo(() => ({ search, dept, klass, load }), [search, dept, klass, load]);
+  // Only search + dept are server filters; class (array membership) and load band
+  // (derived from periods) are applied client-side below. limit raised so that
+  // client-side narrowing sees more than one 200-row page.
+  const filters = useMemo(() => ({ search, dept, limit: 500 }), [search, dept]);
 
   const { items, loading, error, refetch, save, remove, saving, deleting } = useResource(
     allocationsApi,
     filters,
     { label: "allocation", describe: (a) => `${a.subject} — ${a.teacher}` }
+  );
+
+  // Class + workload-band filters (these previously did nothing).
+  const filtered = useMemo(
+    () =>
+      items.filter(
+        (a) =>
+          (!klass || a.classes.includes(klass)) &&
+          (!load || loadBandLabel(a.periods) === load)
+      ),
+    [items, klass, load]
   );
 
   const [formOpen, setFormOpen] = useState(false);
@@ -109,24 +123,24 @@ export default function AllocationPage() {
   };
 
   // Clamp during render — resetting page state from an effect is not allowed.
-  const totalPages = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
-  const paged = items.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  const paged = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   const stats = useMemo(() => {
-    const totalPeriods = items.reduce((sum, a) => sum + a.periods, 0);
-    const overloaded = items.filter((a) => loadBandLabel(a.periods) === "Overloaded").length;
+    const totalPeriods = filtered.reduce((sum, a) => sum + a.periods, 0);
+    const overloaded = filtered.filter((a) => loadBandLabel(a.periods) === "Overloaded").length;
     return {
-      teachers: items.length,
+      teachers: filtered.length,
       totalPeriods,
-      avgLoad: items.length ? Math.round(totalPeriods / items.length) : 0,
+      avgLoad: filtered.length ? Math.round(totalPeriods / filtered.length) : 0,
       overloaded,
     };
-  }, [items]);
+  }, [filtered]);
 
   /** One row per allocation across the whole filtered matrix, not just this page. */
   const handleExport = () => {
-    if (items.length === 0) {
+    if (filtered.length === 0) {
       toast({
         title: "Nothing to export",
         description: "No allocations match the current filters.",
@@ -149,11 +163,11 @@ export default function AllocationPage() {
         { header: "Load (%)", value: (a) => loadPercent(a.periods) },
         { header: "Load Band", value: (a) => loadBandLabel(a.periods) },
       ],
-      items
+      filtered
     );
     toast({
       title: "Export ready",
-      description: `${items.length} allocation${items.length === 1 ? "" : "s"} exported to CSV.`,
+      description: `${filtered.length} allocation${filtered.length === 1 ? "" : "s"} exported to CSV.`,
     });
   };
 
@@ -383,7 +397,7 @@ export default function AllocationPage() {
       {error ? (
         <Card>
           <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
-            <p className="text-sm font-medium text-danger">{error}</p>
+            <p className="text-sm font-medium text-danger-text">{error}</p>
             <Button variant="outline" onClick={refetch}>
               Try again
             </Button>
@@ -416,7 +430,7 @@ export default function AllocationPage() {
           <Pagination
             page={safePage}
             pageSize={PAGE_SIZE}
-            totalItems={items.length}
+            totalItems={filtered.length}
             onPageChange={setPage}
           />
         </>
