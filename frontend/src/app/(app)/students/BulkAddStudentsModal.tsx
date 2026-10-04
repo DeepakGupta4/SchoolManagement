@@ -112,9 +112,12 @@ function mapTableToRows(table: string[][]): BulkRow[] {
   const iDob = col(/dob|birth/, 3);
   // Resolve phone FIRST, then exclude its index when finding the guardian NAME
   // column — otherwise a loose /guardian/ grabs "Guardian Phone" for the name.
+  // NB: the matcher must NOT include a bare /name/, or it would match the
+  // "First Name" / "Last Name" columns (index 0/1) and overwrite the guardian
+  // name with the student's own name.
   const iGPhone = header ? header.findIndex((h) => /phone|mobile|contact/.test(h)) : 5;
   const iGName = header
-    ? header.findIndex((h, i) => i !== iGPhone && /guardian|parent|father|mother|name/.test(h))
+    ? header.findIndex((h, i) => i !== iGPhone && /guardian|parent|father|mother/.test(h))
     : 4;
   return dataRows.map((r) => {
     const g = (r[iGender] ?? "").trim().toLowerCase();
@@ -267,6 +270,10 @@ export function BulkAddStudentsModal({ open, onOpenChange, onSaved }: BulkAddStu
   const [pasteOpen, setPasteOpen] = useState(false);
   const [pasteText, setPasteText] = useState("");
   const fileRef = useRef<HTMLInputElement | null>(null);
+  // Monotonic token for roster fetches. Both the open-effect and retryRoster bump
+  // it and ignore their own result if a newer fetch (reopen/retry) has started —
+  // so a late promise can't clobber a freshly reopened modal's state.
+  const rosterReq = useRef(0);
 
   // Reset the form each time the modal opens, and pull a fresh roster.
   useEffect(() => {
@@ -294,14 +301,15 @@ export function BulkAddStudentsModal({ open, onOpenChange, onSaved }: BulkAddStu
 
     // Fetch the WHOLE roster (every page), not a capped first 200 — admission &
     // roll numbers are derived from it, so a short read means duplicate numbers.
+    const myReq = ++rosterReq.current;
     fetchAllStudents()
       .then((all) => {
-        if (cancelled) return;
+        if (rosterReq.current !== myReq) return;
         setExisting(all);
         setRosterReady(true);
       })
       .catch(() => {
-        if (cancelled) return;
+        if (rosterReq.current !== myReq) return;
         setExisting([]);
         setRosterError(true);
         setRosterReady(true);
@@ -378,14 +386,17 @@ export function BulkAddStudentsModal({ open, onOpenChange, onSaved }: BulkAddStu
 
   // Manual retry when the initial roster fetch failed — keeps typed rows intact.
   const retryRoster = () => {
+    const myReq = ++rosterReq.current;
     setRosterReady(false);
     setRosterError(false);
     fetchAllStudents()
       .then((all) => {
+        if (rosterReq.current !== myReq) return;
         setExisting(all);
         setRosterReady(true);
       })
       .catch(() => {
+        if (rosterReq.current !== myReq) return;
         setExisting([]);
         setRosterError(true);
         setRosterReady(true);

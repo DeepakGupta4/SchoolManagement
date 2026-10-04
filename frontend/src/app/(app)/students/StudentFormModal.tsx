@@ -8,7 +8,7 @@ import { Modal, Button, Input, Textarea, Select, useToast } from "@/components/u
 import { PhotoFrame } from "@/components/cards/PhotoFrame";
 import { studentSchema, type StudentSchema } from "@/lib/schemas/student";
 import { digitsOnly10, PHONE_REGEX } from "@/lib/phone";
-import { listStudents } from "@/lib/api/students";
+import { fetchAllStudents } from "@/lib/api/students";
 import { useClassOptions } from "@/hooks/useClassOptions";
 import { fileToDataUrl } from "@/lib/image";
 import { AttachmentsField } from "@/components/AttachmentsField";
@@ -291,7 +291,9 @@ export function StudentFormModal({
   useEffect(() => {
     if (!open || isEdit) return;
     let cancelled = false;
-    listStudents()
+    // Whole roster (all pages), so the next admission/roll numbers are derived
+    // from every student — not just a capped first page (which risks a dup).
+    fetchAllStudents()
       .then((all) => !cancelled && setExisting(all))
       .catch(() => !cancelled && setExisting([]));
     return () => {
@@ -525,7 +527,7 @@ export function StudentFormModal({
         <section>
           <SectionTitle>Medical</SectionTitle>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Select label="Blood group" placeholder="Not recorded" options={BLOOD_OPTIONS} {...register("bloodGroup", { setValueAs: (v) => v || undefined })} error={errors.bloodGroup?.message} />
+            <Select label="Blood group" placeholder="Not recorded" options={BLOOD_OPTIONS} {...register("bloodGroup", { setValueAs: (v) => v || null })} error={errors.bloodGroup?.message} />
           </div>
           <div className="mt-4">
             <Textarea label="Medical notes" hint="Allergies, conditions, medication" {...register("medicalNotes")} error={errors.medicalNotes?.message} />

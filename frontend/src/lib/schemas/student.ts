@@ -21,7 +21,10 @@ export const studentSchema = z.object({
     .refine(isValidDateString, "Enter a valid date")
     .refine((d) => isWithin(d, MIN_STUDENT_DOB, MAX_STUDENT_DOB), "Student's age looks out of range (2–25 years)"),
   gender: z.enum(["male", "female", "other"]),
-  bloodGroup: z.enum(["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"]).optional(),
+  // Nullable so "Not recorded" can CLEAR a previously-set group on edit: the form
+  // emits null (undefined would be dropped by JSON.stringify, leaving the old
+  // value untouched by the partial PUT). The backend enum + model allow null too.
+  bloodGroup: z.enum(["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"]).nullable().optional(),
   className: z.string().min(1, "Class is required"),
   section: z.string().min(1, "Section is required"),
   status: z.enum(["active", "inactive", "alumni", "transferred"]),

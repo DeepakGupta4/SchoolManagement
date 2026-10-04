@@ -47,10 +47,24 @@ export const MAX_STUDENT_DOB = isoYearsAgo(2);
 /** Earliest sensible joining/admission date. */
 export const MIN_RECORD_DATE = "1970-01-01";
 
-/** True for a real yyyy-mm-dd string with a 4-digit year (rejects 444444). */
+/**
+ * True for a real yyyy-mm-dd string with a 4-digit year (rejects 444444) AND a
+ * valid calendar day. `Date.parse` alone silently rolls over impossible dates
+ * ("2021-02-30" → Mar 2, "2023-02-29" → Mar 1), so we rebuild the date and
+ * require every component to round-trip — otherwise a bad CSV import stores a
+ * date that later renders as a different month.
+ */
 export function isValidDateString(s: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
-  return !Number.isNaN(Date.parse(s));
+  const year = Number(s.slice(0, 4));
+  const month = Number(s.slice(5, 7));
+  const day = Number(s.slice(8, 10));
+  if (month < 1 || month > 12 || day < 1 || day > 31) return false;
+  // Build at UTC noon so no timezone offset can shift the calendar day.
+  const dt = new Date(Date.UTC(year, month - 1, day, 12));
+  return (
+    dt.getUTCFullYear() === year && dt.getUTCMonth() === month - 1 && dt.getUTCDate() === day
+  );
 }
 
 /** ISO date strings compare correctly as plain strings (fixed yyyy-mm-dd). */

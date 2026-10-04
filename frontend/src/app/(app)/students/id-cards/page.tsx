@@ -25,7 +25,7 @@ function toHolder(s: Student): IdCardHolder {
     affiliation: `${s.className} · Section ${s.section}`,
     rollNo: s.rollNo,
     dob: s.dateOfBirth,
-    bloodGroup: s.bloodGroup,
+    bloodGroup: s.bloodGroup ?? undefined,
     phone: s.phone,
     guardianOrDesignation: s.guardian.name,
     guardianLabel: s.guardian.relation,

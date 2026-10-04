@@ -50,13 +50,21 @@ export async function listStudents(filters: StudentFilters = {}): Promise<Studen
  */
 export async function fetchAllStudents(filters: StudentFilters = {}): Promise<Student[]> {
   const first = await listStudentsPage({ ...filters, page: 1, limit: 500 });
-  const all = [...first.data];
-  const pages = first.meta?.pages ?? 1;
+  // Dedupe by id. Offset pagination runs each page as a separate query, so a
+  // record churn between requests can make the same student span a page boundary
+  // (appearing twice) — harmful for the callers this exists for: PDF export
+  // (double-listed) and bulk numbering (a duplicate skews the next roll/adm no.).
+  // A stable server sort (_id tiebreaker) keeps ties deterministic; this Map
+  // guarantees uniqueness regardless.
+  const byId = new Map<string, Student>();
+  for (const s of first.data) byId.set(s.id, s);
+  const rawPages = first.meta?.pages ?? 1;
+  const pages = Number.isFinite(rawPages) && rawPages > 1 ? Math.floor(rawPages) : 1;
   for (let p = 2; p <= pages; p++) {
     const next = await listStudentsPage({ ...filters, page: p, limit: 500 });
-    all.push(...next.data);
+    for (const s of next.data) byId.set(s.id, s);
   }
-  return all;
+  return [...byId.values()];
 }
 
 /**

@@ -84,6 +84,12 @@ export function createCrudRouter<T>(options: CrudOptions<T>): Router {
     afterDelete,
   } = options;
 
+  // A stable `_id` tiebreaker appended to the sort so OFFSET pagination can't
+  // reorder records that share the primary sort value (e.g. the same createdAt)
+  // between separate page requests — which would otherwise duplicate or skip a
+  // record sitting on a page boundary. Harmless for single-page queries.
+  const pagedSort: Record<string, 1 | -1> = "_id" in sort ? sort : { ...sort, _id: -1 };
+
   const router = Router();
   const canWrite: RequestHandler = requireRole(...writeRoles);
 
@@ -117,7 +123,7 @@ export function createCrudRouter<T>(options: CrudOptions<T>): Router {
       const [docs, total] = await Promise.all([
         model
           .find(filter)
-          .sort(sort)
+          .sort(pagedSort)
           .skip((page - 1) * limit)
           .limit(limit),
         model.countDocuments(filter),

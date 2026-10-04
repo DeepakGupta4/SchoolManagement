@@ -20,7 +20,8 @@ export interface Student {
   phone: string;
   dateOfBirth: string; // ISO yyyy-mm-dd
   gender: Gender;
-  bloodGroup?: BloodGroup;
+  /** null = explicitly "not recorded" (clearable on edit); undefined = never set. */
+  bloodGroup?: BloodGroup | null;
   className: string;
   section: string;
   status: StudentStatus;

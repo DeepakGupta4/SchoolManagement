@@ -8,8 +8,35 @@ import { createCrudRouter } from "../../utils/crudRouter.js";
 
 const PHONE = /^\d{10}$/;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
-// Server time is fine for a date BOUND (off-by-one at a timezone edge is harmless).
+
+/**
+ * A real calendar date, not just a regex-shaped string. `Date.parse` silently
+ * rolls impossible dates over ("2021-02-30" → Mar 2), so rebuild the date and
+ * require every component to round-trip.
+ */
+function isRealDate(s: string): boolean {
+  if (!ISO_DATE.test(s)) return false;
+  const y = Number(s.slice(0, 4));
+  const mo = Number(s.slice(5, 7));
+  const d = Number(s.slice(8, 10));
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return false;
+  const dt = new Date(Date.UTC(y, mo - 1, d, 12));
+  return dt.getUTCFullYear() === y && dt.getUTCMonth() === mo - 1 && dt.getUTCDate() === d;
+}
+
+// Server-UTC "today" — fine as the upper bound for a date always in the past
+// (date of birth).
 const serverToday = () => new Date().toISOString().slice(0, 10);
+
+// Upper bound for "today"-ish fields (admission date). The frontend computes
+// "today" in LOCAL time; a UTC server clock can be a day behind for UTC-ahead
+// users (e.g. IST before 05:30), which would reject a default-dated (local-today)
+// admission as "future". One day of grace absorbs that offset.
+const maxToday = () => {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+};
 
 const guardianSchema = z.object({
   name: z.string().min(2, "Guardian name is required"),
@@ -30,7 +57,7 @@ const studentSchema = z.object({
     .string()
     .min(1)
     .regex(ISO_DATE, "Date of birth must be YYYY-MM-DD")
-    .refine((d) => !Number.isNaN(Date.parse(d)), "Enter a valid date of birth")
+    .refine(isRealDate, "Enter a valid date of birth")
     .refine((d) => d >= "1900-01-01" && d <= serverToday(), "Date of birth is out of range"),
   gender: z.enum(["male", "female", "other"]),
   bloodGroup: z.enum(["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"]).nullable().optional(),
@@ -41,7 +68,8 @@ const studentSchema = z.object({
     .string()
     .min(1)
     .regex(ISO_DATE, "Admission date must be YYYY-MM-DD")
-    .refine((d) => !Number.isNaN(Date.parse(d)) && d <= serverToday(), "Admission date can't be in the future"),
+    .refine(isRealDate, "Enter a valid admission date")
+    .refine((d) => d <= maxToday(), "Admission date can't be in the future"),
   address: z.string().min(5),
   guardian: guardianSchema,
   avatar: z.string().optional(),

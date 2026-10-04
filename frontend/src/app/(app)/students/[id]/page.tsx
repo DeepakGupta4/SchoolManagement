@@ -489,7 +489,7 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
             <DetailRow icon={Phone} label="Phone" value={student.phone} />
             <DetailRow icon={CalendarDays} label="Date of birth" value={formatDate(student.dateOfBirth)} />
             <DetailRow icon={UserRound} label="Gender" value={student.gender} />
-            <DetailRow icon={Droplet} label="Blood group" value={student.bloodGroup} />
+            <DetailRow icon={Droplet} label="Blood group" value={student.bloodGroup ?? undefined} />
             <DetailRow icon={MapPin} label="Address" value={student.address} />
           </CardContent>
         </Card>

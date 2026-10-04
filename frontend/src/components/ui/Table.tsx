@@ -78,8 +78,21 @@ export function Table<T>({
   }, [rows, sort, columns]);
 
   // Optional internal pagination — applied AFTER sorting so a page shows the
-  // correct slice of the fully-sorted set. Page is clamped in render.
+  // correct slice of the fully-sorted set.
   const [page, setPage] = useState(1);
+
+  // Return to page 1 whenever the row set or sort changes (sortedRows gets a new
+  // reference). This matches the app-wide "a filter change resets to page 1"
+  // convention and stops a stale high page from resurfacing when the list grows
+  // again — the safePage clamp below only HIDES an out-of-range page, it doesn't
+  // clear it. React's supported "adjust state during render" pattern, guarded so
+  // it runs once per change (no effect, no wrong-page flash).
+  const [prevSorted, setPrevSorted] = useState(sortedRows);
+  if (pageSize && prevSorted !== sortedRows) {
+    setPrevSorted(sortedRows);
+    if (page !== 1) setPage(1);
+  }
+
   const pageCount = pageSize ? Math.max(1, Math.ceil(sortedRows.length / pageSize)) : 1;
   const safePage = Math.min(page, pageCount);
   const visibleRows = pageSize

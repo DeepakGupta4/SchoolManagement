@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Cake, Download, Eye, FileText, Pencil, Plus, Search, Trash2, Users, UsersRound, UserCheck, IndianRupee, TrendingDown } from "lucide-react";
@@ -89,7 +89,7 @@ function StatCard({
 
 function StudentsPageInner() {
   const { toast } = useToast();
-  const { classOptions, defaultClass } = useClassOptions();
+  const { classOptions } = useClassOptions();
   const searchParams = useSearchParams();
   const router = useRouter();
 
@@ -101,18 +101,14 @@ function StudentsPageInner() {
   // Birthday-month filter ("10" = October), set when arriving from the dashboard.
   const [birthdayMonth, setBirthdayMonth] = useState("");
 
-  const defaultedClass = useRef(false);
-
   // Apply dashboard deep-links (?birthdayMonth=10 / ?attendance=below75)
   // REACTIVELY. App Router reuses this page's component when only the query
   // changes (no remount), so a mount-only effect would never fire on a click
-  // from the dashboard — this must depend on searchParams. A drill shows the
-  // whole school (clears the lowest-class auto-select).
+  // from the dashboard — this must depend on searchParams.
   useEffect(() => {
     const low = searchParams.get("attendance") === "below75";
     const bm = searchParams.get("birthdayMonth") ?? "";
     if (!low && !bm) return;
-    defaultedClass.current = true;
     const t = setTimeout(() => {
       setClassName("");
       setQuick(low ? "low" : "all");
@@ -121,16 +117,10 @@ function StudentsPageInner() {
     return () => clearTimeout(t);
   }, [searchParams]);
 
-  // Pre-select the lowest class (e.g. Nursery) once the class list resolves — but
-  // never fight a user who later clears it, and skip it entirely for a drill.
-  useEffect(() => {
-    if (defaultedClass.current || className || !defaultClass) return;
-    defaultedClass.current = true;
-    const t = setTimeout(() => setClassName(defaultClass), 0);
-    return () => clearTimeout(t);
-  }, [className, defaultClass]);
-
-  const { students, loading, error, refetch } = useStudents({ search, className, status });
+  // "All Students" defaults to the WHOLE school (className=""), never a single
+  // auto-selected class — otherwise the page silently hides other classes and the
+  // stat cards filter within one class.
+  const { students, loading, error, refetch, capped } = useStudents({ search, className, status });
 
   // Rows shown in the table, after the stat-card quick filter.
   const displayed = useMemo(() => {
@@ -160,7 +150,16 @@ function StudentsPageInner() {
   // Headline stats come from the server aggregate (uncapped, whole-school),
   // independent of the table's class filter and the 500-row browse cap — so
   // "Total students" / "Fees pending" are never a capped or single-class subtotal.
-  const [agg, setAgg] = useState<{ total: number; active: number; outstanding: number; low: number } | null>(null);
+  // Each field is nullable and tracked per source: getDashboardInsights and
+  // getFeeSummary fail independently (allSettled), and a failed source must read
+  // "—" on its card, never a confident 0. So we never collapse a missing source
+  // to 0 — only a successful fetch sets a real number.
+  const [agg, setAgg] = useState<{
+    total: number | null;
+    active: number | null;
+    outstanding: number | null;
+    low: number | null;
+  } | null>(null);
   const [aggLoading, setAggLoading] = useState(true);
   useEffect(() => {
     let cancelled = false;
@@ -168,14 +167,12 @@ function StudentsPageInner() {
       if (cancelled) return;
       const insights = insightsR.status === "fulfilled" ? insightsR.value : null;
       const fee = feeR.status === "fulfilled" ? feeR.value : null;
-      if (insights || fee) {
-        setAgg({
-          total: insights?.counts.students ?? 0,
-          active: insights?.counts.activeStudents ?? 0,
-          outstanding: fee?.outstanding ?? 0,
-          low: insights?.lowAttendance ?? 0,
-        });
-      }
+      setAgg({
+        total: insights ? insights.counts.students : null,
+        active: insights ? insights.counts.activeStudents : null,
+        outstanding: fee ? fee.outstanding : null,
+        low: insights ? insights.lowAttendance : null,
+      });
       setAggLoading(false);
     });
     return () => {
@@ -183,13 +180,22 @@ function StudentsPageInner() {
     };
   }, []);
 
-  // The roster fetch is capped at 500; the true total comes from the aggregate,
-  // so we can tell the user when older students aren't loaded in the browse view.
-  const rosterCapped = !!agg && students.length < agg.total;
-
   const openCreate = () => {
     setEditing(null);
     setFormOpen(true);
+  };
+
+  // Any filter or stat-card quick filter currently narrowing the list.
+  const isFiltered = Boolean(search || className || status || quick !== "all" || birthdayMonth);
+
+  // One-click reset back to the whole-school view — the action offered when a
+  // filter (or a 0-count stat card) leaves the table empty.
+  const clearAll = () => {
+    setSearch("");
+    setClassName("");
+    setStatus("");
+    setQuick("all");
+    setBirthdayMonth("");
   };
 
   const [exporting, setExporting] = useState(false);
@@ -436,7 +442,7 @@ function StudentsPageInner() {
           <>
             <StatCard
               label="Total students"
-              value={agg ? String(agg.total) : "—"}
+              value={agg?.total != null ? String(agg.total) : "—"}
               icon={Users}
               gradient="gradient-indigo"
               active={!search && !className && !status && quick === "all"}
@@ -449,7 +455,7 @@ function StudentsPageInner() {
             />
             <StatCard
               label="Active"
-              value={agg ? String(agg.active) : "—"}
+              value={agg?.active != null ? String(agg.active) : "—"}
               icon={UserCheck}
               gradient="gradient-emerald"
               active={status === "active"}
@@ -460,7 +466,7 @@ function StudentsPageInner() {
             />
             <StatCard
               label="Fees pending"
-              value={agg ? inr.format(agg.outstanding) : "—"}
+              value={agg?.outstanding != null ? inr.format(agg.outstanding) : "—"}
               icon={IndianRupee}
               gradient="gradient-amber"
               active={quick === "fees"}
@@ -468,7 +474,7 @@ function StudentsPageInner() {
             />
             <StatCard
               label="Attendance < 75%"
-              value={agg ? String(agg.low) : "—"}
+              value={agg?.low != null ? String(agg.low) : "—"}
               icon={TrendingDown}
               gradient="gradient-rose"
               active={quick === "low"}
@@ -547,23 +553,35 @@ function StudentsPageInner() {
             loading={loading}
             pageSize={15}
             onRowClick={(s) => router.push(`/students/${s.id}`)}
-            emptyTitle="No students found"
+            emptyTitle={quick === "low" || quick === "fees" ? "Nothing to show here" : "No students found"}
             emptyDescription={
-              search || className || status || quick !== "all" || birthdayMonth
-                ? "Try clearing your filters to see more results."
-                : "Add your first student to get started."
+              quick === "low"
+                ? "No students are below 75% attendance."
+                : quick === "fees"
+                  ? "No students have pending fees right now."
+                  : birthdayMonth
+                    ? `No students have a birthday in ${MONTH_NAMES[Number(birthdayMonth) - 1] ?? "this month"}.`
+                    : search || className || status
+                      ? "Try clearing your filters to see more results."
+                      : "Add your first student to get started."
             }
             emptyAction={
-              <Button variant="outline" onClick={openCreate}>
-                <Plus className="size-4" />
-                Add student
-              </Button>
+              isFiltered ? (
+                <Button variant="outline" onClick={clearAll}>
+                  Show all students
+                </Button>
+              ) : (
+                <Button variant="outline" onClick={openCreate}>
+                  <Plus className="size-4" />
+                  Add student
+                </Button>
+              )
             }
           />
-          {rosterCapped && !loading && (
+          {capped && !loading && (
             <p className="text-xs text-muted">
-              Showing the newest {students.length} of {agg!.total} students. Use search or the
-              class filter to find a specific student.
+              Showing the first {students.length} students. Narrow your search or filter by class to
+              find a specific student.
             </p>
           )}
         </>
