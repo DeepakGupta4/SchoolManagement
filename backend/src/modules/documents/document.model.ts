@@ -13,6 +13,10 @@ const documentSchema = new Schema(
     ownerId: { type: String, required: true, index: true },
     ownerName: { type: String, default: "" },
     title: { type: String, required: true, trim: true },
+    /** Which tracked vault slot this fills (birthCert/aadhaar/tc/marksheets/photo), or "". */
+    docType: { type: String, default: "", index: true },
+    /** Office-verified (checked against the original), vs merely uploaded (pending). */
+    verified: { type: Boolean, default: false },
     fileName: { type: String, default: "" },
     mimeType: { type: String, default: "" },
     /** base64 data URL of the file contents. */
@@ -34,6 +38,8 @@ export function toPublicDocument(doc: StoredDocumentDoc) {
     ownerId: o.ownerId,
     ownerName: o.ownerName,
     title: o.title,
+    docType: o.docType,
+    verified: o.verified,
     fileName: o.fileName,
     mimeType: o.mimeType,
     dataUrl: o.dataUrl,

@@ -8,6 +8,10 @@ export interface StoredDoc {
   ownerId: string;
   ownerName: string;
   title: string;
+  /** Tracked vault slot this fills (birthCert/aadhaar/tc/marksheets/photo), or "". */
+  docType: string;
+  /** Office-verified against the original, vs merely uploaded (pending). */
+  verified: boolean;
   fileName: string;
   mimeType: string;
   dataUrl: string;
@@ -15,11 +19,22 @@ export interface StoredDoc {
   createdAt: string;
 }
 
+/** Light per-owner row for the vault overview — no file contents. */
+export interface DocSummary {
+  id: string;
+  ownerId: string;
+  title: string;
+  docType: string;
+  verified: boolean;
+}
+
 export interface UploadDocumentInput {
   ownerType: DocumentOwnerType;
   ownerId: string;
   ownerName: string;
   title: string;
+  /** Tag the tracked slot so the vault maps it reliably. */
+  docType?: string;
   fileName: string;
   mimeType: string;
   dataUrl: string;
@@ -30,8 +45,17 @@ export function listDocuments(ownerType: DocumentOwnerType, ownerId: string) {
   return apiRequest<StoredDoc[]>("/api/documents", { query: { ownerType, ownerId } });
 }
 
+/** Every owner's documents of a type, without file contents — for the vault overview. */
+export function getDocumentSummary(ownerType: DocumentOwnerType) {
+  return apiRequest<DocSummary[]>("/api/documents/summary", { query: { ownerType } });
+}
+
 export function uploadDocument(input: UploadDocumentInput) {
   return apiRequest<StoredDoc>("/api/documents", { method: "POST", body: input });
+}
+
+export function setDocumentVerified(id: string, verified: boolean) {
+  return apiRequest<StoredDoc>(`/api/documents/${id}`, { method: "PATCH", body: { verified } });
 }
 
 export function deleteDocument(id: string) {

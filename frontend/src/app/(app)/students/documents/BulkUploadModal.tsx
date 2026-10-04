@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { FileText, Loader2, Upload, X } from "lucide-react";
 import { Modal, Button, Select, useToast } from "@/components/ui";
-import { listStudents } from "@/lib/api/students";
+import { fetchAllStudents } from "@/lib/api/students";
 import { fullName, type Student } from "@/types/student";
 import { readFileAsDataUrl } from "@/lib/image";
 import { uploadDocument } from "@/lib/api/documents";
@@ -32,7 +32,7 @@ export function BulkUploadModal({ open, onOpenChange, onUploaded }: BulkUploadMo
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    listStudents()
+    fetchAllStudents()
       .then((all) => !cancelled && setStudents(all))
       .catch(() => !cancelled && setStudents([]));
     // Reset selections each open.
