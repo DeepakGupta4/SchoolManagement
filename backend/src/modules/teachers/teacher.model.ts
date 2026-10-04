@@ -55,6 +55,21 @@ const teacherSchema = new Schema(
 // same platform can both legitimately have "EMP1001".
 teacherSchema.index({ schoolId: 1, employeeId: 1 }, { unique: true });
 
+// Email is unique within a school too (identity + login provisioning). Partial so
+// multiple blank emails never collide. Dedupe existing clashes before deploying,
+// or the index build will fail silently.
+teacherSchema.index(
+  { schoolId: 1, email: 1 },
+  { unique: true, partialFilterExpression: { email: { $type: "string", $gt: "" } } }
+);
+
+// At most one class teacher per class + section. Partial so only real assignments
+// are constrained (unassigned teachers all share the default empty pair).
+teacherSchema.index(
+  { schoolId: 1, classTeacherOf: 1, classTeacherSection: 1 },
+  { unique: true, partialFilterExpression: { isClassTeacher: true } }
+);
+
 export type TeacherAttrs = InferSchemaType<typeof teacherSchema>;
 
 export const Teacher = mongoose.model("Teacher", teacherSchema);

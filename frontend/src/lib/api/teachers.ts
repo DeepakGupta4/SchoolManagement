@@ -39,22 +39,51 @@ export interface TeacherFilters {
   employmentType?: string;
 }
 
-export async function listTeachers(filters: TeacherFilters = {}): Promise<Teacher[]> {
-  const result = await apiList<Teacher>("/api/teachers", {
+export interface TeacherPage {
+  data: Teacher[];
+  meta: { total: number; page: number; limit: number; pages: number };
+}
+
+/** One page of teachers, keeping `meta` (total/pages). `subject` is a real server
+ *  filter now (Mongo matches array membership on the `subjects` field). */
+export async function listTeachersPage(
+  filters: TeacherFilters & { page?: number; limit?: number } = {}
+): Promise<TeacherPage> {
+  return apiList<Teacher>("/api/teachers", {
     query: {
       search: filters.search,
       status: filters.status,
       employmentType: filters.employmentType,
-      limit: 200,
+      subjects: filters.subject,
+      page: filters.page,
+      limit: filters.limit ?? 200,
     },
   });
+}
 
-  // `subjects` is an array, so it isn't an exact-match server filter — narrow
-  // it here rather than adding a bespoke endpoint for one control.
-  if (filters.subject) {
-    return result.data.filter((t) => t.subjects.includes(filters.subject!));
+export async function listTeachers(filters: TeacherFilters = {}): Promise<Teacher[]> {
+  const { data } = await listTeachersPage({ ...filters, limit: 200 });
+  return data;
+}
+
+/** EVERY matching teacher across all pages — for complete browse/export/dup-checks. */
+export async function fetchAllTeachers(filters: TeacherFilters = {}): Promise<Teacher[]> {
+  const first = await listTeachersPage({ ...filters, page: 1, limit: 500 });
+  const byId = new Map<string, Teacher>();
+  for (const t of first.data) byId.set(t.id, t);
+  const rawPages = first.meta?.pages ?? 1;
+  const pages = Number.isFinite(rawPages) && rawPages > 1 ? Math.floor(rawPages) : 1;
+  for (let p = 2; p <= pages; p++) {
+    const next = await listTeachersPage({ ...filters, page: p, limit: 500 });
+    for (const t of next.data) byId.set(t.id, t);
   }
-  return result.data;
+  return [...byId.values()];
+}
+
+/** Server-side COUNT matching the filters (reads meta.total) — for stat tiles. */
+export async function countTeachers(filters: TeacherFilters = {}): Promise<number> {
+  const result = await listTeachersPage({ ...filters, limit: 1 });
+  return result.meta?.total ?? result.data.length;
 }
 
 export async function getTeacher(id: string): Promise<Teacher | null> {

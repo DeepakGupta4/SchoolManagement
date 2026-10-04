@@ -9,7 +9,6 @@ import {
   Pencil,
   Plus,
   Search,
-  Star,
   Trash2,
   Users,
   UserCheck,
@@ -31,11 +30,12 @@ import {
   type Column,
 } from "@/components/ui";
 import { useTeachers } from "@/hooks/useTeachers";
+import { useSubjectOptions } from "@/hooks/useSubjectOptions";
 import {
   createTeacher,
   deleteTeacher,
   updateTeacher,
-  SUBJECT_OPTIONS,
+  countTeachers,
 } from "@/lib/api/teachers";
 import {
   teacherName,
@@ -96,13 +96,13 @@ function StatCard({
 
 function TeachersPageInner() {
   const { toast } = useToast();
+  const { subjectNames } = useSubjectOptions();
 
   const [search, setSearch] = useState("");
   const [subject, setSubject] = useState("");
   const [status, setStatus] = useState("");
+  const [employmentType, setEmploymentType] = useState("");
   const [page, setPage] = useState(1);
-  // Quick client-side filter driven by the stat cards.
-  const [quick, setQuick] = useState<"all" | "active" | "fulltime" | "onleave">("all");
 
   // Deep-link from the dashboard "Teachers on leave" tile — read reactively so a
   // cached-page navigation still applies it (App Router won't remount the page).
@@ -114,42 +114,67 @@ function TeachersPageInner() {
     return () => clearTimeout(t);
   }, [searchParams]);
 
-  const { teachers, loading, error, refetch } = useTeachers({ search, subject, status });
+  // The table shows the COMPLETE server-filtered set (all pages), so nothing is
+  // capped at 200 and every filter is applied server-side.
+  const { teachers, loading, error, refetch } = useTeachers({ search, subject, status, employmentType });
+  const filtered = teachers;
 
-  const filtered = useMemo(() => {
-    if (quick === "active") return teachers.filter((t) => t.status === "active");
-    if (quick === "onleave") return teachers.filter((t) => t.status === "on-leave");
-    if (quick === "fulltime") return teachers.filter((t) => t.employmentType === "full-time");
-    return teachers;
-  }, [teachers, quick]);
-
-  const setQuickFilter = (next: typeof quick) => {
-    setQuick((cur) => (cur === next ? "all" : next));
-    setPage(1);
-  };
-
-  // A narrowed filter can strand you past the last page, so every filter
-  // change resets to page 1.
+  // A narrowed filter can strand you past the last page, so every filter change
+  // resets to page 1.
   const applyFilter = (setter: (value: string) => void) => (value: string) => {
     setter(value);
     setPage(1);
   };
 
+  const clearAll = () => {
+    setSearch("");
+    setSubject("");
+    setStatus("");
+    setEmploymentType("");
+    setPage(1);
+  };
+  const isFiltered = Boolean(search || subject || status || employmentType);
+
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Teacher | null>(null);
   const [deleting, setDeleting] = useState<Teacher | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
-  const stats = useMemo(() => {
-    const active = teachers.filter((t) => t.status === "active").length;
-    const onLeave = teachers.filter((t) => t.status === "on-leave").length;
-    const fullTime = teachers.filter((t) => t.employmentType === "full-time").length;
-    return { total: teachers.length, active, onLeave, fullTime };
-  }, [teachers]);
+  // Headline tiles come from whole-school server counts, independent of the table
+  // filters, so a status/subject filter never turns them into a subtotal. Each
+  // field is "—" when its count couldn't be fetched (never a confident 0).
+  const [agg, setAgg] = useState<{
+    total: number | null;
+    active: number | null;
+    onLeave: number | null;
+    fullTime: number | null;
+  } | null>(null);
+  const [statsVersion, setStatsVersion] = useState(0);
+  useEffect(() => {
+    let cancelled = false;
+    Promise.allSettled([
+      countTeachers({}),
+      countTeachers({ status: "active" }),
+      countTeachers({ status: "on-leave" }),
+      countTeachers({ employmentType: "full-time" }),
+    ]).then(([t, a, l, f]) => {
+      if (cancelled) return;
+      setAgg({
+        total: t.status === "fulfilled" ? t.value : null,
+        active: a.status === "fulfilled" ? a.value : null,
+        onLeave: l.status === "fulfilled" ? l.value : null,
+        fullTime: f.status === "fulfilled" ? f.value : null,
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [statsVersion]);
+  const statValue = (n: number | null | undefined) => (n != null ? String(n) : "—");
 
-  // Clamp during render — deleting the last row on the last page would
-  // otherwise strand the user on an empty page. Correcting it from an effect
-  // is not allowed (react-hooks/set-state-in-effect).
+  // Clamp during render — deleting the last row on the last page would otherwise
+  // strand the user on an empty page.
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
 
@@ -163,7 +188,7 @@ function TeachersPageInner() {
     setFormOpen(true);
   };
 
-  /** Exports exactly the rows the filters are showing (all pages, not just this one). */
+  /** Exports exactly the rows the filters are showing — the complete set, not one page. */
   const handleExportPdf = () => {
     if (filtered.length === 0) {
       toast({
@@ -173,33 +198,33 @@ function TeachersPageInner() {
       });
       return;
     }
-    const parts = [
-      subject,
-      status,
-      quick !== "all" ? quick : "",
-      search ? `“${search}”` : "",
-    ].filter(Boolean);
-    const ok = exportTablePdf({
-      title: "Teachers",
-      subtitle: parts.length ? `Filtered by ${parts.join(" · ")}` : "All teachers",
-      columns: ["Emp ID", "Name", "Department", "Subjects", "Classes", "Status", "Phone", "Email"],
-      rows: filtered.map((t) => [
-        t.employeeId,
-        teacherName(t),
-        t.department,
-        t.subjects.join(", "),
-        t.classes.join(", "),
-        t.status,
-        t.phone,
-        t.email,
-      ]),
-    });
-    if (!ok) {
-      toast({
-        title: "Pop-up blocked",
-        description: "Allow pop-ups for this site to export a PDF.",
-        variant: "error",
+    setExporting(true);
+    try {
+      const parts = [subject, status, employmentType, search ? `“${search}”` : ""].filter(Boolean);
+      const ok = exportTablePdf({
+        title: "Teachers",
+        subtitle: parts.length ? `Filtered by ${parts.join(" · ")}` : "All teachers",
+        columns: ["Emp ID", "Name", "Department", "Subjects", "Classes", "Status", "Phone", "Email"],
+        rows: filtered.map((t) => [
+          t.employeeId,
+          teacherName(t),
+          t.department,
+          t.subjects.join(", "),
+          t.classes.join(", "),
+          t.status,
+          t.phone,
+          t.email,
+        ]),
       });
+      if (!ok) {
+        toast({
+          title: "Pop-up blocked",
+          description: "Allow pop-ups for this site to export a PDF.",
+          variant: "error",
+        });
+      }
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -220,6 +245,7 @@ function TeachersPageInner() {
           : `${values.firstName} ${values.lastName} joined the staff.`,
       });
       refetch();
+      setStatsVersion((v) => v + 1);
       return saved;
     } catch (e) {
       toast({
@@ -239,6 +265,7 @@ function TeachersPageInner() {
       toast({ title: "Teacher removed", description: `${teacherName(deleting)} was deleted.` });
       setDeleting(null);
       refetch();
+      setStatsVersion((v) => v + 1);
     } catch (e) {
       toast({
         title: "Could not delete teacher",
@@ -295,21 +322,6 @@ function TeachersPageInner() {
       sortable: true,
       align: "right",
       render: (t) => <span className="whitespace-nowrap text-muted">{t.experienceYears} yrs</span>,
-    },
-    {
-      key: "rating",
-      header: "Rating",
-      sortable: true,
-      align: "right",
-      render: (t) =>
-        t.rating > 0 ? (
-          <span className="inline-flex items-center gap-1 font-medium text-text">
-            <Star className="size-3.5 fill-warning text-warning" />
-            {t.rating.toFixed(1)}
-          </span>
-        ) : (
-          <span className="text-subtle">—</span>
-        ),
     },
     {
       key: "employmentType",
@@ -373,9 +385,9 @@ function TeachersPageInner() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" onClick={handleExportPdf}>
+          <Button variant="outline" onClick={handleExportPdf} disabled={exporting}>
             <FileText className="size-4" />
-            Export PDF
+            {exporting ? "Exporting…" : "Export PDF"}
           </Button>
           <Button onClick={openCreate}>
             <Plus className="size-4" />
@@ -387,41 +399,44 @@ function TeachersPageInner() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           label="Total teachers"
-          value={String(stats.total)}
+          value={statValue(agg?.total)}
           icon={Users}
           gradient="gradient-indigo"
-          active={quick === "all" && !search && !subject && !status}
+          active={!search && !subject && !status && !employmentType}
+          onClick={clearAll}
+        />
+        <StatCard
+          label="Active"
+          value={statValue(agg?.active)}
+          icon={UserCheck}
+          gradient="gradient-emerald"
+          active={status === "active"}
           onClick={() => {
-            setSearch("");
-            setSubject("");
-            setStatus("");
-            setQuick("all");
+            setStatus(status === "active" ? "" : "active");
             setPage(1);
           }}
         />
         <StatCard
-          label="Active"
-          value={String(stats.active)}
-          icon={UserCheck}
-          gradient="gradient-emerald"
-          active={quick === "active"}
-          onClick={() => setQuickFilter("active")}
-        />
-        <StatCard
           label="Full-time"
-          value={String(stats.fullTime)}
+          value={statValue(agg?.fullTime)}
           icon={BriefcaseBusiness}
           gradient="gradient-cyan"
-          active={quick === "fulltime"}
-          onClick={() => setQuickFilter("fulltime")}
+          active={employmentType === "full-time"}
+          onClick={() => {
+            setEmploymentType(employmentType === "full-time" ? "" : "full-time");
+            setPage(1);
+          }}
         />
         <StatCard
           label="On leave"
-          value={String(stats.onLeave)}
+          value={statValue(agg?.onLeave)}
           icon={CalendarOff}
           gradient="gradient-amber"
-          active={quick === "onleave"}
-          onClick={() => setQuickFilter("onleave")}
+          active={status === "on-leave"}
+          onClick={() => {
+            setStatus(status === "on-leave" ? "" : "on-leave");
+            setPage(1);
+          }}
         />
       </div>
 
@@ -441,7 +456,7 @@ function TeachersPageInner() {
             value={subject}
             onChange={(e) => applyFilter(setSubject)(e.target.value)}
             placeholder="All subjects"
-            options={SUBJECT_OPTIONS.map((s) => ({ label: s, value: s }))}
+            options={subjectNames.map((s) => ({ label: s, value: s }))}
             aria-label="Filter by subject"
           />
         </div>
@@ -464,7 +479,7 @@ function TeachersPageInner() {
       {error ? (
         <Card>
           <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
-            <p className="text-sm font-medium text-danger">{error}</p>
+            <p className="text-sm font-medium text-danger-text">{error}</p>
             <Button variant="outline" onClick={refetch}>
               Try again
             </Button>
@@ -479,15 +494,21 @@ function TeachersPageInner() {
             loading={loading}
             emptyTitle="No teachers found"
             emptyDescription={
-              search || subject || status || quick !== "all"
-                ? "Try clearing your filters to see more results."
+              isFiltered
+                ? "No teachers match the current filters."
                 : "Add your first teacher to get started."
             }
             emptyAction={
-              <Button variant="outline" onClick={openCreate}>
-                <Plus className="size-4" />
-                Add teacher
-              </Button>
+              isFiltered ? (
+                <Button variant="outline" onClick={clearAll}>
+                  Show all teachers
+                </Button>
+              ) : (
+                <Button variant="outline" onClick={openCreate}>
+                  <Plus className="size-4" />
+                  Add teacher
+                </Button>
+              )
             }
           />
           {!loading && (
@@ -508,7 +529,6 @@ function TeachersPageInner() {
           if (!o) setEditing(null);
         }}
         teacher={editing}
-        existing={teachers}
         onSubmit={handleSubmit}
       />
 
@@ -518,7 +538,7 @@ function TeachersPageInner() {
         title="Delete teacher?"
         description={
           deleting
-            ? `${teacherName(deleting)} (${deleting.employeeId}) will be permanently removed. This cannot be undone.`
+            ? `${teacherName(deleting)} (${deleting.employeeId}) will be permanently removed, along with their uploaded documents. This cannot be undone.`
             : ""
         }
         confirmLabel="Delete"

@@ -140,6 +140,8 @@ export default function TeacherDetailPage({ params }: { params: Promise<{ id: st
 
   const [teacher, setTeacher] = useState<Teacher | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -148,13 +150,19 @@ export default function TeacherDetailPage({ params }: { params: Promise<{ id: st
     // `cancelled` keeps a response for a previous id from overwriting the
     // current one if the route changes mid-flight.
     let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLoading(true);
 
     (async () => {
       try {
         const data = await getTeacher(id);
-        if (!cancelled) setTeacher(data);
-      } catch {
-        if (!cancelled) setTeacher(null);
+        // getTeacher returns null ONLY for a real 404; anything else throws.
+        if (!cancelled) {
+          setTeacher(data);
+          setError(null);
+        }
+      } catch (e) {
+        if (!cancelled) setError(e instanceof Error ? e.message : "Could not load this teacher.");
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -163,7 +171,7 @@ export default function TeacherDetailPage({ params }: { params: Promise<{ id: st
     return () => {
       cancelled = true;
     };
-  }, [id]);
+  }, [id, reloadKey]);
 
   const handleUpdate = async (values: TeacherFormValues): Promise<Teacher | null> => {
     try {
@@ -199,6 +207,24 @@ export default function TeacherDetailPage({ params }: { params: Promise<{ id: st
   };
 
   if (loading) return <DetailSkeleton />;
+
+  if (error) {
+    return (
+      <Card>
+        <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+          <p className="text-sm font-medium text-danger-text">{error}</p>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => setReloadKey((k) => k + 1)}>
+              Try again
+            </Button>
+            <Link href="/teachers">
+              <Button variant="ghost">Back to teachers</Button>
+            </Link>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   if (!teacher) {
     return (
@@ -275,21 +301,12 @@ export default function TeacherDetailPage({ params }: { params: Promise<{ id: st
         </CardContent>
       </Card>
 
-      {/* Metrics */}
+      {/* Metrics — real record data only (attendance/rating/periods have no data
+          source yet, so they are not shown as fabricated numbers). */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard
-          label="Attendance"
-          value={`${teacher.attendancePercent}%`}
-          percent={teacher.attendancePercent}
-          tone={teacher.attendancePercent < 85 ? "warning" : "success"}
-        />
-        <MetricCard
-          label="Rating"
-          value={teacher.rating > 0 ? `${teacher.rating.toFixed(1)} / 5` : "Not rated"}
-          percent={teacher.rating > 0 ? (teacher.rating / 5) * 100 : undefined}
-          tone="primary"
-        />
-        <MetricCard label="Weekly periods" value={String(teacher.weeklyPeriods)} tone="primary" />
+        <MetricCard label="Subjects" value={String(teacher.subjects.length)} tone="primary" />
+        <MetricCard label="Assigned classes" value={String(teacher.classes.length)} tone="primary" />
+        <MetricCard label="Experience" value={`${teacher.experienceYears} yrs`} tone="success" />
         <MetricCard label="Monthly salary" value={inr.format(teacher.salary)} tone="success" />
       </div>
 

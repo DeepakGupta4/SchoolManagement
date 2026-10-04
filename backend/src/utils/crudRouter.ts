@@ -29,6 +29,8 @@ export interface CrudOptions<T> {
   filterFields?: (keyof T & string)[];
   /** Overrides who may create/update/delete. */
   writeRoles?: UserRole[];
+  /** When set, restricts who may READ (list + get). Default: any authenticated user. */
+  readRoles?: UserRole[];
   /** Default sort. Newest first unless a module wants otherwise. */
   sort?: Record<string, 1 | -1>;
   /** Extra routes mounted before the generic ones (so they can shadow `/:id`). */
@@ -75,6 +77,7 @@ export function createCrudRouter<T>(options: CrudOptions<T>): Router {
     searchFields,
     filterFields = [],
     writeRoles = DEFAULT_WRITE_ROLES,
+    readRoles,
     sort = { createdAt: -1 },
     extend,
     notifyOnCreate,
@@ -92,13 +95,16 @@ export function createCrudRouter<T>(options: CrudOptions<T>): Router {
 
   const router = Router();
   const canWrite: RequestHandler = requireRole(...writeRoles);
+  // Reads are open to any authenticated user unless the module restricts them
+  // (e.g. teacher records carry salary/PII — office/HR roles only).
+  const canRead: RequestHandler = readRoles ? requireRole(...readRoles) : (_req, _res, next) => next();
 
   // Everything below requires a valid token.
   router.use(requireAuth);
 
   extend?.(router);
 
-  router.get("/", validate(listQuerySchema, "query"), async (req, res, next) => {
+  router.get("/", canRead, validate(listQuerySchema, "query"), async (req, res, next) => {
     try {
       const { search, page, limit } = parsed<z.infer<typeof listQuerySchema>>(req, "query");
 
@@ -138,7 +144,7 @@ export function createCrudRouter<T>(options: CrudOptions<T>): Router {
     }
   });
 
-  router.get("/:id", async (req, res, next) => {
+  router.get("/:id", canRead, async (req, res, next) => {
     try {
       const doc = await model.findOne({ _id: req.params.id, schoolId: req.user!.schoolId });
       if (!doc) throw ApiError.notFound("Record not found.");

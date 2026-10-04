@@ -13,7 +13,7 @@ import { MIN_ADULT_DOB, MAX_ADULT_DOB, MIN_RECORD_DATE, TODAY_ISO } from "@/lib/
 import { fileToDataUrl } from "@/lib/image";
 import { useClassOptions } from "@/hooks/useClassOptions";
 import { useSubjectOptions } from "@/hooks/useSubjectOptions";
-import { DEPARTMENT_OPTIONS } from "@/lib/api/teachers";
+import { DEPARTMENT_OPTIONS, fetchAllTeachers } from "@/lib/api/teachers";
 import { AttachmentsField } from "@/components/AttachmentsField";
 import { SingleDocField } from "@/components/SingleDocField";
 import { uploadDocumentFiles, uploadLabeledDocument } from "@/lib/api/documents";
@@ -55,7 +55,7 @@ const emptyValues: TeacherSchema = {
   phone: "",
   gender: "female",
   dateOfBirth: "",
-  joiningDate: new Date().toISOString().slice(0, 10),
+  joiningDate: TODAY_ISO,
   department: DEPARTMENT_OPTIONS[0],
   subjects: [],
   classes: [],
@@ -82,8 +82,6 @@ interface TeacherFormModalProps {
   onOpenChange: (open: boolean) => void;
   /** Present = edit mode, absent = create mode. */
   teacher?: Teacher | null;
-  /** Existing teachers — used to block a duplicate email. */
-  existing?: Teacher[];
   /** Returns the saved teacher (so attachments can be uploaded), or null on error. */
   onSubmit: (values: TeacherFormValues) => Promise<Teacher | null | void>;
 }
@@ -92,7 +90,6 @@ export function TeacherFormModal({
   open,
   onOpenChange,
   teacher,
-  existing = [],
   onSubmit,
 }: TeacherFormModalProps) {
   const isEdit = Boolean(teacher);
@@ -106,6 +103,9 @@ export function TeacherFormModal({
   const [docError, setDocError] = useState<string | null>(null);
   const [savingDocs, setSavingDocs] = useState(false);
   const [dupError, setDupError] = useState<string | null>(null);
+  // Complete teacher roster (all pages), pulled per open — the dup-email check and
+  // the auto employee ID must see the WHOLE school, not a filtered/capped prop.
+  const [roster, setRoster] = useState<Teacher[]>([]);
   const { classNames, classOptions, sectionOptions } = useClassOptions();
   const { subjectNames } = useSubjectOptions();
 
@@ -161,21 +161,34 @@ export function TeacherFormModal({
     return () => clearTimeout(t);
   }, [open, teacher, reset]);
 
-  // Auto employee ID on create (editable), once existing teachers are known.
+  // Pull the complete roster each open so the dup-email check and the auto
+  // employee ID see the whole school (works on the detail-page edit path too).
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    fetchAllTeachers()
+      .then((all) => !cancelled && setRoster(all))
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
+  // Auto employee ID on create (editable), from the complete roster.
   useEffect(() => {
     if (!open || isEdit) return;
-    setValue("employeeId", nextCodeId("TCH", existing.map((t) => t.employeeId)));
-  }, [open, isEdit, existing, setValue]);
+    setValue("employeeId", nextCodeId("TCH", roster.map((t) => t.employeeId)));
+  }, [open, isEdit, roster, setValue]);
 
   // Case-insensitive set of emails already taken by *other* teachers.
   const takenEmails = useMemo(() => {
     const set = new Set<string>();
-    for (const t of existing) {
+    for (const t of roster) {
       if (teacher && t.id === teacher.id) continue;
       if (t.email) set.add(t.email.trim().toLowerCase());
     }
     return set;
-  }, [existing, teacher]);
+  }, [roster, teacher]);
 
   const submit = handleSubmit(async (values) => {
     const email = values.email.trim();
@@ -202,6 +215,9 @@ export function TeacherFormModal({
       department: values.department.trim(),
       qualification: values.qualification.trim(),
       address: values.address.trim(),
+      // Never persist a stale class/section once "class teacher" is unchecked.
+      classTeacherOf: values.isClassTeacher ? values.classTeacherOf : "",
+      classTeacherSection: values.isClassTeacher ? values.classTeacherSection : "",
     };
     const saved = await onSubmit(cleaned as TeacherFormValues);
     if (!saved) return; // save failed — keep the form open (error already shown)
@@ -308,7 +324,7 @@ export function TeacherFormModal({
         <section>
           <SectionTitle>Contact</SectionTitle>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Input label="Email" type="email" required {...register("email")} error={errors.email?.message ?? dupError ?? undefined} />
+            <Input label="Email" type="email" required {...register("email", { onChange: () => setDupError(null) })} error={errors.email?.message ?? dupError ?? undefined} />
             <Input label="Phone" required hint="10-digit mobile number" inputMode="numeric" maxLength={10} placeholder="9876543210" {...register("phone", { onChange: digitsOnly10 })} error={errors.phone?.message} />
           </div>
           <div className="mt-4">
@@ -429,7 +445,10 @@ export function TeacherFormModal({
               label="Qualification certificate"
               required={!isEdit}
               file={qualDoc}
-              onChange={setQualDoc}
+              onChange={(f) => {
+                setQualDoc(f);
+                setDocError(null);
+              }}
               hint="Degree / B.Ed / diploma (PDF or image)"
               error={!isEdit && docError && !qualDoc ? docError : undefined}
             />
@@ -437,7 +456,10 @@ export function TeacherFormModal({
               label="Government ID"
               required={!isEdit}
               file={govtId}
-              onChange={setGovtId}
+              onChange={(f) => {
+                setGovtId(f);
+                setDocError(null);
+              }}
               hint="Aadhaar / PAN / Passport (PDF or image)"
               error={!isEdit && docError && !govtId ? docError : undefined}
             />

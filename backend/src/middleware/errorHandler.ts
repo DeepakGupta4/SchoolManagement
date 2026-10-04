@@ -34,6 +34,7 @@ export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
       rollNo: "Roll number",
       email: "Email",
       code: "Code",
+      classTeacherOf: "Class-teacher assignment (class)",
     };
     const value = String(err.keyValue[field] ?? "");
     res.status(409).json({ error: `${LABELS[field] ?? field} "${value}" is already in use.` });
