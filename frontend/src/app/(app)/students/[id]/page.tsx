@@ -74,6 +74,10 @@ function RiskCard({ student }: { student: Student }) {
   const score = ai?.score ?? base.score;
   const meta = RISK_META[level];
   const usingAi = Boolean(ai);
+  // Label the badge by the REAL provider the server used — a "rule" source (no
+  // key / LLM error) returns a truthy result but must not be shown as "Gemini".
+  const aiProvider =
+    ai?.source === "gemini" ? "AI (Gemini)" : ai?.source === "openai" ? "AI (OpenAI)" : null;
 
   const analyze = async () => {
     setAnalyzing(true);
@@ -112,7 +116,7 @@ function RiskCard({ student }: { student: Student }) {
         <div className="flex items-center gap-2">
           <Sparkles className="size-4 text-primary" />
           <h2 className="text-sm font-semibold text-text">Risk assessment</h2>
-          <Badge variant={usingAi ? "info" : "outline"}>{usingAi ? "AI (Gemini)" : "Rule-based"}</Badge>
+          <Badge variant={aiProvider ? "info" : "outline"}>{aiProvider ?? "Rule-based"}</Badge>
         </div>
         <Badge variant={meta.variant}>
           {meta.label} · {score}/100
@@ -194,7 +198,7 @@ function DetailRow({
     <div className="flex items-start gap-3 py-2.5">
       <Icon className="mt-0.5 size-4 shrink-0 text-subtle" />
       <div className="min-w-0">
-        <p className="text-xs text-subtle">{label}</p>
+        <p className="text-xs text-muted">{label}</p>
         <p className="mt-0.5 break-words text-sm text-text">{value || "—"}</p>
       </div>
     </div>
@@ -270,7 +274,10 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
 
   const [student, setStudent] = useState<Student | null>(null);
   const [school, setSchool] = useState<SchoolProfile | null>(null);
+  const [schoolLoading, setSchoolLoading] = useState(true);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -278,7 +285,10 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
   // School profile (name, address, signature) for the printable admission form.
   useEffect(() => {
     let cancelled = false;
-    getMySchool().then((s) => !cancelled && setSchool(s)).catch(() => {});
+    getMySchool()
+      .then((s) => !cancelled && setSchool(s))
+      .catch(() => {})
+      .finally(() => !cancelled && setSchoolLoading(false));
     return () => { cancelled = true; };
   }, []);
 
@@ -297,9 +307,14 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
     (async () => {
       try {
         const data = await getStudent(id);
-        if (!cancelled) setStudent(data);
+        if (!cancelled) {
+          setStudent(data);
+          setError(false);
+        }
       } catch {
-        if (!cancelled) setStudent(null);
+        // getStudent returns null for a real 404 and only THROWS on a genuine
+        // failure (network/500) — so a throw means "couldn't load", not "deleted".
+        if (!cancelled) setError(true);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -308,7 +323,13 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
     return () => {
       cancelled = true;
     };
-  }, [id]);
+  }, [id, reloadKey]);
+
+  const retry = () => {
+    setError(false);
+    setLoading(true);
+    setReloadKey((k) => k + 1);
+  };
 
   const handleUpdate = async (values: StudentFormValues): Promise<Student | null> => {
     try {
@@ -345,6 +366,28 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
 
   if (loading) return <DetailSkeleton />;
 
+  if (error) {
+    return (
+      <Card>
+        <EmptyState
+          icon={<UserRound className="size-5" />}
+          title="Couldn't load this student"
+          description="There was a problem reaching the server. Please try again."
+          action={
+            <div className="flex items-center gap-2">
+              <Button variant="outline" onClick={retry}>
+                Try again
+              </Button>
+              <Link href="/students">
+                <Button variant="outline">Back to students</Button>
+              </Link>
+            </div>
+          }
+        />
+      </Card>
+    );
+  }
+
   if (!student) {
     return (
       <Card>
@@ -373,7 +416,7 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
           Back to students
         </Link>
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={downloadForm}>
+          <Button variant="outline" onClick={downloadForm} disabled={schoolLoading}>
             <Download className="size-4" />
             Download form
           </Button>
@@ -402,7 +445,7 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
             <p className="mt-1 text-sm text-muted">
               {student.className} · Section {student.section} · Roll {student.rollNo}
             </p>
-            <p className="mt-0.5 text-xs text-subtle">
+            <p className="mt-0.5 text-xs text-muted">
               Admission {student.admissionNo} · Enrolled {formatDate(student.admissionDate)}
             </p>
           </div>
@@ -419,8 +462,8 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
         />
         <MetricCard
           label="Performance"
-          value={`${student.performancePercent}%`}
-          percent={student.performancePercent}
+          value={student.performancePercent > 0 ? `${student.performancePercent}%` : "Not assessed"}
+          percent={student.performancePercent > 0 ? student.performancePercent : undefined}
           tone="primary"
         />
         <MetricCard

@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Cake, Download, Eye, FileText, Pencil, Plus, Search, Trash2, Users, UsersRound, UserCheck, IndianRupee, TrendingDown } from "lucide-react";
 import {
   Avatar,
@@ -13,13 +13,16 @@ import {
   ConfirmDialog,
   Input,
   Select,
+  Skeleton,
   Table,
   useToast,
   type Column,
 } from "@/components/ui";
 import { useStudents } from "@/hooks/useStudents";
 import { useClassOptions } from "@/hooks/useClassOptions";
-import { createStudent, deleteStudent, updateStudent } from "@/lib/api/students";
+import { createStudent, deleteStudent, updateStudent, fetchAllStudents } from "@/lib/api/students";
+import { getDashboardInsights } from "@/lib/api/dashboard";
+import { getFeeSummary } from "@/lib/api/feeLedger";
 import { getMySchool, type SchoolProfile } from "@/lib/api/schools";
 import { printAdmissionForm } from "@/lib/admissionForm";
 import { fullName, type Student, type StudentFormValues, type StudentStatus } from "@/types/student";
@@ -88,6 +91,7 @@ function StudentsPageInner() {
   const { toast } = useToast();
   const { classOptions, defaultClass } = useClassOptions();
   const searchParams = useSearchParams();
+  const router = useRouter();
 
   const [search, setSearch] = useState("");
   const [className, setClassName] = useState("");
@@ -153,55 +157,98 @@ function StudentsPageInner() {
     return () => { cancelled = true; };
   }, []);
 
-  const stats = useMemo(() => {
-    const active = students.filter((s) => s.status === "active").length;
-    const due = students.reduce((sum, s) => sum + s.feeDue, 0);
-    const lowAttendance = students.filter((s) => s.attendancePercent < 75).length;
-    return { total: students.length, active, due, lowAttendance };
-  }, [students]);
+  // Headline stats come from the server aggregate (uncapped, whole-school),
+  // independent of the table's class filter and the 500-row browse cap — so
+  // "Total students" / "Fees pending" are never a capped or single-class subtotal.
+  const [agg, setAgg] = useState<{ total: number; active: number; outstanding: number; low: number } | null>(null);
+  const [aggLoading, setAggLoading] = useState(true);
+  useEffect(() => {
+    let cancelled = false;
+    Promise.allSettled([getDashboardInsights(), getFeeSummary()]).then(([insightsR, feeR]) => {
+      if (cancelled) return;
+      const insights = insightsR.status === "fulfilled" ? insightsR.value : null;
+      const fee = feeR.status === "fulfilled" ? feeR.value : null;
+      if (insights || fee) {
+        setAgg({
+          total: insights?.counts.students ?? 0,
+          active: insights?.counts.activeStudents ?? 0,
+          outstanding: fee?.outstanding ?? 0,
+          low: insights?.lowAttendance ?? 0,
+        });
+      }
+      setAggLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // The roster fetch is capped at 500; the true total comes from the aggregate,
+  // so we can tell the user when older students aren't loaded in the browse view.
+  const rosterCapped = !!agg && students.length < agg.total;
 
   const openCreate = () => {
     setEditing(null);
     setFormOpen(true);
   };
 
-  /** Exports exactly the rows the table is showing, filters included. */
-  const handleExportPdf = () => {
-    if (displayed.length === 0) {
-      toast({
-        title: "Nothing to export",
-        description: "No students match the current filters.",
-        variant: "warning",
+  const [exporting, setExporting] = useState(false);
+
+  /** Exports the FULL matching set (all pages), applying the active filters — so
+   *  an "all students" PDF is actually complete, not just the loaded page. */
+  const handleExportPdf = async () => {
+    setExporting(true);
+    try {
+      let rows = await fetchAllStudents({ search, className, status });
+      if (quick === "fees") rows = rows.filter((s) => s.feeDue > 0);
+      else if (quick === "low") rows = rows.filter((s) => s.attendancePercent < 75);
+      if (birthdayMonth) rows = rows.filter((s) => (s.dateOfBirth || "").slice(5, 7) === birthdayMonth);
+
+      if (rows.length === 0) {
+        toast({
+          title: "Nothing to export",
+          description: "No students match the current filters.",
+          variant: "warning",
+        });
+        return;
+      }
+      const parts = [
+        className,
+        status,
+        quick === "fees" ? "Fees pending" : quick === "low" ? "Attendance < 75%" : "",
+        birthdayMonth ? `Birthdays in ${MONTH_NAMES[Number(birthdayMonth) - 1] ?? "month"}` : "",
+        search ? `“${search}”` : "",
+      ].filter(Boolean);
+      const ok = exportTablePdf({
+        title: "Students",
+        subtitle: `${parts.length ? `Filtered by ${parts.join(" · ")}` : "All students"} · ${rows.length} total`,
+        columns: ["Adm No", "Name", "Class", "Section", "Roll", "Status", "Guardian", "Phone"],
+        rows: rows.map((s) => [
+          s.admissionNo,
+          fullName(s),
+          s.className,
+          s.section,
+          s.rollNo,
+          s.status,
+          s.guardian.name,
+          s.guardian.phone,
+        ]),
       });
-      return;
-    }
-    const parts = [
-      className,
-      status,
-      quick === "fees" ? "Fees pending" : quick === "low" ? "Attendance < 75%" : "",
-      search ? `“${search}”` : "",
-    ].filter(Boolean);
-    const ok = exportTablePdf({
-      title: "Students",
-      subtitle: parts.length ? `Filtered by ${parts.join(" · ")}` : "All students",
-      columns: ["Adm No", "Name", "Class", "Section", "Roll", "Status", "Guardian", "Phone"],
-      rows: displayed.map((s) => [
-        s.admissionNo,
-        fullName(s),
-        s.className,
-        s.section,
-        s.rollNo,
-        s.status,
-        s.guardian.name,
-        s.guardian.phone,
-      ]),
-    });
-    if (!ok) {
+      if (!ok) {
+        toast({
+          title: "Pop-up blocked",
+          description: "Allow pop-ups for this site to export a PDF.",
+          variant: "error",
+        });
+      }
+    } catch (e) {
       toast({
-        title: "Pop-up blocked",
-        description: "Allow pop-ups for this site to export a PDF.",
+        title: "Export failed",
+        description: e instanceof Error ? e.message : "Couldn't build the export. Please try again.",
         variant: "error",
       });
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -261,7 +308,7 @@ function StudentsPageInner() {
           <Avatar name={fullName(s)} src={s.avatar} size="sm" />
           <div className="min-w-0">
             <p className="truncate font-medium text-text">{fullName(s)}</p>
-            <p className="truncate text-xs text-subtle">{s.admissionNo}</p>
+            <p className="truncate text-xs text-muted">{s.admissionNo}</p>
           </div>
         </div>
       ),
@@ -289,7 +336,7 @@ function StudentsPageInner() {
       sortable: true,
       align: "right",
       render: (s) => (
-        <span className={s.attendancePercent < 75 ? "font-medium text-danger" : "text-muted"}>
+        <span className={s.attendancePercent < 75 ? "font-medium text-danger-text" : "text-muted"}>
           {s.attendancePercent}%
         </span>
       ),
@@ -367,9 +414,9 @@ function StudentsPageInner() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" onClick={handleExportPdf}>
+          <Button variant="outline" onClick={handleExportPdf} disabled={exporting}>
             <FileText className="size-4" />
-            Export PDF
+            {exporting ? "Exporting…" : "Export PDF"}
           </Button>
           <Button variant="outline" onClick={() => setBulkOpen(true)}>
             <UsersRound className="size-4" />
@@ -383,46 +430,52 @@ function StudentsPageInner() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          label="Total students"
-          value={String(stats.total)}
-          icon={Users}
-          gradient="gradient-indigo"
-          active={!search && !className && !status && quick === "all"}
-          onClick={() => {
-            setSearch("");
-            setClassName("");
-            setStatus("");
-            setQuick("all");
-          }}
-        />
-        <StatCard
-          label="Active"
-          value={String(stats.active)}
-          icon={UserCheck}
-          gradient="gradient-emerald"
-          active={status === "active"}
-          onClick={() => {
-            setStatus(status === "active" ? "" : "active");
-            setQuick("all");
-          }}
-        />
-        <StatCard
-          label="Fees pending"
-          value={inr.format(stats.due)}
-          icon={IndianRupee}
-          gradient="gradient-amber"
-          active={quick === "fees"}
-          onClick={() => setQuick(quick === "fees" ? "all" : "fees")}
-        />
-        <StatCard
-          label="Attendance < 75%"
-          value={String(stats.lowAttendance)}
-          icon={TrendingDown}
-          gradient="gradient-rose"
-          active={quick === "low"}
-          onClick={() => setQuick(quick === "low" ? "all" : "low")}
-        />
+        {aggLoading ? (
+          Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-[72px] w-full" />)
+        ) : (
+          <>
+            <StatCard
+              label="Total students"
+              value={agg ? String(agg.total) : "—"}
+              icon={Users}
+              gradient="gradient-indigo"
+              active={!search && !className && !status && quick === "all"}
+              onClick={() => {
+                setSearch("");
+                setClassName("");
+                setStatus("");
+                setQuick("all");
+              }}
+            />
+            <StatCard
+              label="Active"
+              value={agg ? String(agg.active) : "—"}
+              icon={UserCheck}
+              gradient="gradient-emerald"
+              active={status === "active"}
+              onClick={() => {
+                setStatus(status === "active" ? "" : "active");
+                setQuick("all");
+              }}
+            />
+            <StatCard
+              label="Fees pending"
+              value={agg ? inr.format(agg.outstanding) : "—"}
+              icon={IndianRupee}
+              gradient="gradient-amber"
+              active={quick === "fees"}
+              onClick={() => setQuick(quick === "fees" ? "all" : "fees")}
+            />
+            <StatCard
+              label="Attendance < 75%"
+              value={agg ? String(agg.low) : "—"}
+              icon={TrendingDown}
+              gradient="gradient-rose"
+              active={quick === "low"}
+              onClick={() => setQuick(quick === "low" ? "all" : "low")}
+            />
+          </>
+        )}
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -486,24 +539,34 @@ function StudentsPageInner() {
           </CardContent>
         </Card>
       ) : (
-        <Table
-          columns={columns}
-          rows={displayed}
-          rowKey={(s) => s.id}
-          loading={loading}
-          emptyTitle="No students found"
-          emptyDescription={
-            search || className || status || quick !== "all"
-              ? "Try clearing your filters to see more results."
-              : "Add your first student to get started."
-          }
-          emptyAction={
-            <Button variant="outline" onClick={openCreate}>
-              <Plus className="size-4" />
-              Add student
-            </Button>
-          }
-        />
+        <>
+          <Table
+            columns={columns}
+            rows={displayed}
+            rowKey={(s) => s.id}
+            loading={loading}
+            pageSize={15}
+            onRowClick={(s) => router.push(`/students/${s.id}`)}
+            emptyTitle="No students found"
+            emptyDescription={
+              search || className || status || quick !== "all" || birthdayMonth
+                ? "Try clearing your filters to see more results."
+                : "Add your first student to get started."
+            }
+            emptyAction={
+              <Button variant="outline" onClick={openCreate}>
+                <Plus className="size-4" />
+                Add student
+              </Button>
+            }
+          />
+          {rosterCapped && !loading && (
+            <p className="text-xs text-muted">
+              Showing the newest {students.length} of {agg!.total} students. Use search or the
+              class filter to find a specific student.
+            </p>
+          )}
+        </>
       )}
 
       <StudentFormModal

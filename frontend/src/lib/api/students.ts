@@ -17,34 +17,55 @@ export interface StudentFilters {
   status?: string;
 }
 
-export async function listStudents(filters: StudentFilters = {}): Promise<Student[]> {
-  const result = await apiList<Student>("/api/students", {
+export interface StudentPage {
+  data: Student[];
+  meta: { total: number; page: number; limit: number; pages: number };
+}
+
+/** One page of students, keeping the `meta` (total/pages) the list UI needs. */
+export async function listStudentsPage(
+  filters: StudentFilters & { page?: number; limit?: number } = {}
+): Promise<StudentPage> {
+  return apiList<Student>("/api/students", {
     query: {
       search: filters.search,
       className: filters.className,
       status: filters.status,
-      // The UI pages, filter and paginate client-side, so pull a full page.
-      limit: 200,
+      page: filters.page,
+      // Server caps at 500; default page size matches the old behaviour.
+      limit: filters.limit ?? 200,
     },
   });
-  return result.data;
+}
+
+export async function listStudents(filters: StudentFilters = {}): Promise<Student[]> {
+  const { data } = await listStudentsPage({ ...filters, limit: 200 });
+  return data;
+}
+
+/**
+ * EVERY matching student across all pages — for exports and ID/roll numbering
+ * where a complete, uncapped set matters (not just the first page). Loops at the
+ * server's max page size.
+ */
+export async function fetchAllStudents(filters: StudentFilters = {}): Promise<Student[]> {
+  const first = await listStudentsPage({ ...filters, page: 1, limit: 500 });
+  const all = [...first.data];
+  const pages = first.meta?.pages ?? 1;
+  for (let p = 2; p <= pages; p++) {
+    const next = await listStudentsPage({ ...filters, page: p, limit: 500 });
+    all.push(...next.data);
+  }
+  return all;
 }
 
 /**
  * Server-side COUNT of students matching the filters, read from the list meta
- * (not the rows). Used where only a total is needed — e.g. the teacher
- * dashboard's per-class tallies — so no roster is shipped to the browser and the
- * count is never truncated by a page limit.
+ * (not the rows) — never truncated by a page limit. Used where only a total is
+ * needed (stat cards, teacher dashboard tallies).
  */
 export async function countStudents(filters: StudentFilters = {}): Promise<number> {
-  const result = await apiList<Student>("/api/students", {
-    query: {
-      search: filters.search,
-      className: filters.className,
-      status: filters.status,
-      limit: 1,
-    },
-  });
+  const result = await listStudentsPage({ ...filters, limit: 1 });
   return result.meta?.total ?? result.data.length;
 }
 

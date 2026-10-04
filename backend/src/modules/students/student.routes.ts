@@ -7,6 +7,9 @@ import { StoredDocument } from "../documents/document.model.js";
 import { createCrudRouter } from "../../utils/crudRouter.js";
 
 const PHONE = /^\d{10}$/;
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+// Server time is fine for a date BOUND (off-by-one at a timezone edge is harmless).
+const serverToday = () => new Date().toISOString().slice(0, 10);
 
 const guardianSchema = z.object({
   name: z.string().min(2, "Guardian name is required"),
@@ -23,13 +26,22 @@ const studentSchema = z.object({
   lastName: z.string().min(1),
   email: z.email(),
   phone: z.string().regex(PHONE, "Enter a valid 10-digit Indian mobile number"),
-  dateOfBirth: z.string().min(1),
+  dateOfBirth: z
+    .string()
+    .min(1)
+    .regex(ISO_DATE, "Date of birth must be YYYY-MM-DD")
+    .refine((d) => !Number.isNaN(Date.parse(d)), "Enter a valid date of birth")
+    .refine((d) => d >= "1900-01-01" && d <= serverToday(), "Date of birth is out of range"),
   gender: z.enum(["male", "female", "other"]),
   bloodGroup: z.enum(["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"]).nullable().optional(),
   className: z.string().min(1),
   section: z.string().min(1),
   status: z.enum(["active", "inactive", "alumni", "transferred"]).default("active"),
-  admissionDate: z.string().min(1),
+  admissionDate: z
+    .string()
+    .min(1)
+    .regex(ISO_DATE, "Admission date must be YYYY-MM-DD")
+    .refine((d) => !Number.isNaN(Date.parse(d)) && d <= serverToday(), "Admission date can't be in the future"),
   address: z.string().min(5),
   guardian: guardianSchema,
   avatar: z.string().optional(),
@@ -39,17 +51,17 @@ const studentSchema = z.object({
   // fields are plain strings (no 10-digit regex) so they accept any input.
   fatherName: z.string().optional(),
   fatherOccupation: z.string().optional(),
-  fatherPhone: z.string().optional(),
+  fatherPhone: z.string().optional().refine((v) => !v || PHONE.test(v), "Enter a valid 10-digit number"),
   fatherEmail: z.union([z.email(), z.literal("")]).optional(),
   motherName: z.string().optional(),
   motherOccupation: z.string().optional(),
-  motherPhone: z.string().optional(),
+  motherPhone: z.string().optional().refine((v) => !v || PHONE.test(v), "Enter a valid 10-digit number"),
   motherEmail: z.union([z.email(), z.literal("")]).optional(),
   nationality: z.string().optional(),
   religion: z.string().optional(),
   category: z.string().optional(),
   motherTongue: z.string().optional(),
-  aadhaarNo: z.string().optional(),
+  aadhaarNo: z.string().optional().refine((v) => !v || /^\d{12}$/.test(v), "Aadhaar must be a 12-digit number"),
   placeOfBirth: z.string().optional(),
   annualIncome: z.string().optional(),
   correspondenceAddress: z.string().optional(),

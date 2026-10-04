@@ -5,7 +5,7 @@ import { ClipboardPaste, Download, Plus, Trash2, Upload } from "lucide-react";
 import { Modal, Button, Input, Select, useToast } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import { useClassOptions } from "@/hooks/useClassOptions";
-import { createStudent, listStudents } from "@/lib/api/students";
+import { createStudent, fetchAllStudents } from "@/lib/api/students";
 import { digitsOnly10, PHONE_REGEX } from "@/lib/phone";
 import { parseTable, toCsv, downloadTextFile, normalizeDate } from "@/lib/csv";
 import {
@@ -45,6 +45,7 @@ interface RowError {
   first?: boolean;
   last?: boolean;
   dob?: boolean;
+  gname?: boolean;
   phone?: boolean;
   message: string;
 }
@@ -79,6 +80,19 @@ function looksLikeHeader(row: string[]): boolean {
   );
 }
 
+/**
+ * Normalizes a pasted phone to its 10 significant digits. An Indian number may
+ * arrive as "+91 98765 43210" or "098765 43210"; stripping the country/trunk
+ * prefix and keeping the LAST 10 digits avoids front-truncating to a wrong
+ * number (the old `.slice(0, 10)` turned "+919876543210" into "9198765432").
+ */
+function normalizePhone(raw: string): string {
+  let d = (raw ?? "").replace(/\D/g, "");
+  if (d.length > 10 && d.startsWith("91")) d = d.slice(2);
+  else if (d.length === 11 && d.startsWith("0")) d = d.slice(1);
+  return d.slice(-10);
+}
+
 /** Maps a parsed CSV/TSV grid into bulk rows — header-aware, else positional. */
 function mapTableToRows(table: string[][]): BulkRow[] {
   if (table.length === 0) return [];
@@ -88,17 +102,20 @@ function mapTableToRows(table: string[][]): BulkRow[] {
     header = table[0].map((h) => h.toLowerCase());
     dataRows = table.slice(1);
   }
-  const idx = (re: RegExp, fallback: number) => {
-    if (!header) return fallback;
-    const i = header.findIndex((h) => re.test(h));
-    return i >= 0 ? i : fallback;
-  };
-  const iFirst = idx(/first/, 0);
-  const iLast = idx(/last|surname/, 1);
-  const iGender = idx(/gender|sex/, 2);
-  const iDob = idx(/dob|birth/, 3);
-  const iGName = idx(/guardian|parent|father|mother/, 4);
-  const iGPhone = idx(/phone|mobile|contact/, 5);
+  // With a header, map STRICTLY by header match — a column the sheet doesn't
+  // have stays -1 (blank) instead of silently stealing another column's data.
+  // Positional fallbacks (0..5) apply only to a headerless paste.
+  const col = (re: RegExp, fallback: number) => (header ? header.findIndex((h) => re.test(h)) : fallback);
+  const iFirst = col(/first|given|student|^name$/, 0);
+  const iLast = col(/last|surname|family/, 1);
+  const iGender = col(/gender|sex/, 2);
+  const iDob = col(/dob|birth/, 3);
+  // Resolve phone FIRST, then exclude its index when finding the guardian NAME
+  // column — otherwise a loose /guardian/ grabs "Guardian Phone" for the name.
+  const iGPhone = header ? header.findIndex((h) => /phone|mobile|contact/.test(h)) : 5;
+  const iGName = header
+    ? header.findIndex((h, i) => i !== iGPhone && /guardian|parent|father|mother|name/.test(h))
+    : 4;
   return dataRows.map((r) => {
     const g = (r[iGender] ?? "").trim().toLowerCase();
     const gender: Gender = g.startsWith("m") ? "male" : g.startsWith("f") ? "female" : g ? "other" : "male";
@@ -109,7 +126,7 @@ function mapTableToRows(table: string[][]): BulkRow[] {
       gender,
       dateOfBirth: normalizeDate(r[iDob] ?? ""),
       guardianName: (r[iGName] ?? "").trim(),
-      guardianPhone: (r[iGPhone] ?? "").replace(/\D/g, "").slice(0, 10),
+      guardianPhone: normalizePhone(r[iGPhone] ?? ""),
     };
   });
 }
@@ -140,6 +157,10 @@ function validateRow(r: BulkRow): RowError | null {
   if (!isValidDateString(r.dateOfBirth) || !isWithin(r.dateOfBirth, MIN_STUDENT_DOB, MAX_STUDENT_DOB)) {
     err.dob = true;
     problems.push("date of birth (age 2–25)");
+  }
+  if (r.guardianName.trim().length < 2) {
+    err.gname = true;
+    problems.push("guardian name");
   }
   if (!PHONE_REGEX.test(r.guardianPhone)) {
     err.phone = true;
@@ -238,6 +259,9 @@ export function BulkAddStudentsModal({ open, onOpenChange, onSaved }: BulkAddStu
   // Full roster, pulled once per open to derive the next admission & roll numbers.
   const [existing, setExisting] = useState<Student[]>([]);
   const [rosterReady, setRosterReady] = useState(false);
+  // Roster fetch failed → numbering would start from scratch and silently
+  // duplicate roll numbers, so we block the save until it loads.
+  const [rosterError, setRosterError] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [pasteOpen, setPasteOpen] = useState(false);
@@ -253,6 +277,7 @@ export function BulkAddStudentsModal({ open, onOpenChange, onSaved }: BulkAddStu
     // the deferred reset below.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setRosterReady(false);
+    setRosterError(false);
 
     // Deferred so we don't setState synchronously inside the effect.
     const t = setTimeout(() => {
@@ -267,7 +292,9 @@ export function BulkAddStudentsModal({ open, onOpenChange, onSaved }: BulkAddStu
       setPasteText("");
     }, 0);
 
-    listStudents()
+    // Fetch the WHOLE roster (every page), not a capped first 200 — admission &
+    // roll numbers are derived from it, so a short read means duplicate numbers.
+    fetchAllStudents()
       .then((all) => {
         if (cancelled) return;
         setExisting(all);
@@ -276,6 +303,7 @@ export function BulkAddStudentsModal({ open, onOpenChange, onSaved }: BulkAddStu
       .catch(() => {
         if (cancelled) return;
         setExisting([]);
+        setRosterError(true);
         setRosterReady(true);
       });
 
@@ -348,7 +376,31 @@ export function BulkAddStudentsModal({ open, onOpenChange, onSaved }: BulkAddStu
 
   const noClasses = classOptions.length === 0;
 
+  // Manual retry when the initial roster fetch failed — keeps typed rows intact.
+  const retryRoster = () => {
+    setRosterReady(false);
+    setRosterError(false);
+    fetchAllStudents()
+      .then((all) => {
+        setExisting(all);
+        setRosterReady(true);
+      })
+      .catch(() => {
+        setExisting([]);
+        setRosterError(true);
+        setRosterReady(true);
+      });
+  };
+
   const handleSave = async () => {
+    if (rosterError) {
+      toast({
+        title: "Couldn't load the current roster",
+        description: "Adding now could create duplicate roll numbers. Retry the roster load first.",
+        variant: "error",
+      });
+      return;
+    }
     if (!className || !section) {
       toast({
         title: "Select class and section",
@@ -461,7 +513,7 @@ export function BulkAddStudentsModal({ open, onOpenChange, onSaved }: BulkAddStu
     if (created > 0) {
       // Refresh the roster so retries get correct, non-colliding numbers.
       try {
-        const all = await listStudents();
+        const all = await fetchAllStudents();
         setExisting(all);
       } catch {
         /* keep the stale roster; the unique index still guards collisions */
@@ -494,7 +546,7 @@ export function BulkAddStudentsModal({ open, onOpenChange, onSaved }: BulkAddStu
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
             Cancel
           </Button>
-          <Button onClick={handleSave} disabled={submitting || !rosterReady || noClasses}>
+          <Button onClick={handleSave} disabled={submitting || !rosterReady || rosterError || noClasses}>
             {submitting
               ? progress
                 ? `Adding ${progress.done}/${progress.total}…`
@@ -505,6 +557,17 @@ export function BulkAddStudentsModal({ open, onOpenChange, onSaved }: BulkAddStu
       }
     >
       <div className="flex flex-col gap-5">
+        {rosterError && (
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-danger-soft/50 px-3 py-2">
+            <p className="text-xs text-danger-text">
+              Couldn&apos;t load the current roster — admission &amp; roll numbers can&apos;t be assigned
+              safely, so adding is paused. Retry before continuing.
+            </p>
+            <Button type="button" variant="outline" size="sm" onClick={retryRoster} disabled={!rosterReady}>
+              Retry
+            </Button>
+          </div>
+        )}
         {noClasses ? (
           <p className="rounded-md bg-warning-soft/50 px-3 py-2 text-xs text-warning-text">
             No classes yet — create a class in{" "}
@@ -605,7 +668,7 @@ export function BulkAddStudentsModal({ open, onOpenChange, onSaved }: BulkAddStu
           )}
 
           <div className="max-h-[42vh] overflow-auto rounded-lg border border-border">
-            <table className="w-full border-collapse text-sm">
+            <table className="w-full min-w-[720px] border-collapse text-sm">
               <thead>
                 <tr className="border-b border-border bg-surface-sunken">
                   <th className={cn(th, "w-8 text-center")}>#</th>
@@ -674,6 +737,7 @@ export function BulkAddStudentsModal({ open, onOpenChange, onSaved }: BulkAddStu
                             placeholder="Guardian"
                             value={row.guardianName}
                             disabled={submitting}
+                            className={cn(err?.gname && "border-danger")}
                             onChange={(e) => setRowField(row.id, { guardianName: e.target.value })}
                           />
                         </td>

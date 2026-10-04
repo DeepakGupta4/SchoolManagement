@@ -24,9 +24,19 @@ export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
     err.code === 11000 &&
     err.keyValue
   ) {
-    const field = Object.keys(err.keyValue)[0] ?? "value";
-    const value = String(Object.values(err.keyValue)[0] ?? "");
-    res.status(409).json({ error: `${field} "${value}" is already in use.` });
+    // For a compound index (e.g. {schoolId, admissionNo}) the first key is the
+    // tenant key — skip it so the message names the field the user actually set.
+    const keys = Object.keys(err.keyValue);
+    const field = keys.find((k) => k !== "schoolId") ?? keys[0] ?? "value";
+    const LABELS: Record<string, string> = {
+      admissionNo: "Admission number",
+      employeeId: "Employee ID",
+      rollNo: "Roll number",
+      email: "Email",
+      code: "Code",
+    };
+    const value = String(err.keyValue[field] ?? "");
+    res.status(409).json({ error: `${LABELS[field] ?? field} "${value}" is already in use.` });
     return;
   }
 

@@ -5,6 +5,7 @@ import { ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TableSkeleton } from "./Skeleton";
 import { EmptyState } from "./EmptyState";
+import { Pagination } from "./Pagination";
 
 export interface Column<T> {
   /** Stable key; also used as the sort key when `sortable`. */
@@ -24,6 +25,8 @@ interface TableProps<T> {
   rows: T[];
   rowKey: (row: T) => string;
   loading?: boolean;
+  /** When set, the table paginates internally at this page size (after sorting). */
+  pageSize?: number;
   onRowClick?: (row: T) => void;
   /** Extra classes per row — for selection tints, rank highlights, muted rows. */
   rowClassName?: (row: T) => string | undefined;
@@ -42,6 +45,7 @@ export function Table<T>({
   rows,
   rowKey,
   loading,
+  pageSize,
   onRowClick,
   rowClassName,
   emptyTitle = "No records found",
@@ -72,6 +76,15 @@ export function Table<T>({
       return sort.dir === "asc" ? cmp : -cmp;
     });
   }, [rows, sort, columns]);
+
+  // Optional internal pagination — applied AFTER sorting so a page shows the
+  // correct slice of the fully-sorted set. Page is clamped in render.
+  const [page, setPage] = useState(1);
+  const pageCount = pageSize ? Math.max(1, Math.ceil(sortedRows.length / pageSize)) : 1;
+  const safePage = Math.min(page, pageCount);
+  const visibleRows = pageSize
+    ? sortedRows.slice((safePage - 1) * pageSize, safePage * pageSize)
+    : sortedRows;
 
   const toggleSort = (key: string) =>
     setSort((prev) =>
@@ -131,7 +144,7 @@ export function Table<T>({
 
           {!loading && sortedRows.length > 0 && (
             <tbody>
-              {sortedRows.map((row) => (
+              {visibleRows.map((row) => (
                 <tr
                   key={rowKey(row)}
                   onClick={onRowClick ? () => onRowClick(row) : undefined}
@@ -166,6 +179,17 @@ export function Table<T>({
 
       {!loading && sortedRows.length === 0 && (
         <EmptyState title={emptyTitle} description={emptyDescription} action={emptyAction} />
+      )}
+
+      {pageSize && !loading && sortedRows.length > 0 && (
+        <div className="border-t border-border px-2 py-2">
+          <Pagination
+            page={safePage}
+            pageSize={pageSize}
+            totalItems={sortedRows.length}
+            onPageChange={setPage}
+          />
+        </div>
       )}
     </div>
   );

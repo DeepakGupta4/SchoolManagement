@@ -109,7 +109,7 @@ const emptyValues: StudentSchema = {
   className: "",
   section: "",
   status: "active",
-  admissionDate: new Date().toISOString().slice(0, 10),
+  admissionDate: TODAY_ISO,
   address: "",
   guardian: { name: "", relation: "Father", phone: "", email: "", occupation: "" },
   medicalNotes: "",
@@ -525,7 +525,7 @@ export function StudentFormModal({
         <section>
           <SectionTitle>Medical</SectionTitle>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Select label="Blood group" placeholder="Not recorded" options={BLOOD_OPTIONS} {...register("bloodGroup")} error={errors.bloodGroup?.message} />
+            <Select label="Blood group" placeholder="Not recorded" options={BLOOD_OPTIONS} {...register("bloodGroup", { setValueAs: (v) => v || undefined })} error={errors.bloodGroup?.message} />
           </div>
           <div className="mt-4">
             <Textarea label="Medical notes" hint="Allergies, conditions, medication" {...register("medicalNotes")} error={errors.medicalNotes?.message} />
