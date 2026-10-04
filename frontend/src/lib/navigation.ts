@@ -72,6 +72,7 @@ export const navGroups: NavGroup[] = [
           { title: "All Teachers", href: "/teachers" },
           { title: "Departments", href: "/teachers/departments" },
           { title: "Subject Allocation", href: "/teachers/allocation" },
+          { title: "Substitutions", href: "/teachers/substitutions" },
           { title: "ID Cards", href: "/teachers/id-cards" },
         ],
       },

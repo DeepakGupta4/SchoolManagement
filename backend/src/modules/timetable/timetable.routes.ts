@@ -16,5 +16,7 @@ export default createCrudRouter({
   model: Timetable,
   createSchema: timetableSchema,
   searchFields: ["className", "subject", "teacher", "room"],
-  filterFields: ["className", "day", "subject"],
+  // `teacher` is an exact filter so a substitution screen can pull exactly one
+  // teacher's periods for a day without substring-matching other names.
+  filterFields: ["className", "day", "subject", "teacher"],
 });

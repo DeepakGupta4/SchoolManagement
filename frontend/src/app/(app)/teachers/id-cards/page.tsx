@@ -3,14 +3,21 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CheckSquare, IdCard as IdCardIcon, Printer, Search, Square, Users } from "lucide-react";
 import {
-  Button, Card, EmptyState, Input, PageHeader, Select, Skeleton, StatCard, useToast,
+  Badge, Button, Card, CardContent, EmptyState, Input, PageHeader, Select, Skeleton, StatCard, useToast,
 } from "@/components/ui";
 import { IdCard, type IdCardHolder } from "@/components/cards/IdCard";
+import { ID_CARD_TEMPLATES, getTemplate } from "@/components/cards/idCardTemplates";
 import { useAsyncList } from "@/hooks/useAsyncList";
-import { listTeachers, DEPARTMENT_OPTIONS } from "@/lib/api/teachers";
+import { fetchAllTeachers, DEPARTMENT_OPTIONS } from "@/lib/api/teachers";
 import { getMySchool } from "@/lib/api/schools";
 import { schoolIdentity, FALLBACK_SCHOOL_IDENTITY, type SchoolIdentity } from "@/lib/schoolIdentity";
+import { academicYear } from "@/lib/dates";
+import { cn } from "@/lib/utils";
 import { teacherName, type Teacher } from "@/types/teacher";
+
+const ACADEMIC = academicYear();
+// Separate from the student key so staff and student cards can use different designs.
+const TEMPLATE_STORAGE_KEY = "teacherIdCardTemplate";
 
 /** Maps a teacher record onto the ID-card holder shape, photo included. */
 function toHolder(t: Teacher): IdCardHolder {
@@ -25,7 +32,7 @@ function toHolder(t: Teacher): IdCardHolder {
     phone: t.phone,
     guardianOrDesignation: t.qualification,
     guardianLabel: "Qualification",
-    validTill: "31 Mar 2027",
+    validTill: ACADEMIC.validTill,
     photo: t.avatar || undefined,
     address: t.address,
   };
@@ -58,12 +65,37 @@ export default function TeacherIdCardsPage() {
     };
   }, []);
 
-  // Sourced from the real teachers API, so a photo added on the teacher form
-  // appears here on the card without any extra wiring.
-  const fetcher = useCallback(() => listTeachers({ search }), [search]);
+  // Chosen card design, remembered per operator. Default first; restored from
+  // localStorage post-mount (avoids any SSR/hydration mismatch).
+  const [templateId, setTemplateId] = useState(ID_CARD_TEMPLATES[0].id);
+  useEffect(() => {
+    let saved: string | null = null;
+    try {
+      saved = localStorage.getItem(TEMPLATE_STORAGE_KEY);
+    } catch {
+      saved = null;
+    }
+    if (!saved || !ID_CARD_TEMPLATES.some((t) => t.id === saved)) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setTemplateId(saved);
+  }, []);
+  const template = getTemplate(templateId);
+  const chooseTemplate = (id: string) => {
+    setTemplateId(id);
+    try {
+      localStorage.setItem(TEMPLATE_STORAGE_KEY, id);
+    } catch {
+      /* ignore — a remembered template is a convenience, not required */
+    }
+  };
+
+  // The COMPLETE staff set (all pages) so a large school is never truncated —
+  // ID cards are printed for everyone, not a capped page. A photo added on the
+  // teacher form appears here automatically.
+  const fetcher = useCallback(() => fetchAllTeachers({ search }), [search]);
   const { items: allTeachers, loading } = useAsyncList<Teacher>(fetcher);
 
-  // `department` isn't a listTeachers query param, so narrow it client-side.
+  // `department` isn't a fetchAllTeachers query param, so narrow it client-side.
   const teachers = useMemo(
     () => (department ? allTeachers.filter((t) => t.department === department) : allTeachers),
     [allTeachers, department]
@@ -78,6 +110,21 @@ export default function TeacherIdCardsPage() {
 
   const cards = useMemo(() => displayed.map(toHolder), [displayed]);
   const withPhoto = useMemo(() => teachers.filter((t) => t.avatar).length, [teachers]);
+
+  // Group staff by department (alphabetical), each department's staff sorted by
+  // name, so the sheet prints department-wise.
+  const groups = useMemo(() => {
+    const map = new Map<string, Teacher[]>();
+    for (const t of displayed) {
+      const key = t.department || "Unassigned";
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(t);
+    }
+    for (const arr of map.values()) {
+      arr.sort((a, b) => teacherName(a).localeCompare(teacherName(b)));
+    }
+    return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  }, [displayed]);
 
   const toggle = (id: string) =>
     setSelected((prev) => {
@@ -109,6 +156,7 @@ export default function TeacherIdCardsPage() {
       title: `Preparing ${printCount} card${printCount > 1 ? "s" : ""}`,
       description: "Your browser's print dialog will open.",
     });
+    // Let the toast paint before the print dialog blocks the main thread.
     setTimeout(() => window.print(), 250);
   };
 
@@ -183,12 +231,35 @@ export default function TeacherIdCardsPage() {
             {allVisibleSelected ? "Clear selection" : "Select all"}
           </Button>
         </div>
+
+        {/* Card design picker — staff cards are single-sided (no reverse face). */}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="mr-1 text-xs font-medium text-muted">Template</span>
+          {ID_CARD_TEMPLATES.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => chooseTemplate(t.id)}
+              aria-pressed={templateId === t.id}
+              title={t.name}
+              className={cn(
+                "focus-ring flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors",
+                templateId === t.id
+                  ? "border-primary bg-primary-soft text-primary-text"
+                  : "border-border text-muted hover:border-border-strong hover:text-text"
+              )}
+            >
+              <span className={cn("size-4 rounded-full ring-1 ring-black/10", t.header)} aria-hidden />
+              {t.name}
+            </button>
+          ))}
+        </div>
       </div>
 
       {loading ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className="aspect-[0.631/1] w-full" />
+            <Skeleton key={i} className="h-80 w-full max-w-75" />
           ))}
         </div>
       ) : cards.length === 0 ? (
@@ -200,42 +271,62 @@ export default function TeacherIdCardsPage() {
           />
         </Card>
       ) : (
-        <div className="print-sheet grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {cards.map((holder) => {
-            const isSelected = selected.has(holder.id);
-            const dimmed = selected.size > 0 && !isSelected;
-            const hasPhoto = teachers.find((t) => t.id === holder.id)?.avatar;
-            return (
-              <div key={holder.id} className={dimmed ? "print-hide" : undefined}>
-                <button
-                  onClick={() => toggle(holder.id)}
-                  aria-pressed={isSelected}
-                  aria-label={`Select ID card for ${holder.name}`}
-                  className="focus-ring print-hide mb-2 flex w-full items-center gap-2 rounded-md px-1 text-left text-xs text-muted transition-colors hover:text-text"
-                >
-                  {isSelected ? (
-                    <CheckSquare className="size-4 text-primary" />
-                  ) : (
-                    <Square className="size-4" />
-                  )}
-                  <span className="truncate">{holder.name}</span>
-                  {hasPhoto && (
-                    <span className="ml-auto shrink-0 rounded-full bg-success-soft px-1.5 py-0.5 text-[10px] font-medium text-success-text">
-                      Photo
-                    </span>
-                  )}
-                </button>
-                <IdCard holder={holder} signatureUrl={signatureUrl} school={identity} />
+        <div className="print-sheet flex flex-col gap-8">
+          {groups.map(([dept, group]) => (
+            <section key={dept}>
+              {/* Department heading */}
+              <div className="mb-3 flex items-center gap-2 border-b border-border pb-2">
+                <h3 className="text-sm font-semibold text-text">{dept}</h3>
+                <Badge variant="info">{group.length} card{group.length === 1 ? "" : "s"}</Badge>
               </div>
-            );
-          })}
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                {group.map((t) => {
+                  const holder = toHolder(t);
+                  const isSelected = selected.has(holder.id);
+                  const dimmed = selected.size > 0 && !isSelected;
+                  return (
+                    <div key={holder.id} className={dimmed ? "print-hide" : undefined}>
+                      <button
+                        onClick={() => toggle(holder.id)}
+                        aria-pressed={isSelected}
+                        aria-label={`Select ID card for ${holder.name}`}
+                        className="focus-ring print-hide mx-auto mb-2 flex w-full max-w-75 items-center gap-2 rounded-md px-1 text-left text-xs text-muted transition-colors hover:text-text"
+                      >
+                        {isSelected ? (
+                          <CheckSquare className="size-4 text-primary" />
+                        ) : (
+                          <Square className="size-4" />
+                        )}
+                        <span className="truncate">{holder.name}</span>
+                        {t.avatar && (
+                          <span className="ml-auto shrink-0 rounded-full bg-success-soft px-1.5 py-0.5 text-[10px] font-medium text-success-text">
+                            Photo
+                          </span>
+                        )}
+                      </button>
+                      <div className="flex flex-col items-center gap-3">
+                        <IdCard
+                          holder={holder}
+                          signatureUrl={signatureUrl}
+                          school={identity}
+                          template={template}
+                          sessionLabel={ACADEMIC.label}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          ))}
         </div>
       )}
 
-      <p className="print-hide text-xs text-subtle">
-        Cards render at CR80 size (85.6 × 54 mm). Each card carries a scannable QR encoding the staff member&rsquo;s
-        verifiable identity (name, employee ID, department).
-      </p>
+      <CardContent className="print-hide px-0 text-xs text-subtle">
+        Cards render at portrait CR80 size (54 × 85.6 mm). Add a staff photo from the teacher form and it
+        appears here automatically. Each card carries a scannable QR encoding the employee ID and name.
+      </CardContent>
     </div>
   );
 }

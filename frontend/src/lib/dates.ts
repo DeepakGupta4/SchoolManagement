@@ -84,3 +84,20 @@ export function isValidDateString(s: string): boolean {
 export function isWithin(s: string, min: string, max: string): boolean {
   return s >= min && s <= max;
 }
+
+const WEEKDAYS = [
+  "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday",
+] as const;
+
+/**
+ * Weekday name ("Monday"…) for a yyyy-mm-dd string, or "" if invalid. Built at
+ * UTC noon (like the validators above) so no timezone offset shifts the day, and
+ * deterministic from its input — safe to call in render / useMemo.
+ */
+export function weekdayName(s: string): string {
+  if (!isValidDateString(s)) return "";
+  const year = Number(s.slice(0, 4));
+  const month = Number(s.slice(5, 7));
+  const day = Number(s.slice(8, 10));
+  return WEEKDAYS[new Date(Date.UTC(year, month - 1, day, 12)).getUTCDay()] ?? "";
+}

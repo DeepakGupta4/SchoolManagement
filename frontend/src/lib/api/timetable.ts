@@ -16,6 +16,10 @@ export interface TimetableFilters {
   className?: string;
   day?: string;
   subject?: string;
+  /** Exact teacher-name match (used to pull one teacher's periods). */
+  teacher?: string;
+  /** Page size; raised above the 200 default when a whole day is needed. */
+  limit?: number;
 }
 
 export const timetableApi = createApiResource<TimetableEntry, TimetableFilters>("/api/timetable");

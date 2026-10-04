@@ -7,11 +7,20 @@ const router = Router();
 
 router.use(requireAuth);
 
-/** The filter that selects the caller's own notifications. */
-function scopeFor(user: { role: string; schoolId: string }) {
-  return user.role === "super_admin"
-    ? { audience: "super_admin" as const }
-    : { audience: "school" as const, schoolId: user.schoolId };
+/**
+ * The filter that selects the caller's own notifications. A school user sees
+ * both the school-wide feed AND anything addressed to them personally
+ * (`audience: "user"` matched on their login email).
+ */
+function scopeFor(user: { role: string; schoolId: string; email: string }) {
+  if (user.role === "super_admin") return { audience: "super_admin" as const };
+  return {
+    schoolId: user.schoolId,
+    $or: [
+      { audience: "school" as const },
+      { audience: "user" as const, recipientEmail: (user.email || "").toLowerCase() },
+    ],
+  };
 }
 
 /** Latest notifications for the caller, with the unread count. */

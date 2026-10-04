@@ -12,6 +12,7 @@ import transferRoutes from "./transfers/transfer.routes.js";
 import staffRoutes from "./staff/staff.routes.js";
 import departmentRoutes from "./departments/department.routes.js";
 import allocationRoutes from "./allocations/allocation.routes.js";
+import substitutionRoutes from "./substitutions/substitution.routes.js";
 import feeStructureRoutes from "./feeStructures/feeStructure.routes.js";
 import scholarshipRoutes from "./scholarships/scholarship.routes.js";
 import expenseRoutes from "./expenses/expense.routes.js";
@@ -58,6 +59,7 @@ export const crudModules: { path: string; router: Router }[] = [
   { path: "/api/staff", router: staffRoutes },
   { path: "/api/departments", router: departmentRoutes },
   { path: "/api/allocations", router: allocationRoutes },
+  { path: "/api/substitutions", router: substitutionRoutes },
   { path: "/api/fee-structures", router: feeStructureRoutes },
   { path: "/api/scholarships", router: scholarshipRoutes },
   { path: "/api/expenses", router: expenseRoutes },
