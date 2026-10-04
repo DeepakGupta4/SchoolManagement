@@ -99,7 +99,13 @@ router.post(
     try {
       const schoolId = req.user!.schoolId;
       const body = req.body as z.infer<typeof createSchema>;
-      const doc = await StoredDocument.create({ ...body, schoolId });
+      // The office (admin/principal) uploading a document IS the verification
+      // authority, so their uploads are verified on arrival. Anyone else's (e.g. a
+      // teacher's) stays pending for the office to confirm. The office can still
+      // un-verify later from the vault.
+      const OFFICE_ROLES = ["super_admin", "school_admin", "principal"];
+      const verified = OFFICE_ROLES.includes(req.user!.role) ? true : body.verified;
+      const doc = await StoredDocument.create({ ...body, verified, schoolId });
       res.status(201).json({ data: toPublicDocument(doc) });
     } catch (err) {
       next(err);
