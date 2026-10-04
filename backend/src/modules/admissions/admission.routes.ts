@@ -8,6 +8,8 @@ import { createCrudRouter } from "../../utils/crudRouter.js";
 const admissionSchema = z.object({
   applicationNo: z.string().min(1),
   name: z.string().min(1),
+  firstName: z.string().default(""),
+  lastName: z.string().default(""),
   dateOfBirth: z.string().default(""),
   gender: z.string().default(""),
   classApplied: z.string().default(""),
@@ -24,6 +26,33 @@ const admissionSchema = z.object({
   stage: z.string().default("enquiry"),
   score: z.coerce.number<number>().min(0).default(0),
   notes: z.string().default(""),
+
+  // Detailed admission-form fields (all optional) — mirror the student form and
+  // carry into the enrolled student on approval.
+  avatar: z.string().default(""),
+  medicalNotes: z.string().default(""),
+  fatherName: z.string().default(""),
+  fatherOccupation: z.string().default(""),
+  fatherPhone: z.string().default(""),
+  fatherEmail: z.string().default(""),
+  motherName: z.string().default(""),
+  motherOccupation: z.string().default(""),
+  motherPhone: z.string().default(""),
+  motherEmail: z.string().default(""),
+  nationality: z.string().default(""),
+  religion: z.string().default(""),
+  motherTongue: z.string().default(""),
+  aadhaarNo: z.string().default(""),
+  placeOfBirth: z.string().default(""),
+  annualIncome: z.string().default(""),
+  correspondenceAddress: z.string().default(""),
+  emergencyContact: z.string().default(""),
+  previousClass: z.string().default(""),
+  previousBoard: z.string().default(""),
+  tcNumber: z.string().default(""),
+  previousResult: z.string().default(""),
+  transportRequired: z.boolean().default(false),
+  pickupPoint: z.string().default(""),
 });
 
 const BLOOD_GROUPS = ["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"];
@@ -45,8 +74,8 @@ async function enrolIfApproved(doc: HydratedDocument<ApplicationAttrs>, schoolId
     if (existing) return;
 
     const parts = String(doc.name).trim().split(/\s+/);
-    const firstName = parts[0] || "Student";
-    const lastName = parts.slice(1).join(" ") || firstName;
+    const firstName = (doc.firstName || "").trim() || parts[0] || "Student";
+    const lastName = (doc.lastName || "").trim() || parts.slice(1).join(" ") || firstName;
 
     const gender = ["male", "female", "other"].includes(String(doc.gender).toLowerCase())
       ? (String(doc.gender).toLowerCase() as "male" | "female" | "other")
@@ -91,6 +120,33 @@ async function enrolIfApproved(doc: HydratedDocument<ApplicationAttrs>, schoolId
         phone: doc.phone || "",
         email: emailValid ? String(doc.email).toLowerCase() : "",
       },
+      // Carry the detailed admission-form fields through to the student record.
+      medicalNotes: doc.medicalNotes || "",
+      avatar: doc.avatar || "",
+      fatherName: doc.fatherName || "",
+      fatherOccupation: doc.fatherOccupation || "",
+      fatherPhone: doc.fatherPhone || "",
+      fatherEmail: doc.fatherEmail || "",
+      motherName: doc.motherName || "",
+      motherOccupation: doc.motherOccupation || "",
+      motherPhone: doc.motherPhone || "",
+      motherEmail: doc.motherEmail || "",
+      nationality: doc.nationality || "",
+      religion: doc.religion || "",
+      category: doc.category || "",
+      motherTongue: doc.motherTongue || "",
+      aadhaarNo: doc.aadhaarNo || "",
+      placeOfBirth: doc.placeOfBirth || "",
+      annualIncome: doc.annualIncome || "",
+      correspondenceAddress: doc.correspondenceAddress || "",
+      emergencyContact: doc.emergencyContact || "",
+      previousSchool: doc.previousSchool || "",
+      previousClass: doc.previousClass || "",
+      previousBoard: doc.previousBoard || "",
+      tcNumber: doc.tcNumber || "",
+      previousResult: doc.previousResult || "",
+      transportRequired: Boolean(doc.transportRequired),
+      pickupPoint: doc.pickupPoint || "",
     });
 
     void notifySchool(schoolId, {

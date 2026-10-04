@@ -5,6 +5,8 @@ export interface Application {
   // Applicant
   applicationNo: string;
   name: string;
+  firstName: string;
+  lastName: string;
   dateOfBirth: string;
   gender: string;
   classApplied: string;
@@ -23,6 +25,31 @@ export interface Application {
   stage: string;
   score: number;
   notes: string;
+  // Detailed admission-form fields (mirror the student admission form).
+  avatar: string;
+  medicalNotes: string;
+  fatherName: string;
+  fatherOccupation: string;
+  fatherPhone: string;
+  fatherEmail: string;
+  motherName: string;
+  motherOccupation: string;
+  motherPhone: string;
+  motherEmail: string;
+  nationality: string;
+  religion: string;
+  motherTongue: string;
+  aadhaarNo: string;
+  placeOfBirth: string;
+  annualIncome: string;
+  correspondenceAddress: string;
+  emergencyContact: string;
+  previousClass: string;
+  previousBoard: string;
+  tcNumber: string;
+  previousResult: string;
+  transportRequired: boolean;
+  pickupPoint: string;
 }
 
 export interface ApplicationFilters {

@@ -44,7 +44,6 @@ import {
   STAGE_OPTIONS,
   type Application,
 } from "@/lib/api/admissions";
-import type { AdmissionSchema } from "@/lib/schemas/admission";
 import { useClassOptions } from "@/hooks/useClassOptions";
 import { cn } from "@/lib/utils";
 import { DetailModal } from "@/components/DetailModal";
@@ -146,12 +145,29 @@ function AdmissionsPageInner() {
         { header: "Class Applied", value: (a) => a.classApplied },
         { header: "Category", value: (a) => a.category },
         { header: "Blood Group", value: (a) => a.bloodGroup },
-        { header: "Previous School", value: (a) => a.previousSchool },
-        { header: "Parent / Guardian", value: (a) => a.parent },
+        { header: "Father", value: (a) => a.fatherName },
+        { header: "Father's Phone", value: (a) => a.fatherPhone },
+        { header: "Mother", value: (a) => a.motherName },
+        { header: "Mother's Phone", value: (a) => a.motherPhone },
+        { header: "Primary Contact", value: (a) => a.parent },
         { header: "Relation", value: (a) => a.relation },
         { header: "Phone", value: (a) => a.phone },
         { header: "Email", value: (a) => a.email },
         { header: "Address", value: (a) => a.address },
+        { header: "Nationality", value: (a) => a.nationality },
+        { header: "Religion", value: (a) => a.religion },
+        { header: "Mother Tongue", value: (a) => a.motherTongue },
+        { header: "Aadhaar No", value: (a) => a.aadhaarNo },
+        { header: "Place of Birth", value: (a) => a.placeOfBirth },
+        { header: "Annual Income", value: (a) => a.annualIncome },
+        { header: "Previous School", value: (a) => a.previousSchool },
+        { header: "Class Passed", value: (a) => a.previousClass },
+        { header: "Board", value: (a) => a.previousBoard },
+        { header: "TC Number", value: (a) => a.tcNumber },
+        { header: "Previous Result", value: (a) => a.previousResult },
+        { header: "Transport Required", value: (a) => (a.transportRequired ? "Yes" : "No") },
+        { header: "Pick-up Point", value: (a) => a.pickupPoint },
+        { header: "Emergency Contact", value: (a) => a.emergencyContact },
         { header: "Source", value: (a) => a.source },
         { header: "Applied On", value: (a) => a.appliedOn },
         { header: "Entrance Score", value: (a) => (a.score > 0 ? a.score : "") },
@@ -171,7 +187,7 @@ function AdmissionsPageInner() {
     setFormOpen(true);
   };
 
-  const handleSubmit = async (values: AdmissionSchema) => {
+  const handleSubmit = async (values: Omit<Application, "id">) => {
     const ok = await save(values, editing);
     if (ok) {
       setFormOpen(false);
@@ -503,12 +519,30 @@ function AdmissionsPageInner() {
                 { label: "Class applied", value: viewing.classApplied },
                 { label: "Category", value: viewing.category },
                 { label: "Blood group", value: viewing.bloodGroup },
-                { label: "Previous school", value: viewing.previousSchool },
-                { label: "Parent / guardian", value: viewing.parent },
+                { label: "Medical notes", value: viewing.medicalNotes, full: true },
+                { label: "Father", value: viewing.fatherName },
+                { label: "Father's phone", value: viewing.fatherPhone },
+                { label: "Mother", value: viewing.motherName },
+                { label: "Mother's phone", value: viewing.motherPhone },
+                { label: "Primary contact", value: viewing.parent },
                 { label: "Relation", value: viewing.relation },
                 { label: "Phone", value: viewing.phone },
                 { label: "Email", value: viewing.email },
                 { label: "Address", value: viewing.address, full: true },
+                { label: "Nationality", value: viewing.nationality },
+                { label: "Religion", value: viewing.religion },
+                { label: "Mother tongue", value: viewing.motherTongue },
+                { label: "Aadhaar no.", value: viewing.aadhaarNo },
+                { label: "Place of birth", value: viewing.placeOfBirth },
+                { label: "Annual income", value: viewing.annualIncome },
+                { label: "Previous school", value: viewing.previousSchool },
+                { label: "Class passed", value: viewing.previousClass },
+                { label: "Board", value: viewing.previousBoard },
+                { label: "T.C. number", value: viewing.tcNumber },
+                { label: "Previous result", value: viewing.previousResult },
+                { label: "Transport required", value: viewing.transportRequired ? "Yes" : "No" },
+                { label: "Pick-up point", value: viewing.pickupPoint },
+                { label: "Emergency contact", value: viewing.emergencyContact },
                 { label: "Source", value: viewing.source },
                 { label: "Applied on", value: viewing.appliedOn },
                 { label: "Stage", value: STAGE_META[viewing.stage]?.label ?? viewing.stage },
