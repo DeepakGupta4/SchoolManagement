@@ -87,6 +87,11 @@ const studentSchema = new Schema(
     attendancePercent: { type: Number, default: 100, min: 0, max: 100 },
     performancePercent: { type: Number, default: 0, min: 0, max: 100 },
     feeDue: { type: Number, default: 0, min: 0 },
+
+    // The academic session this student was last promoted/retained/graduated for.
+    // Makes the promotion endpoint idempotent: re-applying the same session is a
+    // no-op, so a double-click can't cascade a student up two classes.
+    lastPromotedSession: { type: String, default: "" },
   },
   { timestamps: true }
 );

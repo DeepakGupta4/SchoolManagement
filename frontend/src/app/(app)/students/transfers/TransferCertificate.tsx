@@ -1,7 +1,21 @@
 import type { TransferRequest } from "@/lib/api/transfers";
 import type { SchoolIdentity } from "@/lib/schoolIdentity";
+import { TODAY_ISO } from "@/lib/dates";
 
 const inr = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 });
+
+const MONTHS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
+/** "2026-10-04" -> "4 October 2026"; returns the input unchanged if not an ISO date. */
+function formatLong(iso: string): string {
+  const [y, m, d] = iso.split("-");
+  const mi = Number(m) - 1;
+  if (!y || !d || Number.isNaN(mi) || mi < 0 || mi > 11) return iso;
+  return `${Number(d)} ${MONTHS[mi]} ${y}`;
+}
 
 /**
  * Printable Transfer / School-Leaving Certificate. Rendered inside a
@@ -10,12 +24,12 @@ const inr = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR",
  * Fixed colours so it looks identical regardless of the operator's theme.
  */
 export function TransferCertificate({ record, school }: { record: TransferRequest; school?: SchoolIdentity }) {
-  const today = new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" });
+  const today = formatLong(TODAY_ISO);
   const typeLabel = record.type.charAt(0).toUpperCase() + record.type.slice(1);
 
   return (
     <div className="print-sheet">
-      <div className="mx-auto max-w-[720px] bg-white p-10 text-slate-900">
+      <div className="mx-auto max-w-180 bg-white p-10 text-slate-900">
         {/* Header */}
         <div className="border-b-2 border-slate-800 pb-4 text-center">
           <h1 className="text-2xl font-extrabold uppercase tracking-wide text-indigo-700">{school?.name || "Your School"}</h1>
@@ -32,7 +46,7 @@ export function TransferCertificate({ record, school }: { record: TransferReques
 
         <div className="mt-6 flex justify-between text-sm">
           <span><span className="font-semibold">TC No:</span> {record.tcNo && record.tcNo !== "—" ? record.tcNo : "—"}</span>
-          <span><span className="font-semibold">Date:</span> {record.issuedOn && record.issuedOn !== "—" ? record.issuedOn : today}</span>
+          <span><span className="font-semibold">Date:</span> {record.issuedOn && record.issuedOn !== "—" ? formatLong(record.issuedOn) : today}</span>
         </div>
 
         {/* Body */}

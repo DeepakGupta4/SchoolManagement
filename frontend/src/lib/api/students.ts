@@ -114,13 +114,16 @@ export interface PromotionResult {
   promoted: number;
   retained: number;
   graduated: number;
+  /** Requested students that were skipped (already promoted this session, not active, or not found). */
+  skipped: number;
 }
 
 export async function promoteStudents(
-  promotions: PromotionDecision[]
+  promotions: PromotionDecision[],
+  session: string
 ): Promise<PromotionResult> {
   return apiRequest<PromotionResult>("/api/students/promote", {
     method: "POST",
-    body: { promotions },
+    body: { session, promotions },
   });
 }

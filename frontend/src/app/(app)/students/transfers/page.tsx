@@ -219,7 +219,7 @@ export default function TransfersPage() {
       align: "right",
       render: (r) =>
         r.dues > 0 ? (
-          <span className="whitespace-nowrap font-semibold text-danger">{inr.format(r.dues)}</span>
+          <span className="whitespace-nowrap font-semibold text-danger-text">{inr.format(r.dues)}</span>
         ) : (
           <span className="whitespace-nowrap text-success">Cleared</span>
         ),
@@ -343,7 +343,7 @@ export default function TransfersPage() {
       {error ? (
         <Card>
           <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
-            <p className="text-sm font-medium text-danger">{error}</p>
+            <p className="text-sm font-medium text-danger-text">{error}</p>
             <Button variant="outline" onClick={refetch}>
               Try again
             </Button>

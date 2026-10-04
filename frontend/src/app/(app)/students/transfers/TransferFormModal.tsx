@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Search } from "lucide-react";
@@ -12,8 +12,9 @@ import {
   TYPE_OPTIONS,
   type TransferRequest,
 } from "@/lib/api/transfers";
-import { listStudents } from "@/lib/api/students";
+import { fetchAllStudents } from "@/lib/api/students";
 import { useClassOptions } from "@/hooks/useClassOptions";
+import { MIN_RECORD_DATE, TODAY_ISO } from "@/lib/dates";
 import { fullName, type Student } from "@/types/student";
 import { cn } from "@/lib/utils";
 
@@ -23,7 +24,7 @@ const emptyValues: TransferSchema = {
   className: "",
   type: TYPE_OPTIONS[0].value,
   reason: "",
-  requestedOn: new Date().toISOString().slice(0, 10),
+  requestedOn: TODAY_ISO,
   issuedOn: "—",
   tcNo: "—",
   status: "pending",
@@ -67,9 +68,13 @@ export function TransferFormModal({
   // In edit mode there's nothing to look up, so the dropdown stays closed
   // until the operator actively edits the name.
   const [picked, setPicked] = useState(true);
+  // Keyboard-highlighted suggestion (-1 = none).
+  const [activeIndex, setActiveIndex] = useState(-1);
 
   const nameValue = useWatch({ control, name: "name" });
   const classValue = useWatch({ control, name: "className" });
+  const typeValue = useWatch({ control, name: "type" });
+  const statusValue = useWatch({ control, name: "status" });
 
   // Repopulate on open so the previous record's values can't leak through.
   useEffect(() => {
@@ -79,6 +84,7 @@ export function TransferFormModal({
     const t = setTimeout(() => {
       setPicked(true);
       setFocused(false);
+      setActiveIndex(-1);
     }, 0);
     return () => clearTimeout(t);
   }, [open, record, reset]);
@@ -86,8 +92,10 @@ export function TransferFormModal({
   useEffect(() => {
     if (!open || isEdit) return;
     let cancelled = false;
-    listStudents()
-      .then((all) => !cancelled && setRoster(all.filter((s) => s.status === "active")))
+    // Whole active roster (all pages) so even students past the first page are
+    // searchable — a capped page would hide them from the autocomplete.
+    fetchAllStudents({ status: "active" })
+      .then((all) => !cancelled && setRoster(all))
       .catch(() => !cancelled && setRoster([]));
     return () => {
       cancelled = true;
@@ -115,6 +123,34 @@ export function TransferFormModal({
     setValue("studentId", s.admissionNo, { shouldValidate: true });
     setValue("className", s.className, { shouldValidate: true });
     setPicked(true);
+    setActiveIndex(-1);
+  };
+
+  const onNameKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      if (!showList) {
+        setPicked(false);
+        setActiveIndex(suggestions.length > 0 ? 0 : -1);
+      } else {
+        setActiveIndex((i) => Math.min(i + 1, suggestions.length - 1));
+      }
+    } else if (e.key === "ArrowUp") {
+      if (!showList) return;
+      e.preventDefault();
+      setActiveIndex((i) => Math.max(i - 1, 0));
+    } else if (e.key === "Enter") {
+      if (showList && activeIndex >= 0 && activeIndex < suggestions.length) {
+        e.preventDefault(); // pick the highlighted student instead of submitting
+        pick(suggestions[activeIndex]);
+      }
+    } else if (e.key === "Escape") {
+      if (showList) {
+        e.preventDefault();
+        setPicked(true);
+        setActiveIndex(-1);
+      }
+    }
   };
 
   const submit = handleSubmit(onSubmit);
@@ -159,25 +195,38 @@ export function TransferFormModal({
                 <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-subtle" />
                 <input
                   autoComplete="off"
+                  role="combobox"
+                  aria-expanded={showList}
+                  aria-controls="transfer-student-list"
+                  aria-autocomplete="list"
+                  aria-activedescendant={
+                    showList && activeIndex >= 0 ? `transfer-opt-${activeIndex}` : undefined
+                  }
                   placeholder={isEdit ? "Aarav Sharma" : "Type to search students…"}
                   className={cn(controlClasses, "pl-9", errors.name && "border-danger")}
                   {...register("name", {
                     onChange: () => {
                       setPicked(false);
+                      setActiveIndex(-1);
                       // Typing invalidates a previously auto-filled ID.
                       if (!isEdit) setValue("studentId", "");
                     },
                   })}
                   onFocus={() => setFocused(true)}
                   onBlur={() => setFocused(false)}
+                  onKeyDown={onNameKeyDown}
                 />
               </div>
             </Field>
 
             {showList && (
-              <ul className="absolute left-0 right-0 z-30 mt-1 max-h-56 overflow-auto rounded-md border border-border bg-surface-raised py-1 shadow-lg">
-                {suggestions.map((s) => (
-                  <li key={s.id}>
+              <ul
+                id="transfer-student-list"
+                role="listbox"
+                className="absolute left-0 right-0 z-30 mt-1 max-h-56 overflow-auto rounded-md border border-border bg-surface-raised py-1 shadow-lg"
+              >
+                {suggestions.map((s, i) => (
+                  <li key={s.id} role="option" id={`transfer-opt-${i}`} aria-selected={i === activeIndex}>
                     <button
                       type="button"
                       // onMouseDown fires before input blur, so the pick lands
@@ -186,7 +235,11 @@ export function TransferFormModal({
                         e.preventDefault();
                         pick(s);
                       }}
-                      className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-surface-hover"
+                      onMouseEnter={() => setActiveIndex(i)}
+                      className={cn(
+                        "flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-surface-hover",
+                        i === activeIndex && "bg-surface-hover"
+                      )}
                     >
                       <span className="min-w-0">
                         <span className="block truncate font-medium text-text">{fullName(s)}</span>
@@ -221,6 +274,8 @@ export function TransferFormModal({
             label="Requested on"
             type="date"
             required
+            min={MIN_RECORD_DATE}
+            max={TODAY_ISO}
             {...register("requestedOn")}
             error={errors.requestedOn?.message}
           />
@@ -234,14 +289,14 @@ export function TransferFormModal({
           <Input
             label="TC number"
             required
-            hint="Use — until a certificate is issued."
+            hint="Auto-assigned when issued — leave as —"
             {...register("tcNo")}
             error={errors.tcNo?.message}
           />
           <Input
             label="Issued on"
             required
-            hint="Use — until a certificate is issued."
+            hint="Auto-assigned when issued — leave as —"
             {...register("issuedOn")}
             error={errors.issuedOn?.message}
           />
@@ -261,6 +316,14 @@ export function TransferFormModal({
           {...register("reason")}
           error={errors.reason?.message}
         />
+
+        {statusValue === "issued" && (
+          <p className="rounded-md bg-info-soft/50 px-3 py-2 text-xs text-info-text">
+            Issuing this certificate assigns a TC number &amp; date automatically and marks the student as{" "}
+            <span className="font-semibold">{typeValue === "withdrawal" ? "withdrawn (inactive)" : "transferred"}</span>,
+            removing them from active rosters, promotions and fee runs.
+          </p>
+        )}
 
         {/* Enables Enter-to-submit without duplicating the footer button. */}
         <button type="submit" className="hidden" aria-hidden tabIndex={-1} />

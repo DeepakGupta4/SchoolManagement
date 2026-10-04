@@ -1,9 +1,12 @@
 import { z } from "zod";
+import mongoose from "mongoose";
 import { requireRole } from "../../middleware/auth.js";
 import { validate } from "../../middleware/validate.js";
 import { Student } from "./student.model.js";
 import { FeeAccount, Payment } from "../fees/fee.model.js";
 import { StoredDocument } from "../documents/document.model.js";
+import { SchoolClass } from "../classes/class.model.js";
+import { ApiError } from "../../utils/ApiError.js";
 import { createCrudRouter } from "../../utils/crudRouter.js";
 
 const PHONE = /^\d{10}$/;
@@ -103,14 +106,15 @@ const studentSchema = z.object({
   pickupPoint: z.string().optional(),
 });
 
-// End-of-session class promotion. Each decision is applied individually and
-// scoped to the caller's school so one tenant can never move another's students.
+// End-of-session class promotion, scoped to the caller's school so one tenant can
+// never move another's students. `session` makes the whole batch idempotent.
 const promoteSchema = z.object({
+  session: z.string().min(1, "Academic session is required"),
   promotions: z
     .array(
       z
         .object({
-          studentId: z.string().min(1),
+          studentId: z.string().refine((v) => mongoose.isValidObjectId(v), "Invalid student id"),
           action: z.enum(["promote", "retain", "graduate"]),
           toClass: z.string().min(1).optional(),
         })
@@ -119,7 +123,8 @@ const promoteSchema = z.object({
           path: ["toClass"],
         })
     )
-    .min(1, "Nothing to apply"),
+    .min(1, "Nothing to apply")
+    .max(5000, "Too many students in one batch"),
 });
 
 export default createCrudRouter({
@@ -157,30 +162,90 @@ export default createCrudRouter({
       validate(promoteSchema),
       async (req, res, next) => {
         try {
-          const { promotions } = req.body as z.infer<typeof promoteSchema>;
+          const { session, promotions } = req.body as z.infer<typeof promoteSchema>;
           const schoolId = req.user!.schoolId;
+
+          // Every promote target must be a real class for THIS school — never trust
+          // a client-supplied className (it's an indexed roster filter). One check
+          // up front so a bad class fails the whole batch cleanly.
+          const validClasses = new Set<string>(await SchoolClass.find({ schoolId }).distinct("name"));
+          for (const p of promotions) {
+            if (p.action === "promote" && !validClasses.has(p.toClass!)) {
+              throw ApiError.badRequest(`Unknown class: "${p.toClass}". Create it in Classes & Sections first.`);
+            }
+          }
+
+          // Only ACTIVE students in this school are eligible. Alumni/transferred/
+          // inactive and other-tenant ids are ignored (counted as skipped), so a
+          // departed student is never silently re-promoted.
+          const ids = promotions.map((p) => new mongoose.Types.ObjectId(p.studentId));
+          const students = await Student.find({ _id: { $in: ids }, schoolId, status: "active" }).select(
+            "status lastPromotedSession"
+          );
+          const eligible = new Set(
+            students.filter((s) => s.lastPromotedSession !== session).map((s) => String(s._id))
+          );
+
+          // Idempotency + eligibility: skip anything already processed for this
+          // session, so a double-click or re-apply can't cascade a second class.
+          const decisions = promotions.filter((p) => eligible.has(p.studentId));
+
+          // Roll reassignment for promotes: continue each destination class's
+          // numbering after its current highest active roll, so promoted students
+          // never collide with students already in that class (no unique index).
+          const targets = [...new Set(decisions.filter((p) => p.action === "promote").map((p) => p.toClass!))];
+          const nextRoll = new Map<string, number>();
+          for (const cls of targets) {
+            const inClass = await Student.find({ schoolId, className: cls, status: "active" }).select("rollNo");
+            const max = inClass.reduce((m, s) => {
+              const n = parseInt(String(s.rollNo).replace(/\D/g, ""), 10);
+              return Number.isNaN(n) ? m : Math.max(m, n);
+            }, 0);
+            nextRoll.set(cls, max);
+          }
 
           let promoted = 0;
           let retained = 0;
           let graduated = 0;
+          const ops: Parameters<typeof Student.bulkWrite>[0] = [];
 
-          for (const p of promotions) {
+          for (const p of decisions) {
             if (p.action === "retain") {
               retained += 1;
-              continue;
-            }
-            const update =
-              p.action === "promote"
-                ? { className: p.toClass }
-                : { status: "alumni" as const };
-            const result = await Student.updateOne({ _id: p.studentId, schoolId }, { $set: update });
-            if (result.matchedCount > 0) {
-              if (p.action === "promote") promoted += 1;
-              else graduated += 1;
+              ops.push({
+                updateOne: {
+                  filter: { _id: p.studentId, schoolId },
+                  update: { $set: { lastPromotedSession: session } },
+                },
+              });
+            } else if (p.action === "graduate") {
+              graduated += 1;
+              ops.push({
+                updateOne: {
+                  filter: { _id: p.studentId, schoolId },
+                  update: { $set: { status: "alumni", lastPromotedSession: session } },
+                },
+              });
+            } else {
+              const cls = p.toClass!;
+              const roll = (nextRoll.get(cls) ?? 0) + 1;
+              nextRoll.set(cls, roll);
+              promoted += 1;
+              ops.push({
+                updateOne: {
+                  filter: { _id: p.studentId, schoolId },
+                  update: { $set: { className: cls, rollNo: String(roll), lastPromotedSession: session } },
+                },
+              });
             }
           }
 
-          res.json({ data: { promoted, retained, graduated } });
+          // One round-trip for the whole batch (not N sequential updates), so the
+          // failure window is tiny and the operation is far faster at scale.
+          if (ops.length > 0) await Student.bulkWrite(ops);
+
+          const skipped = promotions.length - decisions.length;
+          res.json({ data: { promoted, retained, graduated, skipped } });
         } catch (err) {
           next(err);
         }
