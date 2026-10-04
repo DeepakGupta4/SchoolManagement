@@ -3,6 +3,8 @@
 import { GraduationCap, MapPin, Phone } from "lucide-react";
 import { PhotoFrame } from "./PhotoFrame";
 import { QrCode } from "./QrCode";
+import { ID_CARD_TEMPLATES, type IdCardTemplate } from "./idCardTemplates";
+import { academicYear } from "@/lib/dates";
 import type { SchoolIdentity } from "@/lib/schoolIdentity";
 
 export interface IdCardHolder {
@@ -55,17 +57,13 @@ export function idCardPayload(holder: IdCardHolder, schoolName?: string): string
 }
 
 /** One detail row in the card body. */
-function Row({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
+function Row({ label, value, accentClass }: { label: string; value: string; accentClass?: string }) {
   return (
     <div className="flex items-center justify-between gap-2 border-b border-slate-100 py-[3px] last:border-0">
       <span className="shrink-0 text-[7.5px] font-semibold uppercase tracking-wide text-slate-400">
         {label}
       </span>
-      <span
-        className={`truncate text-right text-[9px] font-semibold ${
-          accent ? "text-rose-600" : "text-slate-800"
-        }`}
-      >
+      <span className={`truncate text-right text-[9px] font-semibold ${accentClass ?? "text-slate-800"}`}>
         {value}
       </span>
     </div>
@@ -76,29 +74,36 @@ function Row({ label, value, accent }: { label: string; value: string; accent?: 
  * Vertical (lanyard) school ID card at portrait CR80 proportions
  * (54 × 85.6 mm ≈ 0.631:1) — the format Indian schools actually print.
  *
- * Colours are fixed rather than themed: a printed card must look identical
- * regardless of the operator's light/dark preference.
+ * Colours are fixed per `template` rather than themed: a printed card must look
+ * identical regardless of the operator's light/dark preference.
  */
 export function IdCard({
   holder,
   signatureUrl,
   school,
+  template = ID_CARD_TEMPLATES[0],
+  sessionLabel = academicYear().label,
 }: {
   holder: IdCardHolder;
   /** Authorised signature image (data URL) from the live school profile. */
   signatureUrl?: string;
   /** Live school identity for the masthead, footer and QR payload. */
   school?: SchoolIdentity;
+  /** Visual design to render. Defaults to the first template. */
+  template?: IdCardTemplate;
+  /** Academic-year badge, e.g. "2026-27". */
+  sessionLabel?: string;
 }) {
+  const t = template;
   return (
     <div className="id-card relative mx-auto flex w-full max-w-75 flex-col overflow-hidden rounded-2xl bg-white text-slate-900 shadow-lg ring-1 ring-slate-200">
       {/* Header crest band */}
-      <div className="relative shrink-0 overflow-hidden bg-linear-to-br from-indigo-600 via-indigo-600 to-violet-600 px-3 pb-5 pt-3 text-white">
+      <div className={`relative shrink-0 overflow-hidden px-3 pb-5 pt-3 text-white ${t.header}`}>
         {/* Decorative rings */}
         <div className="pointer-events-none absolute -right-6 -top-8 size-24 rounded-full bg-white/10" aria-hidden />
         <div className="pointer-events-none absolute -right-2 top-6 size-14 rounded-full bg-white/10" aria-hidden />
-        <div className="relative flex items-center gap-2">
-          <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-white/20 ring-1 ring-white/40 backdrop-blur">
+        <div className={`relative flex gap-2 ${t.center ? "flex-col items-center text-center" : "items-center"}`}>
+          <div className={`flex size-9 shrink-0 items-center justify-center rounded-xl ring-1 backdrop-blur ${t.crestTile}`}>
             <GraduationCap className="size-5" />
           </div>
           <div className="min-w-0 leading-tight">
@@ -113,21 +118,21 @@ export function IdCard({
       </div>
 
       {/* Title strip — overlaps the header for a layered look */}
-      <div className="relative z-10 -mt-3 mx-3 flex items-center justify-between rounded-lg bg-slate-900 px-3 py-1 text-white shadow-md">
+      <div className={`relative z-10 -mt-3 mx-3 flex items-center justify-between rounded-lg px-3 py-1 shadow-md ${t.strip}`}>
         <span className="text-[7.5px] font-bold uppercase tracking-[0.18em]">
           {holder.role} Identity Card
         </span>
-        <span className="rounded bg-white/15 px-1.5 py-0.5 text-[6.5px] font-semibold">2025-26</span>
+        <span className="rounded bg-white/15 px-1.5 py-0.5 text-[6.5px] font-semibold">{sessionLabel}</span>
       </div>
 
       {/* Photo + name */}
       <div className="flex shrink-0 flex-col items-center gap-1 px-3 pt-2.5">
-        <div className="rounded-xl bg-linear-to-br from-indigo-100 to-violet-100 p-[3px] shadow-sm ring-1 ring-indigo-200">
+        <div className={`rounded-xl p-[3px] shadow-sm ring-1 ${t.photoWrap}`}>
           <PhotoFrame src={holder.photo} name={holder.name} className="w-[64px] rounded-lg" />
         </div>
         <div className="text-center leading-tight">
           <p className="text-[13px] font-bold text-slate-900">{holder.name}</p>
-          <span className="mt-0.5 inline-block rounded-full bg-indigo-50 px-2 py-0.5 text-[7.5px] font-bold uppercase tracking-wide text-indigo-600 ring-1 ring-indigo-100">
+          <span className={`mt-0.5 inline-block rounded-full px-2 py-0.5 text-[7.5px] font-bold uppercase tracking-wide ring-1 ${t.chip}`}>
             {holder.affiliation}
           </span>
         </div>
@@ -141,7 +146,7 @@ export function IdCard({
             <Row label={holder.guardianLabel ?? "Guardian"} value={holder.guardianOrDesignation} />
           )}
           {holder.phone && <Row label="Phone" value={holder.phone} />}
-          {holder.bloodGroup && <Row label="Blood Group" value={holder.bloodGroup} accent />}
+          {holder.bloodGroup && <Row label="Blood Group" value={holder.bloodGroup} accentClass={t.blood} />}
           <Row label="Valid Till" value={holder.validTill} />
         </div>
 
@@ -168,7 +173,7 @@ export function IdCard({
       </div>
 
       {/* If-found footer */}
-      <div className="mt-2 shrink-0 space-y-0.5 bg-linear-to-r from-slate-900 to-slate-800 px-3 py-1.5 text-white">
+      <div className={`mt-2 shrink-0 space-y-0.5 px-3 py-1.5 text-white ${t.footer}`}>
         <p className="flex items-center gap-1 text-[6.5px] opacity-90">
           <MapPin className="size-2 shrink-0" />
           <span className="truncate">

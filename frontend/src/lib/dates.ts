@@ -29,6 +29,19 @@ export function todayIso(): string {
  */
 export const TODAY_ISO = todayIso();
 
+/**
+ * Current Indian academic year (Apr–Mar) derived from `iso` (local today by
+ * default). Returns a session label ("2026-27") and the matching validity date
+ * ("31 Mar 2027") — used for ID cards so the year is never hardcoded/stale.
+ */
+export function academicYear(iso: string = TODAY_ISO): { label: string; validTill: string } {
+  const y = Number(iso.slice(0, 4));
+  const m = Number(iso.slice(5, 7));
+  const start = m >= 4 ? y : y - 1;
+  const end = start + 1;
+  return { label: `${start}-${String(end).slice(2)}`, validTill: `31 Mar ${end}` };
+}
+
 /** yyyy-mm-dd for `years` before today, in local time. */
 export function isoYearsAgo(years: number): string {
   const d = new Date();

@@ -1,18 +1,24 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { CheckSquare, IdCard as IdCardIcon, Printer, Search, Square, Users } from "lucide-react";
 import {
   Badge, Button, Card, CardContent, EmptyState, Input, PageHeader, Select, Skeleton, StatCard, useToast,
 } from "@/components/ui";
 import { IdCard, type IdCardHolder } from "@/components/cards/IdCard";
+import { ID_CARD_TEMPLATES, getTemplate } from "@/components/cards/idCardTemplates";
 import { useAsyncList } from "@/hooks/useAsyncList";
 import { useClassOptions } from "@/hooks/useClassOptions";
-import { listStudents } from "@/lib/api/students";
+import { fetchAllStudents } from "@/lib/api/students";
 import { getMySchool } from "@/lib/api/schools";
 import { schoolIdentity, FALLBACK_SCHOOL_IDENTITY, type SchoolIdentity } from "@/lib/schoolIdentity";
 import { classRank } from "@/lib/classOrder";
+import { academicYear } from "@/lib/dates";
+import { cn } from "@/lib/utils";
 import { fullName, type Student } from "@/types/student";
+
+const ACADEMIC = academicYear();
+const TEMPLATE_STORAGE_KEY = "idCardTemplate";
 
 /** Maps a student record onto the ID-card holder shape, photo included. */
 function toHolder(s: Student): IdCardHolder {
@@ -29,7 +35,7 @@ function toHolder(s: Student): IdCardHolder {
     phone: s.phone,
     guardianOrDesignation: s.guardian.name,
     guardianLabel: s.guardian.relation,
-    validTill: "31 Mar 2026",
+    validTill: ACADEMIC.validTill,
     photo: s.avatar || undefined,
     address: s.address,
   };
@@ -37,7 +43,7 @@ function toHolder(s: Student): IdCardHolder {
 
 export default function StudentIdCardsPage() {
   const { toast } = useToast();
-  const { classOptions, defaultClass } = useClassOptions();
+  const { classOptions } = useClassOptions();
 
   const [search, setSearch] = useState("");
   const [className, setClassName] = useState("");
@@ -64,20 +70,34 @@ export default function StudentIdCardsPage() {
     };
   }, []);
 
-  // Pre-select the lowest class (e.g. Nursery) once the class list resolves, so
-  // the sheet opens on one class rather than every student. Doesn't fight the
-  // user once they change or clear it.
-  const defaultedClass = useRef(false);
+  // Chosen card design, remembered per operator. Default first; restored from
+  // localStorage post-mount (avoids any SSR/hydration mismatch).
+  const [templateId, setTemplateId] = useState(ID_CARD_TEMPLATES[0].id);
   useEffect(() => {
-    if (defaultedClass.current || className || !defaultClass) return;
-    defaultedClass.current = true;
-    const t = setTimeout(() => setClassName(defaultClass), 0);
-    return () => clearTimeout(t);
-  }, [className, defaultClass]);
+    let saved: string | null = null;
+    try {
+      saved = localStorage.getItem(TEMPLATE_STORAGE_KEY);
+    } catch {
+      saved = null;
+    }
+    if (!saved || !ID_CARD_TEMPLATES.some((t) => t.id === saved)) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setTemplateId(saved);
+  }, []);
+  const template = getTemplate(templateId);
+  const chooseTemplate = (id: string) => {
+    setTemplateId(id);
+    try {
+      localStorage.setItem(TEMPLATE_STORAGE_KEY, id);
+    } catch {
+      /* ignore — a remembered template is a convenience, not required */
+    }
+  };
 
-  // Sourced from the real students API, so a photo added on the student form
-  // appears here on the card without any extra wiring.
-  const fetcher = useCallback(() => listStudents({ search, className }), [search, className]);
+  // The COMPLETE student set (all pages) so a large class / "all classes" is
+  // never truncated — ID cards are printed for everyone, not a capped page.
+  // A photo added on the student form appears here automatically.
+  const fetcher = useCallback(() => fetchAllStudents({ search, className }), [search, className]);
   const { items: students, loading } = useAsyncList<Student>(fetcher);
 
   // Photo quick-filter drives the displayed cards; stat counts stay on `students`.
@@ -213,6 +233,29 @@ export default function StudentIdCardsPage() {
             {allVisibleSelected ? "Clear selection" : "Select all"}
           </Button>
         </div>
+
+        {/* Card design picker */}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="mr-1 text-xs font-medium text-muted">Template</span>
+          {ID_CARD_TEMPLATES.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => chooseTemplate(t.id)}
+              aria-pressed={templateId === t.id}
+              title={t.name}
+              className={cn(
+                "focus-ring flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors",
+                templateId === t.id
+                  ? "border-primary bg-primary-soft text-primary-text"
+                  : "border-border text-muted hover:border-border-strong hover:text-text"
+              )}
+            >
+              <span className={cn("size-4 rounded-full ring-1 ring-black/10", t.header)} aria-hidden />
+              {t.name}
+            </button>
+          ))}
+        </div>
       </div>
 
       {loading ? (
@@ -264,7 +307,13 @@ export default function StudentIdCardsPage() {
                           </span>
                         )}
                       </button>
-                      <IdCard holder={holder} signatureUrl={signatureUrl} school={identity} />
+                      <IdCard
+                        holder={holder}
+                        signatureUrl={signatureUrl}
+                        school={identity}
+                        template={template}
+                        sessionLabel={ACADEMIC.label}
+                      />
                     </div>
                   );
                 })}
