@@ -1,18 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import Link from "next/link";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Clock, UserPlus, DollarSign, CheckSquare, AlertTriangle, Megaphone, Bell, GraduationCap, type LucideIcon,
+  AlertTriangle, Bell, CheckCheck, CheckSquare, Clock, DollarSign, GraduationCap,
+  Megaphone, UserPlus, type LucideIcon,
 } from "lucide-react";
-import { Badge, Card, CardHeader, Skeleton } from "@/components/ui";
+import { Badge, Button, Card, EmptyState, PageHeader, Skeleton, useToast } from "@/components/ui";
 import { cn } from "@/lib/utils";
-import { getNotifications, type AppNotification } from "@/lib/api/notifications";
+import { getNotifications, markAllNotificationsRead, type AppNotification } from "@/lib/api/notifications";
 
 type Tone = "success" | "info" | "warning" | "danger";
 
-/** Map a notification type to a look. */
 function meta(type: string): { icon: LucideIcon; tone: Tone; label: string } {
   switch (type) {
     case "student":
@@ -53,10 +52,23 @@ function relativeTime(iso: string): string {
   return `${Math.floor(h / 24)}d ago`;
 }
 
-export function RecentActivity() {
+export default function NotificationsPage() {
   const router = useRouter();
+  const { toast } = useToast();
   const [items, setItems] = useState<AppNotification[] | null>(null);
   const [error, setError] = useState(false);
+
+  const load = useCallback(() => {
+    return getNotifications()
+      .then(({ items }) => {
+        setError(false);
+        setItems(items);
+      })
+      .catch(() => {
+        setError(true);
+        setItems([]);
+      });
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -65,11 +77,10 @@ export function RecentActivity() {
         .then(({ items }) => {
           if (cancelled) return;
           setError(false);
-          setItems(items.slice(0, 5));
+          setItems(items);
         })
         .catch(() => {
           if (cancelled) return;
-          // A fetch failure is NOT "no activity" — say so, don't imply it's empty.
           setError(true);
           setItems([]);
         });
@@ -80,45 +91,55 @@ export function RecentActivity() {
     };
   }, []);
 
-  return (
-    <Card className="overflow-hidden">
-      <CardHeader>
-        <div className="min-w-0">
-          <p className="text-sm font-semibold text-text">Recent Activity</p>
-          <p className="mt-0.5 text-xs text-muted">Latest updates across school</p>
-        </div>
-        <Link
-          href="/notifications"
-          className="focus-ring inline-flex min-h-6 shrink-0 items-center rounded-md px-1 text-xs font-semibold text-primary transition-colors hover:text-primary-hover"
-        >
-          View all
-        </Link>
-      </CardHeader>
+  const markAll = async () => {
+    try {
+      await markAllNotificationsRead();
+      await load();
+      toast({ title: "All caught up", description: "Every notification is marked read.", variant: "success" });
+    } catch {
+      toast({ title: "Couldn't update", description: "Please try again.", variant: "error" });
+    }
+  };
 
-      <div>
+  return (
+    <div className="flex flex-col gap-5">
+      <PageHeader
+        title="Activity"
+        description="Every update across your school — students, staff, fees and notices."
+        actions={
+          items && items.length > 0 ? (
+            <Button variant="outline" onClick={markAll}>
+              <CheckCheck className="size-4" />
+              Mark all read
+            </Button>
+          ) : undefined
+        }
+      />
+
+      <Card className="overflow-hidden">
         {items === null ? (
           <div className="flex flex-col gap-2 p-4">
-            {[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-12" />)}
+            {[0, 1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-14" />)}
           </div>
         ) : error ? (
-          <p className="px-5 py-10 text-center text-sm text-muted">
-            Couldn&apos;t load recent activity. Reload the page to try again.
-          </p>
+          <EmptyState
+            icon={<AlertTriangle className="size-5 text-warning-text" />}
+            title="Couldn't load activity"
+            description="There was a problem reaching the server. Reload the page to try again."
+          />
         ) : items.length === 0 ? (
-          <p className="px-5 py-10 text-center text-sm text-muted">No recent activity yet.</p>
+          <EmptyState title="No activity yet" description="Updates will appear here as things happen across your school." />
         ) : (
           items.map((a) => {
             const m = meta(a.type);
             const Icon = m.icon;
-            const rowClass =
-              "flex w-full items-center gap-3 border-b border-border px-5 py-3 text-left last:border-0";
             const body = (
               <>
                 <div className={cn("flex size-9 shrink-0 items-center justify-center rounded-md", iconTone[m.tone])}>
                   <Icon className="size-4" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[13px] font-medium text-text">{a.title}</p>
+                  <p className="truncate text-sm font-medium text-text">{a.title}</p>
                   <span className="mt-0.5 flex items-center gap-1 text-[11px] text-muted">
                     <Clock className="size-2.5" />
                     {relativeTime(a.createdAt)}
@@ -128,10 +149,11 @@ export function RecentActivity() {
                 <Badge variant={m.tone === "info" ? "info" : m.tone} className="shrink-0 capitalize">
                   {m.label}
                 </Badge>
+                {!a.read && <span className="size-1.5 shrink-0 rounded-full bg-primary" aria-label="unread" />}
               </>
             );
-            // Only rows that actually go somewhere are focusable buttons; the rest
-            // render as plain, non-interactive rows (no dead focus stop).
+            const rowClass =
+              "flex w-full items-center gap-3 border-b border-border px-5 py-3 text-left last:border-0";
             return a.link ? (
               <button
                 key={a.id}
@@ -147,7 +169,7 @@ export function RecentActivity() {
             );
           })
         )}
-      </div>
-    </Card>
+      </Card>
+    </div>
   );
 }

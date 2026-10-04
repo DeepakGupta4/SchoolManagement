@@ -1,12 +1,12 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import {
   ArrowRight, ArrowUpRight, BadgeIndianRupee, BookMarked, Cake, CalendarClock,
-  CalendarDays, CalendarOff, Check, ClipboardList, GraduationCap, Megaphone, Receipt,
+  CalendarDays, CalendarOff, Check, ClipboardList, Clock, GraduationCap, Megaphone, Receipt,
   School, Sparkles, TrendingDown, UserPlus, UserRound, Users, Wallet, type LucideIcon,
 } from "lucide-react";
 import { Avatar, Badge, Card, CardContent, CardHeader, CountUp, Skeleton } from "@/components/ui";
@@ -67,16 +67,6 @@ const accentClasses: Record<Tone, string> = {
   cyan: "bg-info",
 };
 
-/** Soft tinted card background + border per tone — makes the board colourful. */
-const tileClasses: Record<Tone, string> = {
-  indigo: "border-primary/20 bg-primary-soft/40",
-  rose: "border-danger/20 bg-danger-soft/40",
-  amber: "border-warning/20 bg-warning-soft/40",
-  emerald: "border-success/20 bg-success-soft/40",
-  violet: "border-violet/25 bg-violet/10",
-  cyan: "border-info/20 bg-info-soft/40",
-};
-
 /** Segment colours for the mini attendance-band bar on the featured tile. */
 const BAND_SEGMENTS = ["bg-rose-400", "bg-amber-300", "bg-lime-300", "bg-emerald-300"];
 
@@ -92,33 +82,55 @@ function buildMetrics(d: DashboardInsights): OverviewItem[] {
   ];
 }
 
-/** Big featured tile (2×2) — total students with a live attendance-band bar. */
+/** A small stat chip inside the featured tile. */
+function MiniStat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-lg bg-surface-sunken px-2.5 py-2">
+      <p className="text-lg font-bold leading-none text-text">
+        <CountUp value={value} />
+      </p>
+      <p className="mt-1 text-[10px] font-medium text-muted">{label}</p>
+    </div>
+  );
+}
+
+/** Big featured tile (2×2) — a neutral "school at a glance" with a live attendance bar. */
 function FeaturedStudents({ data }: { data: DashboardInsights }) {
   const bandTotal = data.attendanceBands.reduce((s, b) => s + b.students, 0);
   return (
     <Link href="/students" className="focus-ring group col-span-2 row-span-2 rounded-xl">
-      <Card className="gradient-indigo h-full overflow-hidden border-0 text-white">
-        <CardContent className="relative flex h-full flex-col justify-between p-5">
-          <div className="pointer-events-none absolute -right-8 -top-10 size-32 rounded-full bg-white/10" aria-hidden />
-          <div className="relative flex items-start justify-between">
-            <div className="flex size-11 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/25">
+      <Card className="card-hover relative h-full overflow-hidden">
+        <span className="absolute inset-x-0 top-0 h-0.5 bg-primary" aria-hidden />
+        <CardContent className="flex h-full flex-col justify-between gap-4 p-5">
+          <div className="flex items-start justify-between">
+            <div className="flex size-11 items-center justify-center rounded-xl bg-primary text-white shadow-sm">
               <Users className="size-5" />
             </div>
-            <ArrowUpRight className="size-5 opacity-70 transition-opacity group-hover:opacity-100" />
+            <ArrowUpRight className="size-5 text-subtle transition-colors group-hover:text-text" />
           </div>
-          <div className="relative">
-            <p className="text-4xl font-bold leading-none">
+
+          <div>
+            <p className="text-5xl font-bold leading-none text-text">
               <CountUp value={data.totalStudents} />
             </p>
-            <p className="mt-1.5 text-sm font-semibold text-white/85">Total students</p>
-            <p className="mt-0.5 text-xs text-white/60">{data.activeStudents} active</p>
+            <p className="mt-2 text-sm font-semibold text-muted">
+              Total students · <span className="text-subtle">{data.activeStudents} active</span>
+            </p>
           </div>
+
+          <div className="grid grid-cols-3 gap-2">
+            <MiniStat label="Teachers" value={data.totalTeachers} />
+            <MiniStat label="Classes" value={data.totalClasses} />
+            <MiniStat label="Subjects" value={data.totalSubjects} />
+          </div>
+
           {bandTotal > 0 && (
-            <div className="relative">
-              <div className="mb-1 flex items-center justify-between text-[10px] text-white/60">
+            <div>
+              <div className="mb-1 flex items-center justify-between text-[10px] text-subtle">
                 <span>Attendance spread</span>
+                <span>{bandTotal} active</span>
               </div>
-              <div className="flex h-2 overflow-hidden rounded-full bg-white/15">
+              <div className="flex h-2 overflow-hidden rounded-full bg-surface-hover">
                 {data.attendanceBands.map((b, i) =>
                   b.students > 0 ? (
                     <div
@@ -145,7 +157,9 @@ function MetricTile({ item }: { item: OverviewItem }) {
       href={item.href}
       className={cn("focus-ring group rounded-xl", item.wide ? "col-span-2" : "col-span-1")}
     >
-      <Card className={cn("card-hover h-full border", tileClasses[item.tone])}>
+      <Card className="card-hover relative h-full overflow-hidden">
+        {/* Thin colour accent — keeps a per-tile colour cue without a muddy fill. */}
+        <span className={cn("absolute inset-x-0 top-0 h-0.5", accentClasses[item.tone])} aria-hidden />
         <CardContent className="flex h-full flex-col justify-between p-4">
           <div className="flex items-start justify-between">
             <div className={cn("flex size-9 items-center justify-center rounded-lg text-white shadow-sm", accentClasses[item.tone])}>
@@ -217,12 +231,41 @@ function QuickActions({ role }: { role: string | undefined }) {
 /** Today's open/closed state (styled for the gradient hero). */
 function HeroStatus({ status, loading }: { status: DashboardInsights["schoolOpen"] | undefined; loading: boolean }) {
   if (loading || !status) {
-    return <span className="h-7 w-28 animate-pulse rounded-full bg-white/15" />;
+    return <Skeleton className="h-7 w-28 rounded-full" />;
+  }
+  if (status.open) {
+    return (
+      <span className="inline-flex shrink-0 items-center gap-2 rounded-full bg-success-soft px-3.5 py-1.5 text-xs font-semibold text-success-text">
+        <span className="size-1.5 rounded-full bg-success" />
+        School is Open
+      </span>
+    );
   }
   return (
-    <span className="inline-flex shrink-0 items-center gap-2 rounded-full bg-white/15 px-3.5 py-1.5 text-xs font-semibold text-white ring-1 ring-white/20 backdrop-blur">
-      <span className={cn("size-1.5 rounded-full", status.open ? "bg-emerald-300" : "bg-white/60")} />
-      {status.open ? "School is Open" : `Closed${status.reason ? ` · ${status.reason}` : ""}`}
+    <span className="inline-flex shrink-0 items-center gap-2 rounded-full bg-surface-hover px-3.5 py-1.5 text-xs font-semibold text-muted">
+      <span className="size-1.5 rounded-full bg-current opacity-70" />
+      Closed{status.reason ? ` · ${status.reason}` : ""}
+    </span>
+  );
+}
+
+/** Live ticking clock for the hero. Starts null to avoid an SSR/hydration mismatch. */
+function LiveClock() {
+  const [now, setNow] = useState<Date | null>(null);
+  useEffect(() => {
+    const update = () => setNow(new Date());
+    // Deferred first tick (setTimeout 0) keeps setState out of the effect body.
+    const first = setTimeout(update, 0);
+    const id = setInterval(update, 1000);
+    return () => {
+      clearTimeout(first);
+      clearInterval(id);
+    };
+  }, []);
+  return (
+    <span className="inline-flex items-center gap-1.5 text-lg font-bold tabular-nums text-text sm:text-xl">
+      <Clock className="size-4 text-subtle" />
+      {now ? now.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true }) : "--:--:--"}
     </span>
   );
 }
@@ -343,7 +386,7 @@ function Onboarding({ name, data }: { name?: string; data: DashboardInsights }) 
 /** Bento skeleton while the overview loads. */
 function BentoSkeleton() {
   return (
-    <div className="grid grid-flow-dense auto-rows-[9rem] grid-cols-2 gap-4 xl:grid-cols-4">
+    <div className="grid grid-flow-dense auto-rows-36 grid-cols-2 gap-4 xl:grid-cols-4">
       <Skeleton className="col-span-2 row-span-2 h-full" />
       <Skeleton className="col-span-1 h-full" />
       <Skeleton className="col-span-1 h-full" />
@@ -374,34 +417,34 @@ export default function DashboardPage() {
   return (
     <div className="flex flex-col gap-5">
       {/* Greeting hero */}
-      <Card className="gradient-indigo overflow-hidden border-0 text-white">
-        <CardContent className="relative flex flex-wrap items-center justify-between gap-4 p-5 sm:p-6">
-          <div className="pointer-events-none absolute -right-10 -top-16 size-48 rounded-full bg-white/10" aria-hidden />
-          <div className="pointer-events-none absolute -bottom-20 right-24 size-40 rounded-full bg-white/5" aria-hidden />
-          <div className="relative flex min-w-0 items-center gap-3.5">
+      <Card className="relative overflow-hidden">
+        <span className="absolute inset-x-0 top-0 h-0.5 bg-primary" aria-hidden />
+        <CardContent className="flex flex-wrap items-center justify-between gap-4 p-5 sm:p-6">
+          <div className="flex min-w-0 items-center gap-3.5">
             {data?.schoolLogo ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={data.schoolLogo}
                 alt=""
-                className="size-12 shrink-0 rounded-xl bg-white object-cover shadow-md ring-1 ring-white/30"
+                className="size-12 shrink-0 rounded-xl bg-white object-cover shadow-sm ring-1 ring-border"
               />
             ) : (
-              <div className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/25">
+              <div className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-primary text-white shadow-sm">
                 <School className="size-6" />
               </div>
             )}
             <div className="min-w-0">
-              <h1 className="truncate text-xl font-bold sm:text-2xl">
+              <h1 className="truncate text-xl font-bold text-text sm:text-2xl">
                 {getGreeting()}, {user?.name?.split(" ")[0]} 👋
               </h1>
-              <p className="mt-0.5 truncate text-sm text-white/75">
+              <p className="mt-0.5 truncate text-sm text-muted">
                 {today}
                 {schoolName ? ` · ${schoolName}` : ""}
               </p>
             </div>
           </div>
-          <div className="relative">
+          <div className="flex flex-col items-start gap-2 sm:items-end">
+            <LiveClock />
             <HeroStatus status={data?.schoolOpen} loading={loading} />
           </div>
         </CardContent>
@@ -434,7 +477,7 @@ export default function DashboardPage() {
         ) : loading || !data ? (
           <BentoSkeleton />
         ) : (
-          <div className="stagger-in grid grid-flow-dense auto-rows-[9rem] grid-cols-2 gap-4 xl:grid-cols-4">
+          <div className="stagger-in grid grid-flow-dense auto-rows-36 grid-cols-2 gap-4 xl:grid-cols-4">
             <FeaturedStudents data={data} />
             {metrics.map((item) => (
               <MetricTile key={item.label} item={item} />
@@ -459,7 +502,7 @@ export default function DashboardPage() {
           </div>
           <Link
             href="/students"
-            className="focus-ring inline-flex min-h-[24px] items-center gap-1 rounded-md text-xs font-semibold text-primary transition-colors hover:text-primary-hover"
+            className="focus-ring inline-flex min-h-6 items-center gap-1 rounded-md text-xs font-semibold text-primary transition-colors hover:text-primary-hover"
           >
             View all <ArrowRight className="size-3.5" />
           </Link>

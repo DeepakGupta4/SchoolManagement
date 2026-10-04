@@ -13,7 +13,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import { Users, DollarSign, GraduationCap, Wallet } from "lucide-react";
+import { AlertTriangle, Users, DollarSign, GraduationCap, Wallet } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -27,19 +27,20 @@ import {
 import { useChartTheme, toneClass, type ChartTone } from "@/hooks/useChartTheme";
 import { cn } from "@/lib/utils";
 import { listStudents } from "@/lib/api/students";
-import { listTeachers } from "@/lib/api/teachers";
+import { getDashboardInsights } from "@/lib/api/dashboard";
 import {
   feeAccountsApi,
+  paymentsApi,
   getFeeSummary,
   totalBilled,
   totalPaid,
   balanceOf,
   type StudentFeeAccount,
+  type Payment,
   type FeeSummary,
 } from "@/lib/api/feeLedger";
 import { admissionsApi, type Application } from "@/lib/api/admissions";
 import type { Student } from "@/types/student";
-import type { Teacher } from "@/types/teacher";
 
 const periods = ["week", "month", "year"] as const;
 type Period = (typeof periods)[number];
@@ -137,21 +138,38 @@ function ChartTitle({
 }) {
   return (
     <CardHeader>
-      <div className="min-w-0">
-        <p className="text-sm font-semibold text-text">{title}</p>
-        <p className="mt-0.5 text-xs text-muted">{subtitle}</p>
-      </div>
-      {legend && (
-        <div className="flex shrink-0 items-center gap-3.5">
-          {legend.map((l) => (
-            <span key={l.label} className="flex items-center gap-1.5 text-xs text-muted">
-              <span className={cn("size-2.5 rounded-sm", toneClass[l.tone])} />
-              {l.label}
-            </span>
-          ))}
+      {/* Wrap on narrow screens so the legend never crushes the title. */}
+      <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-text">{title}</p>
+          <p className="mt-0.5 text-xs text-muted">{subtitle}</p>
         </div>
-      )}
+        {legend && (
+          <div className="flex shrink-0 flex-wrap items-center gap-3.5">
+            {legend.map((l) => (
+              <span key={l.label} className="flex items-center gap-1.5 text-xs text-muted">
+                <span className={cn("size-2.5 rounded-sm", toneClass[l.tone])} />
+                {l.label}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
     </CardHeader>
+  );
+}
+
+/** "Couldn't load" state for a chart whose own data source failed (vs empty). */
+function ChartFail({ height = 160 }: { height?: number }) {
+  return (
+    <div
+      className="flex flex-col items-center justify-center gap-2 text-center"
+      style={{ minHeight: height }}
+    >
+      <AlertTriangle className="size-5 text-warning-text" />
+      <p className="text-sm font-medium text-text">Couldn&apos;t load</p>
+      <p className="text-xs text-muted">Reload the page to try again.</p>
+    </div>
   );
 }
 
@@ -160,35 +178,67 @@ export default function AnalyticsPage() {
   const t = useChartTheme();
 
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const [students, setStudents] = useState<Student[]>([]);
-  const [teachers, setTeachers] = useState<Teacher[]>([]);
+  const [counts, setCounts] = useState({ students: 0, teachers: 0, activeStudents: 0 });
   const [accounts, setAccounts] = useState<StudentFeeAccount[]>([]);
+  const [payments, setPayments] = useState<Payment[]>([]);
   const [feeSummary, setFeeSummary] = useState<FeeSummary | null>(null);
   const [applications, setApplications] = useState<Application[]>([]);
+  const [attendanceTaken, setAttendanceTaken] = useState(false);
+  // Per-source load status, so a single failed fetch shows "—" / "couldn't load"
+  // on just that card instead of a confident zero or a fake empty state.
+  const [ok, setOk] = useState({
+    insights: true,
+    students: true,
+    accounts: true,
+    payments: true,
+    fee: true,
+    admissions: true,
+  });
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([
+    // Headline counts come from the server aggregate (uncapped) so they're
+    // correct at any size — not limited to one 200-row page. Each source is
+    // settled independently so one failure degrades only its own section.
+    Promise.allSettled([
+      getDashboardInsights(),
       listStudents(),
-      listTeachers(),
       feeAccountsApi.list(),
       getFeeSummary(),
       admissionsApi.list(),
-    ])
-      .then(([s, te, ac, fs, ap]) => {
-        if (cancelled) return;
-        setStudents(s);
-        setTeachers(te);
-        setAccounts(ac);
-        setFeeSummary(fs);
-        setApplications(ap);
-      })
-      .catch(() => {
-        /* leaves the empty states in place */
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
+      paymentsApi.list(),
+    ]).then(([insightsR, studentsR, accountsR, feeR, admissionsR, paymentsR]) => {
+      if (cancelled) return;
+      const insights = insightsR.status === "fulfilled" ? insightsR.value : null;
+      const studs = studentsR.status === "fulfilled" ? studentsR.value : [];
+      setStudents(studs);
+      setCounts({
+        students: insights?.counts.students ?? studs.length,
+        teachers: insights?.counts.teachers ?? 0,
+        activeStudents:
+          insights?.counts.activeStudents ?? studs.filter((s) => s.status === "active").length,
       });
+      // Attendance is "taken" only if the aggregate returned bands — the endpoint
+      // sends an empty band list until the first roll-call is saved.
+      setAttendanceTaken((insights?.attendanceBands?.length ?? 0) > 0);
+      if (accountsR.status === "fulfilled") setAccounts(accountsR.value);
+      if (paymentsR.status === "fulfilled") setPayments(paymentsR.value);
+      if (feeR.status === "fulfilled") setFeeSummary(feeR.value);
+      if (admissionsR.status === "fulfilled") setApplications(admissionsR.value);
+      setOk({
+        insights: insightsR.status === "fulfilled",
+        students: studentsR.status === "fulfilled",
+        accounts: accountsR.status === "fulfilled",
+        payments: paymentsR.status === "fulfilled",
+        fee: feeR.status === "fulfilled",
+        admissions: admissionsR.status === "fulfilled",
+      });
+      // A hard error only when neither the aggregate nor the roster could load.
+      setError(insightsR.status !== "fulfilled" && studentsR.status !== "fulfilled");
+      setLoading(false);
+    });
     return () => {
       cancelled = true;
     };
@@ -214,7 +264,7 @@ export default function AnalyticsPage() {
     for (const s of students) counts[s.gender] += 1;
     const rows: { name: string; value: number; tone: ChartTone }[] = [
       { name: "Boys", value: counts.male, tone: "primary" },
-      { name: "Girls", value: counts.female, tone: "danger" },
+      { name: "Girls", value: counts.female, tone: "info" },
     ];
     if (counts.other > 0) rows.push({ name: "Other", value: counts.other, tone: "violet" });
     return rows;
@@ -240,26 +290,49 @@ export default function AnalyticsPage() {
   const kpis = useMemo(() => {
     const avg = (arr: Student[], f: (s: Student) => number) =>
       arr.length ? Math.round(arr.reduce((sum, s) => sum + f(s), 0) / arr.length) : 0;
-    const avgAttendance = avg(activeStudents, (s) => s.attendancePercent);
-    const avgPerformance = avg(activeStudents, (s) => s.performancePercent);
+    // Attendance defaults to 100 until a roll-call is taken, so only show a real
+    // figure once attendance actually exists — otherwise "Not recorded".
+    const avgAttendance = attendanceTaken ? avg(activeStudents, (s) => s.attendancePercent) : null;
+    // Performance 0 means "no marks entered yet", not a real zero average — so
+    // average only over students who have actually been assessed.
+    const assessed = activeStudents.filter((s) => s.performancePercent > 0);
+    const avgPerformance = assessed.length ? avg(assessed, (s) => s.performancePercent) : null;
     const collected = feeSummary?.totalCollected ?? 0;
     const outstanding = feeSummary?.outstanding ?? 0;
     const collectionRate =
       collected + outstanding > 0 ? Math.round((collected / (collected + outstanding)) * 100) : 0;
-    const activeRate = students.length
-      ? Math.round((activeStudents.length / students.length) * 100)
+    const activeRate = counts.students
+      ? Math.round((counts.activeStudents / counts.students) * 100)
       : 0;
     return [
-      { label: "Average Attendance", value: `${avgAttendance}%`, pct: avgAttendance },
-      { label: "Average Performance", value: `${avgPerformance}%`, pct: avgPerformance },
-      { label: "Fee Collection Rate", value: `${collectionRate}%`, pct: collectionRate },
       {
+        label: "Average Attendance",
+        value: avgAttendance === null ? "Not recorded" : `${avgAttendance}%`,
+        pct: avgAttendance ?? 0,
+        neutral: false,
+      },
+      {
+        label: "Average Performance",
+        value: avgPerformance === null ? "Not assessed" : `${avgPerformance}%`,
+        pct: avgPerformance ?? 0,
+        neutral: false,
+      },
+      {
+        label: "Fee Collection Rate",
+        value: ok.fee ? `${collectionRate}%` : "—",
+        pct: ok.fee ? collectionRate : 0,
+        neutral: false,
+      },
+      {
+        // Active-vs-lifetime ratio isn't a "health" metric (alumni accumulate),
+        // so it gets a neutral bar, not the green/amber/red thresholds.
         label: "Active Students",
-        value: `${activeStudents.length} of ${students.length}`,
+        value: `${counts.activeStudents} of ${counts.students}`,
         pct: activeRate,
+        neutral: true,
       },
     ];
-  }, [activeStudents, students, feeSummary]);
+  }, [activeStudents, counts, feeSummary, attendanceTaken, ok.fee]);
 
   const topMetrics: {
     label: string;
@@ -267,17 +340,17 @@ export default function AnalyticsPage() {
     icon: typeof DollarSign;
     tone: StatTone;
   }[] = [
-    { label: "Total Students", value: students.length, icon: Users, tone: "indigo" },
-    { label: "Total Teachers", value: teachers.length, icon: GraduationCap, tone: "emerald" },
+    { label: "Total Students", value: counts.students, icon: Users, tone: "indigo" },
+    { label: "Total Teachers", value: ok.insights ? counts.teachers : "—", icon: GraduationCap, tone: "emerald" },
     {
       label: "Fees Collected",
-      value: inr.format(feeSummary?.totalCollected ?? 0),
+      value: ok.fee ? inr.format(feeSummary?.totalCollected ?? 0) : "—",
       icon: DollarSign,
       tone: "amber",
     },
     {
       label: "Fees Outstanding",
-      value: inr.format(feeSummary?.outstanding ?? 0),
+      value: ok.fee ? inr.format(feeSummary?.outstanding ?? 0) : "—",
       icon: Wallet,
       tone: "violet",
     },
@@ -291,11 +364,19 @@ export default function AnalyticsPage() {
   );
   const hasAdmissions = admissionsTrend.some((d) => d.value > 0);
 
-  // lastPaymentDate exists on the account, so we can bucket real collections:
-  // each account's total paid is credited to the bucket of its last payment.
+  // Bucket REAL dated payment records (excluding reversed ones), so each rupee
+  // lands in the period it was actually collected in and reconciles with the
+  // "Fees Collected" stat card — unlike crediting an account's lifetime total to
+  // its single last-payment date.
   const feesTrend = useMemo(
-    () => bucketize(accounts, period, (a) => a.lastPaymentDate, (a) => totalPaid(a)),
-    [accounts, period]
+    () =>
+      bucketize(
+        payments.filter((p) => p.status !== "cancelled" && p.status !== "bounced"),
+        period,
+        (p) => p.date,
+        (p) => p.amount
+      ),
+    [payments, period]
   );
   const hasFees = feesTrend.some((d) => d.value > 0);
 
@@ -311,15 +392,15 @@ export default function AnalyticsPage() {
         description="School performance overview & insights."
         actions={
           <div
-            role="tablist"
+            role="radiogroup"
             aria-label="Reporting period"
             className="flex items-center gap-1 rounded-md border border-border bg-surface-raised p-1"
           >
             {periods.map((p) => (
               <button
                 key={p}
-                role="tab"
-                aria-selected={period === p}
+                role="radio"
+                aria-checked={period === p}
                 onClick={() => setPeriod(p)}
                 className={cn(
                   "focus-ring rounded-sm px-4 py-1.5 text-xs font-semibold capitalize transition-colors",
@@ -335,6 +416,18 @@ export default function AnalyticsPage() {
         }
       />
 
+      {error ? (
+        <Card>
+          <CardContent className="flex flex-col items-center gap-2 py-12 text-center">
+            <AlertTriangle className="size-6 text-warning-text" />
+            <p className="text-sm font-medium text-danger">Couldn&apos;t load analytics</p>
+            <p className="text-xs text-muted">
+              There was a problem reaching the server. Reload the page to try again.
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+       <>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {loading
           ? Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-28 w-full" />)
@@ -351,13 +444,21 @@ export default function AnalyticsPage() {
           <CardContent>
             {loading ? (
               <Skeleton className="h-[210px] w-full" />
+            ) : !ok.admissions ? (
+              <ChartFail height={210} />
             ) : !hasAdmissions ? (
               <EmptyState
                 title="No admissions in this period"
                 description="Applications will appear here as they come in."
               />
             ) : (
-              <ResponsiveContainer width="100%" height={210}>
+              <div
+                role="img"
+                aria-label={`Admissions ${periodWindow[period]}: ${admissionsTrend
+                  .map((d) => `${d.label} ${d.value}`)
+                  .join(", ")}`}
+              >
+                <ResponsiveContainer width="100%" height={210}>
                 <BarChart data={admissionsTrend} barSize={period === "week" ? 26 : 18}>
                   <CartesianGrid strokeDasharray="3 3" stroke={t.grid} vertical={false} />
                   <XAxis
@@ -386,6 +487,7 @@ export default function AnalyticsPage() {
                   />
                 </BarChart>
               </ResponsiveContainer>
+              </div>
             )}
           </CardContent>
         </Card>
@@ -393,15 +495,21 @@ export default function AnalyticsPage() {
         <Card>
           <ChartTitle
             title="Gender Distribution"
-            subtitle={`Total ${students.length} students`}
+            subtitle={`Total ${genderData.reduce((s, g) => s + g.value, 0)} students`}
           />
           <CardContent className="flex flex-col items-center">
             {loading ? (
               <Skeleton className="h-[180px] w-full" />
+            ) : !ok.students ? (
+              <ChartFail height={180} />
             ) : !hasGender ? (
               <EmptyState title="No students yet" />
             ) : (
               <>
+                <div
+                  role="img"
+                  aria-label={genderData.map((g) => `${g.name} ${g.value}`).join(", ")}
+                >
                 <ResponsiveContainer width="100%" height={180}>
                   <PieChart>
                     <Pie
@@ -420,6 +528,7 @@ export default function AnalyticsPage() {
                     <Tooltip contentStyle={t.tooltip} />
                   </PieChart>
                 </ResponsiveContainer>
+                </div>
                 <div className="mt-1 flex items-center gap-6">
                   {genderData.map((g) => (
                     <div key={g.name} className="text-center">
@@ -447,13 +556,21 @@ export default function AnalyticsPage() {
           <CardContent>
             {loading ? (
               <Skeleton className="h-[210px] w-full" />
+            ) : !ok.payments ? (
+              <ChartFail height={210} />
             ) : !hasFees ? (
               <EmptyState
                 title="No collections in this period"
                 description="Payments will appear here as fees are collected."
               />
             ) : (
-              <ResponsiveContainer width="100%" height={210}>
+              <div
+                role="img"
+                aria-label={`Fees collected ${periodWindow[period]}: ${feesTrend
+                  .map((d) => `${d.label} ₹${d.value}`)
+                  .join(", ")}`}
+              >
+                <ResponsiveContainer width="100%" height={210}>
                 <BarChart data={feesTrend} barSize={period === "week" ? 26 : 18}>
                   <CartesianGrid strokeDasharray="3 3" stroke={t.grid} vertical={false} />
                   <XAxis
@@ -482,6 +599,7 @@ export default function AnalyticsPage() {
                   />
                 </BarChart>
               </ResponsiveContainer>
+              </div>
             )}
           </CardContent>
         </Card>
@@ -491,10 +609,18 @@ export default function AnalyticsPage() {
           <CardContent>
             {loading ? (
               <Skeleton className="h-[210px] w-full" />
+            ) : !ok.students ? (
+              <ChartFail height={210} />
             ) : classStrength.length === 0 ? (
               <EmptyState title="No students yet" />
             ) : (
-              <ResponsiveContainer width="100%" height={210}>
+              <div
+                role="img"
+                aria-label={`Students per class: ${classStrength
+                  .map((c) => `${c.class} ${c.students}`)
+                  .join(", ")}`}
+              >
+                <ResponsiveContainer width="100%" height={210}>
                 <BarChart data={classStrength} barSize={28} layout="vertical">
                   <CartesianGrid strokeDasharray="3 3" stroke={t.grid} horizontal={false} />
                   <XAxis
@@ -521,6 +647,7 @@ export default function AnalyticsPage() {
                   />
                 </BarChart>
               </ResponsiveContainer>
+              </div>
             )}
           </CardContent>
         </Card>
@@ -532,10 +659,16 @@ export default function AnalyticsPage() {
           <CardContent className="flex flex-col items-center gap-4">
             {loading ? (
               <Skeleton className="h-[160px] w-full" />
+            ) : !ok.accounts ? (
+              <ChartFail height={160} />
             ) : !hasFeeStatus ? (
               <EmptyState title="No fee accounts yet" />
             ) : (
               <>
+                <div
+                  role="img"
+                  aria-label={feeStatusData.map((f) => `${f.name} ${f.value}`).join(", ")}
+                >
                 <ResponsiveContainer width="100%" height={160}>
                   <PieChart>
                     <Pie
@@ -554,6 +687,7 @@ export default function AnalyticsPage() {
                     <Tooltip contentStyle={t.tooltip} />
                   </PieChart>
                 </ResponsiveContainer>
+                </div>
                 <div className="flex w-full flex-col gap-2">
                   {feeStatusData.map((f) => (
                     <div key={f.name} className="flex items-center justify-between">
@@ -596,7 +730,13 @@ export default function AnalyticsPage() {
                     <div
                       className={cn(
                         "h-full rounded-full transition-[width] duration-500",
-                        row.pct >= 90 ? "bg-success" : row.pct >= 75 ? "bg-warning" : "bg-danger"
+                        row.neutral
+                          ? "bg-primary"
+                          : row.pct >= 90
+                            ? "bg-success"
+                            : row.pct >= 75
+                              ? "bg-warning"
+                              : "bg-danger"
                       )}
                       style={{ width: `${row.pct}%` }}
                     />
@@ -607,6 +747,8 @@ export default function AnalyticsPage() {
           </CardContent>
         </Card>
       </div>
+       </>
+      )}
     </div>
   );
 }

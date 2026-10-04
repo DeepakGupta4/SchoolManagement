@@ -74,7 +74,7 @@ export function UpcomingEvents() {
         </div>
         <Link
           href="/events"
-          className="focus-ring inline-flex min-h-[24px] shrink-0 items-center rounded-md px-1 text-xs font-semibold text-primary transition-colors hover:text-primary-hover"
+          className="focus-ring inline-flex min-h-6 shrink-0 items-center rounded-md px-1 text-xs font-semibold text-primary transition-colors hover:text-primary-hover"
         >
           View all
         </Link>
