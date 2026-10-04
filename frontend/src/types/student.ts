@@ -34,6 +34,8 @@ export interface Student {
   /** Average marks percentage, 0-100. */
   performancePercent: number;
   feeDue: number;
+  /** Academic session the student was last promoted/graduated for (server-owned). */
+  lastPromotedSession?: string;
   medicalNotes?: string;
 
   // --- Optional admission-form details (all backward-compatible) ---

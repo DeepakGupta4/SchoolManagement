@@ -1,7 +1,11 @@
+import { apiRequest } from "./client";
 import { createApiResource } from "./createApiResource";
+import { TODAY_ISO } from "@/lib/dates";
 
 export interface Alumnus {
   id: string;
+  /** Source student's admission no. when imported from graduates; "" otherwise. */
+  studentId: string;
   name: string;
   batch: string;
   stream: string;
@@ -19,11 +23,13 @@ export interface AlumniFilters {
   batch?: string;
   stream?: string;
   city?: string;
+  /** Browse page size; raised from the 200 default so stats/filters see more. */
+  limit?: number;
 }
 
-export const BATCH_OPTIONS = [
-  "2022", "2021", "2020", "2019", "2018", "2017", "2016", "2015", "2014",
-];
+const CURRENT_YEAR = Number(TODAY_ISO.slice(0, 4));
+/** Recent passing-out years, newest first — derived from today so it never goes stale. */
+export const BATCH_OPTIONS = Array.from({ length: 20 }, (_, i) => String(CURRENT_YEAR - i));
 
 export const STREAM_OPTIONS = ["Science", "Commerce", "Arts"];
 
@@ -42,3 +48,10 @@ export const INTEREST_OPTIONS = [
 ];
 
 export const alumniApi = createApiResource<Alumnus, AlumniFilters>("/api/alumni");
+
+/** Pulls graduated students (status "alumni") into the directory. Idempotent. */
+export async function importGraduates(): Promise<{ imported: number; skipped: number }> {
+  return apiRequest<{ imported: number; skipped: number }>("/api/alumni/import-graduates", {
+    method: "POST",
+  });
+}

@@ -2,6 +2,9 @@ import { z } from "zod";
 import { PHONE_REGEX, PHONE_MESSAGE } from "@/lib/phone";
 
 export const alumnusSchema = z.object({
+  // Set when the alumnus is picked from the student search — links back to the
+  // source student and dedupes imports. Not shown as its own field.
+  studentId: z.string().optional(),
   name: z.string().min(2, "Name is required"),
   batch: z.string().regex(/^\d{4}$/, "Batch must be a four-digit year"),
   stream: z.string().min(1, "Stream is required"),

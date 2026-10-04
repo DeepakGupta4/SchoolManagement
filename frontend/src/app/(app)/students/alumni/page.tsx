@@ -6,6 +6,8 @@ import {
   Briefcase,
   Download,
   Eye,
+  GraduationCap,
+  Loader2,
   Mail,
   MapPin,
   Pencil,
@@ -38,6 +40,7 @@ import {
   alumniApi,
   BATCH_OPTIONS,
   CITY_OPTIONS,
+  importGraduates,
   STREAM_OPTIONS,
   type Alumnus,
 } from "@/lib/api/alumni";
@@ -55,7 +58,7 @@ export default function AlumniPage() {
   const [page, setPage] = useState(1);
 
   const filters = useMemo(
-    () => ({ search, batch, stream, city }),
+    () => ({ search, batch, stream, city, limit: 500 }),
     [search, batch, stream, city]
   );
 
@@ -69,6 +72,7 @@ export default function AlumniPage() {
   const [editing, setEditing] = useState<Alumnus | null>(null);
   const [viewing, setViewing] = useState<Alumnus | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Alumnus | null>(null);
+  const [importing, setImporting] = useState(false);
   const { toast } = useToast();
 
   // Narrowing a filter can strand you past the last page, so reset on change.
@@ -131,11 +135,62 @@ export default function AlumniPage() {
   };
 
   // The form models mentorship as a yes/no select; the record stores a boolean.
+  // studentId isn't on the form — preserve it on edit, blank on create.
   const handleSubmit = async (values: AlumnusSchema) => {
-    const ok = await save({ ...values, mentor: values.mentor === "yes" }, editing);
+    const ok = await save(
+      { ...values, mentor: values.mentor === "yes", studentId: values.studentId ?? editing?.studentId ?? "" },
+      editing
+    );
     if (ok) {
       setFormOpen(false);
       setEditing(null);
+    }
+  };
+
+  /** Opens the operator's mail client with every listed alumnus (with an email) as BCC. */
+  const handleInvite = () => {
+    const emails = items.filter((a) => a.email).map((a) => a.email);
+    if (emails.length === 0) {
+      toast({
+        title: "No email addresses",
+        description: "None of the listed alumni have an email on record.",
+        variant: "warning",
+      });
+      return;
+    }
+    const subject = encodeURIComponent("Invitation — Alumni Meet");
+    const bcc = encodeURIComponent(emails.join(","));
+    window.location.href = `mailto:?bcc=${bcc}&subject=${subject}`;
+  };
+
+  /** Pulls graduated students (status "alumni") into the directory. */
+  const handleImport = async () => {
+    setImporting(true);
+    try {
+      const { imported, skipped } = await importGraduates();
+      if (imported > 0) {
+        toast({
+          title: `${imported} graduate${imported === 1 ? "" : "s"} imported`,
+          description: `Added to the directory.${skipped ? ` ${skipped} already present.` : ""}`,
+        });
+        refetch();
+      } else {
+        toast({
+          title: "No new graduates to import",
+          description: skipped
+            ? `All ${skipped} graduate${skipped === 1 ? " is" : "s are"} already in the directory.`
+            : "No students have graduated yet — graduate a final-year class in Promotions first.",
+          variant: "warning",
+        });
+      }
+    } catch (e) {
+      toast({
+        title: "Could not import graduates",
+        description: e instanceof Error ? e.message : "Please try again.",
+        variant: "error",
+      });
+    } finally {
+      setImporting(false);
     }
   };
 
@@ -292,8 +347,15 @@ export default function AlumniPage() {
         description="Stay connected with passed-out batches and their career journeys."
         actions={
           <>
-            {/* Disabled until email delivery is connected. */}
-            <Button variant="outline" disabled title="Email delivery is not connected yet">
+            <Button variant="outline" onClick={handleImport} disabled={importing}>
+              {importing ? <Loader2 className="size-4 animate-spin" /> : <GraduationCap className="size-4" />}
+              Import from graduates
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleInvite}
+              title="Email all listed alumni (opens your mail app)"
+            >
               <Send className="size-4" />
               Invite to Alumni Meet
             </Button>
@@ -359,7 +421,7 @@ export default function AlumniPage() {
       {error ? (
         <Card>
           <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
-            <p className="text-sm font-medium text-danger">{error}</p>
+            <p className="text-sm font-medium text-danger-text">{error}</p>
             <Button variant="outline" onClick={refetch}>
               Try again
             </Button>
