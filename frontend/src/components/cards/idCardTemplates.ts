@@ -6,9 +6,14 @@
  * `strip` is kept dark on every template so the year badge (bg-white/15) stays
  * legible; variety comes from the header, accents, photo frame and footer.
  */
+/** Each template renders a structurally different layout, not just new colours. */
+export type IdCardLayout = "crest" | "banner" | "modern" | "sidebar" | "split" | "minimal";
+
 export interface IdCardTemplate {
   id: string;
   name: string;
+  /** The structural layout this template renders. */
+  layout: IdCardLayout;
   /** Header band background (the swatch preview uses this too). */
   header: string;
   /** Logo tile inside the header. */
@@ -31,6 +36,7 @@ export const ID_CARD_TEMPLATES: IdCardTemplate[] = [
   {
     id: "indigo",
     name: "Classic Indigo",
+    layout: "crest",
     header: "bg-linear-to-br from-indigo-600 via-indigo-600 to-violet-600",
     crestTile: "bg-white/20 ring-white/40",
     strip: "bg-slate-900 text-white",
@@ -42,6 +48,7 @@ export const ID_CARD_TEMPLATES: IdCardTemplate[] = [
   {
     id: "emerald",
     name: "Emerald",
+    layout: "modern",
     header: "bg-linear-to-br from-emerald-600 via-emerald-600 to-teal-600",
     crestTile: "bg-white/20 ring-white/40",
     strip: "bg-emerald-950 text-white",
@@ -54,6 +61,7 @@ export const ID_CARD_TEMPLATES: IdCardTemplate[] = [
   {
     id: "sunset",
     name: "Sunset",
+    layout: "banner",
     header: "bg-linear-to-br from-orange-500 via-rose-500 to-pink-600",
     crestTile: "bg-white/20 ring-white/40",
     strip: "bg-rose-950 text-white",
@@ -65,6 +73,7 @@ export const ID_CARD_TEMPLATES: IdCardTemplate[] = [
   {
     id: "navy-gold",
     name: "Navy & Gold",
+    layout: "split",
     header: "bg-linear-to-br from-blue-950 via-blue-900 to-slate-900",
     crestTile: "bg-amber-400/20 ring-amber-300/50",
     strip: "bg-slate-900 text-white",
@@ -77,6 +86,7 @@ export const ID_CARD_TEMPLATES: IdCardTemplate[] = [
   {
     id: "ocean",
     name: "Ocean Teal",
+    layout: "sidebar",
     header: "bg-linear-to-br from-cyan-600 via-sky-600 to-blue-600",
     crestTile: "bg-white/20 ring-white/40",
     strip: "bg-sky-950 text-white",
@@ -88,6 +98,7 @@ export const ID_CARD_TEMPLATES: IdCardTemplate[] = [
   {
     id: "mono",
     name: "Minimal Mono",
+    layout: "minimal",
     header: "bg-linear-to-br from-slate-700 via-slate-800 to-slate-900",
     crestTile: "bg-white/15 ring-white/30",
     strip: "bg-slate-900 text-white",
