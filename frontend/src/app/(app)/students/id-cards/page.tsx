@@ -5,7 +5,7 @@ import { CheckSquare, IdCard as IdCardIcon, Printer, Search, Square, Users } fro
 import {
   Badge, Button, Card, CardContent, EmptyState, Input, PageHeader, Select, Skeleton, StatCard, useToast,
 } from "@/components/ui";
-import { IdCard, type IdCardHolder } from "@/components/cards/IdCard";
+import { IdCard, IdCardBack, type IdCardHolder } from "@/components/cards/IdCard";
 import { ID_CARD_TEMPLATES, getTemplate } from "@/components/cards/idCardTemplates";
 import { useAsyncList } from "@/hooks/useAsyncList";
 import { useClassOptions } from "@/hooks/useClassOptions";
@@ -49,6 +49,8 @@ export default function StudentIdCardsPage() {
   const [className, setClassName] = useState("");
   // Stat-card quick filter for photo status, applied client-side before grouping.
   const [photo, setPhoto] = useState<"all" | "with" | "without">("all");
+  // Which face(s) to show & print — real school cards are double-sided.
+  const [side, setSide] = useState<"front" | "back" | "both">("both");
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   // Live school profile → the QR's school name and each card's signature image.
@@ -234,7 +236,7 @@ export default function StudentIdCardsPage() {
           </Button>
         </div>
 
-        {/* Card design picker */}
+        {/* Card design picker + front/back toggle */}
         <div className="flex flex-wrap items-center gap-2">
           <span className="mr-1 text-xs font-medium text-muted">Template</span>
           {ID_CARD_TEMPLATES.map((t) => (
@@ -255,6 +257,26 @@ export default function StudentIdCardsPage() {
               {t.name}
             </button>
           ))}
+
+          <div className="ml-auto flex items-center gap-2">
+            <span className="text-xs font-medium text-muted">Side</span>
+            <div className="flex items-center gap-0.5 rounded-lg border border-border p-0.5">
+              {(["front", "back", "both"] as const).map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setSide(s)}
+                  aria-pressed={side === s}
+                  className={cn(
+                    "focus-ring rounded-md px-2.5 py-1 text-xs font-medium capitalize transition-colors",
+                    side === s ? "bg-primary text-white" : "text-muted hover:text-text"
+                  )}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -307,13 +329,26 @@ export default function StudentIdCardsPage() {
                           </span>
                         )}
                       </button>
-                      <IdCard
-                        holder={holder}
-                        signatureUrl={signatureUrl}
-                        school={identity}
-                        template={template}
-                        sessionLabel={ACADEMIC.label}
-                      />
+                      <div className="flex flex-col items-center gap-3">
+                        {side !== "back" && (
+                          <IdCard
+                            holder={holder}
+                            signatureUrl={signatureUrl}
+                            school={identity}
+                            template={template}
+                            sessionLabel={ACADEMIC.label}
+                          />
+                        )}
+                        {side !== "front" && (
+                          <IdCardBack
+                            holder={holder}
+                            signatureUrl={signatureUrl}
+                            school={identity}
+                            template={template}
+                            sessionLabel={ACADEMIC.label}
+                          />
+                        )}
+                      </div>
                     </div>
                   );
                 })}

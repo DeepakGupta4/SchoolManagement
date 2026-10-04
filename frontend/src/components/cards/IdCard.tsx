@@ -120,13 +120,14 @@ function Row({ label, value, accentClass }: { label: string; value: string; acce
   );
 }
 
-function DetailRows({ holder, bloodClass, showBlood = true }: { holder: IdCardHolder; bloodClass: string; showBlood?: boolean }) {
+// Front-of-card rows. Guardian, DOB and address live on the BACK, so the two
+// faces never repeat the same field.
+function DetailRows({ holder, bloodClass }: { holder: IdCardHolder; bloodClass: string }) {
   return (
     <>
       <Row label={holder.identifierLabel} value={holder.identifier} />
-      {holder.guardianOrDesignation && <Row label={holder.guardianLabel ?? "Guardian"} value={holder.guardianOrDesignation} />}
       {holder.phone && <Row label="Phone" value={holder.phone} />}
-      {showBlood && holder.bloodGroup && <Row label="Blood Group" value={holder.bloodGroup} accentClass={bloodClass} />}
+      {holder.bloodGroup && <Row label="Blood Group" value={holder.bloodGroup} accentClass={bloodClass} />}
       <Row label="Valid Till" value={holder.validTill} />
     </>
   );
@@ -244,27 +245,26 @@ function CrestCard({ holder, school, signatureUrl, t, sessionLabel }: CardProps)
 function BannerCard({ holder, school, signatureUrl, t, sessionLabel }: CardProps) {
   return (
     <div className={ROOT}>
-      <div className={cn("relative shrink-0 overflow-hidden px-3 pb-8 pt-3 text-center text-white", t.header)}>
+      <div className={cn("relative shrink-0 overflow-hidden px-3 py-3 text-center text-white", t.header)}>
         <Rings />
-        <span className="absolute right-2 top-2 rounded bg-white/15 px-1.5 py-0.5 text-[6.5px] font-semibold">{sessionLabel}</span>
         <div className="relative flex flex-col items-center gap-1">
           <Crest school={school} tile={t.crestTile} size="size-8" icon="size-4" />
           <Masthead school={school} className="text-center" />
         </div>
       </div>
-      <div className="-mt-6 flex items-end gap-3 px-3">
-        <div className={cn("shrink-0 rounded-xl p-[3px] shadow-md ring-1", t.photoWrap)}>
+      <div className="flex items-center gap-3 px-3 pt-3">
+        <div className={cn("shrink-0 rounded-xl p-[3px] shadow-sm ring-1", t.photoWrap)}>
           <PhotoFrame src={holder.photo} name={holder.name} className="w-[58px] rounded-lg" />
         </div>
-        <div className="min-w-0 pb-1">
-          <p className="truncate text-[13px] font-bold text-slate-900">{holder.name}</p>
-          <div className="mt-0.5">
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[13px] font-bold leading-tight text-slate-900">{holder.name}</p>
+          <div className="mt-1">
             <Chip text={holder.affiliation} className={t.chip} />
           </div>
-          <p className="mt-0.5 text-[7px] font-semibold uppercase tracking-wide text-slate-400">{holder.role} ID</p>
+          <p className="mt-1 text-[7px] font-semibold uppercase tracking-wide text-slate-400">{holder.role} · {sessionLabel}</p>
         </div>
       </div>
-      <div className="px-3 pt-2">
+      <div className="px-3 pt-3">
         <div className="rounded-lg bg-slate-50 px-2.5 py-1 ring-1 ring-slate-100">
           <DetailRows holder={holder} bloodClass={t.blood} />
         </div>
@@ -305,7 +305,6 @@ function ModernCard({ holder, school, signatureUrl, t, sessionLabel }: CardProps
       </div>
       <div className="grid grid-cols-2 gap-x-3 px-3 pt-2">
         <GridItem label={holder.identifierLabel} value={holder.identifier} />
-        {holder.guardianOrDesignation && <GridItem label={holder.guardianLabel ?? "Guardian"} value={holder.guardianOrDesignation} />}
         {holder.phone && <GridItem label="Phone" value={holder.phone} />}
         {holder.bloodGroup && <GridItem label="Blood" value={holder.bloodGroup} valueClass={t.blood} />}
         <GridItem label="Valid Till" value={holder.validTill} />
@@ -470,4 +469,93 @@ export function IdCard({
     default:
       return <CrestCard {...props} />;
   }
+}
+
+const INSTRUCTIONS = [
+  "This card must be carried within the campus at all times.",
+  "It is non-transferable and remains the property of the school.",
+  "Report loss to the school office immediately.",
+  "Produce it on demand by school authorities.",
+];
+
+/**
+ * The reverse of the ID card — the information printed on the back of a real
+ * school card: usage rules, the holder's particulars, a QR, the holder's
+ * signature line, and a "property of the school / if found" footer. Themed to
+ * match the chosen template so front and back are a matched pair.
+ */
+export function IdCardBack({
+  holder,
+  school,
+  template = ID_CARD_TEMPLATES[0],
+  sessionLabel = academicYear().label,
+}: {
+  holder: IdCardHolder;
+  /** Accepted for prop symmetry with IdCard; the back shows the HOLDER's signature line. */
+  signatureUrl?: string;
+  school?: SchoolIdentity;
+  template?: IdCardTemplate;
+  sessionLabel?: string;
+}) {
+  const t = template;
+  return (
+    <div className={ROOT}>
+      <div className={cn("relative shrink-0 overflow-hidden px-3 py-2.5 text-white", t.header)}>
+        <Rings />
+        <div className="relative flex items-center justify-center gap-2 text-center">
+          <Crest school={school} tile={t.crestTile} size="size-7" icon="size-4" />
+          <div className="min-w-0">
+            <p className="truncate text-[11px] font-extrabold uppercase tracking-wide">{school?.name || "Your School"}</p>
+            <p className="text-[6.5px] font-semibold uppercase tracking-[0.18em] opacity-85">{holder.role} Card · {sessionLabel}</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-2 px-3 py-2.5">
+        <div>
+          <p className="mb-1 text-[7.5px] font-bold uppercase tracking-wide text-slate-500">Instructions</p>
+          <ul className="space-y-0.5 text-[7px] leading-snug text-slate-600">
+            {INSTRUCTIONS.map((line) => (
+              <li key={line} className="flex gap-1">
+                <span className="text-slate-400">•</span>
+                <span>{line}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        {/* Only fields the front does NOT carry — no duplication across faces. */}
+        {(holder.guardianOrDesignation || holder.dob) && (
+          <div className="rounded-lg bg-slate-50 px-2.5 py-1 ring-1 ring-slate-100">
+            {holder.guardianOrDesignation && (
+              <Row label={holder.guardianLabel ?? "Guardian"} value={holder.guardianOrDesignation} />
+            )}
+            {holder.dob && <Row label="Date of Birth" value={holder.dob} />}
+          </div>
+        )}
+
+        {holder.address && (
+          <p className="text-[7px] leading-snug text-slate-600">
+            <span className="font-semibold uppercase tracking-wide text-slate-400">Address: </span>
+            {holder.address}
+          </p>
+        )}
+
+        <div className="mt-1 flex items-end justify-between">
+          <QrBlock holder={holder} schoolName={school?.name} size="size-11" />
+          <div className="text-center">
+            <div className="h-5 w-20 border-b border-slate-300" />
+            <p className="mt-0.5 text-[6.5px] italic text-slate-400">Holder&apos;s signature</p>
+          </div>
+        </div>
+      </div>
+
+      <div className={cn("mt-2 shrink-0 space-y-0.5 px-3 py-1.5 text-center text-white", t.footer)}>
+        <p className="text-[6.5px] font-medium opacity-90">Property of {school?.name || "the school"}</p>
+        {(school?.phone || school?.website) && (
+          <p className="truncate text-[6px] opacity-80">{[school?.phone, school?.website].filter(Boolean).join(" · ")}</p>
+        )}
+      </div>
+    </div>
+  );
 }
