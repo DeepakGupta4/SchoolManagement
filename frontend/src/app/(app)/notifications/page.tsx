@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  AlertTriangle, Bell, CheckCheck, CheckSquare, Clock, DollarSign, GraduationCap,
+  AlertTriangle, ArrowRightLeft, Bell, CheckCheck, CheckSquare, Clock, DollarSign, GraduationCap,
   Megaphone, UserPlus, type LucideIcon,
 } from "lucide-react";
 import { Badge, Button, Card, EmptyState, PageHeader, Skeleton, useToast } from "@/components/ui";
@@ -30,6 +30,8 @@ function meta(type: string): { icon: LucideIcon; tone: Tone; label: string } {
       return { icon: AlertTriangle, tone: "danger", label: "expired" };
     case "broadcast":
       return { icon: Megaphone, tone: "info", label: "notice" };
+    case "substitution":
+      return { icon: ArrowRightLeft, tone: "info", label: "cover" };
     default:
       return { icon: Bell, tone: "info", label: "update" };
   }
