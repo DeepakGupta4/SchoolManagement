@@ -8,9 +8,11 @@ import { departmentSchema, type DepartmentSchema } from "@/lib/schemas/departmen
 import {
   DEPARTMENT_BLOCK_OPTIONS,
   DEPARTMENT_STATUS_OPTIONS,
-  DEPARTMENT_SUBJECT_OPTIONS,
   type Department,
 } from "@/lib/api/departments";
+import { useSubjectOptions } from "@/hooks/useSubjectOptions";
+import { fetchAllTeachers } from "@/lib/api/teachers";
+import { teacherName } from "@/types/teacher";
 
 // Common department names — offered as a quick pick, but the field stays free
 // text so any custom department name works.
@@ -53,6 +55,20 @@ export function DepartmentFormModal({
 }: DepartmentFormModalProps) {
   const isEdit = Boolean(record);
   const [dupError, setDupError] = useState<string | null>(null);
+  const [codeError, setCodeError] = useState<string | null>(null);
+  const { subjectNames } = useSubjectOptions();
+  // Real teacher names for the HOD suggestions.
+  const [teacherNames, setTeacherNames] = useState<string[]>([]);
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    fetchAllTeachers()
+      .then((all) => !cancelled && setTeacherNames(all.map(teacherName)))
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
 
   const {
     register,
@@ -69,33 +85,44 @@ export function DepartmentFormModal({
   useEffect(() => {
     if (!open) return;
     reset(record ? { ...record } : emptyValues);
-    // Deferred: clearing the duplicate-name error synchronously in an effect
-    // trips the react-hooks/set-state-in-effect rule.
-    const t = setTimeout(() => setDupError(null), 0);
+    // Deferred: clearing the duplicate errors synchronously in an effect trips
+    // the react-hooks/set-state-in-effect rule.
+    const t = setTimeout(() => {
+      setDupError(null);
+      setCodeError(null);
+    }, 0);
     return () => clearTimeout(t);
   }, [open, record, reset]);
 
-  // Case-insensitive set of names already taken by *other* departments.
-  const takenNames = useMemo(() => {
-    const set = new Set<string>();
+  // Case-insensitive sets of names + codes already taken by *other* departments.
+  const taken = useMemo(() => {
+    const names = new Set<string>();
+    const codes = new Set<string>();
     for (const d of existing) {
       if (record && d.id === record.id) continue;
-      set.add(d.name.trim().toLowerCase());
+      names.add(d.name.trim().toLowerCase());
+      codes.add(d.code.trim().toLowerCase());
     }
-    return set;
+    return { names, codes };
   }, [existing, record]);
 
   const submit = handleSubmit((values) => {
     const name = values.name.trim();
-    if (takenNames.has(name.toLowerCase())) {
+    const code = values.code.trim();
+    if (taken.names.has(name.toLowerCase())) {
       setDupError(`"${name}" already exists. Pick a different department name.`);
       return;
     }
+    if (taken.codes.has(code.toLowerCase())) {
+      setCodeError(`Code "${code}" is already in use.`);
+      return;
+    }
     setDupError(null);
+    setCodeError(null);
     return onSubmit({
       ...values,
       name,
-      code: values.code.trim(),
+      code,
       hod: values.hod.trim(),
       block: values.block.trim(),
     });
@@ -130,7 +157,7 @@ export function DepartmentFormModal({
             required
             list="department-names"
             placeholder="Pick or type — e.g. Mathematics"
-            {...register("name")}
+            {...register("name", { onChange: () => setDupError(null) })}
             error={errors.name?.message ?? dupError ?? undefined}
           />
           <datalist id="department-names">
@@ -139,8 +166,28 @@ export function DepartmentFormModal({
             ))}
           </datalist>
 
-          <Input label="Code" required placeholder="MATH" {...register("code")} error={errors.code?.message} />
-          <Input label="Head of department" required placeholder="Dr. Priya Sharma" {...register("hod")} error={errors.hod?.message} />
+          <Input
+            label="Code"
+            required
+            placeholder="MATH"
+            {...register("code", { onChange: () => setCodeError(null) })}
+            error={errors.code?.message ?? codeError ?? undefined}
+          />
+
+          {/* Head of department — pick a real teacher or type a name. */}
+          <Input
+            label="Head of department"
+            required
+            list="department-hods"
+            placeholder="Pick a teacher or type a name"
+            {...register("hod")}
+            error={errors.hod?.message}
+          />
+          <datalist id="department-hods">
+            {teacherNames.map((n) => (
+              <option key={n} value={n} />
+            ))}
+          </datalist>
 
           {/* Block — pick a preset or type a custom one. */}
           <Input
@@ -157,11 +204,14 @@ export function DepartmentFormModal({
             ))}
           </datalist>
 
-          <Input label="Teachers" type="number" min={0} {...register("teachers")} error={errors.teachers?.message} />
           <Select label="Status" required options={DEPARTMENT_STATUS_OPTIONS} {...register("status")} error={errors.status?.message} />
           <Input label="Annual budget (₹)" type="number" min={0} {...register("budget")} error={errors.budget?.message} />
           <Input label="Spent (₹)" type="number" min={0} {...register("spent")} error={errors.spent?.message} />
         </div>
+
+        <p className="text-xs text-subtle">
+          The teacher count is calculated automatically from staff assigned to this department.
+        </p>
 
         <Controller
           control={control}
@@ -170,7 +220,7 @@ export function DepartmentFormModal({
             <MultiSelect
               label="Subjects"
               required
-              options={DEPARTMENT_SUBJECT_OPTIONS}
+              options={subjectNames}
               value={field.value}
               onChange={field.onChange}
               error={errors.subjects?.message}

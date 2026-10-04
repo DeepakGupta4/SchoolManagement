@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Building2,
   Download,
@@ -31,6 +31,7 @@ import {
 } from "@/components/ui";
 import { exportToCsv } from "@/lib/exportCsv";
 import { useResource } from "@/hooks/useResource";
+import { fetchAllTeachers } from "@/lib/api/teachers";
 import {
   departmentsApi,
   DEPARTMENT_BLOCK_OPTIONS,
@@ -91,6 +92,28 @@ export default function DepartmentsPage() {
   const [pendingDelete, setPendingDelete] = useState<Department | null>(null);
   const { toast } = useToast();
 
+  // Live teacher count per department, derived from actual Teacher records (by
+  // department name) — not a manually-typed number that drifts out of date.
+  const [teacherCounts, setTeacherCounts] = useState<Map<string, number>>(new Map());
+  useEffect(() => {
+    let cancelled = false;
+    fetchAllTeachers()
+      .then((all) => {
+        if (cancelled) return;
+        const m = new Map<string, number>();
+        for (const t of all) {
+          const key = (t.department || "").trim().toLowerCase();
+          if (key) m.set(key, (m.get(key) ?? 0) + 1);
+        }
+        setTeacherCounts(m);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  const teachersIn = (d: Department) => teacherCounts.get(d.name.trim().toLowerCase()) ?? 0;
+
   // A narrowed filter can strand you past the last page, so every filter
   // change resets to page 1.
   const applyFilter = (setter: (value: string) => void) => (value: string) => {
@@ -104,7 +127,10 @@ export default function DepartmentsPage() {
   const paged = items.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   const stats = useMemo(() => {
-    const totalTeachers = items.reduce((sum, d) => sum + d.teachers, 0);
+    const totalTeachers = items.reduce(
+      (sum, d) => sum + (teacherCounts.get(d.name.trim().toLowerCase()) ?? 0),
+      0
+    );
     const totalBudget = items.reduce((sum, d) => sum + d.budget, 0);
     const totalSpent = items.reduce((sum, d) => sum + d.spent, 0);
     return {
@@ -113,7 +139,7 @@ export default function DepartmentsPage() {
       totalBudget,
       utilisation: totalBudget > 0 ? Math.round((totalSpent / totalBudget) * 100) : 0,
     };
-  }, [items]);
+  }, [items, teacherCounts]);
 
   /** Every filter here is applied server-side, so `items` is what the table shows. */
   const handleExport = () => {
@@ -132,7 +158,7 @@ export default function DepartmentsPage() {
         { header: "Department", value: (d) => d.name },
         { header: "Block", value: (d) => d.block },
         { header: "Head of Dept.", value: (d) => d.hod },
-        { header: "Teachers", value: (d) => d.teachers },
+        { header: "Teachers", value: (d) => teachersIn(d) },
         { header: "Subjects", value: (d) => d.subjects.join("; ") },
         { header: "Annual Budget", value: (d) => d.budget },
         { header: "Spent", value: (d) => d.spent },
@@ -208,7 +234,7 @@ export default function DepartmentsPage() {
       render: (d) => (
         <span className="inline-flex items-center gap-1.5 font-medium text-text">
           <Users className="size-3.5 text-subtle" />
-          {d.teachers}
+          {teachersIn(d)}
         </span>
       ),
     },
@@ -361,7 +387,7 @@ export default function DepartmentsPage() {
       {error ? (
         <Card>
           <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
-            <p className="text-sm font-medium text-danger">{error}</p>
+            <p className="text-sm font-medium text-danger-text">{error}</p>
             <Button variant="outline" onClick={refetch}>
               Try again
             </Button>
@@ -419,7 +445,7 @@ export default function DepartmentsPage() {
                 { label: "Code", value: viewing.code },
                 { label: "Head of dept.", value: viewing.hod },
                 { label: "Block", value: viewing.block },
-                { label: "Teachers", value: viewing.teachers },
+                { label: "Teachers", value: teachersIn(viewing) },
                 { label: "Annual budget", value: inr(viewing.budget) },
                 { label: "Spent", value: inr(viewing.spent) },
                 {

@@ -135,6 +135,19 @@ function TeachersPageInner() {
   };
   const isFiltered = Boolean(search || subject || status || employmentType);
 
+  // The status and employment-type stat cards are mutually exclusive — selecting
+  // one clears the other dimension, so only ever one card is highlighted.
+  const pickStatus = (s: string) => {
+    setStatus(status === s ? "" : s);
+    setEmploymentType("");
+    setPage(1);
+  };
+  const pickEmploymentType = (t: string) => {
+    setEmploymentType(employmentType === t ? "" : t);
+    setStatus("");
+    setPage(1);
+  };
+
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Teacher | null>(null);
   const [deleting, setDeleting] = useState<Teacher | null>(null);
@@ -411,10 +424,7 @@ function TeachersPageInner() {
           icon={UserCheck}
           gradient="gradient-emerald"
           active={status === "active"}
-          onClick={() => {
-            setStatus(status === "active" ? "" : "active");
-            setPage(1);
-          }}
+          onClick={() => pickStatus("active")}
         />
         <StatCard
           label="Full-time"
@@ -422,10 +432,7 @@ function TeachersPageInner() {
           icon={BriefcaseBusiness}
           gradient="gradient-cyan"
           active={employmentType === "full-time"}
-          onClick={() => {
-            setEmploymentType(employmentType === "full-time" ? "" : "full-time");
-            setPage(1);
-          }}
+          onClick={() => pickEmploymentType("full-time")}
         />
         <StatCard
           label="On leave"
@@ -433,10 +440,7 @@ function TeachersPageInner() {
           icon={CalendarOff}
           gradient="gradient-amber"
           active={status === "on-leave"}
-          onClick={() => {
-            setStatus(status === "on-leave" ? "" : "on-leave");
-            setPage(1);
-          }}
+          onClick={() => pickStatus("on-leave")}
         />
       </div>
 
@@ -463,7 +467,11 @@ function TeachersPageInner() {
         <div className="w-40">
           <Select
             value={status}
-            onChange={(e) => applyFilter(setStatus)(e.target.value)}
+            onChange={(e) => {
+              setStatus(e.target.value);
+              setEmploymentType("");
+              setPage(1);
+            }}
             placeholder="All statuses"
             options={[
               { label: "Active", value: "active" },

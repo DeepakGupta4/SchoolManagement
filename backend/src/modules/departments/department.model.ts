@@ -16,5 +16,10 @@ const departmentSchema = new Schema(
   { timestamps: true }
 );
 
+// Code and name are each unique within a school (the form promises a unique
+// code). Dedupe any existing clashes before deploying, or the index build fails.
+departmentSchema.index({ schoolId: 1, code: 1 }, { unique: true });
+departmentSchema.index({ schoolId: 1, name: 1 }, { unique: true });
+
 export type DepartmentAttrs = InferSchemaType<typeof departmentSchema>;
 export const Department = mongoose.model("Department", departmentSchema);

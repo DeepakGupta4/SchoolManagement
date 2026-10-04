@@ -34,6 +34,7 @@ export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
       rollNo: "Roll number",
       email: "Email",
       code: "Code",
+      name: "Name",
       classTeacherOf: "Class-teacher assignment (class)",
     };
     const value = String(err.keyValue[field] ?? "");
