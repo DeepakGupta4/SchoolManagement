@@ -14,6 +14,7 @@ import schoolRoutes from "./modules/schools/school.routes.js";
 import subscriptionRoutes from "./modules/schools/subscription.routes.js";
 import notificationRoutes from "./modules/notifications/notification.routes.js";
 import attendanceRoutes from "./modules/attendance/attendance.routes.js";
+import staffAttendanceRoutes from "./modules/staffAttendance/staffAttendance.routes.js";
 import marksRoutes from "./modules/marks/mark.routes.js";
 import dashboardRoutes from "./modules/dashboard/dashboard.routes.js";
 import aiRoutes from "./modules/ai/ai.routes.js";
@@ -75,6 +76,7 @@ export function createApp() {
   app.use("/api/fees", tenantGuard, feeRoutes);
 
   app.use("/api/attendance", tenantGuard, attendanceRoutes);
+  app.use("/api/staff-attendance", tenantGuard, staffAttendanceRoutes);
   app.use("/api/marks", tenantGuard, marksRoutes);
   app.use("/api/dashboard", tenantGuard, dashboardRoutes);
   app.use("/api/ai", tenantGuard, aiRoutes);

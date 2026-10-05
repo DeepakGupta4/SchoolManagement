@@ -32,6 +32,7 @@ const staffSchema = z.object({
   address: z.string().default(""),
   join: pastDate,
   salary: z.coerce.number<number>().min(0).default(0),
+  avatar: z.string().default(""),
 });
 
 export default createCrudRouter({

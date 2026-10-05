@@ -18,6 +18,8 @@ const staffSchema = new Schema(
     address: { type: String, default: "" },
     join: { type: String, default: "" },
     salary: { type: Number, default: 0 },
+    // Passport-style photo (data URL), printed on the staff ID card.
+    avatar: { type: String, default: "" },
   },
   { timestamps: true }
 );

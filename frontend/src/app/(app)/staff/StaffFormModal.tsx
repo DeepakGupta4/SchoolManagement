@@ -1,9 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { Upload, X } from "lucide-react";
 import { Modal, Button, Input, Select, Textarea, useToast } from "@/components/ui";
+import { PhotoFrame } from "@/components/cards/PhotoFrame";
+import { fileToDataUrl } from "@/lib/image";
 import { staffSchema, type StaffSchema } from "@/lib/schemas/staff";
 import { digitsOnly10 } from "@/lib/phone";
 import { nextCodeId } from "@/lib/autoId";
@@ -55,6 +58,7 @@ const emptyValues: StaffSchema = {
   address: "",
   join: "",
   salary: 0,
+  avatar: "",
 };
 
 interface StaffFormModalProps {
@@ -85,17 +89,40 @@ export function StaffFormModal({
   const [savingDocs, setSavingDocs] = useState(false);
   const [dupError, setDupError] = useState<string | null>(null);
   const [empIdError, setEmpIdError] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
 
   const {
     register,
     handleSubmit,
     reset,
     setValue,
+    control,
     formState: { errors },
   } = useForm<StaffSchema>({
     resolver: zodResolver(staffSchema),
     defaultValues: emptyValues,
   });
+
+  // useWatch (not watch) so the React Compiler can still optimise this component.
+  const avatar = useWatch({ control, name: "avatar" });
+  const name = useWatch({ control, name: "name" });
+
+  const handlePhoto = async (file: File | undefined) => {
+    if (!file) return;
+    setUploading(true);
+    try {
+      const dataUrl = await fileToDataUrl(file);
+      setValue("avatar", dataUrl, { shouldDirty: true });
+    } catch (e) {
+      toast({
+        title: "Could not add photo",
+        description: e instanceof Error ? e.message : "Please try another image.",
+        variant: "error",
+      });
+    } finally {
+      setUploading(false);
+    }
+  };
 
   // Repopulate on open so the previous record's values can't leak through.
   useEffect(() => {
@@ -182,6 +209,38 @@ export function StaffFormModal({
       }
     >
       <form onSubmit={submit} className="flex flex-col gap-4">
+        {/* Passport photo — shows on the staff ID card. */}
+        <div className="flex items-center gap-4">
+          <PhotoFrame src={avatar || undefined} name={name || "Staff"} className="w-16 shrink-0" />
+          <div className="flex flex-col gap-2">
+            <div className="flex flex-wrap gap-2">
+              <label className="focus-within:outline-none">
+                <span className="focus-ring inline-flex cursor-pointer items-center gap-2 rounded-md border border-border px-4 py-2 text-sm font-medium text-text transition-colors hover:border-border-strong hover:bg-surface-hover">
+                  <Upload className="size-4" />
+                  {uploading ? "Processing…" : avatar ? "Change photo" : "Upload photo"}
+                </span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="sr-only"
+                  disabled={uploading}
+                  onChange={(e) => {
+                    handlePhoto(e.target.files?.[0]);
+                    e.target.value = ""; // allow re-selecting the same file
+                  }}
+                />
+              </label>
+              {avatar && (
+                <Button type="button" variant="ghost" onClick={() => setValue("avatar", "", { shouldDirty: true })}>
+                  <X className="size-4" />
+                  Remove
+                </Button>
+              )}
+            </div>
+            <p className="text-xs text-subtle">Passport-style photo. Appears on the ID card. Resized automatically.</p>
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Input label="Employee ID" required hint={!isEdit ? "Auto-generated — editable" : undefined} placeholder="STF013" {...register("employeeId", { onChange: () => setEmpIdError(null) })} error={errors.employeeId?.message ?? empIdError ?? undefined} />
           <Input label="Full name" required placeholder="Ms. Anita Gupta" {...register("name")} error={errors.name?.message} />

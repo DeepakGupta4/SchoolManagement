@@ -28,6 +28,7 @@ export const staffSchema = z.object({
     .refine(isValidDateString, "Enter a valid date")
     .refine((d) => isWithin(d, MIN_RECORD_DATE, TODAY_ISO), "Join date can't be in the future"),
   salary: z.coerce.number<number>().min(0, "Cannot be negative"),
+  avatar: z.string().optional(),
 });
 
 export type StaffSchema = z.infer<typeof staffSchema>;
