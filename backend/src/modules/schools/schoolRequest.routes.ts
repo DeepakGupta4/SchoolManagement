@@ -18,6 +18,9 @@ const router = Router();
 
 /* ------------------------------------------------------------ public sign-up */
 
+/** 24-hour "HH:MM" clock time. */
+const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+
 const registrationSchema = z.object({
   schoolName: z.string().min(2, "School name is required"),
   ownerName: z.string().min(2, "Owner name is required"),
@@ -31,6 +34,8 @@ const registrationSchema = z.object({
   teacherCount: z.coerce.number<number>().min(0).default(0),
   schoolType: z.string().default(""),
   website: z.union([z.url(), z.literal("")]).default(""),
+  openingTime: z.string().regex(TIME_RE, "Use a HH:MM time").default("08:00"),
+  closingTime: z.string().regex(TIME_RE, "Use a HH:MM time").default("15:00"),
   message: z.string().max(2000).default(""),
 });
 
@@ -236,6 +241,8 @@ router.post("/:id/approve", async (req, res, next) => {
       teacherCount: request.teacherCount,
       schoolType: request.schoolType,
       website: request.website,
+      openingTime: request.openingTime || "08:00",
+      closingTime: request.closingTime || "15:00",
       status: "active",
       subscription: {
         plan: "trial",

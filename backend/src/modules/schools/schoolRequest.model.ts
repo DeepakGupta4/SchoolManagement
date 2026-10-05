@@ -24,6 +24,9 @@ const schoolRequestSchema = new Schema(
     teacherCount: { type: Number, default: 0 },
     schoolType: { type: String, default: "" },
     website: { type: String, default: "" },
+    // Daily open/close times (local "HH:MM", 24h), carried onto the School on approval.
+    openingTime: { type: String, default: "08:00" },
+    closingTime: { type: String, default: "15:00" },
     message: { type: String, default: "" },
 
     status: { type: String, enum: REQUEST_STATUSES, default: "pending", index: true },
@@ -62,6 +65,8 @@ export function toPublicRequest(doc: SchoolRequestDoc) {
     teacherCount: doc.teacherCount,
     schoolType: doc.schoolType,
     website: doc.website,
+    openingTime: doc.openingTime || "08:00",
+    closingTime: doc.closingTime || "15:00",
     message: doc.message,
     status: doc.status,
     reviewedBy: doc.reviewedBy,

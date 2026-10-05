@@ -60,6 +60,8 @@ const PROFILE_DEFAULTS = {
   address: "",
   city: "",
   state: "",
+  openingTime: "08:00",
+  closingTime: "15:00",
   website: "",
   logo: "",
   signatureUrl: "",
@@ -248,6 +250,8 @@ export default function SettingsPage() {
             address: s.address || prev.address,
             city: s.city || prev.city,
             state: s.state || prev.state,
+            openingTime: s.openingTime || prev.openingTime,
+            closingTime: s.closingTime || prev.closingTime,
             website: s.website || prev.website,
             affiliation: s.affiliation || prev.affiliation,
             logo: s.logo || prev.logo,
@@ -278,6 +282,8 @@ export default function SettingsPage() {
           address: profile.address,
           city: profile.city,
           state: profile.state,
+          openingTime: profile.openingTime || "08:00",
+          closingTime: profile.closingTime || "15:00",
           website: profile.website,
           affiliation: profile.affiliation,
           logo: profile.logo,
@@ -475,6 +481,20 @@ export default function SettingsPage() {
               label="State"
               value={profile.state}
               onChange={(e) => setProfile({ ...profile, state: e.target.value })}
+            />
+            <Input
+              label="Opening time"
+              type="time"
+              value={profile.openingTime}
+              onChange={(e) => setProfile({ ...profile, openingTime: e.target.value })}
+              hint="When the school day starts — drives the dashboard Open/Closed badge."
+            />
+            <Input
+              label="Closing time"
+              type="time"
+              value={profile.closingTime}
+              onChange={(e) => setProfile({ ...profile, closingTime: e.target.value })}
+              hint="When the school day ends."
             />
             <div className="lg:col-span-2">
               <Input

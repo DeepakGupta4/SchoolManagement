@@ -20,6 +20,8 @@ export interface SchoolRegistration {
   teacherCount: number
   schoolType: string
   website: string
+  openingTime: string
+  closingTime: string
   message: string
 }
 

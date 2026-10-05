@@ -228,25 +228,77 @@ function QuickActions({ role }: { role: string | undefined }) {
   );
 }
 
-/** Today's open/closed state (styled for the gradient hero). */
-function HeroStatus({ status, loading }: { status: DashboardInsights["schoolOpen"] | undefined; loading: boolean }) {
-  if (loading || !status) {
-    return <Skeleton className="h-7 w-28 rounded-full" />;
-  }
-  if (status.open) {
-    return (
-      <span className="inline-flex shrink-0 items-center gap-2 rounded-full bg-success-soft px-3.5 py-1.5 text-xs font-semibold text-success-text">
-        <span className="size-1.5 rounded-full bg-success" />
-        School is Open
-      </span>
-    );
-  }
-  return (
-    <span className="inline-flex shrink-0 items-center gap-2 rounded-full bg-surface-hover px-3.5 py-1.5 text-xs font-semibold text-muted">
-      <span className="size-1.5 rounded-full bg-current opacity-70" />
-      Closed{status.reason ? ` · ${status.reason}` : ""}
+// Fallback hours for a school that hasn't set its own yet, so the badge is
+// still accurate out of the box (and never "open" at midnight).
+const DEFAULT_OPENING = "08:00";
+const DEFAULT_CLOSING = "15:00";
+
+/** "14:30" → "2:30 PM". */
+function to12h(hhmm: string): string {
+  const [h, m] = hhmm.split(":");
+  let hour = Number(h);
+  const suffix = hour >= 12 ? "PM" : "AM";
+  hour = hour % 12 || 12;
+  return `${hour}:${m ?? "00"} ${suffix}`;
+}
+
+/**
+ * Today's open/closed state (styled for the gradient hero). The server's
+ * Sunday/holiday decision wins; within a working day the school's opening/closing
+ * window decides, checked against a live clock so it flips at the right minute.
+ */
+function HeroStatus({
+  status,
+  openingTime,
+  closingTime,
+  loading,
+}: {
+  status: DashboardInsights["schoolOpen"] | undefined;
+  openingTime: string | null | undefined;
+  closingTime: string | null | undefined;
+  loading: boolean;
+}) {
+  const [now, setNow] = useState<Date | null>(null);
+  useEffect(() => {
+    const tick = () => setNow(new Date());
+    // Deferred first tick keeps setState out of the effect body; re-checks each
+    // half-minute so the badge flips at opening/closing without a refresh.
+    const first = setTimeout(tick, 0);
+    const id = setInterval(tick, 30000);
+    return () => {
+      clearTimeout(first);
+      clearInterval(id);
+    };
+  }, []);
+
+  const openPill = (
+    <span className="inline-flex shrink-0 items-center gap-2 rounded-full bg-success-soft px-3.5 py-1.5 text-xs font-semibold text-success-text">
+      <span className="size-1.5 rounded-full bg-success" />
+      School is Open
     </span>
   );
+  const closedPill = (reason: string | null) => (
+    <span className="inline-flex shrink-0 items-center gap-2 rounded-full bg-surface-hover px-3.5 py-1.5 text-xs font-semibold text-muted">
+      <span className="size-1.5 rounded-full bg-current opacity-70" />
+      Closed{reason ? ` · ${reason}` : ""}
+    </span>
+  );
+
+  if (loading || !status || !now) {
+    return <Skeleton className="h-7 w-28 rounded-full" />;
+  }
+
+  // Sunday / holiday — the server already decided the whole day is off.
+  if (!status.open) return closedPill(status.reason);
+
+  // Working day: compare the current local time to the opening/closing window.
+  const open = openingTime?.trim() || DEFAULT_OPENING;
+  const close = closingTime?.trim() || DEFAULT_CLOSING;
+  const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+  const within = open <= close ? cur >= open && cur < close : cur >= open || cur < close;
+
+  if (within) return openPill;
+  return closedPill(cur < open ? `Opens ${to12h(open)}` : `Reopens ${to12h(open)}`);
 }
 
 /** Live ticking clock for the hero. Starts null to avoid an SSR/hydration mismatch. */
@@ -445,7 +497,12 @@ export default function DashboardPage() {
           </div>
           <div className="flex flex-col items-start gap-2 sm:items-end">
             <LiveClock />
-            <HeroStatus status={data?.schoolOpen} loading={loading} />
+            <HeroStatus
+              status={data?.schoolOpen}
+              openingTime={data?.openingTime}
+              closingTime={data?.closingTime}
+              loading={loading}
+            />
           </div>
         </CardContent>
       </Card>

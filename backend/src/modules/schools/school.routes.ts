@@ -75,6 +75,9 @@ router.get("/mine", async (req, res, next) => {
   }
 });
 
+/** 24-hour "HH:MM" clock time. */
+const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+
 const profileSchema = z.object({
   name: z.string().min(2).optional(),
   ownerName: z.string().optional(),
@@ -88,6 +91,8 @@ const profileSchema = z.object({
   affiliation: z.string().optional(),
   logo: z.string().optional(),
   signatureUrl: z.string().optional(),
+  openingTime: z.string().regex(TIME_RE, "Use a HH:MM time").optional(),
+  closingTime: z.string().regex(TIME_RE, "Use a HH:MM time").optional(),
   bellSchedule: z
     .array(z.object({ label: z.string(), time: z.string(), isBreak: z.boolean() }))
     .optional(),

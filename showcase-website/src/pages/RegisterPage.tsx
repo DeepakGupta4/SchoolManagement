@@ -20,6 +20,8 @@ const EMPTY: SchoolRegistration = {
   teacherCount: 0,
   schoolType: 'CBSE',
   website: '',
+  openingTime: '08:00',
+  closingTime: '15:00',
   message: '',
 }
 
@@ -60,6 +62,8 @@ export function RegisterPage() {
         ...form,
         studentCount: Number(form.studentCount) || 0,
         teacherCount: Number(form.teacherCount) || 0,
+        openingTime: form.openingTime || '08:00',
+        closingTime: form.closingTime || '15:00',
       })
       setDone(true)
       window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -183,6 +187,11 @@ export function RegisterPage() {
                 <div className="grid gap-4 sm:grid-cols-2">
                   <Field label="Number of students" type="number" value={String(form.studentCount || '')} onChange={(v) => set('studentCount', Number(v) || 0)} placeholder="850" />
                   <Field label="Number of teachers" type="number" value={String(form.teacherCount || '')} onChange={(v) => set('teacherCount', Number(v) || 0)} placeholder="45" />
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field label="School opening time" type="time" value={form.openingTime} onChange={(v) => set('openingTime', v)} />
+                  <Field label="School closing time" type="time" value={form.closingTime} onChange={(v) => set('closingTime', v)} />
                 </div>
 
                 <Field label="Website (optional)" type="url" value={form.website} onChange={(v) => set('website', v)} placeholder="https://yourschool.edu.in" />

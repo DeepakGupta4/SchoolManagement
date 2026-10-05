@@ -100,6 +100,9 @@ export interface SchoolProfile {
   logo: string;
   /** Authorised signatory image (data URL), printed on ID cards. */
   signatureUrl?: string;
+  /** Daily open/close times ("HH:MM", 24h) — drives the dashboard Open/Closed badge. */
+  openingTime?: string;
+  closingTime?: string;
   bellSchedule?: { label: string; time: string; isBreak: boolean }[];
 }
 

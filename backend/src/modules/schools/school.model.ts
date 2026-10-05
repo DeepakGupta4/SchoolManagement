@@ -65,6 +65,10 @@ const schoolSchema = new Schema(
     teacherCount: { type: Number, default: 0 },
     schoolType: { type: String, default: "" },
     website: { type: String, default: "" },
+    // Daily open/close times (local "HH:MM", 24h). Captured at registration,
+    // editable in Settings; drives the dashboard Open/Closed badge.
+    openingTime: { type: String, default: "08:00" },
+    closingTime: { type: String, default: "15:00" },
     // Board/affiliation line printed on official documents (report cards, ID
     // cards, admit cards, certificates), e.g. "CBSE Affiliation No. 2730123".
     affiliation: { type: String, default: "" },
@@ -196,6 +200,8 @@ export function toPublicSchool(school: SchoolDoc) {
     teacherCount: school.teacherCount,
     schoolType: school.schoolType,
     website: school.website,
+    openingTime: school.openingTime || "08:00",
+    closingTime: school.closingTime || "15:00",
     affiliation: school.affiliation ?? "",
     logo: school.logo,
     signatureUrl: school.signatureUrl ?? "",

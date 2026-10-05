@@ -40,6 +40,9 @@ export interface DashboardInsights {
   schoolName: string | null;
   schoolLogo: string | null;
   schoolOpen: { open: boolean; reason: string | null };
+  /** Daily open/close times ("HH:MM", 24h); null when the school hasn't set them. */
+  openingTime: string | null;
+  closingTime: string | null;
   feeSummary: FeeSummary | null;
   feeError: boolean;
 }
@@ -142,6 +145,8 @@ async function buildFromLegacy(
     schoolName: school?.name?.trim() || null,
     schoolLogo: school?.logo?.trim() || null,
     schoolOpen: { open: dow !== 0, reason: dow === 0 ? "Sunday" : null },
+    openingTime: school?.openingTime?.trim() || null,
+    closingTime: school?.closingTime?.trim() || null,
     feeSummary,
     feeError: !feeSummary,
   };
@@ -195,6 +200,8 @@ export function useDashboardInsights() {
           schoolName: school?.name?.trim() || null,
           schoolLogo: school?.logo?.trim() || null,
           schoolOpen: insights.schoolOpen,
+          openingTime: school?.openingTime?.trim() || null,
+          closingTime: school?.closingTime?.trim() || null,
           feeSummary,
           feeError: feeR.status !== "fulfilled",
         });
