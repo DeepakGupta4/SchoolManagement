@@ -18,5 +18,8 @@ const payrollSchema = new Schema(
   { timestamps: true }
 );
 
+// One payroll row per employee per school — employee IDs must be unique.
+payrollSchema.index({ schoolId: 1, employeeId: 1 }, { unique: true });
+
 export type PayrollEntryAttrs = InferSchemaType<typeof payrollSchema>;
 export const PayrollEntry = mongoose.model("PayrollEntry", payrollSchema);

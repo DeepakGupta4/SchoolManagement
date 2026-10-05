@@ -81,7 +81,7 @@ export default function StaffPage() {
   // during render instead, because the stat cards and the department tiles
   // report across the whole roster — filtering them out server-side would make
   // every card that counts a value you just filtered away read zero.
-  const filters = useMemo(() => ({ search, dept: "All", type: "All" }), [search]);
+  const filters = useMemo(() => ({ search, dept: "All", type: "All", limit: 500 }), [search]);
 
   const { items, loading, error, refetch, remove, deleting } = useResource(
     staffApi,
@@ -117,13 +117,17 @@ export default function StaffPage() {
     [items]
   );
 
+  // Presets plus any custom department actually present in the data, so a staff
+  // member saved with a non-preset department is still counted and filterable.
+  const deptList = useMemo(() => {
+    const set = new Set<string>(STAFF_DEPT_OPTIONS);
+    for (const s of items) if (s.dept) set.add(s.dept);
+    return [...set];
+  }, [items]);
+
   const deptCounts = useMemo(
-    () =>
-      STAFF_DEPT_OPTIONS.map((dept) => ({
-        dept,
-        count: items.filter((s) => s.dept === dept).length,
-      })),
-    [items]
+    () => deptList.map((dept) => ({ dept, count: items.filter((s) => s.dept === dept).length })),
+    [deptList, items]
   );
 
   /** Exports exactly the rows the table is showing, filters included. */
@@ -368,7 +372,7 @@ export default function StaffPage() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           label="Total Staff"
-          value={stats.total}
+          value={error ? "—" : stats.total}
           icon={Users}
           tone="cyan"
           active={statusFilter === "All" && typeFilter === "All" && deptFilter === "All"}
@@ -380,7 +384,7 @@ export default function StaffPage() {
         />
         <StatCard
           label="Active"
-          value={stats.active}
+          value={error ? "—" : stats.active}
           icon={UserCheck}
           tone="emerald"
           active={statusFilter === "active"}
@@ -388,7 +392,7 @@ export default function StaffPage() {
         />
         <StatCard
           label="On Leave"
-          value={stats.onLeave}
+          value={error ? "—" : stats.onLeave}
           icon={Clock}
           tone="amber"
           active={statusFilter === "on-leave"}
@@ -396,7 +400,7 @@ export default function StaffPage() {
         />
         <StatCard
           label="Part-time"
-          value={stats.partTime}
+          value={error ? "—" : stats.partTime}
           icon={Briefcase}
           tone="violet"
           active={typeFilter === "Part-time"}
@@ -426,7 +430,7 @@ export default function StaffPage() {
               >
                 {dept}
               </p>
-              <p className="mt-1 text-xl font-semibold text-text">{count}</p>
+              <p className="mt-1 text-xl font-semibold text-text">{error ? "—" : count}</p>
               <p className="text-xs text-muted">members</p>
             </button>
           );
@@ -450,7 +454,7 @@ export default function StaffPage() {
             onChange={(e) => setDeptFilter(e.target.value)}
             options={[
               { label: "All Departments", value: "All" },
-              ...STAFF_DEPT_OPTIONS.map((d) => ({ label: d, value: d })),
+              ...deptList.map((d) => ({ label: d, value: d })),
             ]}
             aria-label="Filter by department"
           />
@@ -514,7 +518,7 @@ export default function StaffPage() {
             return (
               <span key={st} className="flex items-center gap-1.5">
                 <span className={`size-2 rounded-full ${meta.dot}`} />
-                {meta.label}: <strong className="font-semibold text-text">{count}</strong>
+                {meta.label}: <strong className="font-semibold text-text">{error ? "—" : count}</strong>
               </span>
             );
           })}

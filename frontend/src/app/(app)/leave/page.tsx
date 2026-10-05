@@ -23,7 +23,6 @@ import {
   Card,
   CardContent,
   ConfirmDialog,
-  EmptyState,
   Input,
   PageHeader,
   Select,
@@ -34,6 +33,7 @@ import {
 } from "@/components/ui";
 import { exportToCsv } from "@/lib/exportCsv";
 import { useResource } from "@/hooks/useResource";
+import { todayIso } from "@/lib/dates";
 import {
   leaveRequestsApi,
   LEAVE_STATUS_OPTIONS,
@@ -59,18 +59,14 @@ const LEAVE_TYPE_VARIANT: Record<string, BadgeVariant> = {
   "Maternity Leave": "default",
 };
 
-const tabs = ["Requests", "Leave Balance"] as const;
-
 export default function LeavePage() {
-  const [tab, setTab] = useState<(typeof tabs)[number]>("Requests");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [typeFilter, setTypeFilter] = useState("All");
 
-  // `statusFilter` is deliberately left out of the server filters: the stat
-  // cards and the status legend need per-status counts across the whole
-  // (otherwise filtered) set, so status narrowing is applied during render.
-  const filters = useMemo(() => ({ search, type: typeFilter }), [search, typeFilter]);
+  // `status` stays out of the server filters so the stat tiles can count each
+  // status across the whole (search/type-scoped) set; it narrows the table below.
+  const filters = useMemo(() => ({ search, type: typeFilter, limit: 500 }), [search, typeFilter]);
 
   const { items, loading, error, refetch, save, remove, saving, deleting } = useResource(
     leaveRequestsApi,
@@ -84,7 +80,7 @@ export default function LeavePage() {
   const [pendingDelete, setPendingDelete] = useState<LeaveRequest | null>(null);
   const { toast } = useToast();
 
-  // Rows for the table only — stat cards keep counting the full `items`.
+  // Table rows only — stat cards keep counting the full `items`.
   const visible = useMemo(
     () => (statusFilter === "All" ? items : items.filter((l) => l.status === statusFilter)),
     [items, statusFilter]
@@ -121,15 +117,16 @@ export default function LeavePage() {
     });
   };
 
-  const stats = useMemo(
-    () => ({
+  const stats = useMemo(() => {
+    const today = todayIso();
+    return {
       pending: items.filter((l) => l.status === "Pending").length,
       approved: items.filter((l) => l.status === "Approved").length,
       rejected: items.filter((l) => l.status === "Rejected").length,
-      onLeave: items.filter((l) => l.status === "Approved" && l.days <= 5).length,
-    }),
-    [items]
-  );
+      // Genuinely "today": an approved leave whose range covers the current date.
+      onLeave: items.filter((l) => l.status === "Approved" && l.from <= today && today <= l.to).length,
+    };
+  }, [items]);
 
   const openCreate = () => {
     setEditing(null);
@@ -173,9 +170,7 @@ export default function LeavePage() {
       key: "type",
       header: "Leave Type",
       sortable: true,
-      render: (l) => (
-        <Badge variant={LEAVE_TYPE_VARIANT[l.type] ?? "default"}>{l.type}</Badge>
-      ),
+      render: (l) => <Badge variant={LEAVE_TYPE_VARIANT[l.type] ?? "default"}>{l.type}</Badge>,
     },
     {
       key: "from",
@@ -280,8 +275,6 @@ export default function LeavePage() {
     },
   ];
 
-  const isRequests = tab === "Requests";
-
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
@@ -302,136 +295,117 @@ export default function LeavePage() {
       />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Pending" value={stats.pending} icon={Clock} tone="amber" />
-        <StatCard label="Approved" value={stats.approved} icon={CheckCircle} tone="emerald" />
-        <StatCard label="Rejected" value={stats.rejected} icon={XCircle} tone="rose" />
-        <StatCard label="On Leave Today" value={stats.onLeave} icon={Users} tone="indigo" />
+        <StatCard
+          label="Pending"
+          value={error ? "—" : stats.pending}
+          icon={Clock}
+          tone="amber"
+          active={statusFilter === "Pending"}
+          onClick={() => setStatusFilter(statusFilter === "Pending" ? "All" : "Pending")}
+        />
+        <StatCard
+          label="Approved"
+          value={error ? "—" : stats.approved}
+          icon={CheckCircle}
+          tone="emerald"
+          active={statusFilter === "Approved"}
+          onClick={() => setStatusFilter(statusFilter === "Approved" ? "All" : "Approved")}
+        />
+        <StatCard
+          label="Rejected"
+          value={error ? "—" : stats.rejected}
+          icon={XCircle}
+          tone="rose"
+          active={statusFilter === "Rejected"}
+          onClick={() => setStatusFilter(statusFilter === "Rejected" ? "All" : "Rejected")}
+        />
+        <StatCard label="On Leave Today" value={error ? "—" : stats.onLeave} icon={Users} tone="indigo" />
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
-        <div
-          role="tablist"
-          aria-label="Leave views"
-          className="inline-flex gap-1 rounded-md bg-surface-sunken p-1"
-        >
-          {tabs.map((t) => (
-            <button
-              key={t}
-              role="tab"
-              aria-selected={tab === t}
-              onClick={() => {
-                setTab(t);
-                setSearch("");
-                setStatusFilter("All");
-                setTypeFilter("All");
-              }}
-              className={`focus-ring rounded-sm px-4 py-1.5 text-xs font-medium transition-colors ${
-                tab === t ? "bg-surface-raised text-text shadow-sm" : "text-muted hover:text-text"
-              }`}
-            >
-              {t}
-            </button>
-          ))}
+        <div className="min-w-60 flex-1">
+          <Input
+            type="search"
+            placeholder="Search by name or ID…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            icon={<Search className="size-4" />}
+            aria-label="Search leave requests"
+          />
         </div>
-
-        {isRequests && (
-          <>
-            <div className="min-w-60 flex-1">
-              <Input
-                type="search"
-                placeholder="Search by name or ID…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                icon={<Search className="size-4" />}
-                aria-label="Search leave requests"
-              />
-            </div>
-            <div className="w-48">
-              <Select
-                value={typeFilter}
-                onChange={(e) => setTypeFilter(e.target.value)}
-                options={[
-                  { label: "All Types", value: "All" },
-                  ...LEAVE_TYPE_OPTIONS.map((t) => ({ label: t, value: t })),
-                ]}
-                aria-label="Filter by leave type"
-              />
-            </div>
-            <div className="w-40">
-              <Select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                options={[
-                  { label: "All Status", value: "All" },
-                  ...LEAVE_STATUS_OPTIONS.map((s) => ({ label: s, value: s })),
-                ]}
-                aria-label="Filter by status"
-              />
-            </div>
-            <p className="ml-auto text-xs text-subtle">{visible.length} requests</p>
-          </>
-        )}
+        <div className="w-48">
+          <Select
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value)}
+            options={[
+              { label: "All Types", value: "All" },
+              ...LEAVE_TYPE_OPTIONS.map((t) => ({ label: t, value: t })),
+            ]}
+            aria-label="Filter by leave type"
+          />
+        </div>
+        <div className="w-40">
+          <Select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            options={[
+              { label: "All Status", value: "All" },
+              ...LEAVE_STATUS_OPTIONS.map((s) => ({ label: s, value: s })),
+            ]}
+            aria-label="Filter by status"
+          />
+        </div>
+        <p className="ml-auto text-xs text-subtle">{visible.length} requests</p>
       </div>
 
-      {isRequests ? (
-        error ? (
-          <Card>
-            <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
-              <p className="text-sm font-medium text-danger">{error}</p>
-              <Button variant="outline" onClick={refetch}>
-                Try again
-              </Button>
-            </CardContent>
-          </Card>
-        ) : (
-          <Table
-            columns={requestColumns}
-            rows={visible}
-            rowKey={(l) => l.id}
-            loading={loading}
-            emptyTitle="No leave requests found"
-            emptyDescription="Try adjusting your filters"
-            emptyAction={
-              <Button variant="outline" onClick={openCreate}>
-                <Plus className="size-4" />
-                Apply Leave
-              </Button>
-            }
-          />
-        )
-      ) : (
+      {error ? (
         <Card>
-          <EmptyState
-            icon={<CalendarDays className="size-5" />}
-            title="No leave balances yet"
-            description="Staff leave balances will appear here once they are set up."
-          />
+          <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+            <p className="text-sm font-medium text-danger">{error}</p>
+            <Button variant="outline" onClick={refetch}>
+              Try again
+            </Button>
+          </CardContent>
         </Card>
+      ) : (
+        <Table
+          columns={requestColumns}
+          rows={visible}
+          rowKey={(l) => l.id}
+          loading={loading}
+          emptyTitle="No leave requests found"
+          emptyDescription="Try adjusting your filters"
+          emptyAction={
+            <Button variant="outline" onClick={openCreate}>
+              <Plus className="size-4" />
+              Apply Leave
+            </Button>
+          }
+        />
       )}
 
-      {isRequests && (
-        <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted">
-          <p>
-            Showing <strong className="font-semibold text-text">{visible.length}</strong> requests
-          </p>
-          <div className="flex flex-wrap items-center gap-4">
-            {LEAVE_STATUS_OPTIONS.map((st) => {
-              const count = items.filter((l) => l.status === st).length;
-              return (
-                <span key={st} className="flex items-center gap-1.5">
-                  <span className={`size-2 rounded-full ${STATUS_META[st].dot}`} />
-                  {st}: <strong className="font-semibold text-text">{count}</strong>
-                </span>
-              );
-            })}
-          </div>
+      <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted">
+        <p>
+          Showing <strong className="font-semibold text-text">{visible.length}</strong> requests
+        </p>
+        <div className="flex flex-wrap items-center gap-4">
+          {LEAVE_STATUS_OPTIONS.map((st) => {
+            const count = items.filter((l) => l.status === st).length;
+            return (
+              <span key={st} className="flex items-center gap-1.5">
+                <span className={`size-2 rounded-full ${STATUS_META[st].dot}`} />
+                {st}: <strong className="font-semibold text-text">{error ? "—" : count}</strong>
+              </span>
+            );
+          })}
         </div>
-      )}
+      </div>
 
       <LeaveFormModal
         open={formOpen}
         onOpenChange={setFormOpen}
         record={editing}
+        existing={items}
         saving={saving}
         onSubmit={handleSubmit}
       />

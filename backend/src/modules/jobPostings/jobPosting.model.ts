@@ -15,5 +15,8 @@ const jobPostingSchema = new Schema(
   { timestamps: true }
 );
 
+// Job codes must be unique within a school (claimed in the UI; enforced here).
+jobPostingSchema.index({ schoolId: 1, code: 1 }, { unique: true });
+
 export type JobPostingAttrs = InferSchemaType<typeof jobPostingSchema>;
 export const JobPosting = mongoose.model("JobPosting", jobPostingSchema);

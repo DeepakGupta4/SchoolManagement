@@ -101,3 +101,19 @@ export function weekdayName(s: string): string {
   const day = Number(s.slice(8, 10));
   return WEEKDAYS[new Date(Date.UTC(year, month - 1, day, 12)).getUTCDay()] ?? "";
 }
+
+const utcNoon = (s: string) =>
+  Date.UTC(Number(s.slice(0, 4)), Number(s.slice(5, 7)) - 1, Number(s.slice(8, 10)), 12);
+
+/**
+ * Inclusive whole-day count between two yyyy-mm-dd dates (so from===to is 1 day).
+ * Returns 0 when either date is invalid or `to` precedes `from` — the caller then
+ * knows the range is unusable. Pure and deterministic — safe in render / useMemo.
+ */
+export function daysInclusive(from: string, to: string): number {
+  if (!isValidDateString(from) || !isValidDateString(to)) return 0;
+  const a = utcNoon(from);
+  const b = utcNoon(to);
+  if (b < a) return 0;
+  return Math.round((b - a) / 86_400_000) + 1;
+}

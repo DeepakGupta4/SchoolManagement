@@ -21,4 +21,6 @@ export default createCrudRouter({
   createSchema: payrollSchema,
   searchFields: ["name", "employeeId", "dept", "role"],
   filterFields: ["role", "status"],
+  // Salary breakdown + bank details — office/HR only, never students/parents/teachers.
+  readRoles: ["super_admin", "school_admin", "principal", "accountant"],
 });

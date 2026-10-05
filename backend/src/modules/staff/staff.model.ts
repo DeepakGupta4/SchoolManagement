@@ -22,5 +22,8 @@ const staffSchema = new Schema(
   { timestamps: true }
 );
 
+// Employee IDs must be unique within a school (claimed in the UI; enforced here).
+staffSchema.index({ schoolId: 1, employeeId: 1 }, { unique: true });
+
 export type StaffMemberAttrs = InferSchemaType<typeof staffSchema>;
 export const StaffMember = mongoose.model("StaffMember", staffSchema);

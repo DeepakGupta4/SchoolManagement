@@ -10,9 +10,10 @@ import {
   Trash2,
   Briefcase,
   Users,
-  CheckCircle,
   Clock,
   Calendar,
+  Lock,
+  Layers,
 } from "lucide-react";
 import {
   Badge,
@@ -20,7 +21,6 @@ import {
   Card,
   CardContent,
   ConfirmDialog,
-  EmptyState,
   Input,
   PageHeader,
   Select,
@@ -34,23 +34,12 @@ import { useResource } from "@/hooks/useResource";
 import {
   jobPostingsApi,
   JOB_DEPT_OPTIONS,
+  JOB_STATUS_OPTIONS,
   type JobPosting,
 } from "@/lib/api/jobPostings";
 import type { JobPostingSchema } from "@/lib/schemas/jobPosting";
 import { DetailModal } from "@/components/DetailModal";
 import { JobPostingFormModal } from "./JobPostingFormModal";
-
-type Applicant = {
-  id: string;
-  name: string;
-  job: string;
-  dept: string;
-  exp: string;
-  applied: string;
-  status: string;
-  phone: string;
-  email: string;
-};
 
 type BadgeVariant = "default" | "success" | "warning" | "danger" | "info";
 
@@ -67,28 +56,16 @@ const DEPT_VARIANT: Record<string, BadgeVariant> = {
   Security: "danger",
 };
 
-const tabs = ["Job Postings", "Applicants"] as const;
-
 export default function RecruitmentPage() {
-  const [tab, setTab] = useState<(typeof tabs)[number]>("Job Postings");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [deptFilter, setDeptFilter] = useState("All");
 
-  const isJobs = tab === "Job Postings";
-
-  // The applicants tab reuses the same controls, so the job list keeps its own
-  // filters unfiltered while that tab is active.
-  // `statusFilter` is deliberately left out of the server filters: the "Open
-  // Positions" card needs the open count across the whole (otherwise filtered)
-  // set, so status narrowing is applied during render instead.
+  // `status` stays out of the server filters so the stat tiles can count Open vs
+  // Closed across the whole (search/dept-scoped) set; it narrows the table below.
   const filters = useMemo(
-    () => ({
-      search: isJobs ? search : "",
-      dept: isJobs ? deptFilter : "All",
-      status: "All",
-    }),
-    [isJobs, search, deptFilter]
+    () => ({ search, dept: deptFilter, status: "All", limit: 500 }),
+    [search, deptFilter]
   );
 
   const { items, loading, error, refetch, save, remove, saving, deleting } = useResource(
@@ -103,63 +80,45 @@ export default function RecruitmentPage() {
   const [pendingDelete, setPendingDelete] = useState<JobPosting | null>(null);
   const { toast } = useToast();
 
-  // The applicant pipeline has no backend yet — it renders an empty state.
-  const filteredApplicants: Applicant[] = [];
+  // Table rows — narrowed by the status filter; the tiles keep counting all `items`.
+  const visible = useMemo(
+    () => items.filter((j) => statusFilter === "All" || j.status === statusFilter),
+    [items, statusFilter]
+  );
 
-  /** Exports the postings or the applicant pipeline, matching the active tab. */
+  const openJobs = items.filter((j) => j.status === "Open").length;
+  const closedJobs = items.filter((j) => j.status === "Closed").length;
+  // Applicant counts are entered per posting by the admin (no applications backend yet).
+  const totalApps = items.reduce((sum, j) => sum + j.applicants, 0);
+
   const handleExport = () => {
-    const count = isJobs ? items.length : filteredApplicants.length;
-    if (count === 0) {
+    if (visible.length === 0) {
       toast({
         title: "Nothing to export",
-        description: `No ${isJobs ? "job postings" : "applicants"} match the current filters.`,
+        description: "No job postings match the current filters.",
         variant: "warning",
       });
       return;
     }
-    if (isJobs) {
-      exportToCsv<JobPosting>(
-        "job-postings",
-        [
-          { header: "Code", value: (j) => j.code },
-          { header: "Title", value: (j) => j.title },
-          { header: "Department", value: (j) => j.dept },
-          { header: "Type", value: (j) => j.type },
-          { header: "Posted", value: (j) => j.posted },
-          { header: "Deadline", value: (j) => j.deadline },
-          { header: "Applicants", value: (j) => j.applicants },
-          { header: "Status", value: (j) => j.status },
-        ],
-        items
-      );
-    } else {
-      exportToCsv<Applicant>(
-        "applicants",
-        [
-          { header: "Applicant ID", value: (a) => a.id },
-          { header: "Name", value: (a) => a.name },
-          { header: "Applied For", value: (a) => a.job },
-          { header: "Department", value: (a) => a.dept },
-          { header: "Experience", value: (a) => a.exp },
-          { header: "Applied On", value: (a) => a.applied },
-          { header: "Phone", value: (a) => a.phone },
-          { header: "Email", value: (a) => a.email },
-          { header: "Status", value: (a) => a.status },
-        ],
-        filteredApplicants
-      );
-    }
+    exportToCsv<JobPosting>(
+      "job-postings",
+      [
+        { header: "Code", value: (j) => j.code },
+        { header: "Title", value: (j) => j.title },
+        { header: "Department", value: (j) => j.dept },
+        { header: "Type", value: (j) => j.type },
+        { header: "Posted", value: (j) => j.posted },
+        { header: "Deadline", value: (j) => j.deadline },
+        { header: "Applicants", value: (j) => j.applicants },
+        { header: "Status", value: (j) => j.status },
+      ],
+      visible
+    );
     toast({
       title: "Export ready",
-      description: `${count} ${isJobs ? "job posting" : "applicant"}${count === 1 ? "" : "s"} exported to CSV.`,
+      description: `${visible.length} job posting${visible.length === 1 ? "" : "s"} exported to CSV.`,
     });
   };
-
-  const openJobs = items.filter((j) => j.status === "Open").length;
-  // Derived from the real job postings; the applicant pipeline has no backend yet.
-  const totalApps = items.reduce((sum, j) => sum + j.applicants, 0);
-  const shortlisted = 0;
-  const hired = 0;
 
   const openCreate = () => {
     setEditing(null);
@@ -284,12 +243,11 @@ export default function RecruitmentPage() {
     },
   ];
 
-
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
         title="Recruitment"
-        description="Manage job postings and track applicants"
+        description="Post and manage job openings for your school"
         actions={
           <>
             <Button variant="outline" onClick={handleExport}>
@@ -305,48 +263,35 @@ export default function RecruitmentPage() {
       />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Open Positions" value={openJobs} icon={Briefcase} tone="indigo" />
-        <StatCard label="Total Applicants" value={totalApps} icon={Users} tone="cyan" />
-        <StatCard label="Shortlisted" value={shortlisted} icon={Clock} tone="amber" />
-        <StatCard label="Hired" value={hired} icon={CheckCircle} tone="emerald" />
+        <StatCard
+          label="Open Positions"
+          value={error ? "—" : openJobs}
+          icon={Briefcase}
+          tone="indigo"
+          active={statusFilter === "Open"}
+          onClick={() => setStatusFilter(statusFilter === "Open" ? "All" : "Open")}
+        />
+        <StatCard
+          label="Closed Positions"
+          value={error ? "—" : closedJobs}
+          icon={Lock}
+          tone="rose"
+          active={statusFilter === "Closed"}
+          onClick={() => setStatusFilter(statusFilter === "Closed" ? "All" : "Closed")}
+        />
+        <StatCard label="Total Postings" value={error ? "—" : items.length} icon={Layers} tone="cyan" />
+        <StatCard label="Total Applicants" value={error ? "—" : totalApps} icon={Users} tone="violet" />
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
-        <div
-          role="tablist"
-          aria-label="Recruitment views"
-          className="inline-flex gap-1 rounded-md bg-surface-sunken p-1"
-        >
-          {tabs.map((t) => (
-            <button
-              key={t}
-              role="tab"
-              aria-selected={tab === t}
-              onClick={() => {
-                setTab(t);
-                setSearch("");
-                setStatusFilter("All");
-                setDeptFilter("All");
-              }}
-              className={`focus-ring rounded-sm px-4 py-1.5 text-xs font-medium transition-colors ${
-                tab === t
-                  ? "bg-surface-raised text-text shadow-sm"
-                  : "text-muted hover:text-text"
-              }`}
-            >
-              {t}
-            </button>
-          ))}
-        </div>
-
         <div className="min-w-60 flex-1">
           <Input
             type="search"
-            placeholder={isJobs ? "Search jobs…" : "Search applicants…"}
+            placeholder="Search jobs…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             icon={<Search className="size-4" />}
-            aria-label={isJobs ? "Search jobs" : "Search applicants"}
+            aria-label="Search jobs"
           />
         </div>
 
@@ -368,69 +313,46 @@ export default function RecruitmentPage() {
             onChange={(e) => setStatusFilter(e.target.value)}
             options={[
               { label: "All Status", value: "All" },
-              ...(isJobs
-                ? ["Open", "Closed"]
-                : ["Under Review", "Shortlisted", "Hired", "Rejected"]
-              ).map((s) => ({ label: s, value: s })),
+              ...JOB_STATUS_OPTIONS.map((s) => ({ label: s, value: s })),
             ]}
             aria-label="Filter by status"
           />
         </div>
 
-        <p className="ml-auto text-xs text-subtle">
-          {isJobs ? `${items.length} jobs` : `${filteredApplicants.length} applicants`}
-        </p>
+        <p className="ml-auto text-xs text-subtle">{visible.length} jobs</p>
       </div>
 
-      {isJobs ? (
-        error ? (
-          <Card>
-            <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
-              <p className="text-sm font-medium text-danger">{error}</p>
-              <Button variant="outline" onClick={refetch}>
-                Try again
-              </Button>
-            </CardContent>
-          </Card>
-        ) : (
-          <Table
-            columns={jobColumns}
-            rows={items}
-            rowKey={(j) => j.id}
-            loading={loading}
-            emptyTitle="No jobs found"
-            emptyDescription="Try adjusting your filters"
-            emptyAction={
-              <Button variant="outline" onClick={openCreate}>
-                <Plus className="size-4" />
-                Post Job
-              </Button>
-            }
-          />
-        )
-      ) : (
+      {error ? (
         <Card>
-          <EmptyState
-            icon={<Users className="size-5" />}
-            title="No applicants yet"
-            description="Applications will appear here once candidates apply to your job postings."
-          />
+          <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+            <p className="text-sm font-medium text-danger">{error}</p>
+            <Button variant="outline" onClick={refetch}>
+              Try again
+            </Button>
+          </CardContent>
         </Card>
-      )}
-
-      {isJobs && (
-        <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted">
-          <p>
-            Showing{" "}
-            <strong className="font-semibold text-text">{items.length}</strong> jobs
-          </p>
-        </div>
+      ) : (
+        <Table
+          columns={jobColumns}
+          rows={visible}
+          rowKey={(j) => j.id}
+          loading={loading}
+          emptyTitle="No jobs found"
+          emptyDescription="Try adjusting your filters"
+          emptyAction={
+            <Button variant="outline" onClick={openCreate}>
+              <Plus className="size-4" />
+              Post Job
+            </Button>
+          }
+        />
       )}
 
       <JobPostingFormModal
         open={formOpen}
         onOpenChange={setFormOpen}
         record={editing}
+        existing={items}
         saving={saving}
         onSubmit={handleSubmit}
       />
@@ -462,7 +384,7 @@ export default function RecruitmentPage() {
         title="Delete job posting?"
         description={
           pendingDelete
-            ? `${pendingDelete.title} (${pendingDelete.code}) and its ${pendingDelete.applicants} applicant record(s) will be permanently removed. This cannot be undone.`
+            ? `${pendingDelete.title} (${pendingDelete.code}) will be permanently removed. This cannot be undone.`
             : ""
         }
         confirmLabel="Delete"

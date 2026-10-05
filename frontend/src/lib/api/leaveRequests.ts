@@ -19,6 +19,8 @@ export interface LeaveFilters {
   search?: string;
   status?: string;
   type?: string;
+  /** Browse page size; raised above the 200 default so stats/export see all requests. */
+  limit?: number;
 }
 
 export const LEAVE_TYPE_OPTIONS = [

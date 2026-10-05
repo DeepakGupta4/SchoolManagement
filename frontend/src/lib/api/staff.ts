@@ -25,6 +25,8 @@ export interface StaffFilters {
   dept?: string;
   type?: string;
   status?: string;
+  /** Browse page size; raised above the 200 default so stats/export see the roster. */
+  limit?: number;
 }
 
 export const STAFF_DEPT_OPTIONS = [

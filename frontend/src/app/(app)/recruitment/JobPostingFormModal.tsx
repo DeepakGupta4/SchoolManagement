@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Modal, Button, Input, Select } from "@/components/ui";
 import { jobPostingSchema, type JobPostingSchema } from "@/lib/schemas/jobPosting";
+import { TODAY_ISO } from "@/lib/dates";
 import {
   JOB_DEPT_OPTIONS,
   JOB_TYPE_OPTIONS,
@@ -35,7 +36,7 @@ const emptyValues: JobPostingSchema = {
   title: "",
   dept: JOB_DEPT_OPTIONS[0],
   type: JOB_TYPE_OPTIONS[0],
-  posted: "",
+  posted: TODAY_ISO,
   deadline: "",
   applicants: 0,
   status: "Open",
@@ -46,6 +47,8 @@ interface JobPostingFormModalProps {
   onOpenChange: (open: boolean) => void;
   /** Present = edit mode, absent = create mode. */
   record?: JobPosting | null;
+  /** Existing postings — used to block a duplicate job code. */
+  existing?: JobPosting[];
   saving?: boolean;
   onSubmit: (values: JobPostingSchema) => Promise<void>;
 }
@@ -54,10 +57,12 @@ export function JobPostingFormModal({
   open,
   onOpenChange,
   record,
+  existing = [],
   saving,
   onSubmit,
 }: JobPostingFormModalProps) {
   const isEdit = Boolean(record);
+  const [codeError, setCodeError] = useState<string | null>(null);
 
   const {
     register,
@@ -73,9 +78,30 @@ export function JobPostingFormModal({
   useEffect(() => {
     if (!open) return;
     reset(record ? { ...record } : emptyValues);
+    // Deferred: clearing the dup error synchronously trips react-hooks/set-state-in-effect.
+    const t = setTimeout(() => setCodeError(null), 0);
+    return () => clearTimeout(t);
   }, [open, record, reset]);
 
-  const submit = handleSubmit(onSubmit);
+  // Case-insensitive set of codes already taken by *other* postings.
+  const takenCodes = useMemo(() => {
+    const set = new Set<string>();
+    for (const j of existing) {
+      if (record && j.id === record.id) continue;
+      if (j.code) set.add(j.code.trim().toLowerCase());
+    }
+    return set;
+  }, [existing, record]);
+
+  const submit = handleSubmit((values) => {
+    const code = values.code.trim();
+    if (takenCodes.has(code.toLowerCase())) {
+      setCodeError(`Job code "${code}" is already in use.`);
+      return;
+    }
+    setCodeError(null);
+    return onSubmit({ ...values, code });
+  });
 
   return (
     <Modal
@@ -100,7 +126,13 @@ export function JobPostingFormModal({
     >
       <form onSubmit={submit} className="flex flex-col gap-4">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Input label="Job code" required placeholder="JB007" {...register("code")} error={errors.code?.message} />
+          <Input
+            label="Job code"
+            required
+            placeholder="JB007"
+            {...register("code", { onChange: () => setCodeError(null) })}
+            error={errors.code?.message ?? codeError ?? undefined}
+          />
 
           {/* Job title — pick a preset or type a custom one. */}
           <Input
@@ -132,8 +164,8 @@ export function JobPostingFormModal({
             ))}
           </datalist>
           <Select label="Employment type" required options={JOB_TYPE_OPTIONS.map((t) => ({ label: t, value: t }))} {...register("type")} error={errors.type?.message} />
-          <Input label="Posted on" required placeholder="01 Jul 2025" {...register("posted")} error={errors.posted?.message} />
-          <Input label="Deadline" required placeholder="31 Jul 2025" {...register("deadline")} error={errors.deadline?.message} />
+          <Input label="Posted on" required type="date" max={TODAY_ISO} {...register("posted")} error={errors.posted?.message} />
+          <Input label="Deadline" required type="date" {...register("deadline")} error={errors.deadline?.message} />
           <Input label="Applicants" type="number" min={0} {...register("applicants")} error={errors.applicants?.message} />
           <Select label="Status" required options={JOB_STATUS_OPTIONS.map((s) => ({ label: s, value: s }))} {...register("status")} error={errors.status?.message} />
         </div>

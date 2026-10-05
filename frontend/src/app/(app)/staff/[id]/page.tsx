@@ -136,6 +136,21 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
     };
   }, [id]);
 
+  // Other staff — so the edit form can block a duplicate employee ID / email.
+  const [allStaff, setAllStaff] = useState<StaffMember[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    staffApi
+      .list({ limit: 500 })
+      .then((rows) => {
+        if (!cancelled) setAllStaff(rows);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const handleUpdate = async (values: StaffSchema): Promise<StaffMember | null> => {
     setSaving(true);
     try {
@@ -282,6 +297,7 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
         open={editOpen}
         onOpenChange={setEditOpen}
         record={staff}
+        existing={allStaff}
         saving={saving}
         onSubmit={handleUpdate}
       />

@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { PHONE_REGEX, PHONE_MESSAGE } from "@/lib/phone";
-import { isValidDateString, isWithin, MIN_ADULT_DOB, MAX_ADULT_DOB } from "@/lib/dates";
+import {
+  isValidDateString, isWithin, MIN_ADULT_DOB, MAX_ADULT_DOB, MIN_RECORD_DATE, TODAY_ISO,
+} from "@/lib/dates";
 
 export const staffSchema = z.object({
   employeeId: z.string().trim().min(2, "Employee ID is required"),
@@ -20,7 +22,11 @@ export const staffSchema = z.object({
   phone: z.string().regex(PHONE_REGEX, PHONE_MESSAGE),
   email: z.email("Enter a valid email address"),
   address: z.string().trim(),
-  join: z.string().trim().min(3, "Join date is required"),
+  join: z
+    .string()
+    .min(1, "Join date is required")
+    .refine(isValidDateString, "Enter a valid date")
+    .refine((d) => isWithin(d, MIN_RECORD_DATE, TODAY_ISO), "Join date can't be in the future"),
   salary: z.coerce.number<number>().min(0, "Cannot be negative"),
 });
 

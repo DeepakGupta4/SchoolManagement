@@ -11,11 +11,14 @@ const leaveRequestSchema = new Schema(
     to: { type: String, default: "" },
     days: { type: Number, default: 1 },
     reason: { type: String, default: "" },
-    status: { type: String, default: "Pending" },
+    status: { type: String, enum: ["Pending", "Approved", "Rejected"], default: "Pending" },
     dept: { type: String, default: "" },
   },
   { timestamps: true }
 );
+
+// Request codes must be unique within a school (claimed in the UI; enforced here).
+leaveRequestSchema.index({ schoolId: 1, code: 1 }, { unique: true });
 
 export type LeaveRequestAttrs = InferSchemaType<typeof leaveRequestSchema>;
 export const LeaveRequest = mongoose.model("LeaveRequest", leaveRequestSchema);

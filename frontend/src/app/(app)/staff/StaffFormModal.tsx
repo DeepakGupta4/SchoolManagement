@@ -7,7 +7,7 @@ import { Modal, Button, Input, Select, Textarea, useToast } from "@/components/u
 import { staffSchema, type StaffSchema } from "@/lib/schemas/staff";
 import { digitsOnly10 } from "@/lib/phone";
 import { nextCodeId } from "@/lib/autoId";
-import { MIN_ADULT_DOB, MAX_ADULT_DOB } from "@/lib/dates";
+import { MIN_ADULT_DOB, MAX_ADULT_DOB, TODAY_ISO } from "@/lib/dates";
 import { AttachmentsField } from "@/components/AttachmentsField";
 import { uploadDocumentFiles } from "@/lib/api/documents";
 import {
@@ -84,6 +84,7 @@ export function StaffFormModal({
   const [attachments, setAttachments] = useState<File[]>([]);
   const [savingDocs, setSavingDocs] = useState(false);
   const [dupError, setDupError] = useState<string | null>(null);
+  const [empIdError, setEmpIdError] = useState<string | null>(null);
 
   const {
     register,
@@ -102,9 +103,12 @@ export function StaffFormModal({
     reset(record ? { ...record } : emptyValues);
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setAttachments([]);
-    // Deferred: clearing the duplicate-email error synchronously in an effect
-    // trips the react-hooks/set-state-in-effect rule.
-    const t = setTimeout(() => setDupError(null), 0);
+    // Deferred: clearing the duplicate errors synchronously in an effect trips
+    // the react-hooks/set-state-in-effect rule.
+    const t = setTimeout(() => {
+      setDupError(null);
+      setEmpIdError(null);
+    }, 0);
     return () => clearTimeout(t);
   }, [open, record, reset]);
 
@@ -114,24 +118,32 @@ export function StaffFormModal({
     setValue("employeeId", nextCodeId("STF", existing.map((s) => s.employeeId)));
   }, [open, isEdit, existing, setValue]);
 
-  // Case-insensitive set of emails already taken by *other* staff members.
-  const takenEmails = useMemo(() => {
-    const set = new Set<string>();
+  // Case-insensitive sets of emails + employee IDs already taken by *other* staff.
+  const { takenEmails, takenEmployeeIds } = useMemo(() => {
+    const emails = new Set<string>();
+    const ids = new Set<string>();
     for (const s of existing) {
       if (record && s.id === record.id) continue;
-      if (s.email) set.add(s.email.trim().toLowerCase());
+      if (s.email) emails.add(s.email.trim().toLowerCase());
+      if (s.employeeId) ids.add(s.employeeId.trim().toLowerCase());
     }
-    return set;
+    return { takenEmails: emails, takenEmployeeIds: ids };
   }, [existing, record]);
 
   const submit = handleSubmit(async (values) => {
     const email = values.email.trim();
+    const employeeId = values.employeeId.trim();
+    if (takenEmployeeIds.has(employeeId.toLowerCase())) {
+      setEmpIdError(`Employee ID "${employeeId}" is already in use.`);
+      return;
+    }
     if (takenEmails.has(email.toLowerCase())) {
       setDupError(`A staff member with the email "${email}" already exists.`);
       return;
     }
     setDupError(null);
-    const saved = await onSubmit({ ...values, email });
+    setEmpIdError(null);
+    const saved = await onSubmit({ ...values, email, employeeId });
     if (!saved) return; // save failed — keep the form open (error already shown)
     if (attachments.length > 0) {
       setSavingDocs(true);
@@ -171,7 +183,7 @@ export function StaffFormModal({
     >
       <form onSubmit={submit} className="flex flex-col gap-4">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Input label="Employee ID" required hint={!isEdit ? "Auto-generated — editable" : undefined} placeholder="STF013" {...register("employeeId")} error={errors.employeeId?.message} />
+          <Input label="Employee ID" required hint={!isEdit ? "Auto-generated — editable" : undefined} placeholder="STF013" {...register("employeeId", { onChange: () => setEmpIdError(null) })} error={errors.employeeId?.message ?? empIdError ?? undefined} />
           <Input label="Full name" required placeholder="Ms. Anita Gupta" {...register("name")} error={errors.name?.message} />
 
           {/* Role — pick a preset or type a custom one. */}
@@ -206,7 +218,7 @@ export function StaffFormModal({
           <Select label="Status" required options={STAFF_STATUS_OPTIONS} {...register("status")} error={errors.status?.message} />
           <Input label="Phone" required inputMode="numeric" maxLength={10} placeholder="9876543210" {...register("phone", { onChange: digitsOnly10 })} error={errors.phone?.message} />
           <Input label="Email" required type="email" placeholder="name@school.edu" {...register("email")} error={errors.email?.message ?? dupError ?? undefined} />
-          <Input label="Join date" required placeholder="Jan 2024" {...register("join")} error={errors.join?.message} />
+          <Input label="Join date" required type="date" max={TODAY_ISO} {...register("join")} error={errors.join?.message} />
           <Input label="Monthly salary (₹)" type="number" min={0} {...register("salary")} error={errors.salary?.message} />
         </div>
 

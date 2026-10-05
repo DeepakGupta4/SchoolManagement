@@ -250,9 +250,8 @@ const TEACHER_NAV_HREFS = new Set<string>([
   "/notices",
   "/events",
   "/holidays",
-  // Profile & leave
+  // Profile
   "/settings",
-  "/leave",
 ]);
 
 /**
@@ -287,6 +286,27 @@ const RESTRICTED_ROLE_HREFS: Partial<Record<UserRole, Set<string>>> = {
   accountant: ACCOUNTANT_NAV_HREFS,
 };
 
+/**
+ * Roles that see the full school navigation (the platform owner is separate).
+ * Kept as strings because the backend role set (which includes "principal") is
+ * wider than the frontend `UserRole` union.
+ */
+const FULL_ACCESS_ROLES = new Set<string>(["super_admin", "school_admin", "principal"]);
+
+/**
+ * Minimal fallback for any other signed-in role (librarian/parent/student/driver/
+ * staff) that has no explicit allow-list yet — the dashboard only, never the admin
+ * modules (Staff, Payroll, Performance, …). Without this, an unlisted role fell
+ * through to full admin access.
+ */
+const MINIMAL_NAV_HREFS = new Set<string>(["/dashboard"]);
+
+/** The nav allow-list for a role, or `undefined` when the role may see everything. */
+function allowedHrefsFor(role: UserRole | undefined): Set<string> | undefined {
+  if (!role || FULL_ACCESS_ROLES.has(role)) return undefined;
+  return RESTRICTED_ROLE_HREFS[role] ?? MINIMAL_NAV_HREFS;
+}
+
 /** Student sub-routes that stay admin-only even though /students is allowed. */
 const STUDENT_ADMIN_SUBROUTES = new Set([
   "admissions",
@@ -299,7 +319,7 @@ const STUDENT_ADMIN_SUBROUTES = new Set([
 
 /** True when `pathname` is reachable by `role`. Unlisted roles are unrestricted. */
 export function isPathAllowed(role: UserRole | undefined, pathname: string): boolean {
-  const allowed = role ? RESTRICTED_ROLE_HREFS[role] : undefined;
+  const allowed = allowedHrefsFor(role);
   if (!allowed) return true;
   if (pathname === "/" || pathname === "/dashboard") return true;
 
@@ -324,7 +344,7 @@ export function isPathAllowed(role: UserRole | undefined, pathname: string): boo
 /** Filters the nav tree to what `role` should see. */
 export function navGroupsForRole(role: UserRole | undefined): NavGroup[] {
   const isSuper = role === "super_admin";
-  const allowed = role ? RESTRICTED_ROLE_HREFS[role] : undefined;
+  const allowed = allowedHrefsFor(role);
 
   return navGroups
     .filter((g) => {
