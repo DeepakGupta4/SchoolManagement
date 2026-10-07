@@ -1,6 +1,7 @@
 import { createApp } from "./app.js";
 import { connectDatabase, disconnectDatabase } from "./config/db.js";
 import { ensureSuperAdmin } from "./utils/ensureSuperAdmin.js";
+import { backfillLeaveIdentity } from "./modules/leaveRequests/backfillLeaveIdentity.js";
 import { runSubscriptionReminders } from "./modules/schools/reminders.js";
 import { runAllSchools } from "./modules/workflows/workflow.service.js";
 import { runAutoAbsentForAllSchools } from "./modules/attendance/autoAbsent.js";
@@ -12,6 +13,11 @@ async function start() {
 
   // Guarantee a platform owner exists (real DB and in-memory alike).
   await ensureSuperAdmin();
+
+  // One-time repair: leave rows filed before identity resolution stored just an
+  // email/blank as the applicant name. Idempotent, and wrapped so it can never
+  // block boot (the same tolerance ensureSuperAdmin's startup write relies on).
+  await backfillLeaveIdentity().catch((e) => console.error("Leave identity backfill failed:", e));
 
   // Subscription reminder sweep (trial-ending/expired, paid expiring). Also
   // exposed as a cron endpoint; running it here keeps a live instance nudging
