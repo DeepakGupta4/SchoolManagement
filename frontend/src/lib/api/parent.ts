@@ -13,6 +13,9 @@ export interface Parent {
   email: string;
   occupation: string;
   address: string;
+  isPrimary: boolean;
+  isEmergencyContact: boolean;
+  isPickupAuthorized: boolean;
   /**
    * Linked student ids — each is the `id` the students API returns (the Mongo
    * `_id`), used to resolve a parent's children live from the students data.
@@ -54,6 +57,9 @@ export interface ParentDirectoryEntry {
   email: string;
   occupation: string;
   address: string;
+  isPrimary: boolean;
+  isEmergencyContact: boolean;
+  isPickupAuthorized: boolean;
   source: "student" | "manual";
   /** Linked student ids. */
   students: string[];
@@ -102,6 +108,9 @@ function deriveDirectory(students: Student[], manual: Parent[]): ParentDirectory
         email,
         occupation: (c.occupation ?? "").trim(),
         address: "",
+        isPrimary: false,
+        isEmergencyContact: false,
+        isPickupAuthorized: false,
         source: "student",
         students: [],
         children: [],
@@ -158,6 +167,9 @@ function deriveDirectory(students: Student[], manual: Parent[]): ParentDirectory
       if (p.email) existing.email = p.email.toLowerCase();
       if (p.occupation) existing.occupation = p.occupation;
       if (p.address) existing.address = p.address;
+      existing.isPrimary = Boolean(p.isPrimary);
+      existing.isEmergencyContact = Boolean(p.isEmergencyContact);
+      existing.isPickupAuthorized = Boolean(p.isPickupAuthorized);
       for (const c of manualChildren) {
         if (!existing.students.includes(c.id)) {
           existing.students.push(c.id);
@@ -173,6 +185,9 @@ function deriveDirectory(students: Student[], manual: Parent[]): ParentDirectory
         email: (p.email || "").toLowerCase(),
         occupation: p.occupation || "",
         address: p.address || "",
+        isPrimary: Boolean(p.isPrimary),
+        isEmergencyContact: Boolean(p.isEmergencyContact),
+        isPickupAuthorized: Boolean(p.isPickupAuthorized),
         source: "manual",
         students: manualChildren.map((c) => c.id),
         children: manualChildren,
@@ -214,4 +229,19 @@ export interface ParentInviteResult {
 /** Create a parent login (role "parent") for an email so they can use the portal. */
 export async function inviteParent(input: { name: string; email: string }): Promise<ParentInviteResult> {
   return apiRequest<ParentInviteResult>("/api/parents/invite", { method: "POST", body: input });
+}
+
+export interface ParentMessageResult {
+  recipients: number;
+  emailed: number;
+  emailConfigured: boolean;
+}
+
+/** Message parents — an in-app notification (shows in their portal) + an email. */
+export async function messageParents(input: {
+  recipients: string[];
+  title: string;
+  body: string;
+}): Promise<ParentMessageResult> {
+  return apiRequest<ParentMessageResult>("/api/parents/message", { method: "POST", body: input });
 }

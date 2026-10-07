@@ -34,6 +34,9 @@ const emptyValues: ParentSchema = {
   email: "",
   occupation: "",
   address: "",
+  isPrimary: false,
+  isEmergencyContact: false,
+  isPickupAuthorized: false,
   students: [],
 };
 
@@ -192,6 +195,21 @@ export function ParentFormModal({
           {...register("address")}
           error={errors.address?.message}
         />
+
+        <div className="flex flex-wrap gap-x-5 gap-y-2">
+          {(
+            [
+              ["isPrimary", "Primary contact"],
+              ["isEmergencyContact", "Emergency contact"],
+              ["isPickupAuthorized", "Authorized for pickup"],
+            ] as const
+          ).map(([field, label]) => (
+            <label key={field} className="flex items-center gap-2 text-sm text-text">
+              <input type="checkbox" {...register(field)} className="size-4 rounded border-border accent-primary" />
+              {label}
+            </label>
+          ))}
+        </div>
 
         <Controller
           control={control}

@@ -3,17 +3,17 @@
 import { useCallback, useMemo, useState } from "react";
 import {
   Search, Plus, Download, FileText, Eye, Pencil, Trash2, Phone, Mail, Users, User,
-  UserRound, ShieldCheck, GraduationCap, KeyRound,
+  UserRound, ShieldCheck, GraduationCap, KeyRound, MessageSquare,
 } from "lucide-react";
 import {
   Avatar, Badge, Button, Card, CardContent, ConfirmDialog, Input, Modal, PageHeader, Select,
-  StatCard, Table, useToast, type Column,
+  StatCard, Table, Textarea, useToast, type Column,
 } from "@/components/ui";
 import { exportToCsv } from "@/lib/exportCsv";
 import { exportTablePdf } from "@/lib/exportPdf";
 import { useAsyncList } from "@/hooks/useAsyncList";
 import {
-  parentApi, getParentDirectory, inviteParent, RELATION_OPTIONS,
+  parentApi, getParentDirectory, inviteParent, messageParents, RELATION_OPTIONS,
   type ParentDirectoryEntry, type ParentRelation, type Parent, type ParentInviteResult,
 } from "@/lib/api/parent";
 import type { ParentSchema } from "@/lib/schemas/parent";
@@ -49,6 +49,10 @@ export default function ParentsPage() {
   const [deleting, setDeleting] = useState(false);
   const [inviting, setInviting] = useState<string | null>(null);
   const [inviteResult, setInviteResult] = useState<ParentInviteResult | null>(null);
+  const [messageTarget, setMessageTarget] = useState<{ emails: string[]; label: string } | null>(null);
+  const [msgTitle, setMsgTitle] = useState("");
+  const [msgBody, setMsgBody] = useState("");
+  const [sending, setSending] = useState(false);
 
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -126,6 +130,9 @@ export default function ParentsPage() {
       email: p.email,
       occupation: p.occupation,
       address: p.address,
+      isPrimary: p.isPrimary,
+      isEmergencyContact: p.isEmergencyContact,
+      isPickupAuthorized: p.isPickupAuthorized,
       students: p.students,
     });
     setFormOpen(true);
@@ -180,6 +187,37 @@ export default function ParentsPage() {
     }
   };
 
+  const openMessage = (emails: string[], label: string) => {
+    const unique = [...new Set(emails.filter(Boolean))];
+    if (unique.length === 0) {
+      toast({ title: "No email on file", description: "These parents have no email to message.", variant: "warning" });
+      return;
+    }
+    setMsgTitle("");
+    setMsgBody("");
+    setMessageTarget({ emails: unique, label });
+  };
+
+  const sendMessage = async () => {
+    if (!messageTarget || !msgTitle.trim() || !msgBody.trim()) return;
+    try {
+      setSending(true);
+      const r = await messageParents({ recipients: messageTarget.emails, title: msgTitle.trim(), body: msgBody.trim() });
+      toast({
+        title: "Message sent",
+        description: r.emailConfigured
+          ? `${r.recipients} parent(s) notified · ${r.emailed} emailed.`
+          : `${r.recipients} parent(s) notified in-app (email not configured on the server).`,
+        variant: "success",
+      });
+      setMessageTarget(null);
+    } catch (e) {
+      toast({ title: "Could not send", description: e instanceof Error ? e.message : "Try again.", variant: "error" });
+    } finally {
+      setSending(false);
+    }
+  };
+
   const columns: Column<ParentDirectoryEntry>[] = [
     {
       key: "name",
@@ -206,7 +244,14 @@ export default function ParentsPage() {
       key: "relation",
       header: "Relation",
       sortable: true,
-      render: (p) => <Badge variant={RELATION_VARIANT[p.relation] ?? "default"}>{p.relation}</Badge>,
+      render: (p) => (
+        <div className="flex flex-wrap items-center gap-1">
+          <Badge variant={RELATION_VARIANT[p.relation] ?? "default"}>{p.relation}</Badge>
+          {p.isPrimary && <Badge variant="info">Primary</Badge>}
+          {p.isEmergencyContact && <Badge variant="danger">Emergency</Badge>}
+          {p.isPickupAuthorized && <Badge variant="success">Pickup</Badge>}
+        </div>
+      ),
     },
     {
       key: "children",
@@ -259,6 +304,16 @@ export default function ParentsPage() {
               <KeyRound className="size-4" />
             </button>
           )}
+          {p.email && (
+            <button
+              onClick={() => openMessage([p.email], p.name)}
+              aria-label={`Message ${p.name}`}
+              title="Message this parent"
+              className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+            >
+              <MessageSquare className="size-4" />
+            </button>
+          )}
           <button
             onClick={() => setViewing(p)}
             aria-label={`View ${p.name}`}
@@ -307,6 +362,18 @@ export default function ParentsPage() {
             <Button variant="outline" onClick={handleExportPdf}>
               <FileText className="size-4" />
               Export PDF
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() =>
+                openMessage(
+                  visible.filter((p) => p.email).map((p) => p.email),
+                  `${visible.filter((p) => p.email).length} shown`
+                )
+              }
+            >
+              <MessageSquare className="size-4" />
+              Message
             </Button>
             <Button onClick={openCreate}>
               <Plus className="size-4" />
@@ -507,6 +574,48 @@ export default function ParentsPage() {
             </p>
           </div>
         ) : null}
+      </Modal>
+
+      <Modal
+        open={!!messageTarget}
+        onOpenChange={(o) => !o && setMessageTarget(null)}
+        title="Message parents"
+        description={
+          messageTarget
+            ? `Sends an in-app notice + email to ${messageTarget.label} (where an email is on file).`
+            : ""
+        }
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setMessageTarget(null)} disabled={sending}>
+              Cancel
+            </Button>
+            <Button onClick={sendMessage} disabled={sending || !msgTitle.trim() || !msgBody.trim()}>
+              {sending ? "Sending…" : "Send"}
+            </Button>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-4">
+          <Input
+            label="Subject"
+            required
+            placeholder="e.g. Fee reminder · PTM on Saturday"
+            value={msgTitle}
+            onChange={(e) => setMsgTitle(e.target.value)}
+          />
+          <Textarea
+            label="Message"
+            required
+            rows={5}
+            placeholder="Write your message to parents…"
+            value={msgBody}
+            onChange={(e) => setMsgBody(e.target.value)}
+          />
+          <p className="text-xs text-subtle">
+            Delivered to each parent&rsquo;s portal (in-app) and their email, if the school has email configured.
+          </p>
+        </div>
       </Modal>
     </div>
   );

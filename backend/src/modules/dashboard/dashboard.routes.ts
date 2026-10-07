@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import { requireAuth } from "../../middleware/auth.js";
+import { requireAuth, requireRole } from "../../middleware/auth.js";
 import { validate, parsed } from "../../middleware/validate.js";
 import { Student } from "../students/student.model.js";
 import { Attendance } from "../attendance/attendance.model.js";
@@ -28,6 +28,8 @@ import { Timetable } from "../timetable/timetable.model.js";
  */
 const router = Router();
 router.use(requireAuth);
+// School-wide aggregates are staff-only — a parent/student must never pull them.
+router.use(requireRole("super_admin", "school_admin", "principal", "accountant", "teacher"));
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 

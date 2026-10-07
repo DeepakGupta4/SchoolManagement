@@ -6,9 +6,18 @@ import { requireRole } from "../../middleware/auth.js";
 import { validate } from "../../middleware/validate.js";
 import { User, hashPassword } from "../auth/user.model.js";
 import { generateTempPassword } from "../../utils/password.js";
+import { notifyUser } from "../notifications/notification.model.js";
+import { sendEmail, isEmailConfigured } from "../../utils/email.js";
 
 /** Create-a-parent-login payload. */
 const inviteSchema = z.object({ name: z.string().default(""), email: z.email() });
+
+/** Compose-a-message payload (sent in-app + by email to the given parents). */
+const messageSchema = z.object({
+  recipients: z.array(z.email()).min(1, "Pick at least one recipient"),
+  title: z.string().min(1, "Subject is required"),
+  body: z.string().min(1, "Message is required"),
+});
 
 const parentSchema = z.object({
   name: z.string().min(1),
@@ -17,6 +26,9 @@ const parentSchema = z.object({
   email: z.string().default(""),
   occupation: z.string().default(""),
   address: z.string().default(""),
+  isPrimary: z.boolean().default(false),
+  isEmergencyContact: z.boolean().default(false),
+  isPickupAuthorized: z.boolean().default(false),
   // Linked student `_id`s — see parent.model.ts for why ids over admission nos.
   students: z.array(z.string()).default([]),
 });
@@ -38,6 +50,9 @@ interface DirEntry {
   email: string;
   occupation: string;
   address: string;
+  isPrimary: boolean;
+  isEmergencyContact: boolean;
+  isPickupAuthorized: boolean;
   source: "student" | "manual";
   students: string[];
   children: DirChild[];
@@ -95,6 +110,9 @@ export default createCrudRouter({
                 email,
                 occupation: (c.occupation ?? "").trim(),
                 address: "",
+                isPrimary: false,
+                isEmergencyContact: false,
+                isPickupAuthorized: false,
                 source: "student",
                 students: [],
                 children: [],
@@ -158,6 +176,9 @@ export default createCrudRouter({
               if (p.email) existing.email = p.email.toLowerCase();
               if (p.occupation) existing.occupation = p.occupation;
               if (p.address) existing.address = p.address;
+              existing.isPrimary = Boolean(p.isPrimary);
+              existing.isEmergencyContact = Boolean(p.isEmergencyContact);
+              existing.isPickupAuthorized = Boolean(p.isPickupAuthorized);
               for (const c of manualChildren) {
                 if (!existing.students.includes(c.id)) {
                   existing.students.push(c.id);
@@ -173,6 +194,9 @@ export default createCrudRouter({
                 email: (p.email ?? "").toLowerCase(),
                 occupation: p.occupation ?? "",
                 address: p.address ?? "",
+                isPrimary: Boolean(p.isPrimary),
+                isEmergencyContact: Boolean(p.isEmergencyContact),
+                isPickupAuthorized: Boolean(p.isPickupAuthorized),
                 source: "manual",
                 students: manualChildren.map((c) => c.id),
                 children: manualChildren,
@@ -216,6 +240,38 @@ export default createCrudRouter({
             schoolId,
           });
           res.status(201).json({ data: { email: lower, temporaryPassword: tempPassword, existing: false } });
+        } catch (err) {
+          next(err);
+        }
+      }
+    );
+
+    // Message parents — one in-app notification per recipient (shows in their
+    // portal) plus an email when mail is configured. Best-effort per recipient.
+    router.post(
+      "/message",
+      requireRole("super_admin", "school_admin", "principal"),
+      validate(messageSchema),
+      async (req, res, next) => {
+        try {
+          const { recipients, title, body } = req.body as z.infer<typeof messageSchema>;
+          const schoolId = req.user!.schoolId;
+          const emailConfigured = isEmailConfigured();
+          const unique = [...new Set(recipients.map((e) => e.toLowerCase()))];
+          let emailed = 0;
+          for (const email of unique) {
+            await notifyUser({ schoolId, email, type: "parent_message", title, body, link: "/dashboard" });
+            if (emailConfigured) {
+              const r = await sendEmail({
+                to: email,
+                subject: title,
+                text: body,
+                html: `<p>${body.replace(/\n/g, "<br/>")}</p>`,
+              });
+              if (r.delivered) emailed++;
+            }
+          }
+          res.json({ data: { recipients: unique.length, emailed, emailConfigured } });
         } catch (err) {
           next(err);
         }

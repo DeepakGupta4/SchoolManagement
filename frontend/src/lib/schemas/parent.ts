@@ -8,6 +8,9 @@ export const parentSchema = z.object({
   email: z.email("Enter a valid email address"),
   occupation: z.string().trim(),
   address: z.string().trim(),
+  isPrimary: z.boolean(),
+  isEmergencyContact: z.boolean(),
+  isPickupAuthorized: z.boolean(),
   /** Linked student ids. Optional — a parent can be added before children are linked. */
   students: z.array(z.string()),
 });

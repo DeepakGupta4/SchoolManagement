@@ -451,7 +451,7 @@ function BentoSkeleton() {
   );
 }
 
-export default function DashboardPage() {
+function AdminDashboard() {
   const { user } = useAuthStore();
   const router = useRouter();
   const { data, loading, error } = useDashboardInsights();
@@ -620,4 +620,29 @@ export default function DashboardPage() {
       )}
     </div>
   );
+}
+
+export default function DashboardPage() {
+  const { user } = useAuthStore();
+
+  // Parents never load the admin aggregates (which are staff-gated and would leak
+  // school-wide data). They get their own portal — their children + updates.
+  if (user?.role === "parent") {
+    return (
+      <div className="flex flex-col gap-5">
+        <Card className="relative overflow-hidden">
+          <span className="absolute inset-x-0 top-0 h-0.5 bg-primary" aria-hidden />
+          <CardContent className="p-5 sm:p-6">
+            <h1 className="text-xl font-bold text-text sm:text-2xl">
+              {getGreeting()}, {user?.name?.split(" ")[0]} 👋
+            </h1>
+            <p className="mt-0.5 text-sm text-muted">Your children&rsquo;s overview and recent updates.</p>
+          </CardContent>
+        </Card>
+        <ParentDashboard />
+      </div>
+    );
+  }
+
+  return <AdminDashboard />;
 }

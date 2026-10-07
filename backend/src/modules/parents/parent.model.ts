@@ -11,6 +11,10 @@ const parentSchema = new Schema(
     email: { type: String, default: "" },
     occupation: { type: String, default: "" },
     address: { type: String, default: "" },
+    // Safety/role flags for this contact.
+    isPrimary: { type: Boolean, default: false },
+    isEmergencyContact: { type: Boolean, default: false },
+    isPickupAuthorized: { type: Boolean, default: false },
     // Mapping to the students module. Stores each linked student's `_id` (the
     // stable `id` the students API returns), NOT the admission number — the
     // `_id` is immutable and gives an exact join when resolving a parent's
