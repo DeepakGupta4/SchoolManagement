@@ -25,6 +25,7 @@ export default function MyLeavePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const fetcher = useCallback(() => getMyLeave(), [reloadKey]);
   const { items, loading, error } = useAsyncList<LeaveRequest>(fetcher);
+  const [statusFilter, setStatusFilter] = useState("All");
 
   const [open, setOpen] = useState(false);
   const [type, setType] = useState(LEAVE_TYPE_OPTIONS[0]);
@@ -64,6 +65,9 @@ export default function MyLeavePage() {
     approved: items.filter((l) => l.status === "Approved").length,
     rejected: items.filter((l) => l.status === "Rejected").length,
   };
+
+  // Tiles keep counting the full set; clicking one narrows the table (toggle off to clear).
+  const visible = statusFilter === "All" ? items : items.filter((l) => l.status === statusFilter);
 
   const columns: Column<LeaveRequest>[] = [
     {
@@ -107,9 +111,30 @@ export default function MyLeavePage() {
       />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <StatCard label="Pending" value={error ? "—" : stats.pending} icon={Clock} tone="amber" />
-        <StatCard label="Approved" value={error ? "—" : stats.approved} icon={CheckCircle} tone="emerald" />
-        <StatCard label="Rejected" value={error ? "—" : stats.rejected} icon={XCircle} tone="rose" />
+        <StatCard
+          label="Pending"
+          value={error ? "—" : stats.pending}
+          icon={Clock}
+          tone="amber"
+          active={statusFilter === "Pending"}
+          onClick={() => setStatusFilter(statusFilter === "Pending" ? "All" : "Pending")}
+        />
+        <StatCard
+          label="Approved"
+          value={error ? "—" : stats.approved}
+          icon={CheckCircle}
+          tone="emerald"
+          active={statusFilter === "Approved"}
+          onClick={() => setStatusFilter(statusFilter === "Approved" ? "All" : "Approved")}
+        />
+        <StatCard
+          label="Rejected"
+          value={error ? "—" : stats.rejected}
+          icon={XCircle}
+          tone="rose"
+          active={statusFilter === "Rejected"}
+          onClick={() => setStatusFilter(statusFilter === "Rejected" ? "All" : "Rejected")}
+        />
       </div>
 
       {error ? (
@@ -122,17 +147,27 @@ export default function MyLeavePage() {
       ) : (
         <Table
           columns={columns}
-          rows={items}
+          rows={visible}
           rowKey={(l) => l.id}
           loading={loading}
           pageSize={15}
-          emptyTitle="No leave requests yet"
-          emptyDescription="Click “Apply for leave” to submit your first request."
+          emptyTitle={statusFilter === "All" ? "No leave requests yet" : `No ${statusFilter.toLowerCase()} requests`}
+          emptyDescription={
+            statusFilter === "All"
+              ? "Click “Apply for leave” to submit your first request."
+              : "Nothing matches this status — tap the tile again to clear the filter."
+          }
           emptyAction={
-            <Button variant="outline" onClick={() => setOpen(true)}>
-              <Plus className="size-4" />
-              Apply for leave
-            </Button>
+            statusFilter === "All" ? (
+              <Button variant="outline" onClick={() => setOpen(true)}>
+                <Plus className="size-4" />
+                Apply for leave
+              </Button>
+            ) : (
+              <Button variant="outline" onClick={() => setStatusFilter("All")}>
+                Clear filter
+              </Button>
+            )
           }
         />
       )}

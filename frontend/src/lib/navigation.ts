@@ -19,6 +19,12 @@ export interface NavEntry {
   icon: LucideIcon;
   /** Roadmap item with no page yet — rendered inert so it can't 404. */
   soon?: boolean;
+  /**
+   * Personal self-service item that only makes sense for the individual employee
+   * (e.g. "My Leave"). Hidden from full-access admin roles — admins/principals
+   * manage everyone's leave in "Leave Management" rather than filing their own.
+   */
+  hideFromFullAccess?: boolean;
   children?: NavChild[];
 }
 
@@ -90,7 +96,7 @@ export const navGroups: NavGroup[] = [
         ],
       },
       { title: "Parents", href: "/parents", icon: Contact },
-      { title: "My Leave", href: "/leave/my", icon: CalendarX },
+      { title: "My Leave", href: "/leave/my", icon: CalendarX, hideFromFullAccess: true },
     ],
   },
   {
@@ -305,6 +311,15 @@ const RESTRICTED_ROLE_HREFS: Partial<Record<UserRole, Set<string>>> = {
 const FULL_ACCESS_ROLES = new Set<string>(["super_admin", "school_admin", "principal"]);
 
 /**
+ * Personal self-service hrefs (flagged `hideFromFullAccess`, e.g. "/leave/my") that
+ * full-access admins/principals should neither see in nav nor open. Collected from
+ * `navGroups` so it stays in sync with the flag.
+ */
+const SELF_SERVICE_ONLY_HREFS = new Set<string>(
+  navGroups.flatMap((g) => g.items.filter((it) => it.hideFromFullAccess).map((it) => it.href))
+);
+
+/**
  * Minimal fallback for any other signed-in role (librarian/parent/student/driver/
  * staff) that has no explicit allow-list yet — the dashboard only, never the admin
  * modules (Staff, Payroll, Performance, …). Without this, an unlisted role fell
@@ -331,7 +346,9 @@ const STUDENT_ADMIN_SUBROUTES = new Set([
 /** True when `pathname` is reachable by `role`. Unlisted roles are unrestricted. */
 export function isPathAllowed(role: UserRole | undefined, pathname: string): boolean {
   const allowed = allowedHrefsFor(role);
-  if (!allowed) return true;
+  // Full-access roles may open everything except personal self-service pages
+  // (e.g. "/leave/my") — admins manage everyone's leave, they don't file their own.
+  if (!allowed) return !SELF_SERVICE_ONLY_HREFS.has(pathname);
   if (pathname === "/" || pathname === "/dashboard") return true;
 
   // Exact allowed pages.
@@ -365,7 +382,13 @@ export function navGroupsForRole(role: UserRole | undefined): NavGroup[] {
       return !isSuper; // "school"
     })
     .map((g) => {
-      if (!allowed) return g;
+      if (!allowed) {
+        // Full-access roles (admin/principal) see every module EXCEPT personal
+        // self-service items like "My Leave" — they manage everyone's leave in
+        // "Leave Management" and never file their own here.
+        const items = g.items.filter((it) => !it.hideFromFullAccess);
+        return items.length === g.items.length ? g : { ...g, items };
+      }
       // Restricted roles see only their allowed items; parent items keep only
       // the children they may open.
       const items = g.items
