@@ -3,6 +3,12 @@ import { Parent } from "./parent.model.js";
 import { Student } from "../students/student.model.js";
 import { createCrudRouter } from "../../utils/crudRouter.js";
 import { requireRole } from "../../middleware/auth.js";
+import { validate } from "../../middleware/validate.js";
+import { User, hashPassword } from "../auth/user.model.js";
+import { generateTempPassword } from "../../utils/password.js";
+
+/** Create-a-parent-login payload. */
+const inviteSchema = z.object({ name: z.string().default(""), email: z.email() });
 
 const parentSchema = z.object({
   name: z.string().min(1),
@@ -178,6 +184,38 @@ export default createCrudRouter({
             .map((e) => ({ ...e, childCount: e.children.length }))
             .sort((a, b) => a.name.localeCompare(b.name));
           res.json({ data });
+        } catch (err) {
+          next(err);
+        }
+      }
+    );
+
+    // Create a parent login (role "parent") so they can sign in to the portal.
+    // The portal matches their children by this login email, so invite with the
+    // same email that's on the child's record. Returns the temp password once.
+    router.post(
+      "/invite",
+      requireRole("super_admin", "school_admin", "principal"),
+      validate(inviteSchema),
+      async (req, res, next) => {
+        try {
+          const { name, email } = req.body as z.infer<typeof inviteSchema>;
+          const lower = email.toLowerCase();
+          const schoolId = req.user!.schoolId;
+          const existing = await User.findOne({ email: lower });
+          if (existing) {
+            res.json({ data: { email: lower, existing: true } });
+            return;
+          }
+          const tempPassword = generateTempPassword();
+          await User.create({
+            name: name.trim() || lower,
+            email: lower,
+            passwordHash: await hashPassword(tempPassword),
+            role: "parent",
+            schoolId,
+          });
+          res.status(201).json({ data: { email: lower, temporaryPassword: tempPassword, existing: false } });
         } catch (err) {
           next(err);
         }

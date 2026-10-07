@@ -19,6 +19,7 @@ import marksRoutes from "./modules/marks/mark.routes.js";
 import dashboardRoutes from "./modules/dashboard/dashboard.routes.js";
 import aiRoutes from "./modules/ai/ai.routes.js";
 import documentRoutes from "./modules/documents/document.routes.js";
+import portalRoutes from "./modules/portal/portal.routes.js";
 import { crudModules } from "./modules/crudModules.js";
 import { requireAuth } from "./middleware/auth.js";
 import { checkSubscription } from "./middleware/subscription.js";
@@ -81,6 +82,7 @@ export function createApp() {
   app.use("/api/dashboard", tenantGuard, dashboardRoutes);
   app.use("/api/ai", tenantGuard, aiRoutes);
   app.use("/api/documents", tenantGuard, documentRoutes);
+  app.use("/api/portal", tenantGuard, portalRoutes);
 
   // All uniform tenant CRUD modules (classes, exams, library, …).
   for (const mod of crudModules) app.use(mod.path, tenantGuard, mod.router);

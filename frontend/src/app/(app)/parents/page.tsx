@@ -3,18 +3,18 @@
 import { useCallback, useMemo, useState } from "react";
 import {
   Search, Plus, Download, FileText, Eye, Pencil, Trash2, Phone, Mail, Users, User,
-  UserRound, ShieldCheck, GraduationCap,
+  UserRound, ShieldCheck, GraduationCap, KeyRound,
 } from "lucide-react";
 import {
-  Avatar, Badge, Button, Card, CardContent, ConfirmDialog, Input, PageHeader, Select,
+  Avatar, Badge, Button, Card, CardContent, ConfirmDialog, Input, Modal, PageHeader, Select,
   StatCard, Table, useToast, type Column,
 } from "@/components/ui";
 import { exportToCsv } from "@/lib/exportCsv";
 import { exportTablePdf } from "@/lib/exportPdf";
 import { useAsyncList } from "@/hooks/useAsyncList";
 import {
-  parentApi, getParentDirectory, RELATION_OPTIONS,
-  type ParentDirectoryEntry, type ParentRelation, type Parent,
+  parentApi, getParentDirectory, inviteParent, RELATION_OPTIONS,
+  type ParentDirectoryEntry, type ParentRelation, type Parent, type ParentInviteResult,
 } from "@/lib/api/parent";
 import type { ParentSchema } from "@/lib/schemas/parent";
 import { DetailModal } from "@/components/DetailModal";
@@ -47,6 +47,8 @@ export default function ParentsPage() {
   const [pendingDelete, setPendingDelete] = useState<ParentDirectoryEntry | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [inviting, setInviting] = useState<string | null>(null);
+  const [inviteResult, setInviteResult] = useState<ParentInviteResult | null>(null);
 
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -160,6 +162,24 @@ export default function ParentsPage() {
     }
   };
 
+  const invite = async (p: ParentDirectoryEntry) => {
+    if (!p.email) {
+      toast({ title: "No email on file", description: "Add an email before creating a login.", variant: "warning" });
+      return;
+    }
+    try {
+      setInviting(p.id);
+      const r = await inviteParent({ name: p.name, email: p.email });
+      setInviteResult(r);
+      if (r.existing) toast({ title: "Login already exists", description: r.email, variant: "info" });
+      else toast({ title: "Parent login created", description: r.email, variant: "success" });
+    } catch (e) {
+      toast({ title: "Could not create login", description: e instanceof Error ? e.message : "Try again.", variant: "error" });
+    } finally {
+      setInviting(null);
+    }
+  };
+
   const columns: Column<ParentDirectoryEntry>[] = [
     {
       key: "name",
@@ -228,6 +248,17 @@ export default function ParentsPage() {
       align: "right",
       render: (p) => (
         <div className="flex items-center justify-end gap-1">
+          {p.email && (
+            <button
+              onClick={() => invite(p)}
+              disabled={inviting === p.id}
+              aria-label={`Create a portal login for ${p.name}`}
+              title="Create a parent portal login"
+              className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-primary-soft hover:text-primary-text disabled:opacity-50"
+            >
+              <KeyRound className="size-4" />
+            </button>
+          )}
           <button
             onClick={() => setViewing(p)}
             aria-label={`View ${p.name}`}
@@ -441,6 +472,42 @@ export default function ParentsPage() {
         loading={deleting}
         onConfirm={handleDelete}
       />
+
+      <Modal
+        open={!!inviteResult}
+        onOpenChange={(o) => !o && setInviteResult(null)}
+        size="sm"
+        title="Parent portal login"
+        footer={<Button onClick={() => setInviteResult(null)}>Done</Button>}
+      >
+        {inviteResult?.existing ? (
+          <p className="text-sm text-muted">
+            A parent login already exists for{" "}
+            <strong className="text-text">{inviteResult.email}</strong>. They can sign in with their
+            current password — no new one was created.
+          </p>
+        ) : inviteResult ? (
+          <div className="flex flex-col gap-3 text-sm">
+            <p className="text-muted">
+              Share these credentials with the parent — the temporary password is shown only once.
+            </p>
+            <div className="rounded-md border border-border bg-surface-sunken p-3">
+              <p>
+                <span className="text-subtle">Email:</span>{" "}
+                <strong className="text-text">{inviteResult.email}</strong>
+              </p>
+              <p className="mt-1">
+                <span className="text-subtle">Temp password:</span>{" "}
+                <strong className="font-mono text-text">{inviteResult.temporaryPassword}</strong>
+              </p>
+            </div>
+            <p className="text-xs text-subtle">
+              They sign in at the login page and should change this password. The portal shows only
+              their own children.
+            </p>
+          </div>
+        ) : null}
+      </Modal>
     </div>
   );
 }

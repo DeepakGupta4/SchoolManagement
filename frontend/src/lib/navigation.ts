@@ -287,10 +287,14 @@ const ACCOUNTANT_NAV_HREFS = new Set<string>([
   "/settings",
 ]);
 
+/** Sidebar links a parent may see — their portal dashboard plus read-only school info. */
+const PARENT_NAV_HREFS = new Set<string>(["/dashboard", "/holidays", "/notices"]);
+
 /** Roles whose navigation is restricted to a specific allow-list. */
 const RESTRICTED_ROLE_HREFS: Partial<Record<UserRole, Set<string>>> = {
   teacher: TEACHER_NAV_HREFS,
   accountant: ACCOUNTANT_NAV_HREFS,
+  parent: PARENT_NAV_HREFS,
 };
 
 /**

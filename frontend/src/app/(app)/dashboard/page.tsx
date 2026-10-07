@@ -13,6 +13,7 @@ import { Avatar, Badge, Card, CardContent, CardHeader, CountUp, Skeleton } from 
 import { RecentActivity } from "@/components/dashboard/RecentActivity";
 import { UpcomingEvents } from "@/components/dashboard/UpcomingEvents";
 import { TeacherDashboard } from "@/components/dashboard/TeacherDashboard";
+import { ParentDashboard } from "@/components/dashboard/ParentDashboard";
 import { useAuthStore } from "@/store";
 import { useDashboardInsights, type DashboardInsights } from "@/hooks/useDashboardInsights";
 import { fullName } from "@/types/student";
@@ -509,6 +510,8 @@ export default function DashboardPage() {
 
       {user?.role === "teacher" ? (
         <TeacherDashboard />
+      ) : user?.role === "parent" ? (
+        <ParentDashboard />
       ) : setupPending && data && user?.role !== "accountant" ? (
         <Onboarding name={user?.name?.split(" ")[0]} data={data} />
       ) : (
