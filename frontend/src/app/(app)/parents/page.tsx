@@ -17,8 +17,9 @@ import {
   type ParentDirectoryEntry, type ParentRelation, type Parent, type ParentInviteResult,
 } from "@/lib/api/parent";
 import type { ParentSchema } from "@/lib/schemas/parent";
-import { DetailModal } from "@/components/DetailModal";
+import { ApiError } from "@/lib/api/client";
 import { ParentFormModal } from "./ParentFormModal";
+import { ParentDetailModal } from "./ParentDetailModal";
 
 type BadgeVariant = "default" | "success" | "warning" | "danger" | "info";
 
@@ -27,6 +28,21 @@ const RELATION_VARIANT: Record<string, BadgeVariant> = {
   Mother: "success",
   Guardian: "default",
 };
+
+/**
+ * Turns an API failure into a friendly line. Notably: a 404 / "route does not
+ * exist" means the backend running doesn't have this endpoint yet (it needs a
+ * deploy/restart), so we say that plainly instead of leaking the raw route path.
+ */
+function describeError(e: unknown, fallback = "Please try again."): string {
+  if (e instanceof ApiError) {
+    if (e.status === 404 || /does not exist|not found|cannot (get|post)/i.test(e.message)) {
+      return "This feature isn’t live on the server yet — redeploy or restart the backend to enable it.";
+    }
+    return e.message || fallback;
+  }
+  return e instanceof Error ? e.message : fallback;
+}
 
 export default function ParentsPage() {
   const { toast } = useToast();
@@ -181,7 +197,7 @@ export default function ParentsPage() {
       if (r.existing) toast({ title: "Login already exists", description: r.email, variant: "info" });
       else toast({ title: "Parent login created", description: r.email, variant: "success" });
     } catch (e) {
-      toast({ title: "Could not create login", description: e instanceof Error ? e.message : "Try again.", variant: "error" });
+      toast({ title: "Could not create login", description: describeError(e), variant: "error" });
     } finally {
       setInviting(null);
     }
@@ -212,7 +228,7 @@ export default function ParentsPage() {
       });
       setMessageTarget(null);
     } catch (e) {
-      toast({ title: "Could not send", description: e instanceof Error ? e.message : "Try again.", variant: "error" });
+      toast({ title: "Could not send", description: describeError(e), variant: "error" });
     } finally {
       setSending(false);
     }
@@ -293,27 +309,24 @@ export default function ParentsPage() {
       align: "right",
       render: (p) => (
         <div className="flex items-center justify-end gap-1">
-          {p.email && (
-            <button
-              onClick={() => invite(p)}
-              disabled={inviting === p.id}
-              aria-label={`Create a portal login for ${p.name}`}
-              title="Create a parent portal login"
-              className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-primary-soft hover:text-primary-text disabled:opacity-50"
-            >
-              <KeyRound className="size-4" />
-            </button>
-          )}
-          {p.email && (
-            <button
-              onClick={() => openMessage([p.email], p.name)}
-              aria-label={`Message ${p.name}`}
-              title="Message this parent"
-              className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
-            >
-              <MessageSquare className="size-4" />
-            </button>
-          )}
+          <button
+            onClick={() => invite(p)}
+            disabled={!p.email || inviting === p.id}
+            aria-label={p.email ? `Create a portal login for ${p.name}` : `${p.name} has no email on file`}
+            title={p.email ? "Create a parent portal login" : "No email on file — add one to create a login"}
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-primary-soft hover:text-primary-text disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-subtle"
+          >
+            <KeyRound className="size-4" />
+          </button>
+          <button
+            onClick={() => openMessage([p.email], p.name)}
+            disabled={!p.email}
+            aria-label={p.email ? `Message ${p.name}` : `${p.name} has no email on file`}
+            title={p.email ? "Message this parent" : "No email on file — add one to message"}
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-subtle"
+          >
+            <MessageSquare className="size-4" />
+          </button>
           <button
             onClick={() => setViewing(p)}
             aria-label={`View ${p.name}`}
@@ -479,50 +492,23 @@ export default function ParentsPage() {
         onSubmit={handleSubmit}
       />
 
-      <DetailModal
+      <ParentDetailModal
+        parent={viewing}
         open={Boolean(viewing)}
         onOpenChange={(o) => !o && setViewing(null)}
-        title={viewing?.name ?? "Parent"}
-        description={viewing ? `${viewing.relation}${viewing.occupation ? ` · ${viewing.occupation}` : ""}` : ""}
-        rows={
-          viewing
-            ? [
-                { label: "Name", value: viewing.name },
-                { label: "Relation", value: viewing.relation },
-                { label: "Phone", value: viewing.phone || "—" },
-                { label: "Email", value: viewing.email || "—" },
-                { label: "Occupation", value: viewing.occupation || "—" },
-                { label: "Address", value: viewing.address || "—", full: true },
-                { label: "Source", value: viewing.source === "manual" ? "Added manually" : "Auto-derived from student records" },
-                {
-                  label: `Children (${viewing.childCount})`,
-                  full: true,
-                  value:
-                    viewing.childCount > 0 ? (
-                      <ul className="flex flex-col gap-2">
-                        {viewing.children.map((c) => (
-                          <li
-                            key={c.id}
-                            className="flex items-center gap-3 rounded-md border border-border bg-surface-sunken px-3 py-2"
-                          >
-                            <Avatar name={c.name} size="sm" />
-                            <div className="min-w-0">
-                              <p className="truncate font-medium text-text">{c.name}</p>
-                              <p className="truncate text-xs text-subtle">
-                                {c.className}
-                                {c.section ? ` · Section ${c.section}` : ""}
-                              </p>
-                            </div>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      "No children linked"
-                    ),
-                },
-              ]
-            : []
-        }
+        inviting={Boolean(viewing) && inviting === viewing?.id}
+        onInvite={(p) => {
+          setViewing(null);
+          void invite(p);
+        }}
+        onMessage={(p) => {
+          setViewing(null);
+          openMessage([p.email], p.name);
+        }}
+        onEdit={(p) => {
+          setViewing(null);
+          openEdit(p);
+        }}
       />
 
       <ConfirmDialog

@@ -25,4 +25,9 @@ const applicationSchema = new Schema(
 );
 
 export type ApplicationAttrs = InferSchemaType<typeof applicationSchema>;
-export const Application = mongoose.model("Application", applicationSchema);
+// NOTE: model name MUST stay unique. The admissions module registers a model
+// named "Application" too (student admission applications); sharing the name
+// crashes boot with OverwriteModelError and would also collide on the default
+// `applications` collection. This ATS model is "JobApplication" on its own
+// `jobapplications` collection so the two never clash.
+export const Application = mongoose.model("JobApplication", applicationSchema, "jobapplications");
