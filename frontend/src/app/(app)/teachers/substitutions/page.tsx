@@ -12,6 +12,7 @@ import { useAsyncList } from "@/hooks/useAsyncList";
 import { fetchAllTeachers } from "@/lib/api/teachers";
 import { timetableApi, type TimetableEntry } from "@/lib/api/timetable";
 import { substitutionsApi, type Substitution } from "@/lib/api/substitutions";
+import { getStaffAttendance } from "@/lib/api/staffAttendance";
 import { TODAY_ISO, weekdayName } from "@/lib/dates";
 import { teacherName, type Teacher } from "@/types/teacher";
 
@@ -51,6 +52,8 @@ export default function SubstitutionsPage() {
   const [absentEntries, setAbsentEntries] = useState<TimetableEntry[]>([]);
   const [dayTimetable, setDayTimetable] = useState<TimetableEntry[]>([]);
   const [subs, setSubs] = useState<Substitution[]>([]);
+  // Teacher names marked Absent/Leave in Staff Attendance for the selected date.
+  const [absentToday, setAbsentToday] = useState<Set<string>>(new Set());
   const [manual, setManual] = useState<CoverSlot[]>([]);
   const [pick, setPick] = useState<Record<string, string>>({});
   const [loadingSlots, setLoadingSlots] = useState(false);
@@ -87,16 +90,25 @@ export default function SubstitutionsPage() {
     Promise.all([
       substitutionsApi.list({ date, limit: 500 }),
       weekday ? timetableApi.list({ day: weekday, limit: 500 }) : Promise.resolve([] as TimetableEntry[]),
+      getStaffAttendance(date).catch(() => []),
     ])
-      .then(([subRows, dayRows]) => {
+      .then(([subRows, dayRows, attendance]) => {
         if (cancelled) return;
         setSubs(subRows);
         setDayTimetable(dayRows);
+        setAbsentToday(
+          new Set(
+            attendance
+              .filter((a) => a.type === "teacher" && (a.status === "absent" || a.status === "leave"))
+              .map((a) => a.name)
+          )
+        );
       })
       .catch(() => {
         if (cancelled) return;
         setSubs([]);
         setDayTimetable([]);
+        setAbsentToday(new Set());
       })
       .finally(() => {
         if (!cancelled) setLoadingLog(false);
@@ -429,9 +441,15 @@ export default function SubstitutionsPage() {
     },
   ];
 
+  // Teachers marked absent/leave today float to the top and are flagged, so
+  // arranging cover starts from who's actually away (per Staff Attendance).
   const teacherOptions: SelectOption[] = teachers
-    .map((t) => ({ label: `${teacherName(t)} · ${t.department}`, value: teacherName(t) }))
-    .sort((a, b) => a.label.localeCompare(b.label));
+    .map((t) => {
+      const n = teacherName(t);
+      return { label: `${n} · ${t.department}`, value: n, absent: absentToday.has(n) };
+    })
+    .sort((a, b) => Number(b.absent) - Number(a.absent) || a.label.localeCompare(b.label))
+    .map(({ absent, label, value }) => ({ label: absent ? `${label} — absent today` : label, value }));
 
   return (
     <div className="flex flex-col gap-5">
@@ -465,6 +483,11 @@ export default function SubstitutionsPage() {
               onChange={(e) => changeTeacher(e.target.value)}
               placeholder="Select the teacher who's away"
               options={teacherOptions}
+              hint={
+                absentToday.size > 0
+                  ? `${absentToday.size} teacher(s) marked absent in Attendance for this day — shown at the top`
+                  : "Tip: mark Staff Attendance first and absentees surface here automatically"
+              }
             />
           </div>
         </CardContent>

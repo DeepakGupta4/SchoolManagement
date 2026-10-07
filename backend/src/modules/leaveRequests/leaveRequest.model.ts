@@ -13,6 +13,9 @@ const leaveRequestSchema = new Schema(
     reason: { type: String, default: "" },
     status: { type: String, enum: ["Pending", "Approved", "Rejected"], default: "Pending" },
     dept: { type: String, default: "" },
+    // Applicant's login email — set when a teacher files their own leave, so
+    // "My Leave" can scope to the caller. Empty for admin-entered requests.
+    email: { type: String, default: "", lowercase: true, trim: true, index: true },
   },
   { timestamps: true }
 );

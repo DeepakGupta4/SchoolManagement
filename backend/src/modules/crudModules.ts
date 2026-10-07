@@ -28,6 +28,7 @@ import visitorRoutes from "./visitors/visitor.routes.js";
 import certificateRoutes from "./certificates/certificate.routes.js";
 import eventRoutes from "./events/event.routes.js";
 import jobPostingRoutes from "./jobPostings/jobPosting.routes.js";
+import applicationRoutes from "./applications/application.routes.js";
 import announcementRoutes from "./announcements/announcement.routes.js";
 import noticeRoutes from "./notices/notice.routes.js";
 import leaveRequestRoutes from "./leaveRequests/leaveRequest.routes.js";
@@ -75,6 +76,7 @@ export const crudModules: { path: string; router: Router }[] = [
   { path: "/api/certificates", router: certificateRoutes },
   { path: "/api/events", router: eventRoutes },
   { path: "/api/job-postings", router: jobPostingRoutes },
+  { path: "/api/applications", router: applicationRoutes },
   { path: "/api/announcements", router: announcementRoutes },
   { path: "/api/notices", router: noticeRoutes },
   { path: "/api/leave-requests", router: leaveRequestRoutes },

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Search, Download, Target, TrendingUp, Users, Building2 } from "lucide-react";
+import { Search, Download, Star, TrendingUp, Users, Target, Pencil } from "lucide-react";
 import {
   Avatar,
   Badge,
@@ -9,16 +9,19 @@ import {
   Card,
   CardContent,
   Input,
+  Modal,
   PageHeader,
   Select,
   StatCard,
   Table,
   TableSkeleton,
+  Textarea,
   useToast,
   type Column,
 } from "@/components/ui";
 import { exportToCsv } from "@/lib/exportCsv";
-import { fetchAllTeachers } from "@/lib/api/teachers";
+import { fetchAllTeachers, reviewTeacher } from "@/lib/api/teachers";
+import { cn } from "@/lib/utils";
 import { type Teacher, teacherName } from "@/types/teacher";
 
 type BadgeVariant = "default" | "success" | "warning" | "danger" | "info";
@@ -47,6 +50,18 @@ const STATUS_LABEL: Record<string, string> = {
   resigned: "Resigned",
 };
 
+/** Read-only 5-star display for a rating (rounded). */
+function Stars({ value }: { value: number }) {
+  const filled = Math.round(value);
+  return (
+    <span className="inline-flex items-center gap-0.5" aria-label={`${value.toFixed(1)} out of 5`}>
+      {[1, 2, 3, 4, 5].map((n) => (
+        <Star key={n} className={cn("size-3.5", n <= filled ? "fill-warning text-warning" : "text-subtle")} />
+      ))}
+    </span>
+  );
+}
+
 export default function PerformancePage() {
   const [search, setSearch] = useState("");
   const [deptFilter, setDeptFilter] = useState("All");
@@ -54,6 +69,12 @@ export default function PerformancePage() {
   const [error, setError] = useState(false);
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const { toast } = useToast();
+
+  // Review modal state.
+  const [reviewing, setReviewing] = useState<Teacher | null>(null);
+  const [reviewRating, setReviewRating] = useState(0);
+  const [reviewNote, setReviewNote] = useState("");
+  const [savingReview, setSavingReview] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -96,7 +117,38 @@ export default function PerformancePage() {
   const avgExperience = totalTeachers
     ? (teachers.reduce((s, t) => s + t.experienceYears, 0) / totalTeachers).toFixed(1)
     : "0";
-  const deptCount = new Set(teachers.map((t) => t.department)).size;
+  // Average over teachers who've actually been reviewed (unreviewed 0s don't drag it down).
+  const reviewed = teachers.filter((t) => t.reviewedAt);
+  const avgRating = reviewed.length
+    ? (reviewed.reduce((s, t) => s + t.rating, 0) / reviewed.length).toFixed(1)
+    : "—";
+
+  const openReview = (t: Teacher) => {
+    setReviewing(t);
+    setReviewRating(t.rating || 0);
+    setReviewNote(t.reviewNote || "");
+  };
+
+  const saveReview = async () => {
+    if (!reviewing) return;
+    try {
+      setSavingReview(true);
+      const r = await reviewTeacher(reviewing.id, { rating: reviewRating, note: reviewNote });
+      setTeachers((prev) =>
+        prev.map((x) =>
+          x.id === reviewing.id
+            ? { ...x, rating: r.rating, reviewNote: r.reviewNote, reviewedAt: r.reviewedAt, reviewedBy: r.reviewedBy }
+            : x
+        )
+      );
+      toast({ title: "Review saved", description: `${teacherName(reviewing)} rated ${r.rating}/5.`, variant: "success" });
+      setReviewing(null);
+    } catch (e) {
+      toast({ title: "Could not save review", description: e instanceof Error ? e.message : "Try again.", variant: "error" });
+    } finally {
+      setSavingReview(false);
+    }
+  };
 
   const handleExport = () => {
     if (filtered.length === 0) {
@@ -108,7 +160,7 @@ export default function PerformancePage() {
       return;
     }
     exportToCsv<Teacher>(
-      "teacher-overview",
+      "teacher-performance",
       [
         { header: "Employee ID", value: (t) => t.employeeId },
         { header: "Name", value: (t) => teacherName(t) },
@@ -116,6 +168,9 @@ export default function PerformancePage() {
         { header: "Subjects", value: (t) => t.subjects.join(", ") },
         { header: "Classes", value: (t) => t.classes.join(", ") },
         { header: "Experience (yrs)", value: (t) => t.experienceYears },
+        { header: "Rating", value: (t) => (t.reviewedAt ? t.rating : "") },
+        { header: "Reviewed On", value: (t) => t.reviewedAt ?? "" },
+        { header: "Review Note", value: (t) => t.reviewNote ?? "" },
         { header: "Status", value: (t) => STATUS_LABEL[t.status] ?? t.status },
       ],
       filtered
@@ -156,16 +211,26 @@ export default function PerformancePage() {
       render: (t) => <span className="text-sm text-muted">{t.subjects.join(", ") || "—"}</span>,
     },
     {
-      key: "classes",
-      header: "Classes",
-      render: (t) => <span className="text-sm text-muted">{t.classes.join(", ") || "—"}</span>,
-    },
-    {
       key: "experienceYears",
       header: "Experience",
       sortable: true,
       align: "right",
       render: (t) => <span className="text-muted">{t.experienceYears} yrs</span>,
+    },
+    {
+      key: "rating",
+      header: "Rating",
+      sortable: true,
+      sortValue: (t) => (t.reviewedAt ? t.rating : -1),
+      render: (t) =>
+        t.reviewedAt ? (
+          <div className="flex items-center gap-2">
+            <Stars value={t.rating} />
+            <span className="text-xs font-medium text-text">{t.rating.toFixed(1)}</span>
+          </div>
+        ) : (
+          <span className="text-xs text-subtle">Not reviewed</span>
+        ),
     },
     {
       key: "status",
@@ -177,13 +242,24 @@ export default function PerformancePage() {
         </Badge>
       ),
     },
+    {
+      key: "actions",
+      header: "",
+      align: "right",
+      render: (t) => (
+        <Button size="sm" variant="outline" onClick={() => openReview(t)}>
+          <Pencil className="size-3.5" />
+          {t.reviewedAt ? "Re-review" : "Review"}
+        </Button>
+      ),
+    },
   ];
 
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
         title="Performance"
-        description="Teacher roster — department, subjects, teaching load and experience at a glance"
+        description="Rate and review teacher performance — with department, subjects and experience at a glance."
         actions={
           <Button variant="outline" onClick={handleExport}>
             <Download className="size-4" />
@@ -195,8 +271,8 @@ export default function PerformancePage() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Total Teachers" value={error ? "—" : totalTeachers} icon={Users} tone="indigo" />
         <StatCard label="Active" value={error ? "—" : activeCount} icon={TrendingUp} tone="emerald" />
+        <StatCard label="Avg Rating" value={error ? "—" : avgRating} icon={Star} tone="amber" sub={`${reviewed.length} reviewed`} />
         <StatCard label="Avg Experience" value={error ? "—" : avgExperience} suffix=" yrs" icon={Target} tone="cyan" />
-        <StatCard label="Departments" value={error ? "—" : deptCount} icon={Building2} tone="amber" />
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -227,7 +303,7 @@ export default function PerformancePage() {
       </div>
 
       {loading ? (
-        <TableSkeleton rows={6} columns={6} />
+        <TableSkeleton rows={6} columns={7} />
       ) : error ? (
         <Card>
           <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
@@ -257,6 +333,57 @@ export default function PerformancePage() {
           </p>
         </div>
       )}
+
+      <Modal
+        open={!!reviewing}
+        onOpenChange={(o) => !o && setReviewing(null)}
+        title={reviewing ? `Review ${teacherName(reviewing)}` : "Review"}
+        description="Set a performance rating and an optional note. Saved against the teacher."
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setReviewing(null)} disabled={savingReview}>
+              Cancel
+            </Button>
+            <Button onClick={saveReview} disabled={savingReview || reviewRating < 1}>
+              {savingReview ? "Saving…" : "Save review"}
+            </Button>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-4">
+          <div>
+            <p className="mb-1.5 text-xs font-medium text-muted">Rating</p>
+            <div className="flex items-center gap-1">
+              {[1, 2, 3, 4, 5].map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => setReviewRating(n)}
+                  aria-label={`${n} star${n > 1 ? "s" : ""}`}
+                  aria-pressed={n <= reviewRating}
+                  className="focus-ring rounded p-0.5"
+                >
+                  <Star className={cn("size-6", n <= reviewRating ? "fill-warning text-warning" : "text-subtle")} />
+                </button>
+              ))}
+              <span className="ml-2 text-sm text-muted">{reviewRating ? `${reviewRating}/5` : "Not rated"}</span>
+            </div>
+          </div>
+          <Textarea
+            label="Review note"
+            rows={4}
+            placeholder="Strengths, areas to improve, goals for next term…"
+            value={reviewNote}
+            onChange={(e) => setReviewNote(e.target.value)}
+          />
+          {reviewing?.reviewedAt && (
+            <p className="text-xs text-subtle">
+              Last reviewed {reviewing.reviewedAt}
+              {reviewing.reviewedBy ? ` by ${reviewing.reviewedBy}` : ""}.
+            </p>
+          )}
+        </div>
+      </Modal>
     </div>
   );
 }

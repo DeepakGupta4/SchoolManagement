@@ -17,6 +17,8 @@ export interface JobPostingFilters {
   search?: string;
   dept?: string;
   status?: string;
+  /** Browse page size; raised above the 200 default when a full list is needed. */
+  limit?: number;
 }
 
 export const JOB_DEPT_OPTIONS = ["Teaching", "IT", "Finance", "HR", "Security"];

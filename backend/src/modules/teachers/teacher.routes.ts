@@ -2,9 +2,19 @@ import { z } from "zod";
 import { Teacher } from "./teacher.model.js";
 import { StoredDocument } from "../documents/document.model.js";
 import { createCrudRouter } from "../../utils/crudRouter.js";
+import { requireRole } from "../../middleware/auth.js";
+import { validate } from "../../middleware/validate.js";
+import { ApiError } from "../../utils/ApiError.js";
 import { ISO_DATE, isRealDate, serverToday, maxToday } from "../../utils/dates.js";
 
 const PHONE = /^\d{10}$/;
+
+// A performance review persists rating + a note; rating is otherwise server-owned
+// and never accepted by the generic create/update.
+const reviewSchema = z.object({
+  rating: z.coerce.number<number>().min(0).max(5),
+  note: z.string().max(2000).default(""),
+});
 
 const teacherSchema = z.object({
   employeeId: z.string().min(1),
@@ -49,6 +59,36 @@ export default createCrudRouter({
   // Staff records carry salary + PII — restrict reads to the office/HR; the write
   // roles already default to office roles.
   readRoles: ["super_admin", "school_admin", "principal", "accountant"],
+  // Performance review: persist a rating + note (rating is otherwise read-only).
+  extend: (router) => {
+    router.post(
+      "/:id/review",
+      requireRole("super_admin", "school_admin", "principal"),
+      validate(reviewSchema),
+      async (req, res, next) => {
+        try {
+          const { rating, note } = req.body as z.infer<typeof reviewSchema>;
+          const doc = await Teacher.findOneAndUpdate(
+            { _id: req.params.id, schoolId: req.user!.schoolId },
+            { $set: { rating, reviewNote: note, reviewedAt: serverToday(), reviewedBy: req.user!.email } },
+            { new: true }
+          );
+          if (!doc) throw ApiError.notFound("Teacher not found.");
+          res.json({
+            data: {
+              id: String(doc._id),
+              rating: doc.rating,
+              reviewNote: doc.reviewNote,
+              reviewedAt: doc.reviewedAt,
+              reviewedBy: doc.reviewedBy,
+            },
+          });
+        } catch (err) {
+          next(err);
+        }
+      }
+    );
+  },
   notifyOnCreate: (t) => ({
     type: "teacher",
     title: "New staff member added",

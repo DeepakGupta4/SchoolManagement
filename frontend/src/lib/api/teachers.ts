@@ -109,3 +109,22 @@ export async function updateTeacher(id: string, values: TeacherFormValues): Prom
 export async function deleteTeacher(id: string): Promise<void> {
   await apiRequest<void>(`/api/teachers/${id}`, { method: "DELETE" });
 }
+
+export interface TeacherReviewResult {
+  id: string;
+  rating: number;
+  reviewNote: string;
+  reviewedAt: string;
+  reviewedBy: string;
+}
+
+/** Persist a performance review (rating 0–5 + note). Rating is otherwise read-only. */
+export async function reviewTeacher(
+  id: string,
+  input: { rating: number; note: string }
+): Promise<TeacherReviewResult> {
+  return apiRequest<TeacherReviewResult>(`/api/teachers/${id}/review`, {
+    method: "POST",
+    body: input,
+  });
+}

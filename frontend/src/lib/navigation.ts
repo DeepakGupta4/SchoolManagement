@@ -82,12 +82,15 @@ export const navGroups: NavGroup[] = [
           { title: "Staff Management", href: "/staff" },
           { title: "Attendance", href: "/staff/attendance" },
           { title: "Recruitment", href: "/recruitment" },
+          { title: "Applicants", href: "/recruitment/applicants" },
           { title: "Leave Management", href: "/leave" },
+          { title: "Leave Balances", href: "/leave/balances" },
           { title: "Performance", href: "/performance" },
           { title: "ID Cards", href: "/staff/id-cards" },
         ],
       },
       { title: "Parents", href: "/parents", icon: Contact },
+      { title: "My Leave", href: "/leave/my", icon: CalendarX },
     ],
   },
   {
@@ -253,8 +256,9 @@ const TEACHER_NAV_HREFS = new Set<string>([
   "/notices",
   "/events",
   "/holidays",
-  // Profile
+  // Profile & self-service
   "/settings",
+  "/leave/my",
 ]);
 
 /**

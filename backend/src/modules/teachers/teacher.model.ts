@@ -43,10 +43,15 @@ const teacherSchema = new Schema(
     classTeacherOf: { type: String, default: "" },
     classTeacherSection: { type: String, default: "" },
 
-    // Server-owned metrics — clients never set these directly.
+    // Server-owned metrics — clients never set these via create/update.
     rating: { type: Number, default: 0, min: 0, max: 5 },
     attendancePercent: { type: Number, default: 100, min: 0, max: 100 },
     weeklyPeriods: { type: Number, default: 0, min: 0 },
+
+    // Latest performance review — set only through the /:id/review route.
+    reviewNote: { type: String, default: "" },
+    reviewedAt: { type: String, default: "" }, // YYYY-MM-DD
+    reviewedBy: { type: String, default: "" }, // reviewer's email
   },
   { timestamps: true }
 );

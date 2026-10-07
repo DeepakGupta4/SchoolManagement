@@ -30,6 +30,10 @@ export interface Teacher {
   attendancePercent: number;
   /** Weekly teaching periods assigned. */
   weeklyPeriods: number;
+  /** Latest performance review — set from the Performance page, server-owned. */
+  reviewNote?: string;
+  reviewedAt?: string;
+  reviewedBy?: string;
   isClassTeacher: boolean;
   /** The class this teacher is class teacher of, e.g. "Class 10" (when isClassTeacher). */
   classTeacherOf?: string;
@@ -40,7 +44,7 @@ export interface Teacher {
 /** Fields the create/edit form owns. Server-derived fields are excluded. */
 export type TeacherFormValues = Omit<
   Teacher,
-  "id" | "rating" | "attendancePercent" | "weeklyPeriods"
+  "id" | "rating" | "attendancePercent" | "weeklyPeriods" | "reviewNote" | "reviewedAt" | "reviewedBy"
 >;
 
 export const teacherName = (t: Teacher) => `${t.firstName} ${t.lastName}`;
