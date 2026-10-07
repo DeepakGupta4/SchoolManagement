@@ -2,6 +2,8 @@ import { z } from "zod";
 import type { HydratedDocument } from "mongoose";
 import { LeaveRequest, type LeaveRequestAttrs } from "./leaveRequest.model.js";
 import { Teacher } from "../teachers/teacher.model.js";
+import { StaffMember } from "../staff/staff.model.js";
+import { User, type UserRole } from "../auth/user.model.js";
 import { createCrudRouter } from "../../utils/crudRouter.js";
 import { validate } from "../../middleware/validate.js";
 import { shortId } from "../../utils/password.js";
@@ -35,6 +37,56 @@ function dayCount(from: string, to: string): number {
   const a = Date.UTC(Number(from.slice(0, 4)), Number(from.slice(5, 7)) - 1, Number(from.slice(8, 10)));
   const b = Date.UTC(Number(to.slice(0, 4)), Number(to.slice(5, 7)) - 1, Number(to.slice(8, 10)));
   return Math.max(1, Math.round((b - a) / 86_400_000) + 1);
+}
+
+/** Friendly label for a login role, used when the person isn't a teacher/staff record. */
+const ROLE_LABELS: Record<UserRole, string> = {
+  super_admin: "Super Admin",
+  school_admin: "Admin",
+  principal: "Principal",
+  teacher: "Teacher",
+  accountant: "Accountant",
+  librarian: "Librarian",
+  parent: "Parent",
+  student: "Student",
+  driver: "Driver",
+  staff: "Staff",
+};
+
+/**
+ * Resolves the caller's display name / role / department for a self-filed leave,
+ * trying the richest source first: their Teacher record, then their non-teaching
+ * Staff record, then their login account for a real name. Identity is NEVER taken
+ * from the client — only from the authenticated user's own records. This is why an
+ * admin/principal (who has no Teacher row) still files leave under their real name
+ * and role instead of just their email.
+ */
+async function resolveIdentity(user: {
+  id: string;
+  email: string;
+  role: UserRole;
+  schoolId: string;
+}): Promise<{ name: string; role: string; dept: string }> {
+  const { schoolId, email } = user;
+
+  // 1) Teaching staff — richest record (first/last name + department).
+  const teacher = email ? await Teacher.findOne({ schoolId, email }) : null;
+  if (teacher) {
+    const name = `${teacher.firstName} ${teacher.lastName}`.trim();
+    return { name: name || email || "Me", role: "Teacher", dept: teacher.department ?? "" };
+  }
+
+  // 2) Non-teaching staff (accountant, librarian, admin assistant, …).
+  const staff = email ? await StaffMember.findOne({ schoolId, email }) : null;
+  if (staff) {
+    return { name: staff.name || email || "Me", role: staff.role || "Staff", dept: staff.dept ?? "" };
+  }
+
+  // 3) Fall back to the login account for a real name + a friendly role label
+  //    (covers admins/principals who aren't in the Teacher or Staff collection).
+  const account = await User.findById(user.id);
+  const roleLabel = ROLE_LABELS[user.role] ?? "";
+  return { name: account?.name || email || "Me", role: roleLabel, dept: "" };
 }
 
 // Self-service: a teacher/staff member files their OWN leave. Cross-field checks
@@ -91,20 +143,19 @@ export default createCrudRouter({
         const { type, from, to, reason } = req.body as z.infer<typeof applyBody>;
         const schoolId = req.user!.schoolId;
         const email = (req.user!.email || "").toLowerCase();
-        const teacher = await Teacher.findOne({ schoolId, email });
-        const name = teacher ? `${teacher.firstName} ${teacher.lastName}`.trim() : email || "Me";
+        const { name, role, dept } = await resolveIdentity({ ...req.user!, email });
         const doc = await LeaveRequest.create({
           schoolId,
           code: `LV-${shortId(6).toUpperCase()}`,
           name,
-          role: teacher ? "Teacher" : "",
+          role,
           type,
           from,
           to,
           days: dayCount(from, to),
           reason,
           status: "Pending",
-          dept: teacher?.department ?? "",
+          dept,
           email,
         });
         res.status(201).json({ data: toPublic(doc) });
