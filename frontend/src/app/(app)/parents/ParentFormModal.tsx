@@ -42,8 +42,8 @@ interface ParentFormModalProps {
   onOpenChange: (open: boolean) => void;
   /** Present = edit mode, absent = create mode. */
   record?: Parent | null;
-  /** Existing parents — used to block a duplicate email. */
-  existing?: Parent[];
+  /** Existing parents (id + email) — used to block a duplicate email. */
+  existing?: { id: string; email: string }[];
   saving?: boolean;
   onSubmit: (values: ParentSchema) => Promise<void>;
 }
