@@ -12,7 +12,7 @@ import {
   type SchoolClassSchema,
 } from "@/lib/schemas/schoolClass";
 import { STREAM_OPTIONS, type SchoolClass } from "@/lib/api/classes";
-import { listTeachers } from "@/lib/api/teachers";
+import { fetchAllTeachers } from "@/lib/api/teachers";
 import { teacherName, type Teacher } from "@/types/teacher";
 
 // Common Indian-school grades — offered as a quick pick, but the name field is
@@ -29,8 +29,6 @@ const emptyValues: SchoolClassSchema = {
   stream: STREAM_OPTIONS[0],
   classTeacher: "",
   room: "",
-  students: 0,
-  teachers: 0,
 };
 
 interface ClassFormModalProps {
@@ -85,7 +83,7 @@ export function ClassFormModal({
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    listTeachers()
+    fetchAllTeachers()
       .then((all) => !cancelled && setTeachers(all))
       .catch(() => !cancelled && setTeachers([]));
     return () => {

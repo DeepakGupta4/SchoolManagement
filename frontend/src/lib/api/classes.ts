@@ -7,8 +7,6 @@ export interface SchoolClass {
   stream: string;
   classTeacher: string;
   room: string;
-  students: number;
-  teachers: number;
 }
 
 export interface ClassFilters {

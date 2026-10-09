@@ -25,9 +25,8 @@ export const schoolClassSchema = z.object({
   // Optional — a class may not have a teacher or room assigned yet.
   classTeacher: z.string(),
   room: z.string(),
-  // Counts are derived from real students/teachers, not typed.
-  students: z.coerce.number<number>().min(0),
-  teachers: z.coerce.number<number>().min(0),
+  // NOTE: student/teacher counts are DERIVED live from the rosters, never stored
+  // or typed — so they are intentionally NOT part of this schema.
 });
 
 export type SchoolClassSchema = z.infer<typeof schoolClassSchema>;

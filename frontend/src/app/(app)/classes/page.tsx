@@ -13,19 +13,29 @@ import {
   Select,
   StatCard,
   Table,
+  useToast,
   type Column,
 } from "@/components/ui";
 import { useResource } from "@/hooks/useResource";
 import { classesApi, STREAM_OPTIONS, type SchoolClass } from "@/lib/api/classes";
-import { listStudents } from "@/lib/api/students";
-import { listTeachers } from "@/lib/api/teachers";
+import { fetchAllStudents } from "@/lib/api/students";
+import { fetchAllTeachers } from "@/lib/api/teachers";
 import type { Student } from "@/types/student";
 import type { Teacher } from "@/types/teacher";
 import type { SchoolClassSchema } from "@/lib/schemas/schoolClass";
 import { DetailModal } from "@/components/DetailModal";
 import { ClassFormModal } from "./ClassFormModal";
 
+/**
+ * Class names are matched by value across collections (a class row vs a student's
+ * `className` vs a teacher's `classes[]`), and those come from different inputs, so
+ * normalise before comparing — otherwise "Class 6", "class 6" and "Class  6" (double
+ * space) would each miss and show a class as having zero students.
+ */
+const norm = (s: string) => s.trim().replace(/\s+/g, " ").toLowerCase();
+
 export default function ClassesPage() {
+  const { toast } = useToast();
   const [search, setSearch] = useState("");
   const [stream, setStream] = useState("");
 
@@ -42,12 +52,17 @@ export default function ClassesPage() {
   const [viewing, setViewing] = useState<SchoolClass | null>(null);
   const [pendingDelete, setPendingDelete] = useState<SchoolClass | null>(null);
 
-  // Live rosters so student/teacher counts are derived, never typed.
+  // Live rosters so student/teacher counts are DERIVED, never typed. Fetched in
+  // FULL (not the 200-cap list) so counts are correct at any school size, and
+  // refetched only after a class mutation (rosterKey bump) — a rename cascades to
+  // students' className on the server, so the counts must refresh — never on every
+  // search keystroke (which is what keying this on `items` used to do).
   const [roster, setRoster] = useState<Student[]>([]);
   const [staff, setStaff] = useState<Teacher[]>([]);
+  const [rosterKey, setRosterKey] = useState(0);
   useEffect(() => {
     let cancelled = false;
-    Promise.all([listStudents(), listTeachers()])
+    Promise.all([fetchAllStudents(), fetchAllTeachers()])
       .then(([s, t]) => {
         if (cancelled) return;
         setRoster(s);
@@ -57,19 +72,35 @@ export default function ClassesPage() {
     return () => {
       cancelled = true;
     };
-  }, [items]);
+  }, [rosterKey]);
 
   const studentCount = useMemo(() => {
     const m = new Map<string, number>();
-    for (const s of roster) m.set(s.className, (m.get(s.className) ?? 0) + 1);
+    for (const s of roster) {
+      const k = norm(s.className);
+      m.set(k, (m.get(k) ?? 0) + 1);
+    }
     return m;
   }, [roster]);
 
   const teacherCount = useMemo(() => {
     const m = new Map<string, number>();
-    for (const t of staff) for (const c of t.classes) m.set(c, (m.get(c) ?? 0) + 1);
+    for (const t of staff) for (const c of t.classes) {
+      const k = norm(c);
+      m.set(k, (m.get(k) ?? 0) + 1);
+    }
     return m;
   }, [staff]);
+
+  // Active enrollment for the class pending deletion — drives the warning + the
+  // client-side guard (the server also blocks it, but this avoids a doomed call).
+  const pendingActiveStudents = useMemo(
+    () =>
+      pendingDelete
+        ? roster.filter((s) => norm(s.className) === norm(pendingDelete.name) && s.status === "active").length
+        : 0,
+    [pendingDelete, roster]
+  );
 
   const stats = useMemo(
     () => ({
@@ -91,13 +122,27 @@ export default function ClassesPage() {
     if (ok) {
       setFormOpen(false);
       setEditing(null);
+      setRosterKey((k) => k + 1); // a rename cascades to student classNames — refresh counts
     }
   };
 
   const handleDelete = async () => {
     if (!pendingDelete) return;
+    // Don't attempt a delete the server will reject — a class with active students
+    // can't be removed (they'd be orphaned). Guide the admin to reassign first.
+    if (pendingActiveStudents > 0) {
+      toast({
+        title: "Class still has students",
+        description: `${pendingDelete.name} has ${pendingActiveStudents} active student(s). Move or transfer them to another class first.`,
+        variant: "warning",
+      });
+      return;
+    }
     const ok = await remove(pendingDelete);
-    if (ok) setPendingDelete(null);
+    if (ok) {
+      setPendingDelete(null);
+      setRosterKey((k) => k + 1); // delete scrubbed the class off teacher records — refresh
+    }
   };
 
   const columns: Column<SchoolClass>[] = [
@@ -147,16 +192,16 @@ export default function ClassesPage() {
       header: "Students",
       sortable: true,
       align: "right",
-      sortValue: (c) => studentCount.get(c.name) ?? 0,
-      render: (c) => <span className="text-muted">{studentCount.get(c.name) ?? 0}</span>,
+      sortValue: (c) => studentCount.get(norm(c.name)) ?? 0,
+      render: (c) => <span className="text-muted">{studentCount.get(norm(c.name)) ?? 0}</span>,
     },
     {
       key: "teachers",
       header: "Teachers",
       sortable: true,
       align: "right",
-      sortValue: (c) => teacherCount.get(c.name) ?? 0,
-      render: (c) => <span className="text-muted">{teacherCount.get(c.name) ?? 0}</span>,
+      sortValue: (c) => teacherCount.get(norm(c.name)) ?? 0,
+      render: (c) => <span className="text-muted">{teacherCount.get(norm(c.name)) ?? 0}</span>,
     },
     {
       key: "actions",
@@ -286,8 +331,8 @@ export default function ClassesPage() {
                 { label: "Room", value: viewing.room },
                 { label: "Stream", value: viewing.stream },
                 { label: "Class teacher", value: viewing.classTeacher || "—" },
-                { label: "Students", value: studentCount.get(viewing.name) ?? 0 },
-                { label: "Teachers", value: teacherCount.get(viewing.name) ?? 0 },
+                { label: "Students", value: studentCount.get(norm(viewing.name)) ?? 0 },
+                { label: "Teachers", value: teacherCount.get(norm(viewing.name)) ?? 0 },
                 {
                   label: "Sections",
                   value: viewing.sections.length ? viewing.sections.join(", ") : "—",
@@ -304,7 +349,9 @@ export default function ClassesPage() {
         title="Delete class?"
         description={
           pendingDelete
-            ? `${pendingDelete.name} and its ${pendingDelete.sections.length} section(s) will be permanently removed. This cannot be undone.`
+            ? pendingActiveStudents > 0
+              ? `${pendingDelete.name} still has ${pendingActiveStudents} active student(s). Move or transfer them to another class first — deletion is blocked while students are enrolled.`
+              : `${pendingDelete.name} and its ${pendingDelete.sections.length} section(s) will be permanently removed. This cannot be undone.`
             : ""
         }
         confirmLabel="Delete"
