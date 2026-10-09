@@ -79,6 +79,42 @@ export async function getAttendanceSummary(
   });
 }
 
+/** One mark in a student's own attendance history. */
+export interface StudentAttendanceRecord {
+  date: string; // YYYY-MM-DD
+  status: AttendanceStatus;
+}
+
+/** A single student's attendance history + fair-percent tally (newest first). */
+export interface StudentAttendanceHistory {
+  student: { id: string; name: string; className: string; section: string; rollNo: string | number };
+  summary: {
+    present: number;
+    absent: number;
+    late: number;
+    halfDay: number;
+    leave: number;
+    total: number;
+    /** Fair attendance %: (present + late + 0.5*half-day) / (present + absent + late + half-day). */
+    percent: number;
+  };
+  records: StudentAttendanceRecord[];
+}
+
+/**
+ * One student's own attendance — identity, an all-status tally with the fair
+ * percent, and every mark newest-first (optionally within [from, to]). Powers the
+ * "View attendance" action on the students list. Staff-only on the server.
+ */
+export async function getStudentAttendance(
+  studentId: string,
+  range?: { from?: string; to?: string }
+): Promise<StudentAttendanceHistory> {
+  return apiRequest<StudentAttendanceHistory>(`/api/attendance/student/${studentId}`, {
+    query: { from: range?.from, to: range?.to },
+  });
+}
+
 /** Outcome of an explicit absence-alert run (all best-effort counts). */
 export interface NotifyAbsenteesResult {
   /** Students saved as absent on the date. */

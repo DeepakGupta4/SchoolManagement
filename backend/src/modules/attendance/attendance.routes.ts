@@ -7,6 +7,7 @@ import { Attendance, ATTENDANCE_STATUSES } from "./attendance.model.js";
 import { Student } from "../students/student.model.js";
 import { sendEmail, isEmailConfigured } from "../../utils/email.js";
 import { notifySchool } from "../notifications/notification.model.js";
+import { ApiError } from "../../utils/ApiError.js";
 import { env } from "../../config/env.js";
 
 const router = Router();
@@ -125,6 +126,69 @@ router.get("/summary", validate(summaryQuery, "query"), async (req, res, next) =
     next(err);
   }
 });
+
+const studentHistoryQuery = z.object({
+  from: z.string().regex(ISO_DATE, "from must be YYYY-MM-DD").optional(),
+  to: z.string().regex(ISO_DATE, "to must be YYYY-MM-DD").optional(),
+});
+
+/**
+ * One student's own attendance history — the record behind the "View attendance"
+ * action on the students list. Returns the student's identity, an all-status tally
+ * with the fair percent, and every mark (newest first) within the optional
+ * [from, to] window. Scoped to the caller's school; staff-only (parents/students
+ * see their own child's figure through the portal, not this endpoint).
+ */
+router.get(
+  "/student/:id",
+  requireRole("super_admin", "school_admin", "principal", "teacher", "accountant"),
+  validate(studentHistoryQuery, "query"),
+  async (req, res, next) => {
+    try {
+      const schoolId = req.user!.schoolId;
+      const id = String(req.params.id);
+      if (!mongoose.isValidObjectId(id)) throw ApiError.badRequest("Invalid student id.");
+
+      const { from, to } = parsed<z.infer<typeof studentHistoryQuery>>(req, "query");
+      const dateRange: Record<string, string> = {};
+      if (from) dateRange.$gte = from;
+      if (to) dateRange.$lte = to;
+      const match = { schoolId, studentId: id, ...(from || to ? { date: dateRange } : {}) };
+
+      const [student, rows] = await Promise.all([
+        Student.findOne({ schoolId, _id: id }).select("firstName lastName className section rollNo").lean(),
+        Attendance.find(match).select("date status").sort({ date: -1 }).lean(),
+      ]);
+      if (!student) throw ApiError.notFound("Student not found.");
+
+      const counts = { present: 0, absent: 0, late: 0, halfDay: 0, leave: 0, total: 0 };
+      for (const r of rows) {
+        counts.total++;
+        if (r.status === "present") counts.present++;
+        else if (r.status === "absent") counts.absent++;
+        else if (r.status === "late") counts.late++;
+        else if (r.status === "half-day") counts.halfDay++;
+        else if (r.status === "leave") counts.leave++;
+      }
+
+      res.json({
+        data: {
+          student: {
+            id: String(student._id),
+            name: `${student.firstName} ${student.lastName}`.trim(),
+            className: student.className,
+            section: student.section,
+            rollNo: student.rollNo,
+          },
+          summary: { ...counts, percent: attendancePercent(counts) },
+          records: rows.map((r) => ({ date: r.date, status: r.status })),
+        },
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
 
 /** Saved roll-call for one class + section on one date. */
 router.get("/", validate(listQuery, "query"), async (req, res, next) => {

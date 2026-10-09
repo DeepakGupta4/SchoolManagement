@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Cake, Download, Eye, FileText, Pencil, Plus, Search, Trash2, Users, UsersRound, UserCheck, IndianRupee, TrendingDown } from "lucide-react";
+import { Cake, CalendarCheck, Download, Eye, FileText, Pencil, Plus, Search, Trash2, Users, UsersRound, UserCheck, IndianRupee, TrendingDown } from "lucide-react";
 import {
   Avatar,
   Badge,
@@ -29,6 +29,7 @@ import { fullName, type Student, type StudentFormValues, type StudentStatus } fr
 import { exportTablePdf } from "@/lib/exportPdf";
 import { StudentFormModal } from "./StudentFormModal";
 import { BulkAddStudentsModal } from "./BulkAddStudentsModal";
+import { StudentAttendanceModal } from "./StudentAttendanceModal";
 
 const STATUS_VARIANT: Record<StudentStatus, "success" | "default" | "info" | "warning"> = {
   active: "success",
@@ -137,6 +138,7 @@ function StudentsPageInner() {
   const [bulkOpen, setBulkOpen] = useState(false);
   const [editing, setEditing] = useState<Student | null>(null);
   const [deleting, setDeleting] = useState<Student | null>(null);
+  const [viewingAttendance, setViewingAttendance] = useState<Student | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [school, setSchool] = useState<SchoolProfile | null>(null);
 
@@ -384,6 +386,14 @@ function StudentsPageInner() {
             <Eye className="size-4" />
           </Link>
           <button
+            onClick={() => setViewingAttendance(s)}
+            aria-label={`View attendance for ${fullName(s)}`}
+            title="View attendance"
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+          >
+            <CalendarCheck className="size-4" />
+          </button>
+          <button
             onClick={() => printAdmissionForm(s, school)}
             aria-label={`Download admission form for ${fullName(s)}`}
             title="Download admission form"
@@ -598,6 +608,13 @@ function StudentsPageInner() {
       />
 
       <BulkAddStudentsModal open={bulkOpen} onOpenChange={setBulkOpen} onSaved={refetch} />
+
+      <StudentAttendanceModal
+        key={viewingAttendance?.id ?? "none"}
+        student={viewingAttendance}
+        open={Boolean(viewingAttendance)}
+        onOpenChange={(o) => !o && setViewingAttendance(null)}
+      />
 
       <ConfirmDialog
         open={Boolean(deleting)}
