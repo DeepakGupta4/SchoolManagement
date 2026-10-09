@@ -2,8 +2,9 @@
 
 import { useCallback, useState, type ReactNode } from "react";
 import { CalendarX } from "lucide-react";
-import { Avatar, Badge, Button, Modal, Skeleton } from "@/components/ui";
+import { Avatar, Badge, Button, Input, Modal, Select, Skeleton } from "@/components/ui";
 import { useAsyncList } from "@/hooks/useAsyncList";
+import { TODAY_ISO, weekdayName } from "@/lib/dates";
 import {
   getStudentAttendance,
   type AttendanceStatus,
@@ -31,11 +32,42 @@ const MONTHS_LONG = [
 const fmtDay = (iso: string) => `${iso.slice(8, 10)} ${MONTHS_SHORT[Number(iso.slice(5, 7)) - 1] ?? ""}`;
 const monthLabel = (ym: string) => `${MONTHS_LONG[Number(ym.slice(5, 7)) - 1] ?? ""} ${ym.slice(0, 4)}`;
 
+type Period = "all" | "month" | "session" | "custom";
+const PERIOD_OPTIONS: { label: string; value: Period }[] = [
+  { label: "All time", value: "all" },
+  { label: "This month", value: "month" },
+  { label: "This session", value: "session" },
+  { label: "Custom range", value: "custom" },
+];
+
+/**
+ * The [from, to] window for a period, computed purely from the date STRINGS
+ * (no `new Date()`), so it's safe to call in render. "This session" is the Indian
+ * academic year (Apr–Mar). Returns {} for "all time" (no bounds).
+ */
+function rangeFor(period: Period, customFrom: string, customTo: string): { from?: string; to?: string } {
+  switch (period) {
+    case "month":
+      return { from: `${TODAY_ISO.slice(0, 7)}-01`, to: TODAY_ISO };
+    case "session": {
+      const y = Number(TODAY_ISO.slice(0, 4));
+      const m = Number(TODAY_ISO.slice(5, 7));
+      const start = m >= 4 ? y : y - 1;
+      return { from: `${start}-04-01`, to: TODAY_ISO };
+    }
+    case "custom":
+      return { from: customFrom || undefined, to: customTo || undefined };
+    default:
+      return {};
+  }
+}
+
 /**
  * A read-only dialog showing one student's attendance — a fair-percent headline,
- * a per-status tally, and the full mark history (newest first, grouped by month)
- * with a status filter. Opened from the "View attendance" action on the students
- * list. Fetches lazily when opened for a student.
+ * a per-status tally, and the full mark history (newest first, grouped by month).
+ * Production filters: a PERIOD window (all time / this month / this session /
+ * custom range) that refetches the tally from the server, plus a client-side
+ * STATUS filter over the loaded marks. Opened from the students list.
  */
 export function StudentAttendanceModal({
   student,
@@ -47,15 +79,27 @@ export function StudentAttendanceModal({
   onOpenChange: (open: boolean) => void;
 }) {
   const [filter, setFilter] = useState<AttendanceStatus | "all">("all");
+  const [period, setPeriod] = useState<Period>("all");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
 
-  // Only hits the API while the dialog is open for a student. Wrapping the single
-  // record set as a one-element array lets us reuse the race-safe list hook.
+  const { from, to } = rangeFor(period, customFrom, customTo);
+  const customInvalid = period === "custom" && !!from && !!to && from > to;
+
+  // Only hits the API while the dialog is open for a student and the range is
+  // usable. Wrapping the single record set as a one-element array lets us reuse
+  // the race-safe list hook; the from/to deps refetch when the period changes.
   const fetcher = useCallback(
     () =>
-      open && student
-        ? getStudentAttendance(student.id).then((d) => [d])
+      open && student && !customInvalid
+        ? getStudentAttendance(student.id, {
+            from,
+            to,
+            className: student.className,
+            section: student.section,
+          }).then((d) => [d])
         : Promise.resolve([] as StudentAttendanceHistory[]),
-    [open, student]
+    [open, student, from, to, customInvalid]
   );
   const { items, loading, error } = useAsyncList<StudentAttendanceHistory>(fetcher);
   const data = items[0] ?? null;
@@ -74,6 +118,11 @@ export function StudentAttendanceModal({
 
   const pct = data?.summary.percent ?? 0;
   const hasDays = (data?.summary.total ?? 0) > 0;
+
+  const changePeriod = (p: Period) => {
+    setPeriod(p);
+    setFilter("all"); // a new window has its own status counts; start unfiltered
+  };
 
   return (
     <Modal
@@ -100,7 +149,44 @@ export function StudentAttendanceModal({
             </div>
           </div>
 
-          {loading ? (
+          {/* Period filter */}
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="w-44">
+              <Select
+                label="Period"
+                value={period}
+                onChange={(e) => changePeriod(e.target.value as Period)}
+                options={PERIOD_OPTIONS}
+                aria-label="Attendance period"
+              />
+            </div>
+            {period === "custom" && (
+              <>
+                <div className="w-40">
+                  <Input
+                    label="From"
+                    type="date"
+                    value={customFrom}
+                    onChange={(e) => setCustomFrom(e.target.value)}
+                  />
+                </div>
+                <div className="w-40">
+                  <Input
+                    label="To"
+                    type="date"
+                    value={customTo}
+                    onChange={(e) => setCustomTo(e.target.value)}
+                  />
+                </div>
+              </>
+            )}
+          </div>
+
+          {customInvalid ? (
+            <div className="rounded-lg bg-warning-soft px-3 py-2.5 text-xs text-warning-text">
+              The end date must be on or after the start date.
+            </div>
+          ) : loading ? (
             <div className="flex flex-col gap-3">
               <Skeleton className="h-20 w-full" />
               <Skeleton className="h-8 w-2/3" />
@@ -141,12 +227,21 @@ export function StudentAttendanceModal({
                 </div>
               </div>
 
-              {records.length === 0 ? (
+              {data.partial && hasDays ? (
+                <div className="rounded-lg bg-warning-soft px-3 py-2.5 text-xs text-warning-text">
+                  Showing the totals for this period. The day-by-day history will appear once the
+                  backend is updated (restart / redeploy).
+                </div>
+              ) : records.length === 0 ? (
                 <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-border bg-surface-sunken px-4 py-10 text-center">
                   <CalendarX className="size-6 text-subtle" />
-                  <p className="text-sm font-medium text-text">No attendance recorded yet</p>
+                  <p className="text-sm font-medium text-text">
+                    No attendance {period === "all" ? "recorded yet" : "in this period"}
+                  </p>
                   <p className="text-xs text-subtle">
-                    This student has no attendance marked. Mark it from the Attendance screen.
+                    {period === "all"
+                      ? "This student has no attendance marked. Mark it from the Attendance screen."
+                      : "Try a wider period, or All time."}
                   </p>
                 </div>
               ) : (
@@ -180,7 +275,10 @@ export function StudentAttendanceModal({
                               key={r.date}
                               className="flex items-center justify-between gap-3 px-3 py-2 text-sm"
                             >
-                              <span className="text-text">{fmtDay(r.date)}</span>
+                              <span className="text-text">
+                                {fmtDay(r.date)}
+                                <span className="text-subtle"> · {weekdayName(r.date)}</span>
+                              </span>
                               <Badge variant={STATUS_META[r.status].variant}>
                                 {STATUS_META[r.status].label}
                               </Badge>

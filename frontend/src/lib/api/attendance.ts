@@ -1,4 +1,5 @@
 import { apiRequest } from "./client";
+import { TODAY_ISO } from "@/lib/dates";
 
 export type AttendanceStatus = "present" | "absent" | "late" | "half-day" | "leave";
 
@@ -99,20 +100,72 @@ export interface StudentAttendanceHistory {
     percent: number;
   };
   records: StudentAttendanceRecord[];
+  /**
+   * True when the figures came from the FALLBACK (the long-standing class/section
+   * `/summary` endpoint) because the per-student route isn't live on the server
+   * yet — the tally is real but the per-day `records` are unavailable until the
+   * backend is redeployed. Absent/false on the real endpoint.
+   */
+  partial?: boolean;
 }
 
 /**
  * One student's own attendance — identity, an all-status tally with the fair
  * percent, and every mark newest-first (optionally within [from, to]). Powers the
  * "View attendance" action on the students list. Staff-only on the server.
+ *
+ * Resilient: if the per-student route isn't deployed yet it FALLS BACK to the
+ * class/section summary endpoint (which has been live for ages) to still show the
+ * real tally — flagged `partial`, with no per-day history — instead of erroring.
+ * Pass the student's `className`/`section` to enable that fallback.
  */
 export async function getStudentAttendance(
   studentId: string,
-  range?: { from?: string; to?: string }
+  opts?: { from?: string; to?: string; className?: string; section?: string }
 ): Promise<StudentAttendanceHistory> {
-  return apiRequest<StudentAttendanceHistory>(`/api/attendance/student/${studentId}`, {
-    query: { from: range?.from, to: range?.to },
-  });
+  try {
+    return await apiRequest<StudentAttendanceHistory>(`/api/attendance/student/${studentId}`, {
+      query: { from: opts?.from, to: opts?.to },
+    });
+  } catch (e) {
+    if (opts?.className && opts?.section) {
+      try {
+        const summary = await getAttendanceSummary(
+          opts.className,
+          opts.section,
+          opts.from ?? "2000-01-01",
+          opts.to ?? TODAY_ISO
+        );
+        const row = summary.students.find((s) => s.studentId === studentId);
+        if (row) {
+          return {
+            student: {
+              id: studentId,
+              name: row.studentName,
+              className: opts.className,
+              section: opts.section,
+              rollNo: row.roll,
+            },
+            summary: {
+              present: row.present,
+              absent: row.absent,
+              late: row.late,
+              halfDay: row.halfDay,
+              leave: row.leave,
+              total: row.total,
+              percent: row.percent,
+            },
+            records: [],
+            partial: true,
+          };
+        }
+      } catch {
+        // Fallback also failed (e.g. inactive student not in the active roster) —
+        // surface the original error below.
+      }
+    }
+    throw e;
+  }
 }
 
 /** Outcome of an explicit absence-alert run (all best-effort counts). */
