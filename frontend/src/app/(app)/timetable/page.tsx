@@ -22,6 +22,7 @@ import { useSubjectOptions } from "@/hooks/useSubjectOptions";
 import { listTeachers } from "@/lib/api/teachers";
 import { teacherName, type Teacher } from "@/types/teacher";
 import { getMySchool, updateMySchool } from "@/lib/api/schools";
+import { useAuthStore } from "@/store";
 
 const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -69,7 +70,6 @@ function buildPeriodLabels(list: Period[]): Record<number, string> {
   return labels;
 }
 
-const todayIndex = Math.min(new Date().getDay() - 1, 5);
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 function mondayOf(from: Date, weekOffset: number) {
@@ -87,6 +87,15 @@ export default function TimetablePage() {
   const { toast } = useToast();
   const { classOptions, sectionOptions } = useClassOptions();
   const { subjectOptions } = useSubjectOptions();
+  const { user } = useAuthStore();
+  // Building the timetable is an admin/principal job; teachers (and others) view it
+  // read-only — their writes would 403 on the server anyway.
+  const canEdit = ["super_admin", "school_admin", "principal"].includes(user?.role ?? "");
+
+  // Capture "now" once (lazy init) so week math stays pure across renders — the
+  // React Compiler forbids new Date() in render scope.
+  const [now] = useState(() => new Date());
+  const todayIndex = Math.min(now.getDay() - 1, 5);
 
   const [classSel, setClassSel] = useState("");
   const [sectionSel, setSectionSel] = useState("");
@@ -147,9 +156,12 @@ export default function TimetablePage() {
   const activeSection = sectionSel || sectionOptions[0]?.value || "";
   const classKey = activeClass && activeSection ? `${activeClass} - ${activeSection}` : "";
 
+  // Scope the fetch to the selected class so we never hit the 200-row list cap
+  // (a whole school's timetable easily exceeds it) — one class-section is tiny, and
+  // it refetches when the class/section changes.
   const { items, loading, error, refetch, save, remove, saving, deleting } = useResource(
     timetableApi,
-    useMemo(() => ({}), []),
+    useMemo(() => (classKey ? { className: classKey } : {}), [classKey]),
     { label: "period", describe: (r) => `${r.className} ${r.day} P${r.period}` }
   );
 
@@ -185,6 +197,7 @@ export default function TimetablePage() {
   const existing = cell ? grid[cell.day]?.[cell.period] : undefined;
 
   const openCell = (day: string, period: number, time: string) => {
+    if (!canEdit) return; // read-only roles can view but not assign periods
     if (!classKey) {
       toast({ title: "Pick a class and section first", variant: "warning" });
       return;
@@ -215,7 +228,7 @@ export default function TimetablePage() {
     if (ok) setCell(null);
   };
 
-  const weekStart = mondayOf(new Date(), weekOffset);
+  const weekStart = mondayOf(now, weekOffset);
   const weekEnd = addDays(weekStart, days.length - 1);
   const weekLabel = `Week of ${shortDate(weekStart)} – ${shortDate(weekEnd)}, ${weekEnd.getFullYear()}`;
   const todayName = weekOffset === 0 ? days[todayIndex] ?? "" : "";
@@ -257,10 +270,12 @@ export default function TimetablePage() {
         description="Weekly class schedule — pick a class, then tap any slot to assign a period."
         actions={
           <>
-            <Button variant="outline" onClick={openTimings}>
-              <Clock className="size-4" />
-              Edit timings
-            </Button>
+            {canEdit && (
+              <Button variant="outline" onClick={openTimings}>
+                <Clock className="size-4" />
+                Edit timings
+              </Button>
+            )}
             <Button variant="outline" onClick={handleExport} disabled={!classKey}>
               <Download className="size-4" />
               Export CSV
@@ -395,19 +410,32 @@ export default function TimetablePage() {
                             )}
                           >
                             {entry ? (
-                              <button
-                                type="button"
-                                onClick={() => openCell(day, period.id, period.time)}
-                                className={cn(
-                                  "focus-ring w-full cursor-pointer rounded-sm border px-2.5 py-2 text-left transition-transform hover:scale-[1.02]",
-                                  toneFor(entry.subject)
-                                )}
-                              >
-                                <p className="text-xs font-semibold leading-tight">{entry.subject}</p>
-                                {entry.teacher && <p className="mt-0.5 text-[10px] text-muted">{entry.teacher}</p>}
-                                {entry.room && <p className="text-[10px] text-subtle">Room {entry.room}</p>}
-                              </button>
-                            ) : (
+                              canEdit ? (
+                                <button
+                                  type="button"
+                                  onClick={() => openCell(day, period.id, period.time)}
+                                  className={cn(
+                                    "focus-ring w-full cursor-pointer rounded-sm border px-2.5 py-2 text-left transition-transform hover:scale-[1.02]",
+                                    toneFor(entry.subject)
+                                  )}
+                                >
+                                  <p className="text-xs font-semibold leading-tight">{entry.subject}</p>
+                                  {entry.teacher && <p className="mt-0.5 text-[10px] text-muted">{entry.teacher}</p>}
+                                  {entry.room && <p className="text-[10px] text-subtle">Room {entry.room}</p>}
+                                </button>
+                              ) : (
+                                <div
+                                  className={cn(
+                                    "w-full rounded-sm border px-2.5 py-2 text-left",
+                                    toneFor(entry.subject)
+                                  )}
+                                >
+                                  <p className="text-xs font-semibold leading-tight">{entry.subject}</p>
+                                  {entry.teacher && <p className="mt-0.5 text-[10px] text-muted">{entry.teacher}</p>}
+                                  {entry.room && <p className="text-[10px] text-subtle">Room {entry.room}</p>}
+                                </div>
+                              )
+                            ) : canEdit ? (
                               <button
                                 type="button"
                                 onClick={() => openCell(day, period.id, period.time)}
@@ -415,6 +443,8 @@ export default function TimetablePage() {
                               >
                                 + Add
                               </button>
+                            ) : (
+                              <div className="py-2 text-center text-[10px] text-subtle">—</div>
                             )}
                           </td>
                         );

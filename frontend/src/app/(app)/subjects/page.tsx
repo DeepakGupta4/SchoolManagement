@@ -67,25 +67,27 @@ export default function SubjectsPage() {
     const toAdd = [...picked].filter((n) => !present.has(n.toLowerCase()));
     if (toAdd.length === 0) return;
     setBulkSaving(true);
-    try {
-      for (const name of toAdd) {
+    // Add each independently so a name that already exists (the server now enforces
+    // a unique subject name) is skipped rather than aborting the whole batch.
+    const added: string[] = [];
+    const skipped: string[] = [];
+    for (const name of toAdd) {
+      try {
         await subjectsApi.create({ name, code: suggestSubjectCode(name), department: "", type: "Core" });
+        added.push(name);
+      } catch {
+        skipped.push(name);
       }
-      toast({
-        title: `${toAdd.length} subject${toAdd.length === 1 ? "" : "s"} added`,
-        description: toAdd.join(", "),
-      });
-      setPicked(new Set());
-      refetch();
-    } catch (e) {
-      toast({
-        title: "Could not add subjects",
-        description: e instanceof Error ? e.message : "Please try again.",
-        variant: "error",
-      });
-    } finally {
-      setBulkSaving(false);
     }
+    if (added.length > 0) {
+      toast({ title: `${added.length} subject${added.length === 1 ? "" : "s"} added`, description: added.join(", ") });
+    }
+    if (skipped.length > 0) {
+      toast({ title: "Some were skipped", description: `Already present: ${skipped.join(", ")}`, variant: "warning" });
+    }
+    setPicked(new Set());
+    refetch();
+    setBulkSaving(false);
   };
 
   const stats = useMemo(
@@ -324,7 +326,7 @@ export default function SubjectsPage() {
         title="Delete subject?"
         description={
           pendingDelete
-            ? `${pendingDelete.name} will be permanently removed. This cannot be undone.`
+            ? `${pendingDelete.name} will be permanently removed. If it's still used in a timetable, marks, or a teacher's subjects, deletion is blocked — rename it instead.`
             : ""
         }
         confirmLabel="Delete"

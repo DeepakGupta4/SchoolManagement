@@ -2,6 +2,7 @@ import { z } from "zod";
 import { SchoolClass } from "./class.model.js";
 import { Student } from "../students/student.model.js";
 import { Teacher } from "../teachers/teacher.model.js";
+import { Timetable } from "../timetable/timetable.model.js";
 import { createCrudRouter, toPublic } from "../../utils/crudRouter.js";
 import { requireRole } from "../../middleware/auth.js";
 import { validate } from "../../middleware/validate.js";
@@ -21,6 +22,9 @@ function isContiguousFromA(sections: string[]): boolean {
   const sorted = [...unique].sort();
   return sorted.every((s, i) => s === SECTION_SEQUENCE[i]);
 }
+
+/** Escapes regex metacharacters so a class name is matched literally in a $regex. */
+const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 const classCreateSchema = z.object({
   name: z.string().trim().min(1),
@@ -80,6 +84,20 @@ export default createCrudRouter({
                 { schoolId, classTeacherOf: oldName },
                 { $set: { classTeacherOf: newName } }
               ),
+              // Timetable keys by the COMPOSITE "<class> - <section>", so swap just
+              // the class-name prefix, preserving each row's section.
+              Timetable.updateMany({ schoolId, className: { $regex: `^${escapeRegex(oldName)} - ` } }, [
+                {
+                  $set: {
+                    className: {
+                      $concat: [
+                        newName,
+                        { $substrCP: ["$className", oldName.length, { $strLenCP: "$className" }] },
+                      ],
+                    },
+                  },
+                },
+              ]),
             ]);
           }
 
@@ -115,6 +133,9 @@ export default createCrudRouter({
             { schoolId, classTeacherOf: name },
             { $set: { classTeacherOf: "", classTeacherSection: "", isClassTeacher: false } }
           ),
+          // The class is gone, so its timetable rows ("<class> - <section>") are
+          // meaningless — remove them rather than leave orphans.
+          Timetable.deleteMany({ schoolId, className: { $regex: `^${escapeRegex(name)} - ` } }),
         ]);
 
         res.status(204).send();
