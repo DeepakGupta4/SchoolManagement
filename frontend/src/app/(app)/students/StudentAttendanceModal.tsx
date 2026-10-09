@@ -1,14 +1,17 @@
 "use client";
 
 import { useCallback, useState, type ReactNode } from "react";
-import { CalendarX } from "lucide-react";
-import { Avatar, Badge, Button, Input, Modal, Select, Skeleton } from "@/components/ui";
+import { CalendarX, Download, FileText } from "lucide-react";
+import { Avatar, Badge, Button, Input, Modal, Select, Skeleton, useToast } from "@/components/ui";
 import { useAsyncList } from "@/hooks/useAsyncList";
-import { TODAY_ISO, weekdayName } from "@/lib/dates";
+import { exportToCsv } from "@/lib/exportCsv";
+import { exportTablePdf } from "@/lib/exportPdf";
+import { academicYear, TODAY_ISO, weekdayName } from "@/lib/dates";
 import {
   getStudentAttendance,
   type AttendanceStatus,
   type StudentAttendanceHistory,
+  type StudentAttendanceRecord,
 } from "@/lib/api/attendance";
 import { fullName, type Student } from "@/types/student";
 
@@ -30,6 +33,8 @@ const MONTHS_LONG = [
 ];
 // Format date strings WITHOUT `new Date()` so the component stays render-pure.
 const fmtDay = (iso: string) => `${iso.slice(8, 10)} ${MONTHS_SHORT[Number(iso.slice(5, 7)) - 1] ?? ""}`;
+const fmtFull = (iso: string) =>
+  `${iso.slice(8, 10)} ${MONTHS_SHORT[Number(iso.slice(5, 7)) - 1] ?? ""} ${iso.slice(0, 4)}`;
 const monthLabel = (ym: string) => `${MONTHS_LONG[Number(ym.slice(5, 7)) - 1] ?? ""} ${ym.slice(0, 4)}`;
 
 type Period = "all" | "month" | "session" | "custom";
@@ -78,6 +83,7 @@ export function StudentAttendanceModal({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const { toast } = useToast();
   const [filter, setFilter] = useState<AttendanceStatus | "all">("all");
   const [period, setPeriod] = useState<Period>("all");
   const [customFrom, setCustomFrom] = useState("");
@@ -124,6 +130,58 @@ export function StudentAttendanceModal({
     setFilter("all"); // a new window has its own status counts; start unfiltered
   };
 
+  // Human label for the loaded window, reused in exports.
+  const periodLabel =
+    period === "all"
+      ? "All time"
+      : period === "month"
+        ? monthLabel(TODAY_ISO.slice(0, 7))
+        : period === "session"
+          ? `${academicYear().label} session`
+          : from && to
+            ? `${from} to ${to}`
+            : from
+              ? `from ${from}`
+              : to
+                ? `until ${to}`
+                : "Custom range";
+
+  // Exports mirror what's on screen (the period window + any status chip).
+  const exportCsv = () => {
+    if (!data || shown.length === 0) return;
+    exportToCsv<StudentAttendanceRecord>(
+      `attendance-${data.student.name.replace(/\s+/g, "-").toLowerCase() || "student"}`,
+      [
+        { header: "Date", value: (r) => r.date },
+        { header: "Day", value: (r) => weekdayName(r.date) },
+        { header: "Status", value: (r) => STATUS_META[r.status].label },
+      ],
+      shown
+    );
+  };
+
+  const exportPdf = () => {
+    if (!data || shown.length === 0) return;
+    const s = data.summary;
+    const view = filter === "all" ? periodLabel : `${periodLabel} · ${STATUS_META[filter].label} only`;
+    const ok = exportTablePdf({
+      title: "Attendance Report",
+      subtitle:
+        `${data.student.name} · ${data.student.className} ${data.student.section} · Roll ${String(data.student.rollNo)}` +
+        ` — ${view} · ${hasDays ? `${s.percent}%` : "—"}` +
+        ` (Present ${s.present} · Absent ${s.absent} · Late ${s.late} · Half-day ${s.halfDay} · Leave ${s.leave} · Total ${s.total})`,
+      columns: ["Date", "Day", "Status"],
+      rows: shown.map((r) => [fmtFull(r.date), weekdayName(r.date), STATUS_META[r.status].label]),
+    });
+    if (!ok) {
+      toast({
+        title: "Pop-up blocked",
+        description: "Allow pop-ups for this site to export a PDF.",
+        variant: "error",
+      });
+    }
+  };
+
   return (
     <Modal
       open={open}
@@ -131,9 +189,33 @@ export function StudentAttendanceModal({
       title="Attendance"
       size="lg"
       footer={
-        <Button variant="outline" onClick={() => onOpenChange(false)}>
-          Close
-        </Button>
+        <div className="flex w-full items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={exportCsv}
+              disabled={!data || shown.length === 0}
+              title="Export the shown records to CSV"
+            >
+              <Download className="size-4" />
+              CSV
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={exportPdf}
+              disabled={!data || shown.length === 0}
+              title="Export a printable PDF report"
+            >
+              <FileText className="size-4" />
+              PDF
+            </Button>
+          </div>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Close
+          </Button>
+        </div>
       }
     >
       {student && (
