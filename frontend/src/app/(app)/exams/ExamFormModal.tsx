@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Modal, Button, Input, Select, MultiSelect } from "@/components/ui";
 import { useClassOptions } from "@/hooks/useClassOptions";
 import { useSubjectOptions } from "@/hooks/useSubjectOptions";
-import { listStudents } from "@/lib/api/students";
+import { fetchAllStudents } from "@/lib/api/students";
 import type { Student } from "@/types/student";
 import { examSchema, MIN_EXAM_DATE, MAX_EXAM_DATE, type ExamSchema } from "@/lib/schemas/exam";
 import { EXAM_STATUS_OPTIONS, EXAM_TYPE_OPTIONS, type Exam } from "@/lib/api/exams";
@@ -55,7 +55,8 @@ export function ExamFormModal({ open, onOpenChange, record, saving, onSubmit }: 
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    listStudents()
+    // Full roster (uncapped) so the auto-count is right in a >200-student school.
+    fetchAllStudents({ status: "active" })
       .then((s) => !cancelled && setRoster(s))
       .catch(() => {});
     return () => {

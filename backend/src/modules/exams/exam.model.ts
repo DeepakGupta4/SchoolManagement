@@ -18,5 +18,13 @@ const examSchema = new Schema(
   { timestamps: true }
 );
 
+// The exam NAME is the join key for Mark.examName and ScheduledExam.exam, so it must
+// be unique within a school (a duplicate makes those references ambiguous). The code
+// is a generated reference that must also be unique. DEDUPE existing duplicate
+// names/codes per school BEFORE these build, or the index creation fails silently.
+// errorHandler LABELS already map name/code to a friendly 409.
+examSchema.index({ schoolId: 1, name: 1 }, { unique: true, collation: { locale: "en", strength: 2 } });
+examSchema.index({ schoolId: 1, code: 1 }, { unique: true });
+
 export type ExamAttrs = InferSchemaType<typeof examSchema>;
 export const Exam = mongoose.model("Exam", examSchema);

@@ -30,7 +30,7 @@ import {
 import { cn } from "@/lib/utils";
 import { exportToCsv } from "@/lib/exportCsv";
 import { useClassOptions } from "@/hooks/useClassOptions";
-import { listStudents } from "@/lib/api/students";
+import { fetchAllStudents } from "@/lib/api/students";
 import { examsApi } from "@/lib/api/exams";
 import { getMarks } from "@/lib/api/marks";
 import type { Student as ApiStudent } from "@/types/student";
@@ -116,14 +116,14 @@ export default function MeritListPage() {
   useEffect(() => {
     let cancelled = false;
     if (!ready) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setCohort([]);
       setLoading(false);
       return;
     }
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     Promise.all([
-      listStudents({ className: selClass }),
+      fetchAllStudents({ className: selClass, status: "active" }),
       getMarks(selExam, selClass, selSection),
     ])
       .then(([students, marks]) => {
@@ -148,8 +148,12 @@ export default function MeritListPage() {
               attendance: Math.round(s.attendancePercent ?? 0),
             };
           })
-          // Rank is by total, so it always reflects the cohort on screen.
-          .sort((a, b) => b.total - a.total);
+          // Only students who were actually assessed are ranked (an unmarked student
+          // shouldn't sit on the podium at 0% or inflate the Fail count), and rank is
+          // by PERCENTAGE (fair when students have different totals entered), with the
+          // raw total as the tie-breaker.
+          .filter((s) => s.maxTotal > 0)
+          .sort((a, b) => b.pct - a.pct || b.total - a.total);
 
         setCohort(built);
       })

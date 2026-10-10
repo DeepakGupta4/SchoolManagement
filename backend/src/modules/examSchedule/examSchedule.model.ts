@@ -18,5 +18,9 @@ const examScheduleSchema = new Schema(
   { timestamps: true }
 );
 
+// The schedule code is a generated reference that must be unique within a school.
+// DEDUPE existing duplicate codes before this builds, or the index fails silently.
+examScheduleSchema.index({ schoolId: 1, code: 1 }, { unique: true });
+
 export type ScheduledExamAttrs = InferSchemaType<typeof examScheduleSchema>;
 export const ScheduledExam = mongoose.model("ScheduledExam", examScheduleSchema);

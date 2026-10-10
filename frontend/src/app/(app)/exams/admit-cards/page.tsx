@@ -8,9 +8,9 @@ import {
 import { AdmitCard, type AdmitCardData, type AdmitCardSubject } from "@/components/cards/AdmitCard";
 import { useAsyncList } from "@/hooks/useAsyncList";
 import { useClassOptions } from "@/hooks/useClassOptions";
-import { listStudents } from "@/lib/api/students";
+import { fetchAllStudents } from "@/lib/api/students";
 import { examsApi } from "@/lib/api/exams";
-import { examScheduleApi, type ScheduledExam } from "@/lib/api/examSchedule";
+import { fetchAllExamSchedule, type ScheduledExam } from "@/lib/api/examSchedule";
 import { fullName, type Student } from "@/types/student";
 import { useSchoolIdentity } from "@/lib/schoolIdentity";
 
@@ -79,13 +79,13 @@ export default function AdmitCardsPage() {
   // Real students, filtered server-side by class + search — the same source the
   // student ID-cards page uses, so photos flow through automatically.
   const studentsFetcher = useCallback(
-    () => listStudents({ search, className }),
+    () => fetchAllStudents({ search, className, status: "active" }),
     [search, className]
   );
   const { items: students, loading: studentsLoading } = useAsyncList<Student>(studentsFetcher);
 
-  // Real exam schedule, loaded in full so we can group papers by class + exam.
-  const scheduleFetcher = useCallback(() => examScheduleApi.list(), []);
+  // Real exam schedule, loaded in full (uncapped) so we can group papers by class + exam.
+  const scheduleFetcher = useCallback(() => fetchAllExamSchedule(), []);
   const { items: schedule, loading: scheduleLoading } = useAsyncList<ScheduledExam>(scheduleFetcher);
 
   const loading = studentsLoading || scheduleLoading;

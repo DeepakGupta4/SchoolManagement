@@ -13,8 +13,8 @@ router.use(requireAuth);
 
 /**
  * Recomputes each given student's stored `performancePercent` from ALL their
- * marks: the average of (marks / maxMarks) across every subject of every exam,
- * as a 0–100 percentage. This is what makes the figure REAL — without it the
+ * marks: the WEIGHTED percentage (total marks obtained / total maximum across
+ * every subject of every exam), as a 0–100 value. This is what makes it REAL — without it the
  * field stays at its 0 default and the dashboard risk engine wrongly flags
  * every student as "failing at 0%". Best-effort: callers ignore any rejection,
  * and a student with no marks is simply left untouched (stays 0 = "not yet
@@ -26,20 +26,7 @@ async function recomputePerformancePercent(schoolId: string, studentIds: string[
 
   const agg = await Mark.aggregate([
     { $match: { schoolId, studentId: { $in: ids } } },
-    {
-      $group: {
-        _id: "$studentId",
-        pct: {
-          $avg: {
-            $cond: [
-              { $gt: ["$maxMarks", 0] },
-              { $multiply: [{ $divide: ["$marks", "$maxMarks"] }, 100] },
-              0,
-            ],
-          },
-        },
-      },
-    },
+    { $group: { _id: "$studentId", m: { $sum: "$marks" }, mx: { $sum: "$maxMarks" } } },
   ]);
   if (agg.length === 0) return;
 
@@ -47,7 +34,16 @@ async function recomputePerformancePercent(schoolId: string, studentIds: string[
     agg.map((a) => ({
       updateOne: {
         filter: { _id: new mongoose.Types.ObjectId(String(a._id)), schoolId },
-        update: { $set: { performancePercent: Math.max(0, Math.min(100, Math.round(a.pct ?? 0))) } },
+        update: {
+          $set: {
+            // Weighted: total obtained / total maximum, so a 100-mark final outweighs
+            // a 1-mark quiz — and it matches the % the report card / merit list show.
+            performancePercent: Math.max(
+              0,
+              Math.min(100, Math.round(a.mx > 0 ? (a.m / a.mx) * 100 : 0))
+            ),
+          },
+        },
       },
     }))
   );
@@ -60,7 +56,11 @@ const listQuery = z.object({
 });
 
 /** Saved marks for one exam + class + section (empty if never saved). */
-router.get("/", validate(listQuery, "query"), async (req, res, next) => {
+router.get(
+  "/",
+  requireRole("super_admin", "school_admin", "principal", "teacher"),
+  validate(listQuery, "query"),
+  async (req, res, next) => {
   try {
     const { examName, className, section } = parsed<z.infer<typeof listQuery>>(req, "query");
     const rows = await Mark.find({
@@ -90,14 +90,20 @@ const saveBody = z.object({
   section: z.string().min(1),
   records: z
     .array(
-      z.object({
-        studentId: z.string().min(1),
-        studentName: z.string().default(""),
-        roll: z.coerce.number<number>().default(0),
-        subject: z.string().min(1),
-        marks: z.coerce.number<number>().default(0),
-        maxMarks: z.coerce.number<number>().default(100),
-      })
+      z
+        .object({
+          studentId: z.string().min(1),
+          studentName: z.string().default(""),
+          roll: z.coerce.number<number>().default(0),
+          subject: z.string().min(1),
+          marks: z.coerce.number<number>().min(0, "Marks can't be negative").default(0),
+          maxMarks: z.coerce.number<number>().min(1, "Max marks must be at least 1").default(100),
+        })
+        // A student can't score more than the paper's maximum.
+        .refine((r) => r.marks <= r.maxMarks, {
+          message: "Marks can't exceed max marks",
+          path: ["marks"],
+        })
     )
     .min(1, "Nothing to save"),
 });

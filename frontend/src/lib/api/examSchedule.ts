@@ -1,4 +1,5 @@
 import { createApiResource } from "./createApiResource";
+import { apiList } from "./client";
 
 export interface ScheduledExam {
   id: string;
@@ -19,6 +20,8 @@ export interface ScheduledExam {
 export interface ScheduleFilters {
   search?: string;
   status?: string;
+  /** Page size; raised above the 200 default so the schedule stats aren't capped. */
+  limit?: number;
 }
 
 export const SCHEDULE_EXAM_OPTIONS = [
@@ -84,3 +87,22 @@ export const SCHEDULE_STATUS_OPTIONS = [
 export const examScheduleApi = createApiResource<ScheduledExam, ScheduleFilters>(
   "/api/exam-schedule"
 );
+
+/**
+ * EVERY scheduled paper across all pages (deduped by id) — the admit-cards and
+ * schedule pages need the whole session, not just the first 200-row page the
+ * default list returns. Loops at the server's max page size.
+ */
+export async function fetchAllExamSchedule(): Promise<ScheduledExam[]> {
+  const byId = new Map<string, ScheduledExam>();
+  let page = 1;
+  for (;;) {
+    const { data, meta } = await apiList<ScheduledExam>("/api/exam-schedule", {
+      query: { page, limit: 500 },
+    });
+    for (const row of data) byId.set(row.id, row);
+    if (page >= meta.pages || data.length === 0) break;
+    page += 1;
+  }
+  return [...byId.values()];
+}

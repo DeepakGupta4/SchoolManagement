@@ -20,7 +20,7 @@ import { exportToCsv } from "@/lib/exportCsv";
 import type { ReportCardData } from "@/components/cards/ReportCard";
 import { ReportCardModal } from "./ReportCardModal";
 import { useClassOptions } from "@/hooks/useClassOptions";
-import { listStudents } from "@/lib/api/students";
+import { fetchAllStudents } from "@/lib/api/students";
 import { examsApi } from "@/lib/api/exams";
 import { getMarks } from "@/lib/api/marks";
 import type { Student as ApiStudent } from "@/types/student";
@@ -118,14 +118,14 @@ export default function ReportCardsPage() {
   useEffect(() => {
     let cancelled = false;
     if (!ready) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setReports([]);
       setLoading(false);
       return;
     }
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     Promise.all([
-      listStudents({ className: selectedClass }),
+      fetchAllStudents({ className: selectedClass, status: "active" }),
       getMarks(selectedExam, selectedClass, selectedSection),
     ])
       .then(([students, marks]) => {
@@ -163,7 +163,9 @@ export default function ReportCardsPage() {
               rank: 0,
             };
           })
-          .sort((a, b) => b.total - a.total)
+          // Rank by PERCENTAGE (fair when students have different totals entered),
+          // tie-broken by raw total; then display in roll order.
+          .sort((a, b) => b.pct - a.pct || b.total - a.total)
           .map((r, i) => ({ ...r, rank: i + 1 }))
           .sort((a, b) => a.roll - b.roll);
 

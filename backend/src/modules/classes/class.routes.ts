@@ -3,6 +3,10 @@ import { SchoolClass } from "./class.model.js";
 import { Student } from "../students/student.model.js";
 import { Teacher } from "../teachers/teacher.model.js";
 import { Timetable } from "../timetable/timetable.model.js";
+import { Mark } from "../marks/mark.model.js";
+import { Attendance } from "../attendance/attendance.model.js";
+import { Exam } from "../exams/exam.model.js";
+import { ScheduledExam } from "../examSchedule/examSchedule.model.js";
 import { createCrudRouter, toPublic } from "../../utils/crudRouter.js";
 import { requireRole } from "../../middleware/auth.js";
 import { validate } from "../../middleware/validate.js";
@@ -98,6 +102,15 @@ export default createCrudRouter({
                   },
                 },
               ]),
+              // Exam-feature + attendance references are BARE class names (no section).
+              Mark.updateMany({ schoolId, className: oldName }, { $set: { className: newName } }),
+              Attendance.updateMany({ schoolId, className: oldName }, { $set: { className: newName } }),
+              ScheduledExam.updateMany({ schoolId, class: oldName }, { $set: { class: newName } }),
+              Exam.updateMany(
+                { schoolId, classes: oldName },
+                { $set: { "classes.$[e]": newName } },
+                { arrayFilters: [{ e: oldName }] }
+              ),
             ]);
           }
 
@@ -133,9 +146,13 @@ export default createCrudRouter({
             { schoolId, classTeacherOf: name },
             { $set: { classTeacherOf: "", classTeacherSection: "", isClassTeacher: false } }
           ),
-          // The class is gone, so its timetable rows ("<class> - <section>") are
-          // meaningless — remove them rather than leave orphans.
+          // The class is gone, so its timetable rows ("<class> - <section>") and
+          // scheduled exam papers are meaningless — remove them rather than orphan.
           Timetable.deleteMany({ schoolId, className: { $regex: `^${escapeRegex(name)} - ` } }),
+          ScheduledExam.deleteMany({ schoolId, class: name }),
+          // Drop the class from any multi-class exam (historical marks/attendance keep
+          // their className as a record of what was — they're tied to the student).
+          Exam.updateMany({ schoolId, classes: name }, { $pull: { classes: name } }),
         ]);
 
         res.status(204).send();

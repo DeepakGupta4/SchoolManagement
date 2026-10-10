@@ -32,6 +32,7 @@ import { cn } from "@/lib/utils";
 import { exportToCsv } from "@/lib/exportCsv";
 import { useResource } from "@/hooks/useResource";
 import { examScheduleApi, type ScheduledExam } from "@/lib/api/examSchedule";
+import { examStatus } from "@/lib/api/exams";
 import type { ScheduledExamSchema } from "@/lib/schemas/examSchedule";
 import { DetailModal } from "@/components/DetailModal";
 import { ScheduledExamFormModal } from "./ScheduledExamFormModal";
@@ -42,7 +43,12 @@ const statusVariant: Record<string, BadgeVariant> = {
   upcoming: "info",
   ongoing: "warning",
   completed: "success",
+  cancelled: "danger",
 };
+
+// Status derived from the exam DATE (like the Exams list), so a paper doesn't stay
+// "Upcoming" forever after its date passes; a manual "cancelled" is preserved.
+const effStatus = (e: ScheduledExam) => examStatus(e);
 
 const tabs = ["All", "Upcoming", "Ongoing", "Completed"];
 
@@ -53,7 +59,7 @@ export default function ExamSchedulePage() {
   // The status tab is deliberately left out of the server filters: the stat
   // cards need per-status counts across the whole (otherwise filtered) set, so
   // the status narrowing is applied during render instead.
-  const filters = useMemo(() => ({ search, status: "All" }), [search]);
+  const filters = useMemo(() => ({ search, status: "All", limit: 500 }), [search]);
 
   const { items, loading, error, refetch, save, remove, saving, deleting } = useResource(
     examScheduleApi,
@@ -69,16 +75,16 @@ export default function ExamSchedulePage() {
 
   // Rows for the table only — stat cards keep counting the full `items`.
   const visible = useMemo(
-    () => (filter === "All" ? items : items.filter((e) => e.status === filter.toLowerCase())),
+    () => (filter === "All" ? items : items.filter((e) => effStatus(e) === filter.toLowerCase())),
     [items, filter]
   );
 
   const counts = useMemo(
     () => ({
       total: items.length,
-      upcoming: items.filter((e) => e.status === "upcoming").length,
-      ongoing: items.filter((e) => e.status === "ongoing").length,
-      completed: items.filter((e) => e.status === "completed").length,
+      upcoming: items.filter((e) => effStatus(e) === "upcoming").length,
+      ongoing: items.filter((e) => effStatus(e) === "ongoing").length,
+      completed: items.filter((e) => effStatus(e) === "completed").length,
     }),
     [items]
   );
@@ -212,8 +218,8 @@ export default function ExamSchedulePage() {
       header: "Status",
       sortable: true,
       render: (e) => (
-        <Badge variant={statusVariant[e.status] ?? "default"} className="capitalize">
-          {e.status}
+        <Badge variant={statusVariant[effStatus(e)] ?? "default"} className="capitalize">
+          {effStatus(e)}
         </Badge>
       ),
     },
@@ -365,7 +371,7 @@ export default function ExamSchedulePage() {
                 { label: "Room", value: viewing.room },
                 { label: "Invigilator", value: viewing.invigilator },
                 { label: "Total marks", value: viewing.totalMarks },
-                { label: "Status", value: <span className="capitalize">{viewing.status}</span> },
+                { label: "Status", value: <span className="capitalize">{effStatus(viewing)}</span> },
               ]
             : []
         }

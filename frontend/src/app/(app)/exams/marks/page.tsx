@@ -19,7 +19,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useClassOptions } from "@/hooks/useClassOptions";
 import { useSubjectOptions } from "@/hooks/useSubjectOptions";
-import { listStudents } from "@/lib/api/students";
+import { fetchAllStudents } from "@/lib/api/students";
 import { examsApi, type Exam } from "@/lib/api/exams";
 import { getMarks, saveMarks, type MarkRecord } from "@/lib/api/marks";
 import { isValidDateString, TODAY_ISO } from "@/lib/dates";
@@ -75,7 +75,13 @@ export default function MarkEntryPage() {
   const [selectedSection, setSelectedSection] = useState("");
   const [selectedSubject, setSelectedSubject] = useState("");
   const [selectedExam,    setSelectedExam]    = useState("");
-  const [totalMarks,      setTotalMarks]      = useState(100);
+  // maxMarks is tracked PER SUBJECT (a /100 theory and a /30 practical differ), so the
+  // %/grade on screen and the saved maxMarks are always correct for the subject shown.
+  const [maxBySubject, setMaxBySubject] = useState<Record<string, number>>({});
+  const examDefaultTotal = exams.find((e) => e.name === selectedExam)?.totalMarks || 100;
+  // The max for the subject currently on screen — the sheet shows one subject at a time,
+  // so this single value correctly drives the whole visible sheet.
+  const totalMarks = Math.max(1, maxBySubject[selectedSubject] ?? examDefaultTotal);
 
   // Default to the first real subject/exam once they load, so nothing is invented.
   useEffect(() => {
@@ -131,7 +137,7 @@ export default function MarkEntryPage() {
     }
     setLoading(true);
     Promise.all([
-      listStudents({ className: selectedClass }),
+      fetchAllStudents({ className: selectedClass, status: "active" }),
       getMarks(selectedExam, selectedClass, selectedSection),
     ])
       .then(([students, savedMarks]) => {
@@ -154,6 +160,13 @@ export default function MarkEntryPage() {
               `${selectedClass}|${selectedSection}|${m.subject}|${selectedExam}|${m.studentId}`
             ] = String(m.marks);
           }
+          return next;
+        });
+        // Restore each subject's real maxMarks so a /30 practical doesn't render
+        // against /100 (and re-saving never rewrites it to the wrong total).
+        setMaxBySubject((prev) => {
+          const next = { ...prev };
+          for (const m of savedMarks) next[m.subject] = m.maxMarks;
           return next;
         });
 
@@ -394,8 +407,14 @@ export default function MarkEntryPage() {
           <Input
             label="Total Marks"
             type="number"
+            min={1}
             value={totalMarks}
-            onChange={(e) => setTotalMarks(parseInt(e.target.value) || 100)}
+            onChange={(e) =>
+              setMaxBySubject((prev) => ({
+                ...prev,
+                [selectedSubject]: Math.max(1, parseInt(e.target.value) || examDefaultTotal),
+              }))
+            }
           />
         </CardContent>
       </Card>
