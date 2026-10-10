@@ -8,18 +8,31 @@ import { Student } from "../students/student.model.js";
 import { sendEmail, isEmailConfigured } from "../../utils/email.js";
 import { notifySchool } from "../notifications/notification.model.js";
 import { ApiError } from "../../utils/ApiError.js";
+import { isRealDate, maxToday } from "../../utils/dates.js";
 import { env } from "../../config/env.js";
 
 const router = Router();
 router.use(requireAuth);
 
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+// A real calendar date that isn't in the future — you can't mark attendance for a
+// day that hasn't happened yet. maxToday() adds one day of grace for UTC-vs-local skew.
+const markDate = z
+  .string()
+  .regex(ISO_DATE, "Date must be YYYY-MM-DD")
+  .refine(isRealDate, "That date doesn't exist on the calendar.")
+  .refine((d) => d <= maxToday(), "You can't mark attendance for a future date.");
+
+// Attendance is staff data — reading a class register is limited to teaching/admin
+// roles (students/parents see their own figures via the portal, not these routes).
+const canRead = requireRole("super_admin", "school_admin", "principal", "teacher");
+
 const listQuery = z.object({
   className: z.string().min(1),
   section: z.string().min(1),
-  date: z.string().min(1),
+  date: z.string().regex(ISO_DATE, "date must be YYYY-MM-DD").refine(isRealDate, "Invalid date."),
 });
-
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 const summaryQuery = z.object({
   className: z.string().min(1),
@@ -61,7 +74,7 @@ function attendancePercent(c: {
  * student with no marks still appears with zeros) plus a per-day roll-up for
  * charts. Scoped to the caller's school.
  */
-router.get("/summary", validate(summaryQuery, "query"), async (req, res, next) => {
+router.get("/summary", canRead, validate(summaryQuery, "query"), async (req, res, next) => {
   try {
     const { className, section, from, to } = parsed<z.infer<typeof summaryQuery>>(req, "query");
     const schoolId = req.user!.schoolId;
@@ -191,7 +204,7 @@ router.get(
 );
 
 /** Saved roll-call for one class + section on one date. */
-router.get("/", validate(listQuery, "query"), async (req, res, next) => {
+router.get("/", canRead, validate(listQuery, "query"), async (req, res, next) => {
   try {
     const { className, section, date } = parsed<z.infer<typeof listQuery>>(req, "query");
     const rows = await Attendance.find({
@@ -216,7 +229,7 @@ router.get("/", validate(listQuery, "query"), async (req, res, next) => {
 const saveBody = z.object({
   className: z.string().min(1),
   section: z.string().min(1),
-  date: z.string().min(1),
+  date: markDate,
   records: z
     .array(
       z.object({
@@ -297,7 +310,7 @@ router.post(
 const notifyBody = z.object({
   className: z.string().min(1),
   section: z.string().min(1),
-  date: z.string().regex(ISO_DATE, "date must be YYYY-MM-DD"),
+  date: markDate,
 });
 
 /**

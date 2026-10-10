@@ -29,7 +29,7 @@ import { cn } from "@/lib/utils";
 import { exportToCsv } from "@/lib/exportCsv";
 import { exportTablePdf } from "@/lib/exportPdf";
 import { useClassOptions } from "@/hooks/useClassOptions";
-import { listStudents } from "@/lib/api/students";
+import { fetchAllStudents } from "@/lib/api/students";
 import {
   getAttendance,
   getAttendanceSummary,
@@ -205,7 +205,12 @@ export default function AttendancePage() {
         return;
       }
       setLoading(true);
-      Promise.all([listStudents({ className }), getAttendance(className, section, date)])
+      // Full roster (uncapped) and ACTIVE students only — you take attendance for
+      // currently-enrolled students, not transferred/inactive/alumni ones.
+      Promise.all([
+        fetchAllStudents({ className, status: "active" }),
+        getAttendance(className, section, date),
+      ])
         .then(([students, saved]) => {
           if (cancelled) return;
           const rows: Row[] = (students as Student[])
@@ -668,6 +673,7 @@ export default function AttendancePage() {
           <input
             type="date"
             value={date}
+            max={todayIso()}
             onChange={(e) => setDate(e.target.value)}
             className="focus-ring h-9 rounded-md border border-border bg-surface px-2.5 text-sm text-text"
             aria-label="Attendance date"
@@ -812,6 +818,7 @@ export default function AttendancePage() {
             <input
               type="month"
               value={reportMonth}
+              max={currentMonth()}
               onChange={(e) => setReportMonth(e.target.value)}
               className="focus-ring h-9 rounded-md border border-border bg-surface px-2.5 text-sm text-text"
               aria-label="Report month"
