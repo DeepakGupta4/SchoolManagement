@@ -77,13 +77,9 @@ export async function runAutoAbsentForAllSchools(now: Date = new Date()): Promis
       await Attendance.bulkWrite(
         toInsert.map((rec) => ({
           updateOne: {
-            filter: {
-              schoolId: rec.schoolId,
-              className: rec.className,
-              section: rec.section,
-              date: rec.date,
-              studentId: rec.studentId,
-            },
+            // Match the unique (studentId, date) key so a student already marked under
+            // ANY section today is never duplicated; $setOnInsert keeps existing marks.
+            filter: { schoolId: rec.schoolId, studentId: rec.studentId, date: rec.date },
             update: { $setOnInsert: rec },
             upsert: true,
           },

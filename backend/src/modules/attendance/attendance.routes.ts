@@ -5,6 +5,7 @@ import { requireAuth, requireRole } from "../../middleware/auth.js";
 import { validate, parsed } from "../../middleware/validate.js";
 import { Attendance, ATTENDANCE_STATUSES } from "./attendance.model.js";
 import { Student } from "../students/student.model.js";
+import { Holiday } from "../holidays/holiday.model.js";
 import { sendEmail, isEmailConfigured } from "../../utils/email.js";
 import { notifySchool } from "../notifications/notification.model.js";
 import { ApiError } from "../../utils/ApiError.js";
@@ -27,6 +28,9 @@ const markDate = z
 // Attendance is staff data — reading a class register is limited to teaching/admin
 // roles (students/parents see their own figures via the portal, not these routes).
 const canRead = requireRole("super_admin", "school_admin", "principal", "teacher");
+
+/** True when a YYYY-MM-DD date falls on a Sunday (the weekly holiday). */
+const isSundayIso = (d: string) => new Date(`${d}T00:00:00Z`).getUTCDay() === 0;
 
 const listQuery = z.object({
   className: z.string().min(1),
@@ -279,10 +283,24 @@ router.post(
       const { className, section, date, records } = req.body as z.infer<typeof saveBody>;
       const schoolId = req.user!.schoolId;
 
+      // The school is closed on Sundays and on any holiday — attendance isn't taken
+      // then (matches the auto-absent sweep and the marking UI).
+      if (isSundayIso(date)) {
+        throw ApiError.conflict("Sunday is a weekly holiday — attendance isn't taken.");
+      }
+      const holiday = await Holiday.findOne({ schoolId, date });
+      if (holiday) {
+        throw ApiError.conflict(
+          `School is closed on ${date} (${holiday.name}). Attendance isn't taken on a holiday.`
+        );
+      }
+
       await Attendance.bulkWrite(
         records.map((r) => ({
           updateOne: {
-            filter: { schoolId, className, section, date, studentId: r.studentId },
+            // One mark per student per day — match on (studentId, date) so re-saving
+            // (even under a different section) updates the single record, never dups.
+            filter: { schoolId, studentId: r.studentId, date },
             update: { $set: { ...r, schoolId, className, section, date } },
             upsert: true,
           },
