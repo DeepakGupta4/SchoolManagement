@@ -8,6 +8,7 @@ import { StoredDocument } from "../documents/document.model.js";
 import { SchoolClass } from "../classes/class.model.js";
 import { ApiError } from "../../utils/ApiError.js";
 import { createCrudRouter } from "../../utils/crudRouter.js";
+import { studentRosterScope } from "../../utils/teacherScope.js";
 import { ISO_DATE, isRealDate, serverToday, maxToday } from "../../utils/dates.js";
 
 const PHONE = /^\d{10}$/;
@@ -103,6 +104,9 @@ export default createCrudRouter({
   createSchema: studentSchema,
   searchFields: ["firstName", "lastName", "admissionNo", "email", "rollNo"],
   filterFields: ["className", "status", "section"],
+  // A class teacher only ever reads their own class's roster (list AND detail);
+  // office/admin roles are unrestricted. Writes stay office-only (default roles).
+  readScope: studentRosterScope,
   notifyOnCreate: (s) => ({
     type: "student",
     title: "New student admitted",

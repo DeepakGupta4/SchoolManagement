@@ -592,7 +592,7 @@ router.post(
  * headline figures the fee dashboard needs. All derived from the register and
  * the student-centric ledger — never stored, so it can't drift.
  */
-router.get("/summary", async (req, res, next) => {
+router.get("/summary", canCollect, async (req, res, next) => {
   try {
     const schoolId = req.user!.schoolId;
     const today = new Date().toISOString().slice(0, 10);

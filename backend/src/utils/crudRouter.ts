@@ -31,6 +31,14 @@ export interface CrudOptions<T> {
   writeRoles?: UserRole[];
   /** When set, restricts who may READ (list + get). Default: any authenticated user. */
   readRoles?: UserRole[];
+  /**
+   * A mandatory extra read filter, merged into EVERY list and get-by-id query
+   * AFTER schoolId and the client's own filters (so it always wins and can't be
+   * widened via query params). Return null/undefined for no restriction. Used to
+   * scope a role's reads — e.g. a teacher limited to their own class — without a
+   * per-module custom route.
+   */
+  readScope?: (req: Request) => Promise<Record<string, unknown> | null | undefined>;
   /** Default sort. Newest first unless a module wants otherwise. */
   sort?: Record<string, 1 | -1>;
   /** Extra routes mounted before the generic ones (so they can shadow `/:id`). */
@@ -78,6 +86,7 @@ export function createCrudRouter<T>(options: CrudOptions<T>): Router {
     filterFields = [],
     writeRoles = DEFAULT_WRITE_ROLES,
     readRoles,
+    readScope,
     sort = { createdAt: -1 },
     extend,
     notifyOnCreate,
@@ -126,6 +135,13 @@ export function createCrudRouter<T>(options: CrudOptions<T>): Router {
         filter.$or = searchFields.map((field) => ({ [field]: rx }));
       }
 
+      // A role-based mandatory scope (e.g. a teacher limited to their own class),
+      // applied LAST so it overrides any client-chosen filter and can't be widened.
+      if (readScope) {
+        const scope = await readScope(req);
+        if (scope) Object.assign(filter, scope);
+      }
+
       const [docs, total] = await Promise.all([
         model
           .find(filter)
@@ -146,7 +162,14 @@ export function createCrudRouter<T>(options: CrudOptions<T>): Router {
 
   router.get("/:id", canRead, async (req, res, next) => {
     try {
-      const doc = await model.findOne({ _id: req.params.id, schoolId: req.user!.schoolId });
+      // The same role scope guards detail reads, so a teacher can't fetch an
+      // out-of-class record by guessing its id (it simply reads as not found).
+      const scope = readScope ? await readScope(req) : null;
+      const doc = await model.findOne({
+        _id: req.params.id,
+        schoolId: req.user!.schoolId,
+        ...(scope ?? {}),
+      });
       if (!doc) throw ApiError.notFound("Record not found.");
       res.json({ data: toPublic(doc as HydratedDocument<T>) });
     } catch (err) {

@@ -22,8 +22,10 @@ import { useSubjectOptions } from "@/hooks/useSubjectOptions";
 import { fetchAllStudents } from "@/lib/api/students";
 import { examsApi, type Exam } from "@/lib/api/exams";
 import { getMarks, saveMarks, type MarkRecord } from "@/lib/api/marks";
+import { getMyTeacher } from "@/lib/api/teachers";
 import { isValidDateString, TODAY_ISO } from "@/lib/dates";
 import type { Student as ApiStudent } from "@/types/student";
+import { useAuthStore } from "@/store";
 
 type Row = { id: string; name: string; roll: number };
 
@@ -53,6 +55,11 @@ export default function MarkEntryPage() {
   const { toast } = useToast();
   const { classOptions, sectionOptions } = useClassOptions();
   const { subjectOptions } = useSubjectOptions();
+
+  // A teacher only enters marks for the classes they teach; other roles are
+  // unrestricted. `isTeacher` gates all the class-scoping added below.
+  const { user } = useAuthStore();
+  const isTeacher = user?.role === "teacher";
 
   // Real exams the school created power the exam picker. Full records are kept so
   // the selected exam's own date can gate mark entry.
@@ -96,6 +103,46 @@ export default function MarkEntryPage() {
       setSelectedExam(examNames[0]);
     }
   }, [examNames, selectedExam]);
+
+  // Classes the signed-in teacher is allowed to enter marks for. Null means
+  // "no restriction" (any non-teacher role). Loaded from the teacher's own
+  // record: the classes they teach plus the one they're class-teacher of.
+  const [allowedClasses, setAllowedClasses] = useState<string[] | null>(null);
+  useEffect(() => {
+    if (user?.role !== "teacher") return;
+    let cancelled = false;
+    getMyTeacher()
+      .then((t) => {
+        if (cancelled || !t) return;
+        const list = [...t.classes, t.classTeacherOf].filter(
+          (c): c is string => Boolean(c)
+        );
+        setAllowedClasses([...new Set(list)]);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.role]);
+
+  // A teacher's class picker is narrowed to their classes; everyone else sees all.
+  const classSelectOptions =
+    isTeacher && allowedClasses
+      ? classOptions.filter((o) => allowedClasses.includes(o.value))
+      : classOptions;
+
+  // Auto-select an allowed class for a teacher when the current choice is empty
+  // or not one of theirs, so the sheet never sits on a class they can't pick.
+  useEffect(() => {
+    if (!isTeacher || !allowedClasses || allowedClasses.length === 0) return;
+    if (
+      (!selectedClass || !allowedClasses.includes(selectedClass)) &&
+      selectedClass !== allowedClasses[0]
+    ) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSelectedClass(allowedClasses[0]);
+    }
+  }, [isTeacher, allowedClasses, selectedClass]);
 
   const [roster, setRoster] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
@@ -381,7 +428,7 @@ export default function MarkEntryPage() {
             value={selectedClass}
             onChange={(e) => setSelectedClass(e.target.value)}
             placeholder="All classes"
-            options={classOptions}
+            options={classSelectOptions}
           />
           <Select
             label="Section"

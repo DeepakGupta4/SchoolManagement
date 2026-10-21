@@ -9,6 +9,7 @@ import { Holiday } from "../holidays/holiday.model.js";
 import { sendEmail, isEmailConfigured } from "../../utils/email.js";
 import { notifySchool } from "../notifications/notification.model.js";
 import { ApiError } from "../../utils/ApiError.js";
+import { assertTeacherMayAccessClass } from "../../utils/teacherScope.js";
 import { isRealDate, maxToday } from "../../utils/dates.js";
 import { env } from "../../config/env.js";
 
@@ -81,6 +82,8 @@ function attendancePercent(c: {
 router.get("/summary", canRead, validate(summaryQuery, "query"), async (req, res, next) => {
   try {
     const { className, section, from, to } = parsed<z.infer<typeof summaryQuery>>(req, "query");
+    // A teacher may only read a class they teach; office/admin are unrestricted.
+    await assertTeacherMayAccessClass(req, className);
     const schoolId = req.user!.schoolId;
     const match = { schoolId, className, section, date: { $gte: from, $lte: to } };
 
@@ -177,6 +180,8 @@ router.get(
         Attendance.find(match).select("date status").sort({ date: -1 }).lean(),
       ]);
       if (!student) throw ApiError.notFound("Student not found.");
+      // A teacher may only view a student in a class they teach.
+      await assertTeacherMayAccessClass(req, student.className);
 
       const counts = { present: 0, absent: 0, late: 0, halfDay: 0, leave: 0, total: 0 };
       for (const r of rows) {
@@ -211,6 +216,7 @@ router.get(
 router.get("/", canRead, validate(listQuery, "query"), async (req, res, next) => {
   try {
     const { className, section, date } = parsed<z.infer<typeof listQuery>>(req, "query");
+    await assertTeacherMayAccessClass(req, className);
     const rows = await Attendance.find({
       schoolId: req.user!.schoolId,
       className,
@@ -282,6 +288,8 @@ router.post(
     try {
       const { className, section, date, records } = req.body as z.infer<typeof saveBody>;
       const schoolId = req.user!.schoolId;
+      // A teacher may only mark attendance for a class they teach.
+      await assertTeacherMayAccessClass(req, className);
 
       // The school is closed on Sundays and on any holiday — attendance isn't taken
       // then (matches the auto-absent sweep and the marking UI).
@@ -347,6 +355,8 @@ router.post(
     try {
       const { className, section, date } = req.body as z.infer<typeof notifyBody>;
       const schoolId = req.user!.schoolId;
+      // A teacher may only notify absentees for a class they teach.
+      await assertTeacherMayAccessClass(req, className);
 
       const absentees = await Attendance.find({
         schoolId,

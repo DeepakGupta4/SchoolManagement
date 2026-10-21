@@ -262,8 +262,7 @@ const TEACHER_NAV_HREFS = new Set<string>([
   "/notices",
   "/events",
   "/holidays",
-  // Profile & self-service
-  "/settings",
+  // Self-service (no school Settings — that's office/admin config, incl. the data-reset danger zone)
   "/leave/my",
 ]);
 

@@ -30,6 +30,8 @@ import { exportToCsv } from "@/lib/exportCsv";
 import { exportTablePdf } from "@/lib/exportPdf";
 import { useClassOptions } from "@/hooks/useClassOptions";
 import { fetchAllStudents } from "@/lib/api/students";
+import { getMyTeacher } from "@/lib/api/teachers";
+import { useAuthStore } from "@/store";
 import {
   getAttendance,
   getAttendanceSummary,
@@ -119,10 +121,15 @@ const pctBar = (pct: number) =>
 export default function AttendancePage() {
   const { toast } = useToast();
   const { classOptions, sectionOptions, defaultClass } = useClassOptions();
+  const { user } = useAuthStore();
+  const isTeacher = user?.role === "teacher";
 
   const [className, setClassName] = useState("");
   const [section, setSection] = useState("");
   const [date, setDate] = useState(todayIso());
+  // A teacher may only take attendance for the classes they teach. Populated from
+  // their own record (stays null for every other role, which keeps all classes).
+  const [allowedClasses, setAllowedClasses] = useState<string[] | null>(null);
 
   const [roster, setRoster] = useState<Row[]>([]);
   const [attendance, setAttendance] = useState<Record<string, AttendanceStatus>>({});
@@ -165,6 +172,50 @@ export default function AttendancePage() {
     const t = setTimeout(() => setClassName(defaultClass), 0);
     return () => clearTimeout(t);
   }, [className, defaultClass]);
+
+  // Teachers are limited to the classes they teach. Load their own record once
+  // (the server already 403s a class a teacher doesn't teach — this just keeps the
+  // picker honest). Best-effort: on failure the picker is left unrestricted.
+  useEffect(() => {
+    if (!isTeacher) {
+      setAllowedClasses(null);
+      return;
+    }
+    let cancelled = false;
+    getMyTeacher()
+      .then((t) => {
+        if (cancelled || !t) return;
+        const unique = [...new Set([...t.classes, t.classTeacherOf].filter(Boolean))] as string[];
+        setAllowedClasses(unique);
+      })
+      .catch(() => {
+        /* Best-effort — leave the picker unrestricted if the lookup fails. */
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.role]);
+
+  // Class <Select> options: a teacher sees only their own classes; every other
+  // role sees the full list unchanged.
+  const teacherClassOptions = useMemo(
+    () =>
+      isTeacher && allowedClasses
+        ? classOptions.filter((o) => allowedClasses.includes(o.value))
+        : classOptions,
+    [isTeacher, allowedClasses, classOptions]
+  );
+
+  // Keep a teacher's selection inside their allowed set: snap to the first allowed
+  // class when nothing is chosen yet, or when a stale/forbidden class is selected.
+  // The `!== className` guard stops this from re-firing in a loop.
+  useEffect(() => {
+    if (!isTeacher || !allowedClasses || allowedClasses.length === 0) return;
+    if ((!className || !allowedClasses.includes(className)) && allowedClasses[0] !== className) {
+      setClassName(allowedClasses[0]);
+    }
+  }, [isTeacher, allowedClasses, className]);
 
   // School holidays — a matching date closes the marking UI entirely.
   const [holidays, setHolidays] = useState<Holiday[]>([]);
@@ -665,7 +716,7 @@ export default function AttendancePage() {
       <Card className="overflow-hidden">
         <div className="flex flex-wrap items-center gap-3 border-b border-border px-5 py-4">
           <div className="w-36">
-            <Select value={className} onChange={(e) => setClassName(e.target.value)} placeholder="Select class" options={classOptions} aria-label="Select class" />
+            <Select value={className} onChange={(e) => setClassName(e.target.value)} placeholder="Select class" options={teacherClassOptions} aria-label="Select class" />
           </div>
           <div className="w-24">
             <Select value={section} onChange={(e) => setSection(e.target.value)} placeholder="Section" options={sectionOptions} aria-label="Select section" />

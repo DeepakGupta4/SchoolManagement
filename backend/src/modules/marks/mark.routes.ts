@@ -4,6 +4,7 @@ import { z } from "zod";
 import { requireAuth, requireRole } from "../../middleware/auth.js";
 import { validate, parsed } from "../../middleware/validate.js";
 import { ApiError } from "../../utils/ApiError.js";
+import { assertTeacherMayAccessClass } from "../../utils/teacherScope.js";
 import { Mark } from "./mark.model.js";
 import { Exam } from "../exams/exam.model.js";
 import { Student } from "../students/student.model.js";
@@ -63,6 +64,8 @@ router.get(
   async (req, res, next) => {
   try {
     const { examName, className, section } = parsed<z.infer<typeof listQuery>>(req, "query");
+    // A teacher may only read marks for a class they teach; office/admin unrestricted.
+    await assertTeacherMayAccessClass(req, className);
     const rows = await Mark.find({
       schoolId: req.user!.schoolId,
       examName,
@@ -117,6 +120,8 @@ router.post(
     try {
       const { examName, className, section, records } = req.body as z.infer<typeof saveBody>;
       const schoolId = req.user!.schoolId;
+      // A teacher may only enter marks for a class they teach.
+      await assertTeacherMayAccessClass(req, className);
 
       // Marks can't be entered before the exam has taken place. Enforce server-
       // side (matching the UI lock) so the future-date guard can't be bypassed

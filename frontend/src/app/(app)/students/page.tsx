@@ -24,6 +24,8 @@ import { createStudent, deleteStudent, updateStudent, fetchAllStudents } from "@
 import { getDashboardInsights } from "@/lib/api/dashboard";
 import { getFeeSummary } from "@/lib/api/feeLedger";
 import { getMySchool, type SchoolProfile } from "@/lib/api/schools";
+import { getMyTeacher } from "@/lib/api/teachers";
+import { useAuthStore } from "@/store";
 import { printAdmissionForm } from "@/lib/admissionForm";
 import { fullName, type Student, type StudentFormValues, type StudentStatus } from "@/types/student";
 import { exportTablePdf } from "@/lib/exportPdf";
@@ -94,6 +96,13 @@ function StudentsPageInner() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
+  // A class teacher gets a READ-ONLY roster of only their own class. The server
+  // enforces this (readScope on /api/students); here we lock the UI to match —
+  // hide write actions, lock the class filter, and show class-scoped stats.
+  const { user } = useAuthStore();
+  const isTeacher = user?.role === "teacher";
+  const [myClass, setMyClass] = useState<{ className: string; section: string } | null>(null);
+
   const [search, setSearch] = useState("");
   const [className, setClassName] = useState("");
   const [status, setStatus] = useState("");
@@ -149,6 +158,18 @@ function StudentsPageInner() {
     return () => { cancelled = true; };
   }, []);
 
+  // The teacher's own class — for the locked class chip and header line.
+  useEffect(() => {
+    if (user?.role !== "teacher") return;
+    let cancelled = false;
+    getMyTeacher()
+      .then((t) => {
+        if (!cancelled && t) setMyClass({ className: t.classTeacherOf ?? "", section: t.classTeacherSection ?? "" });
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [user?.role]);
+
   // Headline stats come from the server aggregate (uncapped, whole-school),
   // independent of the table's class filter and the 500-row browse cap — so
   // "Total students" / "Fees pending" are never a capped or single-class subtotal.
@@ -164,7 +185,35 @@ function StudentsPageInner() {
   } | null>(null);
   const [aggLoading, setAggLoading] = useState(true);
   useEffect(() => {
+    if (!user) return; // wait until the role is known
     let cancelled = false;
+
+    if (user.role === "teacher") {
+      // Class-scoped stats from the teacher's OWN roster — the server already
+      // restricts /api/students to their class, so this is never whole-school.
+      // "outstanding" here is the COUNT of their students with dues (not a money
+      // total — teachers don't see school finance).
+      setAggLoading(true);
+      fetchAllStudents({})
+        .then((rows) => {
+          if (cancelled) return;
+          setAgg({
+            total: rows.length,
+            active: rows.filter((s) => s.status === "active").length,
+            outstanding: rows.filter((s) => s.feeDue > 0).length,
+            low: rows.filter((s) => s.attendancePercent < 75).length,
+          });
+          setAggLoading(false);
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setAgg({ total: null, active: null, outstanding: null, low: null });
+          setAggLoading(false);
+        });
+      return () => { cancelled = true; };
+    }
+
+    // Office/admin: whole-school aggregates (independent of the table filter).
     Promise.allSettled([getDashboardInsights(), getFeeSummary()]).then(([insightsR, feeR]) => {
       if (cancelled) return;
       const insights = insightsR.status === "fulfilled" ? insightsR.value : null;
@@ -180,7 +229,7 @@ function StudentsPageInner() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [user]);
 
   const openCreate = () => {
     setEditing(null);
@@ -401,20 +450,24 @@ function StudentsPageInner() {
           >
             <Download className="size-4" />
           </button>
-          <button
-            onClick={() => openEdit(s)}
-            aria-label={`Edit ${fullName(s)}`}
-            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
-          >
-            <Pencil className="size-4" />
-          </button>
-          <button
-            onClick={() => setDeleting(s)}
-            aria-label={`Delete ${fullName(s)}`}
-            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-danger-soft hover:text-danger"
-          >
-            <Trash2 className="size-4" />
-          </button>
+          {!isTeacher && (
+            <>
+              <button
+                onClick={() => openEdit(s)}
+                aria-label={`Edit ${fullName(s)}`}
+                className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+              >
+                <Pencil className="size-4" />
+              </button>
+              <button
+                onClick={() => setDeleting(s)}
+                aria-label={`Delete ${fullName(s)}`}
+                className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-danger-soft hover:text-danger"
+              >
+                <Trash2 className="size-4" />
+              </button>
+            </>
+          )}
         </div>
       ),
     },
@@ -426,7 +479,11 @@ function StudentsPageInner() {
         <div>
           <h1 className="text-xl font-semibold text-text">Students</h1>
           <p className="mt-0.5 text-sm text-muted">
-            Manage enrolment, records and academic profiles.
+            {isTeacher
+              ? myClass?.className
+                ? `Your class roster · ${myClass.className}${myClass.section ? ` · Section ${myClass.section}` : ""}`
+                : "Your class roster"
+              : "Manage enrolment, records and academic profiles."}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -434,14 +491,18 @@ function StudentsPageInner() {
             <FileText className="size-4" />
             {exporting ? "Exporting…" : "Export PDF"}
           </Button>
-          <Button variant="outline" onClick={() => setBulkOpen(true)}>
-            <UsersRound className="size-4" />
-            Bulk add
-          </Button>
-          <Button onClick={openCreate}>
-            <Plus className="size-4" />
-            Add student
-          </Button>
+          {!isTeacher && (
+            <>
+              <Button variant="outline" onClick={() => setBulkOpen(true)}>
+                <UsersRound className="size-4" />
+                Bulk add
+              </Button>
+              <Button onClick={openCreate}>
+                <Plus className="size-4" />
+                Add student
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
@@ -451,7 +512,7 @@ function StudentsPageInner() {
         ) : (
           <>
             <StatCard
-              label="Total students"
+              label={isTeacher ? "My students" : "Total students"}
               value={agg?.total != null ? String(agg.total) : "—"}
               icon={Users}
               gradient="gradient-indigo"
@@ -475,8 +536,8 @@ function StudentsPageInner() {
               }}
             />
             <StatCard
-              label="Fees pending"
-              value={agg?.outstanding != null ? inr.format(agg.outstanding) : "—"}
+              label={isTeacher ? "With fees due" : "Fees pending"}
+              value={agg?.outstanding != null ? (isTeacher ? String(agg.outstanding) : inr.format(agg.outstanding)) : "—"}
               icon={IndianRupee}
               gradient="gradient-amber"
               active={quick === "fees"}
@@ -505,15 +566,23 @@ function StudentsPageInner() {
             aria-label="Search students"
           />
         </div>
-        <div className="w-40">
-          <Select
-            value={className}
-            onChange={(e) => setClassName(e.target.value)}
-            placeholder="All classes"
-            options={classOptions}
-            aria-label="Filter by class"
-          />
-        </div>
+        {isTeacher ? (
+          <div className="flex h-10 items-center rounded-md border border-border bg-surface-sunken px-3 text-sm text-muted">
+            {myClass?.className
+              ? `${myClass.className}${myClass.section ? ` · ${myClass.section}` : ""}`
+              : "Your class"}
+          </div>
+        ) : (
+          <div className="w-40">
+            <Select
+              value={className}
+              onChange={(e) => setClassName(e.target.value)}
+              placeholder="All classes"
+              options={classOptions}
+              aria-label="Filter by class"
+            />
+          </div>
+        )}
         <div className="w-40">
           <Select
             value={status}
@@ -573,14 +642,16 @@ function StudentsPageInner() {
                     ? `No students have a birthday in ${MONTH_NAMES[Number(birthdayMonth) - 1] ?? "this month"}.`
                     : search || className || status
                       ? "Try clearing your filters to see more results."
-                      : "Add your first student to get started."
+                      : isTeacher
+                        ? "No students are in your class yet. Please contact the school office."
+                        : "Add your first student to get started."
             }
             emptyAction={
               isFiltered ? (
                 <Button variant="outline" onClick={clearAll}>
-                  Show all students
+                  {isTeacher ? "Clear filters" : "Show all students"}
                 </Button>
-              ) : (
+              ) : isTeacher ? undefined : (
                 <Button variant="outline" onClick={openCreate}>
                   <Plus className="size-4" />
                   Add student
