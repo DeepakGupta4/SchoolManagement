@@ -21,6 +21,7 @@ export default createCrudRouter({
   createSchema: assignmentSchema,
   searchFields: ["title", "subject", "class", "teacher", "code"],
   filterFields: ["status", "class"],
+  writeRoles: ["super_admin", "school_admin", "principal", "teacher"],
   // Reference numbers continue the per-school sequence rather than restarting.
   generate: (seq) => ({ code: `A${String(seq + 1).padStart(3, "0")}` }),
 });

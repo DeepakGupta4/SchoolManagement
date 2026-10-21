@@ -86,6 +86,20 @@ export async function countTeachers(filters: TeacherFilters = {}): Promise<numbe
   return result.meta?.total ?? result.data.length;
 }
 
+/** The logged-in teacher's OWN record (matched by login email on the server).
+ *  Lets a teacher load their dashboard without the admin/office-only full
+ *  teacher list (GET /api/teachers is readRoles-gated and 403s for teachers). */
+export async function getMyTeacher(): Promise<Teacher | null> {
+  try {
+    return await apiRequest<Teacher>("/api/teachers/me");
+  } catch (e) {
+    if (e instanceof Error && "status" in e && (e as { status: number }).status === 404) {
+      return null;
+    }
+    throw e;
+  }
+}
+
 export async function getTeacher(id: string): Promise<Teacher | null> {
   try {
     return await apiRequest<Teacher>(`/api/teachers/${id}`);

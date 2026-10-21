@@ -18,4 +18,6 @@ export default createCrudRouter({
   createSchema: bookSchema,
   searchFields: ["title", "author", "isbn"],
   filterFields: ["category"],
+  // The librarian runs the library — let them manage the catalog, not just read it.
+  writeRoles: ["super_admin", "school_admin", "principal", "librarian"],
 });

@@ -21,4 +21,5 @@ export default createCrudRouter({
   createSchema: onlineClassSchema,
   searchFields: ["topic", "subject", "teacher", "klass"],
   filterFields: ["subject", "teacher", "state"],
+  writeRoles: ["super_admin", "school_admin", "principal", "teacher"],
 });

@@ -35,6 +35,7 @@ export default createCrudRouter({
   createSchema: scholarshipSchema,
   searchFields: ["student", "code", "type", "class", "reason"],
   filterFields: ["status"],
+  writeRoles: ["super_admin", "school_admin", "principal", "accountant"],
   afterCreate: resync,
   afterUpdate: resync,
   afterDelete: resync,

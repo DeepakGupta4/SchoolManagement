@@ -20,4 +20,5 @@ export default createCrudRouter({
   createSchema: syllabusSchema,
   searchFields: ["subject", "teacher", "unit", "chapter"],
   filterFields: ["className", "subject", "academicYear", "status"],
+  writeRoles: ["super_admin", "school_admin", "principal", "teacher"],
 });

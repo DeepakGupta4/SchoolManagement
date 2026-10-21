@@ -14,7 +14,12 @@ import { RecentActivity } from "@/components/dashboard/RecentActivity";
 import { UpcomingEvents } from "@/components/dashboard/UpcomingEvents";
 import { TeacherDashboard } from "@/components/dashboard/TeacherDashboard";
 import { ParentDashboard } from "@/components/dashboard/ParentDashboard";
+import { StudentDashboard } from "@/components/dashboard/StudentDashboard";
+import { DriverDashboard } from "@/components/dashboard/DriverDashboard";
+import { StaffDashboard } from "@/components/dashboard/StaffDashboard";
+import { LibrarianDashboard } from "@/components/dashboard/LibrarianDashboard";
 import { useAuthStore } from "@/store";
+import type { UserRole } from "@/types";
 import { useDashboardInsights, type DashboardInsights } from "@/hooks/useDashboardInsights";
 import { fullName } from "@/types/student";
 import { todayIso } from "@/lib/dates";
@@ -622,12 +627,23 @@ function AdminDashboard() {
   );
 }
 
+// Non-admin roles get their OWN portal dashboard and never load the admin
+// aggregates (those are office/HR-gated — they'd 403 and the AdminDashboard would
+// error out, which is exactly what used to break student/driver/staff/librarian).
+const PORTAL_DASHBOARDS: Partial<Record<UserRole, { Comp: React.ComponentType; subtitle: string }>> = {
+  parent: { Comp: ParentDashboard, subtitle: "Your children’s overview and recent updates." },
+  student: { Comp: StudentDashboard, subtitle: "Your attendance, classes and school updates." },
+  driver: { Comp: DriverDashboard, subtitle: "Your assigned routes and daily trips." },
+  staff: { Comp: StaffDashboard, subtitle: "Your profile and self-service." },
+  librarian: { Comp: LibrarianDashboard, subtitle: "Your library at a glance." },
+};
+
 export default function DashboardPage() {
   const { user } = useAuthStore();
+  const portal = user?.role ? PORTAL_DASHBOARDS[user.role] : undefined;
 
-  // Parents never load the admin aggregates (which are staff-gated and would leak
-  // school-wide data). They get their own portal — their children + updates.
-  if (user?.role === "parent") {
+  if (portal) {
+    const { Comp, subtitle } = portal;
     return (
       <div className="flex flex-col gap-5">
         <Card className="relative overflow-hidden">
@@ -636,10 +652,10 @@ export default function DashboardPage() {
             <h1 className="text-xl font-bold text-text sm:text-2xl">
               {getGreeting()}, {user?.name?.split(" ")[0]} 👋
             </h1>
-            <p className="mt-0.5 text-sm text-muted">Your children&rsquo;s overview and recent updates.</p>
+            <p className="mt-0.5 text-sm text-muted">{subtitle}</p>
           </CardContent>
         </Card>
-        <ParentDashboard />
+        <Comp />
       </div>
     );
   }

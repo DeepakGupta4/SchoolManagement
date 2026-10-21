@@ -26,4 +26,5 @@ export default createCrudRouter({
   createSchema: materialSchema,
   searchFields: ["title", "subject", "uploader"],
   filterFields: ["type", "subject", "klass"],
+  writeRoles: ["super_admin", "school_admin", "principal", "teacher"],
 });

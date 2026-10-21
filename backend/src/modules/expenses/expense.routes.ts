@@ -20,4 +20,5 @@ export default createCrudRouter({
   createSchema: expenseSchema,
   searchFields: ["title", "paidTo", "voucherNo", "category"],
   filterFields: ["status", "category"],
+  writeRoles: ["super_admin", "school_admin", "principal", "accountant"],
 });

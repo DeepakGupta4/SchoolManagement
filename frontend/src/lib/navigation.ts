@@ -296,11 +296,27 @@ const ACCOUNTANT_NAV_HREFS = new Set<string>([
 /** Sidebar links a parent may see — their portal dashboard plus read-only school info. */
 const PARENT_NAV_HREFS = new Set<string>(["/dashboard", "/holidays", "/notices"]);
 
+/** A student: their own portal dashboard (attendance/classes/updates) + read-only school info. */
+const STUDENT_NAV_HREFS = new Set<string>(["/dashboard", "/holidays", "/notices"]);
+
+/** Non-teaching staff: self-service home, their own leave, and read-only school info. */
+const STAFF_NAV_HREFS = new Set<string>(["/dashboard", "/leave/my", "/holidays", "/notices"]);
+
+/** A driver: their routes dashboard + read-only school info. */
+const DRIVER_NAV_HREFS = new Set<string>(["/dashboard", "/holidays", "/notices"]);
+
+/** A librarian: the library module they run, plus their dashboard and school info. */
+const LIBRARIAN_NAV_HREFS = new Set<string>(["/dashboard", "/library", "/holidays", "/notices"]);
+
 /** Roles whose navigation is restricted to a specific allow-list. */
 const RESTRICTED_ROLE_HREFS: Partial<Record<UserRole, Set<string>>> = {
   teacher: TEACHER_NAV_HREFS,
   accountant: ACCOUNTANT_NAV_HREFS,
   parent: PARENT_NAV_HREFS,
+  student: STUDENT_NAV_HREFS,
+  staff: STAFF_NAV_HREFS,
+  driver: DRIVER_NAV_HREFS,
+  librarian: LIBRARIAN_NAV_HREFS,
 };
 
 /**

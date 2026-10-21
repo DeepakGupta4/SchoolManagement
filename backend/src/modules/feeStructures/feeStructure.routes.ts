@@ -17,4 +17,5 @@ export default createCrudRouter({
   model: FeeStructure,
   createSchema: feeStructureSchema,
   searchFields: ["code", "class"],
+  writeRoles: ["super_admin", "school_admin", "principal", "accountant"],
 });

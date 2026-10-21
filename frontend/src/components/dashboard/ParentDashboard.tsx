@@ -2,11 +2,11 @@
 
 import { useEffect, useState } from "react";
 import {
-  GraduationCap, CalendarCheck, TrendingUp, Wallet, Bell, Clock, Inbox,
+  GraduationCap, CalendarCheck, TrendingUp, Wallet, Bell, Clock, Inbox, BookOpen, ChevronDown,
 } from "lucide-react";
 import { Avatar, Badge, Card, CardContent, CardHeader, Skeleton } from "@/components/ui";
 import { cn } from "@/lib/utils";
-import { getMyChildren, type PortalChild } from "@/lib/api/portal";
+import { getMyChildren, getChildDetail, type PortalChild, type ChildDetail } from "@/lib/api/portal";
 import { getNotifications, type AppNotification } from "@/lib/api/notifications";
 
 const inr = (n: number) => `₹${n.toLocaleString("en-IN")}`;
@@ -36,6 +36,92 @@ function Stat({ icon: Icon, label, value, tone }: { icon: typeof Wallet; label: 
       </p>
       <p className={cn("mt-0.5 text-lg font-bold leading-none", tone ?? "text-text")}>{value}</p>
     </div>
+  );
+}
+
+function ChildCard({ child: c }: { child: PortalChild }) {
+  const [open, setOpen] = useState(false);
+  const [detail, setDetail] = useState<ChildDetail | "loading" | "error" | null>(null);
+
+  const toggle = () => {
+    const next = !open;
+    setOpen(next);
+    if (next && detail === null) {
+      setDetail("loading");
+      getChildDetail(c.id)
+        .then((d) => setDetail(d))
+        .catch(() => setDetail("error"));
+    }
+  };
+
+  return (
+    <Card className="card-hover">
+      <CardContent className="flex flex-col gap-4">
+        <div className="flex items-center gap-3">
+          <Avatar name={c.name} size="lg" />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-base font-semibold text-text">{c.name}</p>
+            <p className="truncate text-xs text-muted">
+              {c.className}
+              {c.section ? ` · Section ${c.section}` : ""}
+              {c.rollNo ? ` · Roll ${c.rollNo}` : ""}
+            </p>
+          </div>
+          <Badge variant={c.status === "active" ? "success" : "default"}>
+            {c.status === "active" ? "Active" : c.status}
+          </Badge>
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          <Stat icon={CalendarCheck} label="Attendance" value={`${c.attendancePercent}%`} tone={pctTone(c.attendancePercent)} />
+          <Stat icon={TrendingUp} label="Performance" value={`${c.performancePercent}%`} tone={pctTone(c.performancePercent)} />
+          <Stat
+            icon={Wallet}
+            label="Fee due"
+            value={c.feeDue > 0 ? inr(c.feeDue) : "Paid"}
+            tone={c.feeDue > 0 ? "text-danger" : "text-success"}
+          />
+        </div>
+        <button
+          onClick={toggle}
+          className="focus-ring -mt-1 inline-flex items-center justify-center gap-1.5 rounded-md py-1 text-xs font-semibold text-primary transition-colors hover:text-primary-hover"
+        >
+          <BookOpen className="size-3.5" />
+          {open ? "Hide marks" : "View marks"}
+          <ChevronDown className={cn("size-3.5 transition-transform", open && "rotate-180")} />
+        </button>
+        {open && (
+          <div className="rounded-lg bg-surface-sunken p-3">
+            {detail === "loading" ? (
+              <p className="py-3 text-center text-xs text-muted">Loading…</p>
+            ) : detail === "error" || detail === null ? (
+              <p className="py-3 text-center text-xs text-muted">Marks aren&rsquo;t available right now.</p>
+            ) : detail.subjects.length === 0 ? (
+              <p className="py-3 text-center text-xs text-muted">No marks recorded yet.</p>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {detail.subjects.map((s) => (
+                  <div key={s.subject} className="flex items-center gap-2">
+                    <span className="w-28 shrink-0 truncate text-xs text-text">{s.subject}</span>
+                    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-hover">
+                      <div
+                        className={cn(
+                          "h-full rounded-full",
+                          s.percent >= 85 ? "bg-success" : s.percent >= 40 ? "bg-primary" : "bg-danger"
+                        )}
+                        style={{ width: `${Math.min(100, s.percent)}%` }}
+                      />
+                    </div>
+                    <span className="w-14 shrink-0 text-right text-xs font-semibold text-text">
+                      {s.marks}/{s.maxMarks}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -87,34 +173,7 @@ export function ParentDashboard() {
         ) : (
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             {children.map((c) => (
-              <Card key={c.id} className="card-hover">
-                <CardContent className="flex flex-col gap-4">
-                  <div className="flex items-center gap-3">
-                    <Avatar name={c.name} size="lg" />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-base font-semibold text-text">{c.name}</p>
-                      <p className="truncate text-xs text-muted">
-                        {c.className}
-                        {c.section ? ` · Section ${c.section}` : ""}
-                        {c.rollNo ? ` · Roll ${c.rollNo}` : ""}
-                      </p>
-                    </div>
-                    <Badge variant={c.status === "active" ? "success" : "default"}>
-                      {c.status === "active" ? "Active" : c.status}
-                    </Badge>
-                  </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    <Stat icon={CalendarCheck} label="Attendance" value={`${c.attendancePercent}%`} tone={pctTone(c.attendancePercent)} />
-                    <Stat icon={TrendingUp} label="Performance" value={`${c.performancePercent}%`} tone={pctTone(c.performancePercent)} />
-                    <Stat
-                      icon={Wallet}
-                      label="Fee due"
-                      value={c.feeDue > 0 ? inr(c.feeDue) : "Paid"}
-                      tone={c.feeDue > 0 ? "text-danger" : "text-success"}
-                    />
-                  </div>
-                </CardContent>
-              </Card>
+              <ChildCard key={c.id} child={c} />
             ))}
           </div>
         )}

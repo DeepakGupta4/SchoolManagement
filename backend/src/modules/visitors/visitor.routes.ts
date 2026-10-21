@@ -19,4 +19,5 @@ export default createCrudRouter({
   createSchema: visitorSchema,
   searchFields: ["name", "phone", "whomToMeet", "passCode"],
   filterFields: ["purpose", "status"],
+  writeRoles: ["super_admin", "school_admin", "principal", "accountant"],
 });

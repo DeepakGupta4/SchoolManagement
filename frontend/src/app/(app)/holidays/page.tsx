@@ -34,6 +34,10 @@ import { holidaysApi, type Holiday } from "@/lib/api/holidays";
 import type { HolidaySchema } from "@/lib/schemas/holiday";
 import { DetailModal } from "@/components/DetailModal";
 import { HolidayFormModal } from "./HolidayFormModal";
+import { useAuthStore } from "@/store";
+
+/** Only office roles manage holidays; viewers (parent/student/staff/driver) see read-only. */
+const MANAGE_ROLES = ["super_admin", "school_admin", "principal"];
 
 const pad2 = (n: number) => String(n).padStart(2, "0");
 
@@ -185,6 +189,8 @@ export default function HolidaysPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("All");
   const { toast } = useToast();
+  const { user } = useAuthStore();
+  const canManage = MANAGE_ROLES.includes(user?.role ?? "");
 
   const filters = useMemo(() => ({ search }), [search]);
 
@@ -400,20 +406,24 @@ export default function HolidaysPage() {
           >
             <Eye className="size-4" />
           </button>
-          <button
-            onClick={() => openEdit(h)}
-            aria-label={`Edit ${h.name}`}
-            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
-          >
-            <Pencil className="size-4" />
-          </button>
-          <button
-            onClick={() => setPendingDelete(h)}
-            aria-label={`Delete ${h.name}`}
-            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-danger-soft hover:text-danger"
-          >
-            <Trash2 className="size-4" />
-          </button>
+          {canManage && (
+            <>
+              <button
+                onClick={() => openEdit(h)}
+                aria-label={`Edit ${h.name}`}
+                className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+              >
+                <Pencil className="size-4" />
+              </button>
+              <button
+                onClick={() => setPendingDelete(h)}
+                aria-label={`Delete ${h.name}`}
+                className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-danger-soft hover:text-danger"
+              >
+                <Trash2 className="size-4" />
+              </button>
+            </>
+          )}
         </div>
       ),
     },
@@ -432,10 +442,12 @@ export default function HolidaysPage() {
               <Download className="size-4" />
               Export CSV
             </Button>
-            <Button onClick={openCreate}>
-              <Plus className="size-4" />
-              Add holiday
-            </Button>
+            {canManage && (
+              <Button onClick={openCreate}>
+                <Plus className="size-4" />
+                Add holiday
+              </Button>
+            )}
           </>
         }
       />
@@ -502,9 +514,10 @@ export default function HolidaysPage() {
               return (
                 <button
                   key={iso}
-                  onClick={() =>
-                    dayHoliday ? openEdit(dayHoliday) : openCreateFor(iso, suggestion)
-                  }
+                  onClick={() => {
+                    if (!canManage) return;
+                    dayHoliday ? openEdit(dayHoliday) : openCreateFor(iso, suggestion);
+                  }}
                   title={
                     dayHoliday
                       ? `Edit ${dayHoliday.name}`
@@ -616,12 +629,12 @@ export default function HolidaysPage() {
               <Button variant="outline" onClick={clearFilters}>
                 Clear filters
               </Button>
-            ) : (
+            ) : canManage ? (
               <Button variant="outline" onClick={openCreate}>
                 <Plus className="size-4" />
                 Add holiday
               </Button>
-            )
+            ) : undefined
           }
         />
       )}

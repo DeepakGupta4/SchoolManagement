@@ -19,4 +19,5 @@ export default createCrudRouter({
   createSchema,
   searchFields: ["name", "role", "subject", "body"],
   filterFields: ["category"],
+  writeRoles: ["super_admin", "school_admin", "principal", "teacher", "accountant"],
 });

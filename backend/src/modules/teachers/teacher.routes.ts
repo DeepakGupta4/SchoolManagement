@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { Teacher } from "./teacher.model.js";
 import { StoredDocument } from "../documents/document.model.js";
-import { createCrudRouter } from "../../utils/crudRouter.js";
+import { createCrudRouter, toPublic } from "../../utils/crudRouter.js";
 import { requireRole } from "../../middleware/auth.js";
 import { validate } from "../../middleware/validate.js";
 import { ApiError } from "../../utils/ApiError.js";
@@ -61,6 +61,22 @@ export default createCrudRouter({
   readRoles: ["super_admin", "school_admin", "principal", "accountant"],
   // Performance review: persist a rating + note (rating is otherwise read-only).
   extend: (router) => {
+    // A teacher's OWN record, matched by their login email. Teachers are excluded
+    // from the full teacher list (readRoles above = office/HR only, since records
+    // carry salary/PII), so this scoped self-lookup is how a teacher loads their
+    // own dashboard (classes, subjects, class-teacher-of) without a 403.
+    router.get("/me", async (req, res, next) => {
+      try {
+        const doc = await Teacher.findOne({
+          schoolId: req.user!.schoolId,
+          email: req.user!.email,
+        });
+        if (!doc) throw ApiError.notFound("No teacher record for this account.");
+        res.json({ data: toPublic(doc) });
+      } catch (err) {
+        next(err);
+      }
+    });
     router.post(
       "/:id/review",
       requireRole("super_admin", "school_admin", "principal"),

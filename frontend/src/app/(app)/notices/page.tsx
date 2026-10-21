@@ -41,6 +41,10 @@ import {
 import type { NoticeSchema } from "@/lib/schemas/notice";
 import { DetailModal } from "@/components/DetailModal";
 import { NoticeFormModal } from "./NoticeFormModal";
+import { useAuthStore } from "@/store";
+
+/** Only office roles manage notices; viewers (parent/student/staff/driver) see read-only. */
+const MANAGE_ROLES = ["super_admin", "school_admin", "principal"];
 
 type BadgeVariant = "default" | "success" | "warning" | "danger" | "info" | "outline";
 
@@ -102,6 +106,8 @@ export default function NoticesPage() {
   const [viewing, setViewing] = useState<Notice | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Notice | null>(null);
   const { toast } = useToast();
+  const { user } = useAuthStore();
+  const canManage = MANAGE_ROLES.includes(user?.role ?? "");
 
   const pinned = useMemo(() => items.filter((n) => n.pinned), [items]);
 
@@ -251,20 +257,24 @@ export default function NoticesPage() {
           >
             <Eye className="size-4" />
           </button>
-          <button
-            onClick={() => openEdit(n)}
-            aria-label={`Edit ${n.title}`}
-            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
-          >
-            <Pencil className="size-4" />
-          </button>
-          <button
-            onClick={() => setPendingDelete(n)}
-            aria-label={`Delete ${n.title}`}
-            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-danger-soft hover:text-danger"
-          >
-            <Trash2 className="size-4" />
-          </button>
+          {canManage && (
+            <>
+              <button
+                onClick={() => openEdit(n)}
+                aria-label={`Edit ${n.title}`}
+                className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+              >
+                <Pencil className="size-4" />
+              </button>
+              <button
+                onClick={() => setPendingDelete(n)}
+                aria-label={`Delete ${n.title}`}
+                className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-danger-soft hover:text-danger"
+              >
+                <Trash2 className="size-4" />
+              </button>
+            </>
+          )}
         </div>
       ),
     },
@@ -281,10 +291,12 @@ export default function NoticesPage() {
               <Download className="size-4" />
               Export
             </Button>
-            <Button onClick={openCreate}>
-              <Plus className="size-4" />
-              Post notice
-            </Button>
+            {canManage && (
+              <Button onClick={openCreate}>
+                <Plus className="size-4" />
+                Post notice
+              </Button>
+            )}
           </>
         }
       />
@@ -342,20 +354,24 @@ export default function NoticesPage() {
                       >
                         <Eye className="size-4" />
                       </button>
-                      <button
-                        onClick={() => openEdit(n)}
-                        aria-label={`Edit ${n.title}`}
-                        className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
-                      >
-                        <Pencil className="size-4" />
-                      </button>
-                      <button
-                        onClick={() => setPendingDelete(n)}
-                        aria-label={`Delete ${n.title}`}
-                        className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-danger-soft hover:text-danger"
-                      >
-                        <Trash2 className="size-4" />
-                      </button>
+                      {canManage && (
+                        <>
+                          <button
+                            onClick={() => openEdit(n)}
+                            aria-label={`Edit ${n.title}`}
+                            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+                          >
+                            <Pencil className="size-4" />
+                          </button>
+                          <button
+                            onClick={() => setPendingDelete(n)}
+                            aria-label={`Delete ${n.title}`}
+                            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-danger-soft hover:text-danger"
+                          >
+                            <Trash2 className="size-4" />
+                          </button>
+                        </>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
@@ -428,10 +444,12 @@ export default function NoticesPage() {
               : "Post your first notice to get started."
           }
           emptyAction={
-            <Button variant="outline" onClick={openCreate}>
-              <Plus className="size-4" />
-              Post notice
-            </Button>
+            canManage ? (
+              <Button variant="outline" onClick={openCreate}>
+                <Plus className="size-4" />
+                Post notice
+              </Button>
+            ) : undefined
           }
         />
       )}

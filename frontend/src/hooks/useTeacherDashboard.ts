@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { listTeachers } from "@/lib/api/teachers";
+import { getMyTeacher } from "@/lib/api/teachers";
 import { countStudents } from "@/lib/api/students";
 import { timetableApi, type TimetableEntry } from "@/lib/api/timetable";
 import { assignmentsApi, type Assignment } from "@/lib/api/assignments";
@@ -43,12 +43,12 @@ export function useTeacherDashboard(email: string | undefined) {
     let cancelled = false;
 
     (async () => {
-      let teachers: Teacher[];
+      let self: Teacher | null;
       let timetable: TimetableEntry[];
       let assignments: Assignment[];
       try {
-        [teachers, timetable, assignments] = await Promise.all([
-          listTeachers(),
+        [self, timetable, assignments] = await Promise.all([
+          getMyTeacher(),
           timetableApi.list(),
           assignmentsApi.list(),
         ]);
@@ -60,8 +60,6 @@ export function useTeacherDashboard(email: string | undefined) {
       }
       if (cancelled) return;
 
-      const self =
-        teachers.find((t) => email && t.email.toLowerCase() === email.toLowerCase()) ?? null;
       const name = self ? teacherName(self) : "";
       const classes = [...new Set(self?.classes ?? [])];
 
