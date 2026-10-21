@@ -11,7 +11,7 @@ import {
   type FeeAccountDoc,
   type PaymentDoc,
 } from "./fee.model.js";
-import { Student } from "../students/student.model.js";
+import { Student, type StudentDoc } from "../students/student.model.js";
 import { FeeStructure } from "../feeStructures/feeStructure.model.js";
 import { Scholarship } from "../scholarships/scholarship.model.js";
 import {
@@ -26,6 +26,15 @@ import { validate, parsed } from "../../middleware/validate.js";
 import { ApiError } from "../../utils/ApiError.js";
 import { toPublic } from "../../utils/crudRouter.js";
 import { notifySchool } from "../notifications/notification.model.js";
+import {
+  isRazorpayConfigured,
+  razorpayKeyId,
+  createRazorpayOrder,
+  fetchRazorpayPayment,
+  verifyRazorpaySignature,
+  mapRazorpayMethod,
+} from "../../utils/razorpay.js";
+import type { Request } from "express";
 
 const router = Router();
 router.use(requireAuth);
@@ -624,6 +633,261 @@ router.get("/summary", async (req, res, next) => {
     });
   } catch (err) {
     next(err);
+  }
+});
+
+/* ------------------------------------------------------------------ */
+/* Online fee payment (Razorpay) — self-service for guardians/students  */
+/*                                                                      */
+/* These routes are deliberately NOT gated to the office: a signed-in    */
+/* guardian or student pays their OWN dues. Ownership is re-checked on    */
+/* the server for every call (never trusted from the client), and the     */
+/* money is posted through the SAME transactional ledger write as a       */
+/* counter collection, so an online receipt is indistinguishable from a   */
+/* cash one in the register. Without Razorpay keys the endpoints answer    */
+/* 503 and the portal falls back to "pay at the office".                   */
+/* ------------------------------------------------------------------ */
+
+/** Office staff may collect for anyone; everyone else only for themselves/their child. */
+const OFFICE_ROLES = new Set(["super_admin", "school_admin", "principal", "accountant"]);
+
+/**
+ * Resolves the one student the caller is allowed to pay for, re-checking
+ * ownership server-side so a crafted studentId can neither pay against nor probe
+ * someone else's ledger:
+ *  - office staff → any student in their school (by id);
+ *  - everyone else → only a student whose guardian/father/mother/own email is
+ *    the caller's login, or (with no id) their own student record.
+ */
+async function resolvePayableStudent(req: Request, studentId?: string): Promise<StudentDoc> {
+  const schoolId = req.user!.schoolId;
+  const email = (req.user!.email || "").trim().toLowerCase();
+
+  if (OFFICE_ROLES.has(req.user!.role)) {
+    if (!studentId || !mongoose.isValidObjectId(studentId)) {
+      throw ApiError.badRequest("A student is required.");
+    }
+    const s = await Student.findOne({ _id: studentId, schoolId });
+    if (!s) throw ApiError.notFound("Student not found.");
+    return s;
+  }
+
+  if (studentId && mongoose.isValidObjectId(studentId)) {
+    const s = await Student.findOne({ _id: studentId, schoolId });
+    const mine =
+      !!s &&
+      [s.guardian?.email, s.fatherEmail, s.motherEmail, s.email]
+        .map((e) => String(e ?? "").trim().toLowerCase())
+        .includes(email);
+    // Don't reveal whether the id exists for someone else's child.
+    if (!s || !mine) throw ApiError.notFound("Student not found.");
+    return s;
+  }
+
+  const self = email ? await Student.findOne({ schoolId, email }) : null;
+  if (!self) throw ApiError.notFound("No student record is linked to your account.");
+  return self;
+}
+
+/** The student's current outstanding balance, from a stored account or synthesised live. */
+async function outstandingFor(schoolId: string, student: StudentDoc) {
+  const stored = await FeeAccount.findOne({
+    schoolId,
+    studentId: student._id,
+    session: CURRENT_SESSION,
+  });
+  if (stored) return { balance: balanceOf(stored), name: stored.name };
+  const structure = await matchStructure(schoolId, student.className);
+  const gross = deriveGrossHeads(structure);
+  const concession = await scholarshipConcessionFor(schoolId, String(student._id));
+  const prov = provisionalAccountFor(student, gross, concession);
+  return { balance: balanceOf(prov), name: prov.name };
+}
+
+/** Spreads a paid amount across outstanding heads, earliest first (never past each head's bill). */
+function allocateAcrossHeads(
+  heads: { head: string; billed: number; paid: number }[],
+  amount: number
+): { head: string; amount: number }[] {
+  let left = amount;
+  const out: { head: string; amount: number }[] = [];
+  for (const h of heads) {
+    if (left <= 0) break;
+    const due = Math.max(0, h.billed - h.paid);
+    if (due <= 0) continue;
+    const put = Math.min(due, left);
+    out.push({ head: h.head, amount: put });
+    left -= put;
+  }
+  return out;
+}
+
+const payOrderBody = z.object({ studentId: z.string().optional() });
+
+/**
+ * Opens a Razorpay order for the caller's own outstanding balance. Returns the
+ * public key id and order so the browser can launch Checkout; 503 (handled
+ * gracefully by the client) when online payment isn't configured for the school.
+ */
+router.post("/pay/order", validate(payOrderBody), async (req, res, next) => {
+  try {
+    if (!isRazorpayConfigured()) {
+      throw new ApiError(
+        503,
+        "Online payment isn't set up for this school yet. Please pay at the school office."
+      );
+    }
+    const body = req.body as z.infer<typeof payOrderBody>;
+    const student = await resolvePayableStudent(req, body.studentId);
+    const { balance, name } = await outstandingFor(req.user!.schoolId, student);
+    if (balance <= 0) throw ApiError.badRequest("There are no dues to pay right now.");
+
+    const order = await createRazorpayOrder(Math.round(balance * 100), `fee_${String(student._id)}`);
+    res.json({
+      data: {
+        keyId: razorpayKeyId(),
+        orderId: order.id,
+        amount: order.amount,
+        currency: order.currency,
+        studentId: String(student._id),
+        studentName: name,
+        dueRupees: balance,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+const payVerifyBody = z.object({
+  studentId: z.string().optional(),
+  razorpay_order_id: z.string().min(1),
+  razorpay_payment_id: z.string().min(1),
+  razorpay_signature: z.string().min(1),
+});
+
+/**
+ * Verifies a Checkout callback and posts the payment to the ledger. The money is
+ * only recorded after the HMAC signature verifies AND Razorpay itself confirms a
+ * captured payment for the matching order — never on the browser's word — and
+ * the receipt + ledger posting land in one transaction, exactly like a counter
+ * collection. A repeat callback for the same payment returns the first receipt.
+ */
+router.post("/pay/verify", validate(payVerifyBody), async (req, res, next) => {
+  const body = req.body as z.infer<typeof payVerifyBody>;
+  const schoolId = req.user!.schoolId;
+  const session = await mongoose.startSession();
+  try {
+    if (!isRazorpayConfigured()) {
+      throw new ApiError(503, "Online payment isn't set up for this school yet.");
+    }
+
+    // 1. A forged callback fails here, so no receipt is posted for unpaid money.
+    if (!verifyRazorpaySignature(body.razorpay_order_id, body.razorpay_payment_id, body.razorpay_signature)) {
+      throw ApiError.badRequest(
+        "Payment verification failed. If money was deducted it will be refunded automatically."
+      );
+    }
+
+    // 2. Ownership — never trust the studentId the browser sent.
+    const student = await resolvePayableStudent(req, body.studentId);
+
+    // 3. Read the payment from Razorpay: the authority on amount and capture.
+    const payment = await fetchRazorpayPayment(body.razorpay_payment_id);
+    if (payment.order_id !== body.razorpay_order_id) {
+      throw ApiError.badRequest("This payment doesn't match its order.");
+    }
+    if (payment.status !== "captured") {
+      throw ApiError.badRequest("This payment hasn't been captured yet. Please try again shortly.");
+    }
+    const paidRupees = Math.round(payment.amount / 100);
+    if (paidRupees <= 0) throw ApiError.badRequest("Nothing was paid.");
+
+    // Idempotency: a Razorpay payment id is unique, so a receipt already
+    // referencing it means this callback was handled — return that receipt.
+    const already = await Payment.findOne({ schoolId, reference: body.razorpay_payment_id });
+    if (already) {
+      res.status(200).json({ data: toPublic(already) });
+      return;
+    }
+
+    let receipt: PaymentDoc | null = null;
+    await session.withTransaction(async () => {
+      let account = await FeeAccount.findOne({
+        schoolId,
+        studentId: student._id,
+        session: CURRENT_SESSION,
+      }).session(session);
+      if (!account) account = await provisionAccount(schoolId, String(student._id), session);
+
+      // Never post more than is owed, even if the balance dropped since the
+      // order was opened (e.g. the office also collected in the meantime).
+      const applied = Math.min(paidRupees, balanceOf(account));
+      if (applied <= 0) throw ApiError.badRequest("There are no dues to pay right now.");
+
+      const allocations = allocateAcrossHeads(
+        account.heads.map((h) => ({ head: h.head, billed: h.billed, paid: h.paid })),
+        applied
+      );
+
+      const issued = await Payment.countDocuments({ schoolId }).session(session);
+      const receiptNo = `RCP-${25000 + issued + 1}`;
+      const today = new Date().toISOString().slice(0, 10);
+
+      const [created] = await Payment.create(
+        [
+          {
+            schoolId,
+            receiptNo,
+            studentId: account.studentId,
+            studentName: account.name,
+            admissionNo: account.admissionNo,
+            className: `${account.className} · ${account.section}`,
+            date: today,
+            amount: applied,
+            method: mapRazorpayMethod(payment.method),
+            reference: body.razorpay_payment_id,
+            bank: "",
+            allocations,
+            remarks: "Online payment (Razorpay)",
+            collectedBy: req.user!.email,
+            status: "paid",
+          },
+        ],
+        { session }
+      );
+
+      const byHead = new Map(allocations.map((a) => [a.head, a.amount]));
+      for (const head of account.heads) {
+        const extra = byHead.get(head.head);
+        if (extra) head.paid += extra;
+      }
+      account.lastPaymentDate = today;
+      await account.save({ session });
+
+      await Student.updateOne(
+        { _id: account.studentId, schoolId },
+        { $set: { feeDue: balanceOf(account) } }
+      ).session(session);
+
+      receipt = created as PaymentDoc;
+    });
+
+    if (receipt) {
+      const r: PaymentDoc = receipt;
+      void notifySchool(schoolId, {
+        type: "fee",
+        title: "Online fee payment received",
+        body: `₹${r.amount.toLocaleString("en-IN")} from ${r.studentName} · ${r.receiptNo}`,
+        link: "/fees/receipts",
+      });
+    }
+
+    res.status(201).json({ data: toPublic(receipt!) });
+  } catch (err) {
+    next(err);
+  } finally {
+    await session.endSession();
   }
 });
 

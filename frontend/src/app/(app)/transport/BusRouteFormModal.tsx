@@ -33,6 +33,7 @@ const emptyValues: DefaultValues<BusRouteSchema> = {
   name: "",
   stops: [],
   driver: "",
+  driverEmail: "",
   bus: "",
   capacity: undefined,
   students: 0,
@@ -198,6 +199,17 @@ export function BusRouteFormModal({
               <option key={d} value={d} />
             ))}
           </datalist>
+
+          {/* Optional login email — links this route to a driver's account so
+              the driver portal can match them to their route(s). */}
+          <Input
+            label="Driver email (login)"
+            type="email"
+            placeholder="driver@school.edu — optional"
+            hint="Link this route to the driver's login account."
+            {...register("driverEmail")}
+            error={errors.driverEmail?.message}
+          />
           <Input
             label="Bus number"
             required

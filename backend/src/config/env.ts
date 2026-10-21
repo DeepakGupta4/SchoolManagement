@@ -58,8 +58,13 @@ const envSchema = z.object({
   SUPER_ADMIN_NAME: z.string().default("Platform Owner"),
 
   /**
-   * Razorpay. Optional: without keys the payment endpoints report "not
-   * configured" and schools activate via the Super Admin instead.
+   * Razorpay. Powers BOTH self-service flows: a school's own subscription
+   * payment, and guardians/students paying fees online ("Pay now"). Optional:
+   * without BOTH keys those endpoints report "not configured" (503) and both
+   * flows fall back — schools activate via the Super Admin, fees are paid at the
+   * office — so the app keeps working. Keys from dashboard.razorpay.com →
+   * Settings → API Keys. The KEY_ID is sent to the browser (public by design);
+   * the KEY_SECRET must stay on the server only.
    */
   RAZORPAY_KEY_ID: z.string().optional(),
   RAZORPAY_KEY_SECRET: z.string().optional(),

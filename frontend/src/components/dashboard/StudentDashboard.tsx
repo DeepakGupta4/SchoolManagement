@@ -6,6 +6,7 @@ import { Avatar, Badge, Card, CardContent, CardHeader, Skeleton } from "@/compon
 import { cn } from "@/lib/utils";
 import { getMyStudent, type StudentPortal } from "@/lib/api/portal";
 import { getNotifications, type AppNotification } from "@/lib/api/notifications";
+import { PayFeesButton } from "./PayFeesButton";
 
 const inr = (n: number) => `₹${n.toLocaleString("en-IN")}`;
 function pctTone(p: number): string {
@@ -38,6 +39,8 @@ function Stat({ icon: Icon, label, value, tone }: { icon: typeof Wallet; label: 
 export function StudentDashboard() {
   const [me, setMe] = useState<StudentPortal | null | undefined>(undefined);
   const [notices, setNotices] = useState<AppNotification[]>([]);
+  // Bumped after a successful online payment so the fee-due figure refreshes.
+  const [tick, setTick] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -50,7 +53,7 @@ export function StudentDashboard() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [tick]);
 
   if (me === undefined) {
     return (
@@ -108,6 +111,16 @@ export function StudentDashboard() {
               tone={me.stats.feeDue > 0 ? "text-danger" : "text-success"}
             />
           </div>
+          {me.stats.feeDue > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-surface-sunken px-3 py-2.5">
+              <p className="text-xs text-muted">Pay your outstanding fees securely online.</p>
+              <PayFeesButton
+                dueRupees={me.stats.feeDue}
+                prefill={{ name: me.profile.name }}
+                onPaid={() => setTick((t) => t + 1)}
+              />
+            </div>
+          )}
         </CardContent>
       </Card>
 

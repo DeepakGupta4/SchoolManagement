@@ -8,6 +8,7 @@ const busRouteSchema = new Schema(
     stops: { type: [String], default: [] },
     students: { type: Number, default: 0 },
     driver: { type: String, default: "" },
+    driverEmail: { type: String, default: "", lowercase: true, trim: true },
     bus: { type: String, default: "" },
     capacity: { type: Number, default: 40 },
     departure: { type: String, default: "" },

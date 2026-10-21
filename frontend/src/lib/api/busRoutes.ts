@@ -9,6 +9,8 @@ export interface BusRoute {
   stops: string[];
   students: number;
   driver: string;
+  /** Optional login email linking this route to a driver's account. */
+  driverEmail?: string;
   bus: string;
   capacity: number;
   departure: string;

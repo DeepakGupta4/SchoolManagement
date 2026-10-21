@@ -17,6 +17,7 @@ import feeStructureRoutes from "./feeStructures/feeStructure.routes.js";
 import scholarshipRoutes from "./scholarships/scholarship.routes.js";
 import expenseRoutes from "./expenses/expense.routes.js";
 import bookRoutes from "./books/book.routes.js";
+import bookIssueRoutes from "./bookIssue/bookIssue.routes.js";
 import busRouteRoutes from "./busRoutes/busRoute.routes.js";
 import hostelStudentRoutes from "./hostelStudents/hostelStudent.routes.js";
 import inventoryItemRoutes from "./inventory/inventoryItem.routes.js";
@@ -65,6 +66,7 @@ export const crudModules: { path: string; router: Router }[] = [
   { path: "/api/scholarships", router: scholarshipRoutes },
   { path: "/api/expenses", router: expenseRoutes },
   { path: "/api/books", router: bookRoutes },
+  { path: "/api/book-issues", router: bookIssueRoutes },
   { path: "/api/bus-routes", router: busRouteRoutes },
   { path: "/api/hostel-students", router: hostelStudentRoutes },
   { path: "/api/inventory", router: inventoryItemRoutes },

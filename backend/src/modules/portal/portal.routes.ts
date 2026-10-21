@@ -174,9 +174,13 @@ router.get("/me/driver", async (req, res, next) => {
     const schoolId = req.user!.schoolId;
     const me = await User.findOne({ schoolId, email: req.user!.email }).lean();
     const name = (me?.name || "").trim();
-    const routes = name
-      ? await BusRoute.find({ schoolId, driver: new RegExp(`^${escapeRx(name)}$`, "i") }).lean()
-      : [];
+    const email = (req.user!.email || "").trim().toLowerCase();
+    // Prefer the hard link (route.driverEmail == the driver's login) and fall back
+    // to a name match for routes whose driver was entered as free text.
+    const or: Record<string, unknown>[] = [];
+    if (email) or.push({ driverEmail: email });
+    if (name) or.push({ driver: new RegExp(`^${escapeRx(name)}$`, "i") });
+    const routes = or.length ? await BusRoute.find({ schoolId, $or: or }).lean() : [];
     res.json({
       data: {
         driverName: name,

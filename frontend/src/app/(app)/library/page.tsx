@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   Search,
   Plus,
@@ -12,6 +12,7 @@ import {
   BookCheck,
   BookMarked,
   AlertCircle,
+  RotateCcw,
 } from "lucide-react";
 import {
   Badge,
@@ -19,7 +20,6 @@ import {
   Card,
   CardContent,
   ConfirmDialog,
-  EmptyState,
   Input,
   PageHeader,
   Select,
@@ -31,20 +31,39 @@ import {
 import { cn } from "@/lib/utils";
 import { exportToCsv } from "@/lib/exportCsv";
 import { useResource } from "@/hooks/useResource";
+import { useAsyncList } from "@/hooks/useAsyncList";
 import { booksApi, CATEGORY_OPTIONS, type Book } from "@/lib/api/books";
+import {
+  listBookIssues,
+  issueBook,
+  returnBook,
+  type BookIssue,
+  type IssueBookInput,
+} from "@/lib/api/bookIssues";
 import type { BookSchema } from "@/lib/schemas/book";
 import { DetailModal } from "@/components/DetailModal";
 import { BookFormModal } from "./BookFormModal";
+import { IssueFormModal } from "./IssueFormModal";
 
-type IssueRecord = {
-  id: string;
-  book: string;
-  student: string;
-  class: string;
-  issueDate: string;
-  dueDate: string;
-  status: "issued" | "overdue" | "returned";
-};
+/** Local date as YYYY-MM-DD — the register compares due dates against "today". */
+const todayISO = () => new Date().toLocaleDateString("en-CA");
+
+/** Friendly en-IN date, e.g. "21 Oct 2026"; em dash for an unset date. */
+const fmtDate = (iso: string) =>
+  iso
+    ? new Date(`${iso}T00:00:00`).toLocaleDateString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      })
+    : "—";
+
+/** Whole days `todayIso` is past `dueIso` (never negative). Mirrors the ₹2/day fine. */
+const overdueDaysBetween = (dueIso: string, todayIso: string) =>
+  Math.max(0, Math.round((Date.parse(todayIso) - Date.parse(dueIso)) / 86_400_000));
+
+/** Fine levied per overdue day, in rupees — matches the backend. */
+const FINE_PER_DAY = 2;
 
 /** Category colour coding: a badge tone plus a tile gradient, both tokenised. */
 const categoryStyles: Record<
@@ -116,6 +135,23 @@ export default function LibraryPage() {
   const [pendingDelete, setPendingDelete] = useState<Book | null>(null);
   const { toast } = useToast();
 
+  // Circulation records (newest first), independent of the catalogue filters.
+  const fetchIssues = useCallback(() => listBookIssues().then((r) => r.data), []);
+  const {
+    items: issues,
+    loading: issuesLoading,
+    error: issuesError,
+    refetch: refetchIssues,
+  } = useAsyncList<BookIssue>(fetchIssues);
+
+  const [issueOpen, setIssueOpen] = useState(false);
+  const [issuing, setIssuing] = useState(false);
+  const [pendingReturn, setPendingReturn] = useState<BookIssue | null>(null);
+  const [returning, setReturning] = useState(false);
+
+  const today = todayISO();
+  const isOverdue = (i: BookIssue) => i.status === "issued" && i.dueDate < today;
+
   // Rows for the catalogue table only — stat cards keep counting all `items`.
   const visibleBooks = useMemo(() => {
     if (catalogTab === "Available") return items.filter((b) => b.available > 0);
@@ -128,19 +164,16 @@ export default function LibraryPage() {
       total: items.reduce((s, b) => s + b.total, 0),
       available: items.reduce((s, b) => s + b.available, 0),
       issued: items.reduce((s, b) => s + (b.total - b.available), 0),
-      // Issue records have no backend yet, so overdue cannot be derived.
-      overdue: 0,
+      // Still-out copies whose due date has already passed.
+      overdue: issues.filter((i) => i.status === "issued" && i.dueDate < today).length,
     }),
-    [items]
+    [items, issues, today]
   );
-
-  // Circulation has no backend yet — the issued list renders an empty state.
-  const filteredIssued: IssueRecord[] = [];
 
   /** Exports the catalogue or the issue register, whichever section is open. */
   const handleExport = () => {
     const onCatalog = activeSection === "catalog";
-    const count = onCatalog ? visibleBooks.length : filteredIssued.length;
+    const count = onCatalog ? visibleBooks.length : issues.length;
     if (count === 0) {
       toast({
         title: "Nothing to export",
@@ -166,18 +199,20 @@ export default function LibraryPage() {
         visibleBooks
       );
     } else {
-      exportToCsv<IssueRecord>(
+      exportToCsv<BookIssue>(
         "library-issues",
         [
-          { header: "Issue ID", value: (i) => i.id },
-          { header: "Book", value: (i) => i.book },
-          { header: "Student", value: (i) => i.student },
-          { header: "Class", value: (i) => i.class },
+          { header: "Issue ID", value: (i) => i.code },
+          { header: "Book", value: (i) => i.bookTitle },
+          { header: "Borrower", value: (i) => i.borrowerName },
+          { header: "Borrower Type", value: (i) => i.borrowerType },
           { header: "Issue Date", value: (i) => i.issueDate },
           { header: "Due Date", value: (i) => i.dueDate },
-          { header: "Status", value: (i) => i.status },
+          { header: "Return Date", value: (i) => i.returnDate || "—" },
+          { header: "Status", value: (i) => (isOverdue(i) ? "overdue" : i.status) },
+          { header: "Fine", value: (i) => i.fine },
         ],
-        filteredIssued
+        issues
       );
     }
     toast({
@@ -203,6 +238,54 @@ export default function LibraryPage() {
     if (!pendingDelete) return;
     const ok = await remove(pendingDelete);
     if (ok) setPendingDelete(null);
+  };
+
+  const handleIssueSubmit = async (values: IssueBookInput) => {
+    setIssuing(true);
+    try {
+      const created = await issueBook(values);
+      toast({
+        title: "Book issued",
+        description: `${created.bookTitle} issued to ${created.borrowerName}.`,
+      });
+      setIssueOpen(false);
+      refetchIssues();
+      refetch(); // the catalogue's available count has dropped by one
+    } catch (e) {
+      toast({
+        title: "Could not issue book",
+        description: e instanceof Error ? e.message : "Something went wrong.",
+        variant: "error",
+      });
+    } finally {
+      setIssuing(false);
+    }
+  };
+
+  const handleReturn = async () => {
+    if (!pendingReturn) return;
+    setReturning(true);
+    try {
+      const res = await returnBook(pendingReturn.id);
+      toast({
+        title: "Book returned",
+        description:
+          res.fine > 0
+            ? `${pendingReturn.bookTitle} returned. Fine due: ₹${res.fine.toLocaleString("en-IN")}.`
+            : `${pendingReturn.bookTitle} returned.`,
+      });
+      setPendingReturn(null);
+      refetchIssues();
+      refetch(); // the copy is back on the shelf
+    } catch (e) {
+      toast({
+        title: "Could not return book",
+        description: e instanceof Error ? e.message : "Something went wrong.",
+        variant: "error",
+      });
+    } finally {
+      setReturning(false);
+    }
   };
 
   const bookColumns: Column<Book>[] = [
@@ -313,6 +396,85 @@ export default function LibraryPage() {
     },
   ];
 
+  const issueColumns: Column<BookIssue>[] = [
+    {
+      key: "bookTitle",
+      header: "Book",
+      sortable: true,
+      render: (i) => (
+        <div className="min-w-0 max-w-56">
+          <p className="truncate font-medium text-text">{i.bookTitle}</p>
+          <p className="truncate font-mono text-xs text-subtle">{i.code}</p>
+        </div>
+      ),
+    },
+    {
+      key: "borrowerName",
+      header: "Borrower",
+      sortable: true,
+      render: (i) => (
+        <div className="min-w-0">
+          <p className="truncate font-medium text-text">{i.borrowerName}</p>
+          <p className="truncate text-xs capitalize text-subtle">
+            {i.borrowerType}
+            {i.borrowerId ? ` · ${i.borrowerId}` : ""}
+          </p>
+        </div>
+      ),
+    },
+    {
+      key: "issueDate",
+      header: "Issued",
+      sortable: true,
+      render: (i) => <span className="whitespace-nowrap text-muted">{fmtDate(i.issueDate)}</span>,
+    },
+    {
+      key: "dueDate",
+      header: "Due",
+      sortable: true,
+      render: (i) => <span className="whitespace-nowrap text-muted">{fmtDate(i.dueDate)}</span>,
+    },
+    {
+      key: "status",
+      header: "Status",
+      sortable: true,
+      sortValue: (i) => (isOverdue(i) ? "overdue" : i.status),
+      render: (i) => {
+        if (i.status === "returned") return <Badge variant="success">Returned</Badge>;
+        if (isOverdue(i)) return <Badge variant="danger">Overdue</Badge>;
+        return <Badge variant="info">Issued</Badge>;
+      },
+    },
+    {
+      key: "fine",
+      header: "Fine",
+      align: "right",
+      sortable: true,
+      render: (i) =>
+        i.fine > 0 ? (
+          <span className="font-semibold text-danger">₹{i.fine.toLocaleString("en-IN")}</span>
+        ) : (
+          <span className="text-subtle">—</span>
+        ),
+    },
+    {
+      key: "actions",
+      header: "",
+      align: "right",
+      render: (i) =>
+        i.status === "issued" ? (
+          <Button variant="outline" size="sm" onClick={() => setPendingReturn(i)}>
+            <RotateCcw className="size-3.5" />
+            Return
+          </Button>
+        ) : (
+          <span className="whitespace-nowrap text-xs text-subtle">
+            Returned {fmtDate(i.returnDate)}
+          </span>
+        ),
+    },
+  ];
+
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
@@ -410,13 +572,45 @@ export default function LibraryPage() {
       )}
 
       {activeSection === "issued" && (
-        <Card>
-          <EmptyState
-            icon={<BookMarked className="size-5" />}
-            title="No issued books yet"
-            description="Books checked out to students will appear here."
-          />
-        </Card>
+        <>
+          <div className="flex flex-wrap items-center gap-3">
+            <p className="text-xs text-muted">
+              {issues.length} issue record{issues.length === 1 ? "" : "s"}
+              {stats.overdue > 0 ? ` · ${stats.overdue} overdue` : ""}
+            </p>
+            <Button className="ml-auto" onClick={() => setIssueOpen(true)}>
+              <Plus className="size-4" />
+              Issue book
+            </Button>
+          </div>
+
+          {issuesError ? (
+            <Card>
+              <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+                <p className="text-sm font-medium text-danger">{issuesError}</p>
+                <Button variant="outline" onClick={refetchIssues}>
+                  Try again
+                </Button>
+              </CardContent>
+            </Card>
+          ) : (
+            <Table
+              columns={issueColumns}
+              rows={issues}
+              rowKey={(i) => i.id}
+              loading={issuesLoading}
+              pageSize={15}
+              emptyTitle="No issued books yet"
+              emptyDescription="Issue a book to a student, teacher or staff member to start the register."
+              emptyAction={
+                <Button variant="outline" onClick={() => setIssueOpen(true)}>
+                  <Plus className="size-4" />
+                  Issue book
+                </Button>
+              }
+            />
+          )}
+        </>
       )}
 
       <BookFormModal
@@ -463,6 +657,31 @@ export default function LibraryPage() {
         destructive
         loading={deleting}
         onConfirm={handleDelete}
+      />
+
+      <IssueFormModal
+        open={issueOpen}
+        onOpenChange={setIssueOpen}
+        saving={issuing}
+        onSubmit={handleIssueSubmit}
+      />
+
+      <ConfirmDialog
+        open={Boolean(pendingReturn)}
+        onOpenChange={(open) => !open && setPendingReturn(null)}
+        title="Return this book?"
+        description={
+          pendingReturn
+            ? isOverdue(pendingReturn)
+              ? `"${pendingReturn.bookTitle}" is ${overdueDaysBetween(pendingReturn.dueDate, today)} day(s) overdue — a fine of ₹${(
+                  overdueDaysBetween(pendingReturn.dueDate, today) * FINE_PER_DAY
+                ).toLocaleString("en-IN")} will apply. Mark it returned?`
+              : `Mark "${pendingReturn.bookTitle}" (issued to ${pendingReturn.borrowerName}) as returned.`
+            : ""
+        }
+        confirmLabel="Mark returned"
+        loading={returning}
+        onConfirm={handleReturn}
       />
     </div>
   );

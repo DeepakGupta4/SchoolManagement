@@ -5,6 +5,7 @@ export const busRouteSchema = z.object({
   name: z.string().trim().min(3, "Route name is required"),
   stops: z.array(z.string()).min(1, "Select at least one stop"),
   driver: z.string().trim().min(2, "Driver is required"),
+  driverEmail: z.union([z.email("Enter a valid email address"), z.literal("")]).optional(),
   bus: z.string().trim().min(4, "Bus number is required"),
   capacity: z.coerce.number<number>().min(1, "Must be at least 1"),
   students: z.coerce.number<number>().min(0, "Cannot be negative"),

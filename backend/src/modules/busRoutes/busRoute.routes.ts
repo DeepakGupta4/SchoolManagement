@@ -8,6 +8,7 @@ const busRouteSchema = z.object({
   stops: z.array(z.string()).default([]),
   students: z.coerce.number<number>().min(0).default(0),
   driver: z.string().default(""),
+  driverEmail: z.string().default(""),
   bus: z.string().default(""),
   capacity: z.coerce.number<number>().min(0).default(40),
   departure: z.string().default(""),
