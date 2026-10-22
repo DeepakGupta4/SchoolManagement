@@ -71,7 +71,10 @@ export const COMMON_FEE_HEADS = [
  */
 export function structureHeads(row: FeeStructure): FeeHead[] {
   if (row.heads && row.heads.length > 0) {
-    return row.heads.filter((h) => h.name?.trim() && Number(h.amount) > 0);
+    const flex = row.heads.filter((h) => h.name?.trim() && Number(h.amount) > 0);
+    // Fall back to legacy columns only when the flexible heads net to nothing
+    // (keeps FE in lockstep with backend deriveGrossHeads).
+    if (flex.length > 0) return flex;
   }
   return FEE_HEADS.map((h) => ({ name: h.label, amount: Number(row[h.key] ?? 0) })).filter(
     (h) => h.amount > 0

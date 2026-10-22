@@ -52,9 +52,13 @@ export function deriveGrossHeads(structure: FeeStructureAttrs | null | undefined
   if (!structure) return [];
   const flexible = (structure.heads ?? []) as { name: string; amount: number }[];
   if (flexible.length > 0) {
-    return flexible
+    const mapped = flexible
       .map((h) => ({ head: String(h.name ?? "").trim(), billed: Math.max(0, Math.round(Number(h.amount) || 0)) }))
       .filter((h) => h.head.length > 0 && h.billed > 0);
+    // Only trust the flexible heads when they actually bill something; if a heads
+    // array nets to nothing (all zeroed) fall through to the legacy columns so an
+    // older structure's real amounts aren't silently lost.
+    if (mapped.length > 0) return mapped;
   }
   return STRUCTURE_HEADS.map(({ key, label }) => ({
     head: label,

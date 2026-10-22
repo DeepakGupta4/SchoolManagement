@@ -44,3 +44,12 @@ feeStructureSchema.index(
 
 export type FeeStructureAttrs = InferSchemaType<typeof feeStructureSchema>;
 export const FeeStructure = mongoose.model("FeeStructure", feeStructureSchema);
+
+// Surface a failed unique-index build (otherwise Mongoose swallows the E11000 and
+// the {schoolId,class} uniqueness silently never takes effect in a tenant that
+// still has duplicate class names — dedupe those, then restart).
+FeeStructure.on("index", (err) => {
+  if (err) {
+    console.error("[FeeStructure] index build failed — dedupe duplicate class names:", err.message);
+  }
+});
