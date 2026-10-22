@@ -106,6 +106,8 @@ function StudentsPageInner() {
   // Only office/admin manage student records; teacher & accountant are read-only
   // (they can view for lookup, but Add/Edit/Delete/Suspend would 403).
   const canManageStudents = ["super_admin", "school_admin", "principal"].includes(user?.role ?? "");
+  // Fee collectors (office + accountant) get a quick "Collect fee" action per row.
+  const canCollectFees = ["super_admin", "school_admin", "principal", "accountant"].includes(user?.role ?? "");
   const [myClass, setMyClass] = useState<{ className: string; section: string } | null>(null);
 
   const [search, setSearch] = useState("");
@@ -479,6 +481,16 @@ function StudentsPageInner() {
           >
             <Download className="size-4" />
           </button>
+          {canCollectFees && (
+            <Link
+              href={`/fees/collect?student=${s.id}&q=${encodeURIComponent(s.admissionNo)}`}
+              aria-label={`Collect fee from ${fullName(s)}`}
+              title="Collect fee"
+              className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+            >
+              <IndianRupee className="size-4" />
+            </Link>
+          )}
           {canManageStudents && (
             <>
               <button

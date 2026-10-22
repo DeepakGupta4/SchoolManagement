@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import {
-  ArrowRight, BookMarked, CalendarDays, ClipboardList, Clock, GraduationCap,
+  ArrowRight, BookMarked, CalendarDays, CalendarX, ClipboardList, Clock, GraduationCap,
   MapPin, School, UserCheck, Users,
 } from "lucide-react";
 import {
@@ -11,18 +12,33 @@ import {
 } from "@/components/ui";
 import { useAuthStore } from "@/store";
 import { useTeacherDashboard } from "@/hooks/useTeacherDashboard";
+import { getMyLeave, type LeaveRequest } from "@/lib/api/leaveRequests";
 
 /** Quick actions a teacher reaches for daily. */
 const QUICK_ACTIONS = [
   { label: "Mark attendance", href: "/attendance", icon: UserCheck },
   { label: "New assignment", href: "/assignments", icon: ClipboardList },
   { label: "My timetable", href: "/timetable", icon: CalendarDays },
+  { label: "My Leave", href: "/leave/my", icon: CalendarX },
 ];
 
 export function TeacherDashboard() {
   const user = useAuthStore((s) => s.user);
   const router = useRouter();
   const { data, loading, error } = useTeacherDashboard(user?.email);
+
+  // The teacher's own leave — summarised here so they can apply/track from the
+  // dashboard (the full apply form lives on /leave/my).
+  const [leave, setLeave] = useState<LeaveRequest[] | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    getMyLeave()
+      .then((rows) => !cancelled && setLeave(rows))
+      .catch(() => !cancelled && setLeave([]));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   if (error) {
     return (
@@ -216,6 +232,45 @@ export function TeacherDashboard() {
               </button>
             ))
           )}
+        </CardContent>
+      </Card>
+
+      {/* My Leave — request time off and track your own applications */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <CalendarX className="size-4 text-primary" />
+            <h2 className="text-sm font-semibold text-text">My Leave</h2>
+          </div>
+          <Link
+            href="/leave/my"
+            className="focus-ring inline-flex items-center gap-1 rounded-md text-xs font-semibold text-primary transition-colors hover:text-primary-hover"
+          >
+            View all <ArrowRight className="size-3.5" />
+          </Link>
+        </CardHeader>
+        <CardContent className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-4 text-sm">
+            {leave === null ? (
+              <span className="text-muted">Loading your leave…</span>
+            ) : leave.length === 0 ? (
+              <span className="text-muted">No leave requests yet — apply when you need time off.</span>
+            ) : (
+              <>
+                <span className="text-muted">
+                  <strong className="text-warning-text">{leave.filter((l) => l.status === "Pending").length}</strong> pending
+                </span>
+                <span className="text-muted">
+                  <strong className="text-success">{leave.filter((l) => l.status === "Approved").length}</strong> approved
+                </span>
+                <span className="text-subtle">· {leave.length} total</span>
+              </>
+            )}
+          </div>
+          <Button onClick={() => router.push("/leave/my")}>
+            <CalendarX className="size-4" />
+            Apply for leave
+          </Button>
         </CardContent>
       </Card>
 

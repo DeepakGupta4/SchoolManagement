@@ -106,6 +106,19 @@ export default function CollectFeePage() {
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const selected = accounts.find((a) => a.studentId === selectedStudentId) ?? null;
 
+  // Deep-link from the Students list "Collect fee" action: surface the student by
+  // their admission no. and pre-select them. Read from the URL once on mount —
+  // client-only, so it needs no Suspense boundary.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const q = params.get("q");
+    const sid = params.get("student");
+    if (q) setSearch(q);
+    if (sid) setSelectedStudentId(sid);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Per-head amounts the clerk is collecting right now, keyed by head name.
   const [entered, setEntered] = useState<Record<string, string>>({});
   const [method, setMethod] = useState<PaymentMethod>("Cash");
