@@ -5,6 +5,7 @@ import { createCrudRouter } from "../../utils/crudRouter.js";
 const feeHead = z.object({
   name: z.string().min(1, "Head name is required"),
   amount: z.coerce.number<number>().min(0).default(0),
+  frequency: z.enum(["monthly", "one-time", "per-exam"]).default("one-time"),
 });
 
 const feeStructureSchema = z

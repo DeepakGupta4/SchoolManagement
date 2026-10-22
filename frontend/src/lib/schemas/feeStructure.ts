@@ -3,6 +3,9 @@ import { z } from "zod";
 export const feeHeadSchema = z.object({
   name: z.string().trim().min(1, "Head name is required"),
   amount: z.coerce.number<number>().min(0, "Cannot be negative"),
+  // No .default() here: a default makes zod's INPUT type optional, which breaks
+  // useForm<FeeStructureSchema> (input ≠ output). The form always sets a frequency.
+  frequency: z.enum(["monthly", "one-time", "per-exam"]),
 });
 
 export const feeStructureSchema = z

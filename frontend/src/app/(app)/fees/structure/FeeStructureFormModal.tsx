@@ -4,12 +4,14 @@ import { useEffect, useMemo, useState, type BaseSyntheticEvent } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Plus, Trash2 } from "lucide-react";
-import { Modal, Button, Input, Field } from "@/components/ui";
+import { Modal, Button, Input, Field, Select, type SelectOption } from "@/components/ui";
 import { feeStructureSchema, type FeeStructureSchema } from "@/lib/schemas/feeStructure";
 import {
   COMMON_FEE_HEADS,
-  feeTotal,
+  FREQUENCY_LABELS,
+  feeBreakdown,
   structureHeads,
+  type FeeFrequency,
   type FeeStructure,
 } from "@/lib/api/feeStructures";
 
@@ -35,17 +37,24 @@ const FEE_CLASS_PRESETS = [
   "Class 12",
 ];
 
+// Frequency choices for each head's <Select>, derived from the shared labels so
+// the wording stays in one place: Monthly / One-time / Per-exam.
+const FREQUENCY_OPTIONS: SelectOption[] = (
+  Object.entries(FREQUENCY_LABELS) as [FeeFrequency, string][]
+).map(([value, label]) => ({ value, label }));
+
 const inr = new Intl.NumberFormat("en-IN", {
   style: "currency",
   currency: "INR",
   maximumFractionDigits: 0,
 });
 
-// Create-mode default: one sensible head so the editor is never empty.
+// Create-mode default: one sensible head so the editor is never empty. Tuition
+// recurs monthly.
 const emptyValues: FeeStructureSchema = {
   code: "",
   class: "",
-  heads: [{ name: "Tuition", amount: 0 }],
+  heads: [{ name: "Tuition", amount: 0, frequency: "monthly" }],
 };
 
 interface FeeStructureFormModalProps {
@@ -86,7 +95,8 @@ export function FeeStructureFormModal({
   const { fields, append, remove } = useFieldArray({ control, name: "heads" });
 
   // Repopulate on open so the previous record's values can't leak through. On
-  // edit, legacy fixed columns come through structureHeads() as editable heads.
+  // edit, structureHeads() returns heads WITH their frequency (legacy fixed
+  // columns are classified by name), so they load back in as-is.
   useEffect(() => {
     if (!open) return;
     if (record) {
@@ -94,7 +104,7 @@ export function FeeStructureFormModal({
       reset({
         code: record.code,
         class: record.class,
-        heads: heads.length ? heads : [{ name: "", amount: 0 }],
+        heads: heads.length ? heads : [{ name: "", amount: 0, frequency: "one-time" }],
       });
     } else {
       reset(emptyValues);
@@ -116,15 +126,16 @@ export function FeeStructureFormModal({
     return set;
   }, [existing, record]);
 
-  // Live heads drive the running total and the preset "already added" state.
+  // Live heads drive the running breakdown and the preset "already added" state.
   const watchedHeads = watch("heads") ?? [];
-  const runningTotal = feeTotal({ heads: watchedHeads } as FeeStructure);
+  const breakdown = feeBreakdown(watchedHeads);
   const hasHead = (name: string) =>
     watchedHeads.some((h) => h.name.trim().toLowerCase() === name.trim().toLowerCase());
 
-  // Preset chip: append the head only if that name isn't already in the list.
-  const addPreset = (name: string) => {
-    if (!hasHead(name)) append({ name, amount: 0 });
+  // Preset chip: append the head (with its usual frequency) only if that name
+  // isn't already in the list.
+  const addPreset = (head: (typeof COMMON_FEE_HEADS)[number]) => {
+    if (!hasHead(head.name)) append({ name: head.name, amount: 0, frequency: head.frequency });
   };
 
   const onValid = (values: FeeStructureSchema) => {
@@ -135,9 +146,9 @@ export function FeeStructureFormModal({
     }
     setDupError(null);
     // Defensive: blank-name rows are already pruned before validation, but keep
-    // the payload clean and send no legacy columns.
+    // the payload clean and carry each head's frequency through.
     const heads = values.heads
-      .map((h) => ({ name: h.name.trim(), amount: Number(h.amount) || 0 }))
+      .map((h) => ({ name: h.name.trim(), amount: Number(h.amount) || 0, frequency: h.frequency }))
       .filter((h) => h.name.length > 0);
     return onSubmit({ code: values.code.trim(), class: cls, heads });
   };
@@ -162,8 +173,8 @@ export function FeeStructureFormModal({
       title={isEdit ? "Edit fee structure" : "Add fee structure"}
       description={
         isEdit
-          ? "Update this class's fee heads. The total is recalculated automatically."
-          : "Define a class's monthly fee heads. The class must be unique."
+          ? "Update this class's fee heads. Totals are recalculated automatically."
+          : "Define a class's fee heads and how often each is charged. The class must be unique."
       }
       footer={
         <>
@@ -201,19 +212,21 @@ export function FeeStructureFormModal({
           </datalist>
         </div>
 
-        {/* Dynamic fee heads — one editable name + amount per row. */}
+        {/* Dynamic fee heads — one editable name + amount + frequency per row. */}
         <Field label="Fee heads" error={headsError}>
           <div className="flex flex-col gap-2">
             {fields.length > 0 && (
-              <div className="flex items-center gap-2 px-0.5 text-xs font-medium text-subtle">
+              <div className="hidden items-center gap-2 px-0.5 text-xs font-medium text-subtle sm:flex">
                 <span className="flex-1">Head</span>
-                <span className="w-28 sm:w-36">Amount (₹)</span>
+                <span className="w-28">Amount (₹)</span>
+                <span className="w-36">Frequency</span>
                 <span className="w-9 shrink-0" aria-hidden />
               </div>
             )}
             {fields.map((field, index) => (
-              <div key={field.id} className="flex items-start gap-2">
-                <div className="flex-1">
+              <div key={field.id} className="flex flex-wrap items-start gap-2">
+                {/* Name — full width on phone, flexes alongside on wider screens. */}
+                <div className="min-w-0 basis-full sm:flex-1">
                   <Input
                     aria-label={`Fee head ${index + 1} name`}
                     placeholder="e.g. Tuition"
@@ -221,7 +234,7 @@ export function FeeStructureFormModal({
                     error={errors.heads?.[index]?.name?.message}
                   />
                 </div>
-                <div className="w-28 sm:w-36">
+                <div className="w-24 shrink-0 sm:w-28">
                   <Input
                     type="number"
                     min={0}
@@ -229,6 +242,14 @@ export function FeeStructureFormModal({
                     aria-label={`Fee head ${index + 1} amount`}
                     {...register(`heads.${index}.amount`)}
                     error={errors.heads?.[index]?.amount?.message}
+                  />
+                </div>
+                <div className="min-w-0 flex-1 sm:w-36 sm:flex-none">
+                  <Select
+                    aria-label={`Fee head ${index + 1} frequency`}
+                    options={FREQUENCY_OPTIONS}
+                    {...register(`heads.${index}.frequency`)}
+                    error={errors.heads?.[index]?.frequency?.message}
                   />
                 </div>
                 <button
@@ -248,17 +269,17 @@ export function FeeStructureFormModal({
         <div className="flex flex-col gap-2">
           <p className="text-xs font-medium text-subtle">Quick add a head</p>
           <div className="flex flex-wrap gap-1.5">
-            {COMMON_FEE_HEADS.map((name) => {
-              const added = hasHead(name);
+            {COMMON_FEE_HEADS.map((head) => {
+              const added = hasHead(head.name);
               return (
                 <button
-                  key={name}
+                  key={head.name}
                   type="button"
                   disabled={added}
-                  onClick={() => addPreset(name)}
+                  onClick={() => addPreset(head)}
                   className="focus-ring rounded-full border border-border px-2.5 py-1 text-xs text-muted transition-colors hover:border-border-strong hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  + {name}
+                  + {head.name}
                 </button>
               );
             })}
@@ -268,7 +289,7 @@ export function FeeStructureFormModal({
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => append({ name: "", amount: 0 })}
+              onClick={() => append({ name: "", amount: 0, frequency: "one-time" })}
             >
               <Plus className="size-4" />
               Add another
@@ -276,10 +297,34 @@ export function FeeStructureFormModal({
           </div>
         </div>
 
-        {/* Running total of whatever is currently entered. */}
-        <div className="flex items-center justify-between rounded-md border border-border bg-surface px-3 py-2.5">
-          <span className="text-sm font-medium text-muted">Monthly total</span>
-          <span className="text-base font-semibold text-primary">{inr.format(runningTotal)}</span>
+        {/* Honest breakdown by cadence — tuition recurs monthly, admission/ID/etc.
+            are one-time, exams are per-exam. Monthly always shows; the others
+            only when they actually bill something. */}
+        <div className="flex flex-col gap-1.5 rounded-md border border-border bg-surface px-3 py-2.5">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium text-muted">Monthly</span>
+            <span className="text-base font-semibold text-primary">
+              {inr.format(breakdown.monthly)}
+              <span className="text-sm font-normal text-muted">/mo</span>
+            </span>
+          </div>
+          {breakdown.oneTime > 0 && (
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-muted">One-time</span>
+              <span className="text-base font-semibold text-primary">
+                {inr.format(breakdown.oneTime)}
+              </span>
+            </div>
+          )}
+          {breakdown.perExam > 0 && (
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-muted">Per-exam</span>
+              <span className="text-base font-semibold text-primary">
+                {inr.format(breakdown.perExam)}
+                <span className="text-sm font-normal text-muted">/exam</span>
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Enables Enter-to-submit without duplicating the footer button. */}

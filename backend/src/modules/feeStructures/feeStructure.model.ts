@@ -1,10 +1,14 @@
 import mongoose, { Schema, type InferSchemaType } from "mongoose";
 
 /** One configurable fee head (name + monthly amount). */
+/** How often a head is charged — drives the fee breakdown and collection. */
+export const FEE_FREQUENCIES = ["monthly", "one-time", "per-exam"] as const;
+
 const feeHeadSchema = new Schema(
   {
     name: { type: String, required: true, trim: true },
     amount: { type: Number, default: 0, min: 0 },
+    frequency: { type: String, enum: FEE_FREQUENCIES, default: "one-time" },
   },
   { _id: false }
 );

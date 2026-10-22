@@ -23,6 +23,7 @@ import {
   PageHeader,
   StatCard,
   Table,
+  Badge,
   useToast,
   type Column,
 } from "@/components/ui";
@@ -31,11 +32,14 @@ import { useResource } from "@/hooks/useResource";
 import {
   feeStructuresApi,
   feeTotal,
+  feeBreakdown,
   structureHeads,
+  FREQUENCY_LABELS,
+  type FeeFrequency,
   type FeeStructure,
 } from "@/lib/api/feeStructures";
 import type { FeeStructureSchema } from "@/lib/schemas/feeStructure";
-import { DetailModal } from "@/components/DetailModal";
+import { DetailModal, type DetailRow } from "@/components/DetailModal";
 import { FeeStructureFormModal } from "./FeeStructureFormModal";
 
 const inr = new Intl.NumberFormat("en-IN", {
@@ -43,6 +47,13 @@ const inr = new Intl.NumberFormat("en-IN", {
   currency: "INR",
   maximumFractionDigits: 0,
 });
+
+// Frequency → badge tone, so each head's cadence reads at a glance.
+const FREQ_BADGE: Record<FeeFrequency, "info" | "default" | "warning"> = {
+  monthly: "info",
+  "one-time": "default",
+  "per-exam": "warning",
+};
 
 export default function FeeStructurePage() {
   const [search, setSearch] = useState("");
@@ -75,13 +86,16 @@ export default function FeeStructurePage() {
       [
         { header: "Code", value: (f) => f.code },
         { header: "Class", value: (f) => f.class },
-        { header: "Monthly Total (INR)", value: (f) => feeTotal(f) },
+        // Split by cadence so the CSV is honest — never one lump sum as "monthly".
+        { header: "Monthly (INR/mo)", value: (f) => feeBreakdown(structureHeads(f)).monthly },
+        { header: "One-time (INR)", value: (f) => feeBreakdown(structureHeads(f)).oneTime },
+        { header: "Per-exam (INR)", value: (f) => feeBreakdown(structureHeads(f)).perExam },
         // Fixed-width regardless of head count: all heads collapsed into one cell.
         {
           header: "Heads",
           value: (f) =>
             structureHeads(f)
-              .map((h) => `${h.name}: ₹${h.amount}`)
+              .map((h) => `${h.name} (${FREQUENCY_LABELS[h.frequency]}): ₹${h.amount}`)
               .join("; "),
         },
       ],
@@ -141,13 +155,15 @@ export default function FeeStructurePage() {
       ),
     },
     {
-      key: "total",
-      header: "Total",
+      key: "monthly",
+      header: "Monthly",
       align: "right",
       sortable: true,
+      sortValue: (f) => feeBreakdown(structureHeads(f)).monthly,
       render: (f) => (
         <span className="whitespace-nowrap font-semibold text-primary">
-          {inr.format(feeTotal(f))}
+          {inr.format(feeBreakdown(structureHeads(f)).monthly)}
+          <span className="ml-0.5 text-xs font-normal text-subtle">/mo</span>
         </span>
       ),
     },
@@ -204,6 +220,34 @@ export default function FeeStructurePage() {
       ),
     },
   ];
+
+  // Derived once for the View dialog — heads plus an honest split by cadence.
+  const viewingHeads = viewing ? structureHeads(viewing) : [];
+  const viewingBreakdown = feeBreakdown(viewingHeads);
+  const viewingRows: DetailRow[] = viewing
+    ? [
+        { label: "Code", value: viewing.code },
+        { label: "Class", value: viewing.class },
+        ...viewingHeads.map((head) => ({
+          label: head.name,
+          value: (
+            <span className="inline-flex items-center gap-2">
+              <span>{inr.format(head.amount)}</span>
+              <Badge variant={FREQ_BADGE[head.frequency]}>
+                {FREQUENCY_LABELS[head.frequency]}
+              </Badge>
+            </span>
+          ),
+        })),
+        { label: "Monthly", value: `${inr.format(viewingBreakdown.monthly)}/mo` },
+        ...(viewingBreakdown.oneTime > 0
+          ? [{ label: "One-time", value: inr.format(viewingBreakdown.oneTime) }]
+          : []),
+        ...(viewingBreakdown.perExam > 0
+          ? [{ label: "Per-exam", value: `${inr.format(viewingBreakdown.perExam)}/exam` }]
+          : []),
+      ]
+    : [];
 
   return (
     <div className="flex flex-col gap-5">
@@ -288,20 +332,10 @@ export default function FeeStructurePage() {
         open={Boolean(viewing)}
         onOpenChange={(o) => !o && setViewing(null)}
         title={viewing ? `Class ${viewing.class}` : "Fee Structure"}
-        description={viewing ? `${viewing.code} · ${inr.format(feeTotal(viewing))} / month` : ""}
-        rows={
-          viewing
-            ? [
-                { label: "Code", value: viewing.code },
-                { label: "Class", value: viewing.class },
-                ...structureHeads(viewing).map((head) => ({
-                  label: head.name,
-                  value: inr.format(head.amount),
-                })),
-                { label: "Monthly total", value: inr.format(feeTotal(viewing)) },
-              ]
-            : []
+        description={
+          viewing ? `${viewing.code} · ${inr.format(viewingBreakdown.monthly)}/mo recurring` : ""
         }
+        rows={viewingRows}
       />
 
       <ConfirmDialog
