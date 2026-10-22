@@ -21,6 +21,7 @@ import {
   applyTransportHead,
   toAccountHeads,
   matchStructure,
+  pickStructureForClass,
   netHeadsFor,
   provisionalAccountFor,
   scholarshipConcessionFor,
@@ -149,13 +150,6 @@ async function loadStudentFeeRows(
   // A route's fee is the transport bill for the students assigned to it (by code).
   const routeFeeByCode = new Map(routes.map((r) => [r.code, Number(r.fee) || 0]));
 
-  // First structure that covers each class (matched case-insensitively).
-  const structureByClass = new Map<string, (typeof structures)[number]>();
-  for (const st of structures) {
-    const key = st.class.trim().toLowerCase();
-    if (!structureByClass.has(key)) structureByClass.set(key, st);
-  }
-
   // Summed active scholarship waiver per linked student.
   const concessionByStudent = new Map<string, number>();
   for (const sc of scholarships) {
@@ -168,7 +162,7 @@ async function loadStudentFeeRows(
   return students.map((student) => {
     const existing = accountByStudent.get(String(student._id));
     if (existing) return publicAccount(existing as FeeAccountDoc);
-    const structure = structureByClass.get(student.className.trim().toLowerCase());
+    const structure = pickStructureForClass(structures, student.className);
     const gross = applyTransportHead(deriveGrossHeads(structure), {
       transportRequired: student.transportRequired,
       routeFee: student.transportRouteCode ? routeFeeByCode.get(student.transportRouteCode) ?? null : null,

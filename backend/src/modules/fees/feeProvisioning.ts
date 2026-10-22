@@ -139,14 +139,65 @@ export function applyConcession(heads: GrossHead[], concession: number): GrossHe
 }
 
 /**
- * Finds the fee structure covering a class, matched exactly but
- * case-insensitively (the admission form matches the same way).
+ * Academic rank of a class name — pre-primary grades sit below Class 1, numbered
+ * grades rank by their number, anything else sinks to the end. Mirrors the
+ * frontend `classOrder.ts` so FE and BE agree on what a fee band covers.
+ */
+const GRADE_PREFIX: Record<string, number> = { nursery: -3, lkg: -2, ukg: -1, kg: -1, prep: -1 };
+function classRank(name: string): number {
+  const lower = (name ?? "").toLowerCase().trim();
+  for (const [key, rank] of Object.entries(GRADE_PREFIX)) if (lower.includes(key)) return rank;
+  const digits = (name ?? "").match(/\d+/)?.[0];
+  return digits ? parseInt(digits, 10) : 999;
+}
+
+/**
+ * Whether a fee structure's class covers a student's class. A structure may be a
+ * single class ("Class 6") or a BAND ("Nursery-UKG", "Class 1-5") — a band covers
+ * any class whose academic rank falls between its two endpoints. This is what lets
+ * one structure serve a range of classes.
+ */
+export function classMatchesStructure(structureClass: string, studentClass: string): boolean {
+  const sc = (structureClass ?? "").trim();
+  const st = (studentClass ?? "").trim();
+  if (!sc || !st) return false;
+  if (sc.toLowerCase() === st.toLowerCase()) return true; // exact
+  const dash = sc.indexOf("-");
+  if (dash > 0) {
+    const loR = classRank(sc.slice(0, dash));
+    const hiR = classRank(sc.slice(dash + 1));
+    // Only treat it as a band when BOTH endpoints are real grades, so a custom
+    // hyphenated name (e.g. "Pre-Primary") can't accidentally match a range.
+    if (loR !== 999 && hiR !== 999) {
+      const stR = classRank(st);
+      if (stR >= Math.min(loR, hiR) && stR <= Math.max(loR, hiR)) return true;
+    }
+  }
+  return false;
+}
+
+/** The structure covering a class — an exact class match wins over a band match. */
+export function pickStructureForClass<T extends { class: string }>(
+  structures: T[],
+  className: string
+): T | null {
+  const st = (className ?? "").trim().toLowerCase();
+  if (!st) return null;
+  const exact = structures.find((s) => (s.class ?? "").trim().toLowerCase() === st);
+  if (exact) return exact;
+  return structures.find((s) => classMatchesStructure(s.class, className)) ?? null;
+}
+
+/**
+ * Finds the fee structure covering a class — an exact class match, or a band such
+ * as "Nursery-UKG" / "Class 1-5" that the class falls within (the admission form
+ * matches the same way).
  */
 export async function matchStructure(schoolId: string, className: string) {
   const name = (className ?? "").trim();
   if (!name) return null;
-  const rx = new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
-  return FeeStructure.findOne({ schoolId, class: rx });
+  const structures = await FeeStructure.find({ schoolId });
+  return pickStructureForClass(structures, name);
 }
 
 /** Sum of ACTIVE scholarship waivers linked to a student (by studentId). */

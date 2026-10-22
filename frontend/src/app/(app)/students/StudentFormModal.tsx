@@ -26,6 +26,7 @@ import {
 } from "@/lib/api/feeStructures";
 import { busRoutesApi, type BusRoute } from "@/lib/api/busRoutes";
 import { createFeeAccount } from "@/lib/api/feeLedger";
+import { classMatchesStructure } from "@/lib/classOrder";
 import { MIN_STUDENT_DOB, MAX_STUDENT_DOB, MIN_RECORD_DATE, TODAY_ISO } from "@/lib/dates";
 import type { Student, StudentFormValues } from "@/types/student";
 
@@ -410,7 +411,7 @@ export function StudentFormModal({
 
   // Fee structures for the class picked above, and the derived amounts shown in
   // the Fees section. Cheap to recompute; the React Compiler memoises it.
-  const classStructures = feeStructures.filter((s) => s.class === className);
+  const classStructures = feeStructures.filter((s) => classMatchesStructure(s.class, className));
   const selectedStructure = classStructures.find((s) => s.id === feeStructureId) ?? null;
   const selectedRoute = busRoutes.find((r) => r.code === transportRouteCode) ?? null;
   // The exact heads the account will be opened with — transport billed from the
