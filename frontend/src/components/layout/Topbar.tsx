@@ -7,7 +7,7 @@ import { Bell, ChevronDown, LogOut, Menu, Search, Settings } from "lucide-react"
 import { useAuthStore, useSidebarStore } from "@/store";
 import { logout as apiLogout } from "@/lib/api/auth";
 import { Avatar } from "@/components/ui";
-import { breadcrumbFor } from "@/lib/navigation";
+import { breadcrumbFor, isPathAllowed } from "@/lib/navigation";
 import { useNotifications } from "@/hooks/useNotifications";
 import type { AppNotification } from "@/lib/api/notifications";
 import { ThemeToggle } from "./ThemeToggle";
@@ -52,7 +52,7 @@ export function Topbar() {
   };
 
   const markAllRead = () => markAll();
-  const trail = breadcrumbFor(pathname);
+  const trail = breadcrumbFor(pathname, user?.role);
 
   // ⌘K / Ctrl+K opens the palette from anywhere.
   useEffect(() => {
@@ -213,15 +213,22 @@ export function Topbar() {
                   <p className="mt-0.5 text-[11px] text-subtle">{user?.email}</p>
                 </div>
 
-                <DropdownMenu.Item
-                  onSelect={() => router.push("/settings")}
-                  className={`${menuItemClasses} text-text data-[highlighted]:bg-surface-hover`}
-                >
-                  <Settings size={15} className="text-subtle" />
-                  Settings
-                </DropdownMenu.Item>
+                {/* Settings is office/admin school-config — hidden for roles that
+                    can't open it (e.g. teachers), so the item isn't a dead link
+                    that just bounces back to the dashboard. */}
+                {isPathAllowed(user?.role, "/settings") && (
+                  <>
+                    <DropdownMenu.Item
+                      onSelect={() => router.push("/settings")}
+                      className={`${menuItemClasses} text-text data-[highlighted]:bg-surface-hover`}
+                    >
+                      <Settings size={15} className="text-subtle" />
+                      Settings
+                    </DropdownMenu.Item>
 
-                <div className="my-1 h-px bg-border" />
+                    <div className="my-1 h-px bg-border" />
+                  </>
+                )}
 
                 <DropdownMenu.Item
                   onSelect={handleLogout}

@@ -411,21 +411,36 @@ export function navGroupsForRole(role: UserRole | undefined): NavGroup[] {
           const children = it.children?.filter((c) => allowed.has(c.href));
           return children && it.children ? { ...it, children } : it;
         })
-        .filter((it) => allowed.has(it.href) || (it.children?.length ?? 0) > 0);
+        .filter((it) => allowed.has(it.href) || (it.children?.length ?? 0) > 0)
+        // A teacher's student list is only their own class, so "All Students"
+        // reads as "My Class".
+        .map((it) =>
+          role === "teacher" && it.children
+            ? {
+                ...it,
+                children: it.children.map((c) =>
+                  c.href === "/students" ? { ...c, title: "My Class" } : c
+                ),
+              }
+            : it
+        );
       return { ...g, items };
     })
     .filter((g) => g.items.length > 0);
 }
 
 /** Human-readable trail for the current pathname, e.g. Academic → Examinations → Mark Entry. */
-export function breadcrumbFor(pathname: string): string[] {
+export function breadcrumbFor(pathname: string, role?: UserRole): string[] {
+  // A teacher only ever sees their own class, so "All Students" reads as "My Class".
+  const relabel = (trail: string[]) =>
+    role === "teacher" ? trail.map((t) => (t === "All Students" ? "My Class" : t)) : trail;
   for (const group of navGroups) {
     for (const item of group.items) {
       const child = item.children?.find((c) => c.href === pathname);
-      if (child) return [group.label, item.title, child.title];
-      if (item.href === pathname) return [group.label, item.title];
+      if (child) return relabel([group.label, item.title, child.title]);
+      if (item.href === pathname) return relabel([group.label, item.title]);
       // Detail routes like /students/stu_001 sit under their list page.
-      if (pathname.startsWith(`${item.href}/`)) return [group.label, item.title, "Details"];
+      if (pathname.startsWith(`${item.href}/`)) return relabel([group.label, item.title, "Details"]);
     }
   }
   return [];

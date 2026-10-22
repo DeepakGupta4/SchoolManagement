@@ -481,7 +481,7 @@ function StudentsPageInner() {
     <div className="flex flex-col gap-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold text-text">Students</h1>
+          <h1 className="text-xl font-semibold text-text">{isTeacher ? "My Class" : "Students"}</h1>
           <p className="mt-0.5 text-sm text-muted">
             {isTeacher
               ? myClass?.className
