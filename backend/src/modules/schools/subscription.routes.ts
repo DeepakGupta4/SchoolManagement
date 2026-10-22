@@ -1,7 +1,7 @@
 import { Router } from "express";
 import crypto from "node:crypto";
 import { z } from "zod";
-import { requireAuth } from "../../middleware/auth.js";
+import { requireAuth, requireRole } from "../../middleware/auth.js";
 import { validate } from "../../middleware/validate.js";
 import { ApiError } from "../../utils/ApiError.js";
 import { env } from "../../config/env.js";
@@ -57,6 +57,9 @@ router.post("/run-reminders", async (req, res, next) => {
 
 router.use(requireAuth);
 
+/** Paying for / managing the SaaS plan is the account owner's action, not the principal's. */
+const canBill = requireRole("super_admin", "school_admin");
+
 /** Available plans, plus whether online payment is currently enabled. */
 router.get("/plans", (_req, res) => {
   res.json({ data: { plans: plans(), paymentEnabled: paymentConfigured() } });
@@ -65,7 +68,7 @@ router.get("/plans", (_req, res) => {
 const orderSchema = z.object({ plan: z.enum(["monthly", "yearly"]) });
 
 /** Create a Razorpay order for the chosen plan. */
-router.post("/order", validate(orderSchema), async (req, res, next) => {
+router.post("/order", canBill, validate(orderSchema), async (req, res, next) => {
   try {
     if (!paymentConfigured()) {
       throw new ApiError(503, "Online payment is not configured yet. Please contact support to activate.");
@@ -116,7 +119,7 @@ const verifySchema = z.object({
 });
 
 /** Verify the gateway signature and activate the subscription. */
-router.post("/verify", validate(verifySchema), async (req, res, next) => {
+router.post("/verify", canBill, validate(verifySchema), async (req, res, next) => {
   try {
     if (!paymentConfigured()) throw new ApiError(503, "Payment is not configured.");
     const body = req.body as z.infer<typeof verifySchema>;

@@ -331,6 +331,31 @@ const RESTRICTED_ROLE_HREFS: Partial<Record<UserRole, Set<string>>> = {
 const FULL_ACCESS_ROLES = new Set<string>(["super_admin", "school_admin", "principal"]);
 
 /**
+ * Hrefs a near-full role may NOT see even though it otherwise has full access. The
+ * principal runs the school day-to-day but is NOT the account owner, so the
+ * SaaS-account items — billing/subscription, the Security page, and the platform
+ * setup tools (Workflow Builder, Mobile Apps) — stay with super_admin /
+ * school_admin. (The Settings "reset all data" danger zone is gated inside the
+ * Settings page itself, since the rest of Settings IS the principal's.)
+ */
+const DENIED_HREFS_BY_ROLE: Partial<Record<string, Set<string>>> = {
+  principal: new Set<string>(["/subscription", "/security", "/workflows", "/mobile"]),
+};
+
+function deniedHrefsFor(role: UserRole | undefined): Set<string> | undefined {
+  return role ? DENIED_HREFS_BY_ROLE[role] : undefined;
+}
+
+/** True when a full-access role is nonetheless denied this path (exact or a sub-route). */
+function isDeniedForRole(role: UserRole | undefined, pathname: string): boolean {
+  const denied = deniedHrefsFor(role);
+  if (!denied) return false;
+  if (denied.has(pathname)) return true;
+  for (const base of denied) if (pathname.startsWith(`${base}/`)) return true;
+  return false;
+}
+
+/**
  * Personal self-service hrefs (flagged `hideFromFullAccess`, e.g. "/leave/my") that
  * full-access admins/principals should neither see in nav nor open. Collected from
  * `navGroups` so it stays in sync with the flag.
@@ -367,8 +392,9 @@ const STUDENT_ADMIN_SUBROUTES = new Set([
 export function isPathAllowed(role: UserRole | undefined, pathname: string): boolean {
   const allowed = allowedHrefsFor(role);
   // Full-access roles may open everything except personal self-service pages
-  // (e.g. "/leave/my") — admins manage everyone's leave, they don't file their own.
-  if (!allowed) return !SELF_SERVICE_ONLY_HREFS.has(pathname);
+  // (e.g. "/leave/my") and anything on their role's deny-list (the principal
+  // can't open the account-owner pages).
+  if (!allowed) return !SELF_SERVICE_ONLY_HREFS.has(pathname) && !isDeniedForRole(role, pathname);
   if (pathname === "/" || pathname === "/dashboard") return true;
 
   // Exact allowed pages.
@@ -403,11 +429,17 @@ export function navGroupsForRole(role: UserRole | undefined): NavGroup[] {
     })
     .map((g) => {
       if (!allowed) {
-        // Full-access roles (admin/principal) see every module EXCEPT personal
-        // self-service items like "My Leave" — they manage everyone's leave in
-        // "Leave Management" and never file their own here.
-        const items = g.items.filter((it) => !it.hideFromFullAccess);
-        return items.length === g.items.length ? g : { ...g, items };
+        // Full-access roles see every module EXCEPT personal self-service items
+        // (e.g. "My Leave") and anything on their role's deny-list (the principal
+        // doesn't see the account-owner items).
+        const denied = deniedHrefsFor(role);
+        const items = g.items
+          .filter((it) => !it.hideFromFullAccess)
+          .filter((it) => !denied || !denied.has(it.href))
+          .map((it) =>
+            denied && it.children ? { ...it, children: it.children.filter((c) => !denied.has(c.href)) } : it
+          );
+        return { ...g, items };
       }
       // Restricted roles see only their allowed items; parent items keep only
       // the children they may open.

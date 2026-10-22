@@ -120,6 +120,9 @@ export default function SettingsPage() {
   const canManageSchool = ["super_admin", "school_admin", "principal"].includes(
     user?.role ?? ""
   );
+  // Wiping all school data is an account-owner action — a principal manages the
+  // school but cannot reset it.
+  const canResetData = ["super_admin", "school_admin"].includes(user?.role ?? "");
 
   // The signed-in user's own display name (header + dashboard greeting).
   const [accountName, setAccountName] = useState("");
@@ -1132,7 +1135,8 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
-      {/* Danger zone — clear all school data */}
+      {/* Danger zone — clear all school data (account owner only; a principal manages the school but can't reset it) */}
+      {canResetData && (
       <Card className="border-danger/40">
         <CardHeader>
           <div className="flex items-center gap-2">
@@ -1154,6 +1158,7 @@ export default function SettingsPage() {
           </Button>
         </CardContent>
       </Card>
+      )}
 
       <Modal
         open={resetOpen}

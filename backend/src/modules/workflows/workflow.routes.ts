@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { Workflow, WORKFLOW_TRIGGERS } from "./workflow.model.js";
 import { createCrudRouter } from "../../utils/crudRouter.js";
+import { requireRole } from "../../middleware/auth.js";
 import { ApiError } from "../../utils/ApiError.js";
 import { runWorkflowsForSchool, runSingleWorkflow } from "./workflow.service.js";
 import type { HydratedDocument } from "mongoose";
@@ -19,11 +20,14 @@ export default createCrudRouter({
   createSchema: workflowSchema,
   searchFields: ["name", "trigger"],
   filterFields: ["trigger"],
+  // Automation setup is an owner/admin tool, not a day-to-day principal action.
+  writeRoles: ["super_admin", "school_admin"],
   // Mounted before the generic `/:id` routes so `/run-all` isn't swallowed by
   // the `GET /:id` handler. `extend` runs after `router.use(requireAuth)`.
   extend: (router) => {
+    const canManage = requireRole("super_admin", "school_admin");
     // Evaluate every enabled rule now (manual, non-deduped) and report back.
-    router.post("/run-all", async (req, res, next) => {
+    router.post("/run-all", canManage, async (req, res, next) => {
       try {
         const summary = await runWorkflowsForSchool(req.user!.schoolId, { auto: false });
         res.json({ data: summary });
@@ -33,7 +37,7 @@ export default createCrudRouter({
     });
 
     // Run a single rule immediately.
-    router.post("/:id/run", async (req, res, next) => {
+    router.post("/:id/run", canManage, async (req, res, next) => {
       try {
         const rule = await Workflow.findOne({
           _id: req.params.id,

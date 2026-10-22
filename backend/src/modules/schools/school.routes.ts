@@ -141,7 +141,8 @@ router.patch(
  */
 router.post(
   "/reset-data",
-  requireRole("super_admin", "school_admin", "principal"),
+  // Wiping ALL school data is an account-owner action — never the principal's.
+  requireRole("super_admin", "school_admin"),
   async (req, res, next) => {
     try {
       const schoolId = req.user!.schoolId;
