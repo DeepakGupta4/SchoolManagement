@@ -8,7 +8,10 @@ import { Modal, Button, Input, Field, Select, type SelectOption } from "@/compon
 import { feeStructureSchema, type FeeStructureSchema } from "@/lib/schemas/feeStructure";
 import {
   COMMON_FEE_HEADS,
+  DEFAULT_EXAMS_PER_YEAR,
+  DEFAULT_MONTHS_PER_YEAR,
   FREQUENCY_LABELS,
+  annualTotal,
   feeBreakdown,
   structureHeads,
   type FeeFrequency,
@@ -50,11 +53,13 @@ const inr = new Intl.NumberFormat("en-IN", {
 });
 
 // Create-mode default: one sensible head so the editor is never empty. Tuition
-// recurs monthly.
+// recurs monthly. Months/exams per year default to the usual Indian session.
 const emptyValues: FeeStructureSchema = {
   code: "",
   class: "",
   heads: [{ name: "Tuition", amount: 0, frequency: "monthly" }],
+  monthsPerYear: DEFAULT_MONTHS_PER_YEAR,
+  examsPerYear: DEFAULT_EXAMS_PER_YEAR,
 };
 
 interface FeeStructureFormModalProps {
@@ -105,6 +110,8 @@ export function FeeStructureFormModal({
         code: record.code,
         class: record.class,
         heads: heads.length ? heads : [{ name: "", amount: 0, frequency: "one-time" }],
+        monthsPerYear: record.monthsPerYear ?? DEFAULT_MONTHS_PER_YEAR,
+        examsPerYear: record.examsPerYear ?? DEFAULT_EXAMS_PER_YEAR,
       });
     } else {
       reset(emptyValues);
@@ -129,6 +136,10 @@ export function FeeStructureFormModal({
   // Live heads drive the running breakdown and the preset "already added" state.
   const watchedHeads = watch("heads") ?? [];
   const breakdown = feeBreakdown(watchedHeads);
+  // Cadence drives the annual (session) bill — monthly heads × months, exams × exams.
+  const months = Number(watch("monthsPerYear")) || DEFAULT_MONTHS_PER_YEAR;
+  const exams = Number(watch("examsPerYear")) || 0;
+  const annual = annualTotal(watchedHeads, months, exams);
   const hasHead = (name: string) =>
     watchedHeads.some((h) => h.name.trim().toLowerCase() === name.trim().toLowerCase());
 
@@ -150,7 +161,13 @@ export function FeeStructureFormModal({
     const heads = values.heads
       .map((h) => ({ name: h.name.trim(), amount: Number(h.amount) || 0, frequency: h.frequency }))
       .filter((h) => h.name.length > 0);
-    return onSubmit({ code: values.code.trim(), class: cls, heads });
+    return onSubmit({
+      code: values.code.trim(),
+      class: cls,
+      heads,
+      monthsPerYear: values.monthsPerYear,
+      examsPerYear: values.examsPerYear,
+    });
   };
 
   // Drop any blank-name rows up-front so a stray "Add another" row the user
@@ -297,9 +314,36 @@ export function FeeStructureFormModal({
           </div>
         </div>
 
+        {/* Billing cadence — how many monthly instalments a session runs over, and
+            how many exams it has. These multiply the per-period amounts into the
+            annual bill and decide how many times each head is collected. */}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Input
+            label="Months per year"
+            type="number"
+            min={1}
+            max={12}
+            inputMode="numeric"
+            hint="Monthly heads are billed this many times (e.g. 12)."
+            {...register("monthsPerYear")}
+            error={errors.monthsPerYear?.message}
+          />
+          <Input
+            label="Exams per year"
+            type="number"
+            min={0}
+            max={20}
+            inputMode="numeric"
+            hint="Per-exam heads are billed once for each exam."
+            {...register("examsPerYear")}
+            error={errors.examsPerYear?.message}
+          />
+        </div>
+
         {/* Honest breakdown by cadence — tuition recurs monthly, admission/ID/etc.
             are one-time, exams are per-exam. Monthly always shows; the others
-            only when they actually bill something. */}
+            only when they actually bill something. The annual line is the full
+            session bill, which is what the student is billed and collected against. */}
         <div className="flex flex-col gap-1.5 rounded-md border border-border bg-surface px-3 py-2.5">
           <div className="flex items-center justify-between">
             <span className="text-sm font-medium text-muted">Monthly</span>
@@ -325,6 +369,17 @@ export function FeeStructureFormModal({
               </span>
             </div>
           )}
+          <div className="mt-0.5 flex items-center justify-between border-t border-border pt-2">
+            <span className="text-sm font-semibold text-foreground">Annual bill</span>
+            <span className="text-lg font-bold text-foreground">
+              {inr.format(annual)}
+              <span className="text-sm font-normal text-muted">/year</span>
+            </span>
+          </div>
+          <p className="text-xs text-subtle">
+            Full session fee ({months} monthly instalment{months === 1 ? "" : "s"}
+            {exams > 0 ? ` + ${exams} exam${exams === 1 ? "" : "s"}` : ""}). Collected in parts.
+          </p>
         </div>
 
         {/* Enables Enter-to-submit without duplicating the footer button. */}

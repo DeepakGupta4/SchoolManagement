@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   BadgeIndianRupee,
   CalendarClock,
@@ -48,6 +48,7 @@ import {
   REFERENCE_REQUIRED,
   totalBilled,
   totalPaid,
+  type FeeHeadDue,
   type FeeStanding,
   type PaymentAllocation,
   type PaymentMethod,
@@ -72,6 +73,9 @@ const STANDING_BADGE: Record<FeeStanding, "success" | "warning" | "danger" | "de
   due: "default",
 };
 
+/** The late fee rides in the allocation list under this exact name (matches the server). */
+const LATE_FEE_HEAD = "Late Fee";
+
 /** Quick amounts a clerk reaches for before typing a custom figure. */
 const QUICK_PRESETS = [
   { label: "Full balance", of: (b: number) => b },
@@ -79,6 +83,65 @@ const QUICK_PRESETS = [
   { label: "₹5,000", of: () => 5000 },
   { label: "₹2,000", of: () => 2000 },
 ];
+
+/** The per-period amount stored on a head (one month / one exam). */
+const headUnit = (h: FeeHeadDue) => Math.max(0, Math.round(Number(h.unit) || 0));
+
+/** How a head reads at a glance — "₹4,500/mo", "₹500/exam", or "One-time". */
+function headCadenceLabel(h: FeeHeadDue): string {
+  const unit = headUnit(h);
+  if (h.frequency === "monthly") return unit > 0 ? `${inr(unit)}/mo` : "Monthly";
+  if (h.frequency === "per-exam") return unit > 0 ? `${inr(unit)}/exam` : "Per-exam";
+  return "One-time";
+}
+
+/** One instalment to add for a head: a month, an exam, or (one-time) the whole due. */
+function headInstalment(h: FeeHeadDue): number {
+  const due = headBalance(h);
+  if (h.frequency === "monthly" || h.frequency === "per-exam") {
+    const unit = headUnit(h);
+    return Math.min(due, unit > 0 ? unit : due);
+  }
+  return due;
+}
+
+/** Label for a head's quick-add button. */
+function instalmentLabel(h: FeeHeadDue): string {
+  if (h.frequency === "monthly") return "+1 month";
+  if (h.frequency === "per-exam") return "+1 exam";
+  return "Add full";
+}
+
+/**
+ * One month's worth of each MONTHLY head (capped at its due) — the default a
+ * clerk collects: tuition and other recurring heads shown for the current month,
+ * with one-time and per-exam heads added only when selected. Mirrors how a real
+ * ERP front desk takes the monthly instalment.
+ */
+function monthlyDefaults(account: StudentFeeAccount): Record<string, string> {
+  const next: Record<string, string> = {};
+  for (const h of account.heads) {
+    if (h.frequency !== "monthly") continue;
+    const amt = Math.min(headUnit(h), headBalance(h));
+    if (amt > 0) next[h.head] = String(amt);
+  }
+  return next;
+}
+
+/**
+ * One exam's worth of each PER-EXAM head (capped at its due) — exam fee and
+ * report-card fee are separate heads, both added one exam at a time when the
+ * office collects exam-time dues.
+ */
+function examDefaults(account: StudentFeeAccount): Record<string, string> {
+  const next: Record<string, string> = {};
+  for (const h of account.heads) {
+    if (h.frequency !== "per-exam") continue;
+    const amt = Math.min(headUnit(h), headBalance(h));
+    if (amt > 0) next[h.head] = String(amt);
+  }
+  return next;
+}
 
 export default function CollectFeePage() {
   const { toast } = useToast();
@@ -114,9 +177,13 @@ export default function CollectFeePage() {
     const params = new URLSearchParams(window.location.search);
     const q = params.get("q");
     const sid = params.get("student");
-    if (q) setSearch(q);
-    if (sid) setSelectedStudentId(sid);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (!q && !sid) return;
+    // Deferred so state isn't set synchronously in the effect (set-state-in-effect).
+    const t = setTimeout(() => {
+      if (q) setSearch(q);
+      if (sid) setSelectedStudentId(sid);
+    }, 0);
+    return () => clearTimeout(t);
   }, []);
 
   // Per-head amounts the clerk is collecting right now, keyed by head name.
@@ -128,12 +195,23 @@ export default function CollectFeePage() {
   const [submitting, setSubmitting] = useState(false);
   const [receipt, setReceipt] = useState<Payment | null>(null);
 
+  // The student we've already pre-filled monthly defaults for, so switching
+  // students prefills once without clobbering edits or re-filling after a payment.
+  const prefilledFor = useRef<string | null>(null);
+
   // The selected student's own receipts (their payment history).
   const [history, setHistory] = useState<Payment[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyNonce, setHistoryNonce] = useState(0);
 
   const balance = selected ? balanceOf(selected) : 0;
+  // Which cadences still have dues — drives the "This month" / "This exam" presets.
+  const hasMonthlyDue = Boolean(
+    selected?.heads.some((h) => h.frequency === "monthly" && headBalance(h) > 0)
+  );
+  const hasExamDue = Boolean(
+    selected?.heads.some((h) => h.frequency === "per-exam" && headBalance(h) > 0)
+  );
 
   // Load the student's history when the selection changes or a payment lands.
   // Deferred with a 0ms timer so state isn't set synchronously inside the
@@ -161,6 +239,24 @@ export default function CollectFeePage() {
     };
   }, [selectedStudentId, historyNonce]);
 
+  // Pre-fill this month's recurring instalment when a student is first selected —
+  // tuition and other monthly heads show their monthly amount by default, so the
+  // clerk collects the month in one tap and adds one-time/per-exam heads on top.
+  // Ref-guarded by studentId so it runs once per student (not after each payment
+  // or an unrelated refetch), and never overrides what the clerk has typed.
+  useEffect(() => {
+    if (!selected) return;
+    if (prefilledFor.current === selected.studentId) return;
+    prefilledFor.current = selected.studentId;
+    if (isUnbilled(selected) || isCleared(selected)) return;
+    const defaults = monthlyDefaults(selected);
+    if (Object.keys(defaults).length === 0) return;
+    // Deferred so state isn't set synchronously in the effect (lint rule used
+    // throughout this file).
+    const t = setTimeout(() => setEntered(defaults), 0);
+    return () => clearTimeout(t);
+  }, [selected]);
+
   // Cheap to recompute each render; the React Compiler handles memoisation.
   const allocations: PaymentAllocation[] = !selected
     ? []
@@ -170,8 +266,20 @@ export default function CollectFeePage() {
 
   const collecting = allocations.reduce((sum, a) => sum + a.amount, 0);
   const overpaying = collecting > balance;
+  // The scalar late fee is only addressed as "Late Fee" when no billed head owns
+  // that (free-form) name; a real "Late Fee" head is checked in the heads loop.
+  const lateFeeIsScalar = !selected?.heads.some((h) => h.head === LATE_FEE_HEAD);
+  // No single head (nor the late fee) may be paid beyond its own due — else one
+  // head is overpaid while another stays unpaid. The server rejects this too.
+  const headOver = Boolean(
+    selected &&
+      (selected.heads.some((h) => Math.round(Number(entered[h.head]) || 0) > headBalance(h)) ||
+        (lateFeeIsScalar &&
+          Math.round(Number(entered[LATE_FEE_HEAD]) || 0) > (selected.lateFee || 0)))
+  );
   const referenceMissing = REFERENCE_REQUIRED.includes(method) && !reference.trim();
-  const canSubmit = Boolean(selected) && collecting > 0 && !overpaying && !referenceMissing;
+  const canSubmit =
+    Boolean(selected) && collecting > 0 && !overpaying && !headOver && !referenceMissing;
 
   const pickStudent = (account: StudentFeeAccount) => {
     setSelectedStudentId(account.studentId);
@@ -193,6 +301,26 @@ export default function CollectFeePage() {
 
   const setHead = (head: string, value: string) =>
     setEntered((prev) => ({ ...prev, [head]: value.replace(/[^\d]/g, "") }));
+
+  /** Fill every monthly head with one month's amount, keeping anything else entered. */
+  const fillThisMonth = () => {
+    if (!selected) return;
+    setEntered((prev) => ({ ...prev, ...monthlyDefaults(selected) }));
+  };
+
+  /** Fill every per-exam head (exam fee, report card…) with one exam's amount. */
+  const fillThisExam = () => {
+    if (!selected) return;
+    setEntered((prev) => ({ ...prev, ...examDefaults(selected) }));
+  };
+
+  /** Add one instalment (a month / an exam / the full due) to a head, capped at its due. */
+  const addInstalment = (h: FeeHeadDue) => {
+    const due = headBalance(h);
+    const current = Math.max(0, Math.round(Number(entered[h.head]) || 0));
+    const step = headInstalment(h) || due;
+    setHead(h.head, String(Math.min(due, current + step)));
+  };
 
   const handleSubmit = async () => {
     if (!selected || !canSubmit) return;
@@ -404,12 +532,24 @@ export default function CollectFeePage() {
                     <div>
                       <p className="text-sm font-semibold text-text">How much is being paid now?</p>
                       <p className="mt-0.5 text-xs text-muted">
-                        Part payments are allowed — enter any amount up to the balance.
+                        This month&rsquo;s recurring heads are pre-filled. Use <strong>This exam</strong>{" "}
+                        to add exam &amp; report-card fees, or set any head below. Part payments are
+                        allowed, up to the balance.
                       </p>
                     </div>
                   </CardHeader>
                   <CardContent className="flex flex-col gap-4">
                     <div className="flex flex-wrap gap-2">
+                      {hasMonthlyDue && (
+                        <Button variant="primary" size="sm" onClick={fillThisMonth}>
+                          This month
+                        </Button>
+                      )}
+                      {hasExamDue && (
+                        <Button variant="primary" size="sm" onClick={fillThisExam}>
+                          This exam
+                        </Button>
+                      )}
                       {QUICK_PRESETS.map((p) => {
                         const amount = Math.min(p.of(balance), balance);
                         return (
@@ -449,7 +589,12 @@ export default function CollectFeePage() {
                             const over = Number(value || 0) > due;
                             return (
                               <tr key={h.head} className="border-b border-border last:border-0">
-                                <td className="px-4 py-2.5 font-medium text-text">{h.head}</td>
+                                <td className="px-4 py-2.5">
+                                  <span className="font-medium text-text">{h.head}</span>
+                                  <span className="mt-0.5 block text-xs text-subtle">
+                                    {headCadenceLabel(h)}
+                                  </span>
+                                </td>
                                 <td className="px-4 py-2.5 text-right text-muted">{inr(h.billed)}</td>
                                 <td className="px-4 py-2.5 text-right text-muted">{inr(h.paid)}</td>
                                 <td
@@ -470,12 +615,21 @@ export default function CollectFeePage() {
                                     aria-label={`Amount for ${h.head}`}
                                     className={cn("text-right", over && "border-danger")}
                                   />
+                                  {due > 0 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => addInstalment(h)}
+                                      className="focus-ring mt-1 ml-auto block rounded px-1.5 py-0.5 text-[11px] font-medium text-primary transition-colors hover:bg-primary-soft"
+                                    >
+                                      {instalmentLabel(h)}
+                                    </button>
+                                  )}
                                 </td>
                               </tr>
                             );
                           })}
 
-                          {selected.lateFee > 0 && (
+                          {selected.lateFee > 0 && lateFeeIsScalar && (
                             <tr className="border-b border-border last:border-0 bg-warning-soft/40">
                               <td className="px-4 py-2.5 font-medium text-text">Late Fee</td>
                               <td className="px-4 py-2.5 text-right text-muted">
@@ -489,10 +643,14 @@ export default function CollectFeePage() {
                                 <Input
                                   inputMode="numeric"
                                   placeholder="0"
-                                  value={entered["Late Fee"] ?? ""}
-                                  onChange={(e) => setHead("Late Fee", e.target.value)}
+                                  value={entered[LATE_FEE_HEAD] ?? ""}
+                                  onChange={(e) => setHead(LATE_FEE_HEAD, e.target.value)}
                                   aria-label="Amount for late fee"
-                                  className="text-right"
+                                  className={cn(
+                                    "text-right",
+                                    Math.round(Number(entered[LATE_FEE_HEAD]) || 0) > selected.lateFee &&
+                                      "border-danger"
+                                  )}
                                 />
                               </td>
                             </tr>
@@ -602,6 +760,12 @@ export default function CollectFeePage() {
                         <span className="inline-flex items-center gap-1.5 text-xs font-medium text-danger">
                           <TriangleAlert className="size-3.5" />
                           Exceeds balance by {inr(collecting - balance)}
+                        </span>
+                      )}
+                      {!overpaying && headOver && (
+                        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-danger">
+                          <TriangleAlert className="size-3.5" />
+                          A head is over its due — reduce the highlighted amount
                         </span>
                       )}
                       <Button onClick={handleSubmit} disabled={!canSubmit || submitting}>

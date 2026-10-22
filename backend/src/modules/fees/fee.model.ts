@@ -17,6 +17,9 @@ const feeHeadSchema = new Schema(
     head: { type: String, required: true },
     billed: { type: Number, required: true, min: 0 },
     paid: { type: Number, default: 0, min: 0 },
+    /** How this head is charged, and the per-period amount (for instalment display). */
+    frequency: { type: String, enum: ["monthly", "one-time", "per-exam"], default: "one-time" },
+    unit: { type: Number, default: 0, min: 0 },
   },
   { _id: false }
 );

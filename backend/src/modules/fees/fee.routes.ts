@@ -8,6 +8,7 @@ import {
   PAYMENT_METHODS,
   CURRENT_SESSION,
   balanceOf,
+  headBalance,
   type FeeAccountDoc,
   type PaymentDoc,
 } from "./fee.model.js";
@@ -18,10 +19,12 @@ import { BusRoute } from "../busRoutes/busRoute.model.js";
 import {
   deriveGrossHeads,
   applyTransportHead,
+  toAccountHeads,
   matchStructure,
   netHeadsFor,
   provisionalAccountFor,
   scholarshipConcessionFor,
+  type FeeFrequency,
 } from "./feeProvisioning.js";
 import { requireAuth, requireRole } from "../../middleware/auth.js";
 import { validate, parsed } from "../../middleware/validate.js";
@@ -44,6 +47,13 @@ router.use(requireAuth);
 /** Collecting money is restricted — a librarian should not be issuing receipts. */
 const canCollect = requireRole("super_admin", "school_admin", "principal", "accountant");
 
+/**
+ * The late fee is tracked as a scalar on the account (`account.lateFee`), not as a
+ * billed head, but it's collected through the same allocation list. Both the client
+ * and the collect handler key it by this exact name — keep them in sync.
+ */
+const LATE_FEE_HEAD = "Late Fee";
+
 /* ------------------------------------------------------------------ */
 /* Student-centric fee rows                                             */
 /*                                                                     */
@@ -65,7 +75,7 @@ interface StudentFeeRow {
   guardian: string;
   guardianPhone: string;
   session: string;
-  heads: { head: string; billed: number; paid: number }[];
+  heads: { head: string; billed: number; paid: number; frequency: FeeFrequency; unit: number }[];
   concession: number;
   lateFee: number;
   lastPaymentDate: string | null;
@@ -85,7 +95,13 @@ function publicAccount(doc: FeeAccountDoc): StudentFeeRow {
     guardian: doc.guardian,
     guardianPhone: doc.guardianPhone,
     session: doc.session,
-    heads: doc.heads.map((h) => ({ head: h.head, billed: h.billed, paid: h.paid })),
+    heads: doc.heads.map((h) => ({
+      head: h.head,
+      billed: h.billed,
+      paid: h.paid,
+      frequency: (h.frequency ?? "one-time") as FeeFrequency,
+      unit: h.unit ?? 0,
+    })),
     concession: doc.concession,
     lateFee: doc.lateFee,
     lastPaymentDate: doc.lastPaymentDate ?? null,
@@ -156,6 +172,7 @@ async function loadStudentFeeRows(
     const gross = applyTransportHead(deriveGrossHeads(structure), {
       transportRequired: student.transportRequired,
       routeFee: student.transportRouteCode ? routeFeeByCode.get(student.transportRouteCode) ?? null : null,
+      monthsPerYear: structure?.monthsPerYear,
     });
     const concession = concessionByStudent.get(String(student._id)) ?? 0;
     return provisionalAccountFor(student, gross, concession);
@@ -208,7 +225,14 @@ router.get("/accounts", canCollect, validate(accountQuery, "query"), async (req,
 const feeAccountBody = z.object({
   studentId: z.string().min(1),
   heads: z
-    .array(z.object({ head: z.string().min(1), billed: z.coerce.number<number>().min(0) }))
+    .array(
+      z.object({
+        head: z.string().min(1),
+        billed: z.coerce.number<number>().min(0),
+        frequency: z.enum(["monthly", "one-time", "per-exam"]).optional(),
+        unit: z.coerce.number<number>().min(0).optional(),
+      })
+    )
     .min(1, "Add at least one fee head"),
   concession: z.coerce.number<number>().min(0).default(0),
   lateFee: z.coerce.number<number>().min(0).default(0),
@@ -225,7 +249,12 @@ router.post("/accounts", canCollect, validate(feeAccountBody), async (req, res, 
     if (!student) throw ApiError.notFound("Student not found.");
 
     // Heads are stored net of the concession; the concession can't exceed the bill.
-    const gross = body.heads.map((h) => ({ head: h.head, billed: Math.round(h.billed) }));
+    const gross = body.heads.map((h) => ({
+      head: h.head,
+      billed: Math.round(h.billed),
+      frequency: (h.frequency ?? "one-time") as FeeFrequency,
+      unit: Math.round(h.unit ?? h.billed),
+    }));
     const net = netHeadsFor(gross, body.concession);
 
     const account = await FeeAccount.findOneAndUpdate(
@@ -239,7 +268,7 @@ router.post("/accounts", canCollect, validate(feeAccountBody), async (req, res, 
           rollNo: student.rollNo,
           guardian: student.guardian.name,
           guardianPhone: student.guardian.phone,
-          heads: net.heads,
+          heads: toAccountHeads(net.heads),
           concession: net.concession,
           lateFee: Math.round(body.lateFee),
           dueDate: body.dueDate?.trim() ? body.dueDate.trim() : null,
@@ -340,6 +369,7 @@ async function provisionAccount(
   const gross = applyTransportHead(deriveGrossHeads(structure), {
     transportRequired: student.transportRequired,
     routeFee: route?.fee ?? null,
+    monthsPerYear: structure?.monthsPerYear,
   });
   const concession = await scholarshipConcessionFor(schoolId, studentId);
   const net = netHeadsFor(gross, concession);
@@ -357,7 +387,7 @@ async function provisionAccount(
         guardian: student.guardian.name,
         guardianPhone: student.guardian.phone,
         session: CURRENT_SESSION,
-        heads: net.heads.map((h) => ({ head: h.head, billed: h.billed, paid: 0 })),
+        heads: toAccountHeads(net.heads),
         concession: net.concession,
         lateFee: 0,
       },
@@ -415,6 +445,43 @@ router.post("/collect", canCollect, validate(collectBody), async (req, res, next
         );
       }
 
+      // Every allocation must land on a real due — a billed head with room left,
+      // or the account's late fee (a scalar, not a head row). Validating here keeps
+      // the receipt total equal to what actually posts: an unknown head would
+      // otherwise be receipted but silently dropped (phantom money), and an amount
+      // over one head's due would overpay it while another head stayed unpaid.
+      const dueByHead = new Map<string, number>();
+      for (const head of account.heads) dueByHead.set(head.head, headBalance(head));
+
+      // Head names are free-form, so a structure MAY bill a real head literally
+      // named "Late Fee". When it does, that head wins and the scalar late fee is
+      // left alone — otherwise the two would collide (one blocks the other, or the
+      // amount posts twice).
+      const lateFeeIsScalar = !dueByHead.has(LATE_FEE_HEAD);
+
+      // Sum per head name: the client may split a head across rows, and the receipt
+      // total must equal what posts. This is also what the posting loop consumes.
+      const byHead = new Map<string, number>();
+      for (const a of body.allocations) byHead.set(a.head, (byHead.get(a.head) ?? 0) + a.amount);
+
+      for (const [head, amt] of byHead) {
+        const room = dueByHead.has(head)
+          ? dueByHead.get(head)!
+          : head === LATE_FEE_HEAD && lateFeeIsScalar
+            ? account.lateFee
+            : null;
+        if (room == null) {
+          throw ApiError.badRequest(`Unknown fee head "${head}".`);
+        }
+        if (amt > room) {
+          throw ApiError.badRequest(
+            `₹${amt.toLocaleString("en-IN")} exceeds the ₹${room.toLocaleString(
+              "en-IN"
+            )} due on "${head}".`
+          );
+        }
+      }
+
       // Receipt numbers come from a per-school count that only moves forward,
       // so a deleted receipt never has its number reissued.
       const issued = await Payment.countDocuments({ schoolId }).session(session);
@@ -445,12 +512,22 @@ router.post("/collect", canCollect, validate(collectBody), async (req, res, next
         { session }
       );
 
-      // Mutated in place: `heads` is a Mongoose subdocument array, and
-      // replacing it with a plain array loses its change tracking.
-      const byHead = new Map(body.allocations.map((a) => [a.head, a.amount]));
+      // Mutated in place: `heads` is a Mongoose subdocument array, and replacing it
+      // with a plain array loses its change tracking. Credit a name once even if two
+      // heads happen to share it, so a single allocation never posts twice.
       for (const head of account.heads) {
         const extra = byHead.get(head.head);
-        if (extra) head.paid += extra;
+        if (extra) {
+          head.paid += extra;
+          byHead.delete(head.head);
+        }
+      }
+      // The late fee is a scalar field, not a head row, so settle it explicitly —
+      // but only when "Late Fee" isn't itself a billed head (that head was just
+      // posted by the loop above; settling the scalar too would double-count).
+      if (lateFeeIsScalar) {
+        const lateFeePaid = byHead.get(LATE_FEE_HEAD);
+        if (lateFeePaid) account.lateFee = Math.max(0, account.lateFee - lateFeePaid);
       }
       account.lastPaymentDate = today;
       await account.save({ session });
@@ -721,6 +798,7 @@ async function outstandingFor(schoolId: string, student: StudentDoc) {
   const gross = applyTransportHead(deriveGrossHeads(structure), {
     transportRequired: student.transportRequired,
     routeFee: route?.fee ?? null,
+    monthsPerYear: structure?.monthsPerYear,
   });
   const concession = await scholarshipConcessionFor(schoolId, String(student._id));
   const prov = provisionalAccountFor(student, gross, concession);
@@ -852,6 +930,18 @@ router.post("/pay/verify", validate(payVerifyBody), async (req, res, next) => {
         account.heads.map((h) => ({ head: h.head, billed: h.billed, paid: h.paid })),
         applied
       );
+      // allocateAcrossHeads fills billed heads only, but the balance also includes
+      // the scalar late fee, so settle its share here — otherwise an online payment
+      // is receipted in full while the late fee is dropped and never clears (this
+      // mirrors /collect). Skip when "Late Fee" is itself a billed head (the loop
+      // above already allocated it) so the two can't double-count.
+      const lateFeeIsScalar = !account.heads.some((h) => h.head === LATE_FEE_HEAD);
+      let lateFeePaid = 0;
+      if (lateFeeIsScalar && account.lateFee > 0) {
+        const toHeads = allocations.reduce((s, a) => s + a.amount, 0);
+        lateFeePaid = Math.min(applied - toHeads, account.lateFee);
+        if (lateFeePaid > 0) allocations.push({ head: LATE_FEE_HEAD, amount: lateFeePaid });
+      }
 
       const issued = await Payment.countDocuments({ schoolId }).session(session);
       const receiptNo = `RCP-${25000 + issued + 1}`;
@@ -885,6 +975,7 @@ router.post("/pay/verify", validate(payVerifyBody), async (req, res, next) => {
         const extra = byHead.get(head.head);
         if (extra) head.paid += extra;
       }
+      if (lateFeePaid > 0) account.lateFee = Math.max(0, account.lateFee - lateFeePaid);
       account.lastPaymentDate = today;
       await account.save({ session });
 

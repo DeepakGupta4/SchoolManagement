@@ -1,5 +1,6 @@
 import { apiList, apiRequest } from "./client";
 import { todayIso } from "@/lib/dates";
+import type { FeeFrequency } from "./feeStructures";
 
 /**
  * Student fee accounts and the payment register.
@@ -39,8 +40,12 @@ export const REFERENCE_LABEL: Record<PaymentMethod, string> = {
 
 export interface FeeHeadDue {
   head: string;
+  /** Session (annual) amount billed for this head = unit × periods. */
   billed: number;
   paid: number;
+  /** How this head is charged, and the per-period amount — for instalment display. */
+  frequency?: FeeFrequency;
+  unit?: number;
 }
 
 export interface StudentFeeAccount {
@@ -200,8 +205,12 @@ export const feeAccountsApi = {
 
 export interface NewFeeAccountInput {
   studentId: string;
-  /** Billed amount per fee head, e.g. [{ head: "Tuition", billed: 45000 }]. */
-  heads: { head: string; billed: number }[];
+  /**
+   * Billed amount per fee head, e.g. [{ head: "Tuition", billed: 54000,
+   * frequency: "monthly", unit: 4500 }]. `billed` is the annual figure; `unit`
+   * and `frequency` let the collect screen offer one instalment at a time.
+   */
+  heads: { head: string; billed: number; frequency?: FeeFrequency; unit?: number }[];
   /** Optional scholarship / sibling discount, netted off the billed heads. */
   concession?: number;
   lateFee?: number;

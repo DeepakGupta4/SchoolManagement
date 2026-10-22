@@ -22,6 +22,9 @@ export interface FeeStructure {
   class: string;
   /** The school's chosen fee heads (name + amount + frequency) — the source of truth. */
   heads: FeeHead[];
+  /** Months a monthly head recurs over a session (installments), and exams/year. */
+  monthsPerYear?: number;
+  examsPerYear?: number;
   // Legacy fixed columns — present only on structures created before `heads`
   // existed; read via structureHeads() as a fallback.
   tuition?: number;
@@ -31,6 +34,10 @@ export interface FeeStructure {
   sports?: number;
   misc?: number;
 }
+
+/** Billing cadence defaults when a structure predates these fields. */
+export const DEFAULT_MONTHS_PER_YEAR = 12;
+export const DEFAULT_EXAMS_PER_YEAR = 3;
 
 export interface FeeStructureFilters {
   search?: string;
@@ -58,7 +65,8 @@ export const FEE_HEADS: {
 export function defaultFrequencyFor(name: string): FeeFrequency {
   const n = name.trim().toLowerCase();
   if (n.includes("tuition") || n.includes("transport")) return "monthly";
-  if (n.includes("exam")) return "per-exam";
+  // Exam fee and report-card fee are separate heads, both charged per exam/term.
+  if (n.includes("exam") || n.includes("report card")) return "per-exam";
   return "one-time";
 }
 
@@ -70,7 +78,7 @@ export function defaultFrequencyFor(name: string): FeeFrequency {
 export const COMMON_FEE_HEADS: { name: string; frequency: FeeFrequency }[] = [
   { name: "Tuition", frequency: "monthly" },
   { name: "Admission", frequency: "one-time" },
-  { name: "Examination", frequency: "per-exam" },
+  { name: "Exam Fee", frequency: "per-exam" },
   { name: "Computer", frequency: "monthly" },
   { name: "Lab", frequency: "one-time" },
   { name: "Library", frequency: "one-time" },
@@ -103,10 +111,14 @@ export function structureHeads(row: FeeStructure): FeeHead[] {
       }));
     if (flex.length > 0) return flex;
   }
+  // Legacy fixed columns were ALWAYS billed once as the stored amount — never a
+  // per-period unit. Keep them one-time so they aren't retroactively annualised
+  // (×12) when read, which mirrors the backend and avoids a silent 12× over-bill.
+  // Migrate to flexible heads for true monthly instalments.
   return FEE_HEADS.map((h) => ({
     name: h.label,
     amount: Number(row[h.key] ?? 0),
-    frequency: defaultFrequencyFor(h.label),
+    frequency: "one-time" as FeeFrequency,
   })).filter((h) => h.amount > 0);
 }
 
@@ -119,6 +131,31 @@ export function feeBreakdown(heads: FeeHead[]): { monthly: number; oneTime: numb
   const sumOf = (f: FeeFrequency) =>
     heads.filter((h) => h.frequency === f).reduce((s, h) => s + (Number(h.amount) || 0), 0);
   return { monthly: sumOf("monthly"), oneTime: sumOf("one-time"), perExam: sumOf("per-exam") };
+}
+
+/** How many times a frequency is charged across a session. Mirrors the backend. */
+export function periodsFor(
+  frequency: FeeFrequency,
+  monthsPerYear: number,
+  examsPerYear: number
+): number {
+  return frequency === "monthly" ? monthsPerYear : frequency === "per-exam" ? examsPerYear : 1;
+}
+
+/**
+ * The full session (annual) bill — every head's per-period amount multiplied by
+ * how many times it recurs (monthly × months, per-exam × exams, one-time × 1).
+ * This is what the student is actually billed; it's then collected in instalments.
+ */
+export function annualTotal(
+  heads: FeeHead[],
+  monthsPerYear = DEFAULT_MONTHS_PER_YEAR,
+  examsPerYear = DEFAULT_EXAMS_PER_YEAR
+): number {
+  return heads.reduce(
+    (sum, h) => sum + (Number(h.amount) || 0) * periodsFor(h.frequency, monthsPerYear, examsPerYear),
+    0
+  );
 }
 
 export const feeStructuresApi = createApiResource<FeeStructure, FeeStructureFilters>(

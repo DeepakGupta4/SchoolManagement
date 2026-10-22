@@ -13,6 +13,8 @@ const feeStructureSchema = z
     code: z.string().min(1),
     class: z.string().min(1),
     heads: z.array(feeHead).default([]),
+    monthsPerYear: z.coerce.number<number>().min(1).max(12).default(12),
+    examsPerYear: z.coerce.number<number>().min(0).max(20).default(3),
     // Legacy fixed columns stay optional so old edit payloads don't break.
     tuition: z.coerce.number<number>().min(0).optional(),
     transport: z.coerce.number<number>().min(0).optional(),

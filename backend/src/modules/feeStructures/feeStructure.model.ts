@@ -26,6 +26,10 @@ const feeStructureSchema = new Schema(
      */
     heads: { type: [feeHeadSchema], default: [] },
 
+    /** Billing cadence: months a monthly head recurs over a session, and exams/year. */
+    monthsPerYear: { type: Number, default: 12, min: 1 },
+    examsPerYear: { type: Number, default: 3, min: 0 },
+
     // Legacy fixed columns — kept ONLY so structures created before `heads`
     // existed still bill correctly (read as a fallback). New/edited structures
     // write `heads`. Do not add more of these.

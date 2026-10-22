@@ -13,6 +13,10 @@ export const feeStructureSchema = z
     code: z.string().trim().min(2, "Structure code is required"),
     class: z.string().trim().min(2, "Class is required"),
     heads: z.array(feeHeadSchema).min(1, "Add at least one fee head"),
+    // Billing cadence: months a monthly head recurs over the session, exams/year.
+    // No .default() (keeps useForm input = output); the form always supplies them.
+    monthsPerYear: z.coerce.number<number>().int().min(1, "At least 1 month").max(12, "At most 12"),
+    examsPerYear: z.coerce.number<number>().int().min(0, "Cannot be negative").max(20, "At most 20"),
   })
   .refine(
     (s) => {

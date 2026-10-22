@@ -33,7 +33,10 @@ import {
   feeStructuresApi,
   feeTotal,
   feeBreakdown,
+  annualTotal,
   structureHeads,
+  DEFAULT_EXAMS_PER_YEAR,
+  DEFAULT_MONTHS_PER_YEAR,
   FREQUENCY_LABELS,
   type FeeFrequency,
   type FeeStructure,
@@ -224,6 +227,9 @@ export default function FeeStructurePage() {
   // Derived once for the View dialog — heads plus an honest split by cadence.
   const viewingHeads = viewing ? structureHeads(viewing) : [];
   const viewingBreakdown = feeBreakdown(viewingHeads);
+  const viewingMonths = viewing?.monthsPerYear ?? DEFAULT_MONTHS_PER_YEAR;
+  const viewingExams = viewing?.examsPerYear ?? DEFAULT_EXAMS_PER_YEAR;
+  const viewingAnnual = annualTotal(viewingHeads, viewingMonths, viewingExams);
   const viewingRows: DetailRow[] = viewing
     ? [
         { label: "Code", value: viewing.code },
@@ -246,6 +252,12 @@ export default function FeeStructurePage() {
         ...(viewingBreakdown.perExam > 0
           ? [{ label: "Per-exam", value: `${inr.format(viewingBreakdown.perExam)}/exam` }]
           : []),
+        {
+          label: "Annual bill",
+          value: `${inr.format(viewingAnnual)}/year (${viewingMonths} mo${
+            viewingExams > 0 ? ` + ${viewingExams} exams` : ""
+          })`,
+        },
       ]
     : [];
 
