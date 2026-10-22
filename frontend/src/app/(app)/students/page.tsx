@@ -164,7 +164,11 @@ function StudentsPageInner() {
     let cancelled = false;
     getMyTeacher()
       .then((t) => {
-        if (!cancelled && t) setMyClass({ className: t.classTeacherOf ?? "", section: t.classTeacherSection ?? "" });
+        if (cancelled || !t) return;
+        setMyClass({ className: t.classTeacherOf ?? "", section: t.classTeacherSection ?? "" });
+        // Lock the Students view to their class-teacher class (the server scopes
+        // reads too; this makes the list + stats show that one class by default).
+        if (t.isClassTeacher && t.classTeacherOf) setClassName(t.classTeacherOf);
       })
       .catch(() => {});
     return () => { cancelled = true; };
@@ -190,11 +194,11 @@ function StudentsPageInner() {
 
     if (user.role === "teacher") {
       // Class-scoped stats from the teacher's OWN roster — the server already
-      // restricts /api/students to their class, so this is never whole-school.
-      // "outstanding" here is the COUNT of their students with dues (not a money
-      // total — teachers don't see school finance).
+      // restricts /api/students to their class(es), so this is never whole-school.
+      // A class teacher's cards are their class-teacher class; "outstanding" is the
+      // COUNT of their students with dues (not a money total — no school finance).
       setAggLoading(true);
-      fetchAllStudents({})
+      fetchAllStudents(myClass?.className ? { className: myClass.className } : {})
         .then((rows) => {
           if (cancelled) return;
           setAgg({
@@ -229,7 +233,7 @@ function StudentsPageInner() {
     return () => {
       cancelled = true;
     };
-  }, [user]);
+  }, [user, myClass?.className]);
 
   const openCreate = () => {
     setEditing(null);

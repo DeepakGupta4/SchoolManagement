@@ -25,6 +25,7 @@ export default createCrudRouter({
   createSchema: certificateSchema,
   searchFields: ["student", "admissionNo", "rollNo", "requestedBy", "verificationCode"],
   filterFields: ["type", "status", "className"],
+  readRoles: ["super_admin", "school_admin", "principal", "accountant"],
   // Reference numbers continue the per-school sequence rather than restarting.
   generate: (seq) => ({ code: `CR-${9000 + seq + 1}` }),
 });

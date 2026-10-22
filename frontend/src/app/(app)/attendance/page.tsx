@@ -175,7 +175,8 @@ export default function AttendancePage() {
 
   // Teachers are limited to the classes they teach. Load their own record once
   // (the server already 403s a class a teacher doesn't teach — this just keeps the
-  // picker honest). Best-effort: on failure the picker is left unrestricted.
+  // picker honest). Fails closed: if the teacher record can't be loaded, the
+  // picker shows no classes (the server enforces the scope regardless).
   useEffect(() => {
     if (!isTeacher) {
       setAllowedClasses(null);
@@ -184,12 +185,16 @@ export default function AttendancePage() {
     let cancelled = false;
     getMyTeacher()
       .then((t) => {
-        if (cancelled || !t) return;
+        if (cancelled) return;
+        if (!t) {
+          setAllowedClasses([]); // no record → no selectable classes
+          return;
+        }
         const unique = [...new Set([...t.classes, t.classTeacherOf].filter(Boolean))] as string[];
         setAllowedClasses(unique);
       })
       .catch(() => {
-        /* Best-effort — leave the picker unrestricted if the lookup fails. */
+        if (!cancelled) setAllowedClasses([]);
       });
     return () => {
       cancelled = true;

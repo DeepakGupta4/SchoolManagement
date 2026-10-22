@@ -27,6 +27,7 @@ export default createCrudRouter({
   createSchema: alumnusSchema,
   searchFields: ["name", "occupation", "employer", "email"],
   filterFields: ["batch", "stream", "city"],
+  readRoles: ["super_admin", "school_admin", "principal"],
   // Bring graduated students (Student.status === "alumni") into the directory, so
   // the alumni list isn't a manual-only island disconnected from real leavers.
   extend: (router) => {

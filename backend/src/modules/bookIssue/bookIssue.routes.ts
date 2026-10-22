@@ -39,6 +39,7 @@ export default createCrudRouter({
   searchFields: ["bookTitle", "borrowerName", "code"],
   filterFields: ["status", "borrowerType"],
   writeRoles: WRITE_ROLES,
+  readRoles: ["super_admin", "school_admin", "principal", "librarian"],
   // Reference code is server-owned; a new record always starts out issued and
   // unreturned. The client never sends these (stripped by the schema above).
   generate: (seq) => ({

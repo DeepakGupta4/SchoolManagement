@@ -62,6 +62,7 @@ export default createCrudRouter({
   createSchema: transferSchema,
   searchFields: ["name", "studentId", "tcNo", "reason"],
   filterFields: ["status", "type"],
+  readRoles: ["super_admin", "school_admin", "principal"],
   afterCreate: (doc, req) => applyOnIssue(doc, req.user!.schoolId),
   afterUpdate: (doc, req) => applyOnIssue(doc, req.user!.schoolId),
 });

@@ -17,6 +17,12 @@ import { ApiError } from "./ApiError.js";
  * All scoping FAILS CLOSED: a teacher with no matching record or no assignment
  * sees nothing, never everything. Non-teacher roles are never restricted here
  * (the functions return null / are no-ops), so office/admin reads are unchanged.
+ *
+ * `studentRosterScope` limits student reads to the classes a teacher teaches
+ * (classes[] plus their class-teacher class), honouring a specific class they
+ * asked for when it is one of theirs. The Students page passes the teacher's
+ * class-teacher class so it shows only that; the attendance/marks screens pass
+ * whichever class is being worked on — both stay within the teacher's own set.
  */
 
 interface TeacherScope {
@@ -50,28 +56,38 @@ async function loadScope(req: Request): Promise<TeacherScope | null> {
   return scope;
 }
 
-/** Every class a teacher may act on for attendance/marks: taught classes ∪ their class-teacher class. */
+/** Every class a teacher may act on: taught classes ∪ their class-teacher class (only when actually a class teacher). */
 function actionableClasses(scope: TeacherScope): string[] {
   const set = new Set<string>(scope.classes);
-  if (scope.classTeacherOf) set.add(scope.classTeacherOf);
+  // Guard on the flag too, so a stale classTeacherOf without isClassTeacher
+  // can't grant access the roster scope would deny (keeps the two consistent).
+  if (scope.isClassTeacher && scope.classTeacherOf) set.add(scope.classTeacherOf);
   return [...set];
 }
 
 /**
- * readScope for the Students list/detail. A teacher sees ONLY the students of the
- * class they are class teacher of; a teacher who isn't a class teacher (or whose
- * record is missing) sees none. Returns null for non-teachers (no restriction).
+ * readScope for the Students list/detail. A teacher only ever sees students of a
+ * class they teach (classes[] ∪ their class-teacher class). If they ask for a
+ * specific class that is one of theirs, it's honoured (so the Students page can
+ * lock to their class-teacher class and the attendance/marks rosters can load any
+ * class they teach); any other request is narrowed to their whole set. A teacher
+ * with no classes sees none. Returns null for non-teachers (no restriction).
  */
 export async function studentRosterScope(req: Request): Promise<Record<string, unknown> | null> {
   const scope = await loadScope(req);
   if (!scope) return null;
-  if (scope.isClassTeacher && scope.classTeacherOf) {
-    const filter: Record<string, unknown> = { className: scope.classTeacherOf };
-    if (scope.classTeacherSection) filter.section = scope.classTeacherSection;
+  const allowed = actionableClasses(scope);
+  // Fail closed: match nothing rather than the whole school.
+  if (allowed.length === 0) return { _id: { $in: [] } };
+
+  const requested = typeof req.query.className === "string" ? req.query.className.trim() : "";
+  if (requested && allowed.includes(requested)) {
+    const filter: Record<string, unknown> = { className: requested };
+    const section = typeof req.query.section === "string" ? req.query.section.trim() : "";
+    if (section) filter.section = section;
     return filter;
   }
-  // Fail closed: match nothing rather than the whole school.
-  return { _id: { $in: [] } };
+  return { className: { $in: allowed } };
 }
 
 /**

@@ -17,6 +17,7 @@ export default createCrudRouter({
   createSchema: patientSchema,
   searchFields: ["name", "issue", "code", "doctor", "class"],
   filterFields: ["status", "type"],
+  readRoles: ["super_admin", "school_admin", "principal"],
   // Patient references continue the per-school sequence rather than restarting.
   generate: (seq) => ({ code: `P${String(seq + 1).padStart(3, "0")}` }),
 });

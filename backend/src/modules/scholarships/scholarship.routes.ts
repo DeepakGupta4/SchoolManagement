@@ -36,6 +36,7 @@ export default createCrudRouter({
   searchFields: ["student", "code", "type", "class", "reason"],
   filterFields: ["status"],
   writeRoles: ["super_admin", "school_admin", "principal", "accountant"],
+  readRoles: ["super_admin", "school_admin", "principal", "accountant"],
   afterCreate: resync,
   afterUpdate: resync,
   afterDelete: resync,

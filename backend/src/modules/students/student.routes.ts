@@ -104,7 +104,10 @@ export default createCrudRouter({
   createSchema: studentSchema,
   searchFields: ["firstName", "lastName", "admissionNo", "email", "rollNo"],
   filterFields: ["className", "status", "section"],
-  // A class teacher only ever reads their own class's roster (list AND detail);
+  // The directory is staff-only — parents/students/drivers get their data through
+  // /api/portal, never the raw roster (which carries guardian/Aadhaar/medical PII).
+  readRoles: ["super_admin", "school_admin", "principal", "teacher", "accountant"],
+  // A teacher is further narrowed to the classes they teach (list AND detail);
   // office/admin roles are unrestricted. Writes stay office-only (default roles).
   readScope: studentRosterScope,
   notifyOnCreate: (s) => ({

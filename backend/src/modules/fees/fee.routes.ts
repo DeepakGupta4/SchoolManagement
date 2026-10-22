@@ -161,7 +161,7 @@ const accountQuery = z.object({
   standing: z.string().optional(),
 });
 
-router.get("/accounts", validate(accountQuery, "query"), async (req, res, next) => {
+router.get("/accounts", canCollect, validate(accountQuery, "query"), async (req, res, next) => {
   try {
     const { search, className, standing } = parsed<z.infer<typeof accountQuery>>(req, "query");
 
@@ -259,7 +259,7 @@ const paymentQuery = z.object({
   className: z.string().optional(),
 });
 
-router.get("/payments", validate(paymentQuery, "query"), async (req, res, next) => {
+router.get("/payments", canCollect, validate(paymentQuery, "query"), async (req, res, next) => {
   try {
     const { search, method, status, studentId, className } = parsed<z.infer<typeof paymentQuery>>(
       req,

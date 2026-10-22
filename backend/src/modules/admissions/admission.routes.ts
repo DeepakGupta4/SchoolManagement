@@ -165,6 +165,7 @@ export default createCrudRouter({
   createSchema: admissionSchema,
   searchFields: ["name", "applicationNo", "parent", "phone"],
   filterFields: ["stage", "classApplied", "source"],
+  readRoles: ["super_admin", "school_admin", "principal"],
   afterCreate: (doc, req) => enrolIfApproved(doc, req.user!.schoolId),
   afterUpdate: (doc, req) => enrolIfApproved(doc, req.user!.schoolId),
 });

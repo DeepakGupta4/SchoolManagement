@@ -19,4 +19,5 @@ export default createCrudRouter({
   createSchema: hostelStudentSchema,
   searchFields: ["name", "studentId", "room"],
   filterFields: ["type", "hostel", "fees"],
+  readRoles: ["super_admin", "school_admin", "principal"],
 });

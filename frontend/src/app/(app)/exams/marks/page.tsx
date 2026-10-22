@@ -113,13 +113,19 @@ export default function MarkEntryPage() {
     let cancelled = false;
     getMyTeacher()
       .then((t) => {
-        if (cancelled || !t) return;
+        if (cancelled) return;
+        if (!t) {
+          setAllowedClasses([]); // fail closed: no record → no selectable classes
+          return;
+        }
         const list = [...t.classes, t.classTeacherOf].filter(
           (c): c is string => Boolean(c)
         );
         setAllowedClasses([...new Set(list)]);
       })
-      .catch(() => {});
+      .catch(() => {
+        if (!cancelled) setAllowedClasses([]);
+      });
     return () => {
       cancelled = true;
     };
