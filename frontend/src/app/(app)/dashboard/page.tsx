@@ -18,6 +18,7 @@ import { StudentDashboard } from "@/components/dashboard/StudentDashboard";
 import { DriverDashboard } from "@/components/dashboard/DriverDashboard";
 import { StaffDashboard } from "@/components/dashboard/StaffDashboard";
 import { LibrarianDashboard } from "@/components/dashboard/LibrarianDashboard";
+import { AccountantDashboard } from "@/components/dashboard/AccountantDashboard";
 import { useAuthStore } from "@/store";
 import type { UserRole } from "@/types";
 import { useDashboardInsights, type DashboardInsights } from "@/hooks/useDashboardInsights";
@@ -636,6 +637,7 @@ const PORTAL_DASHBOARDS: Partial<Record<UserRole, { Comp: React.ComponentType; s
   driver: { Comp: DriverDashboard, subtitle: "Your assigned routes and daily trips." },
   staff: { Comp: StaffDashboard, subtitle: "Your profile and self-service." },
   librarian: { Comp: LibrarianDashboard, subtitle: "Your library at a glance." },
+  accountant: { Comp: AccountantDashboard, subtitle: "Collections, dues, expenses and payroll at a glance." },
 };
 
 export default function DashboardPage() {

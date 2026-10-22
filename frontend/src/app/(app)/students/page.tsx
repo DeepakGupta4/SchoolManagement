@@ -103,6 +103,9 @@ function StudentsPageInner() {
   const isTeacher = user?.role === "teacher";
   // Hard delete is super-admin-only (it erases history); office roles suspend instead.
   const isSuperAdmin = user?.role === "super_admin";
+  // Only office/admin manage student records; teacher & accountant are read-only
+  // (they can view for lookup, but Add/Edit/Delete/Suspend would 403).
+  const canManageStudents = ["super_admin", "school_admin", "principal"].includes(user?.role ?? "");
   const [myClass, setMyClass] = useState<{ className: string; section: string } | null>(null);
 
   const [search, setSearch] = useState("");
@@ -476,7 +479,7 @@ function StudentsPageInner() {
           >
             <Download className="size-4" />
           </button>
-          {!isTeacher && (
+          {canManageStudents && (
             <>
               <button
                 onClick={() => openEdit(s)}
@@ -529,7 +532,7 @@ function StudentsPageInner() {
             <FileText className="size-4" />
             {exporting ? "Exporting…" : "Export PDF"}
           </Button>
-          {!isTeacher && (
+          {canManageStudents && (
             <>
               <Button variant="outline" onClick={() => setBulkOpen(true)}>
                 <UsersRound className="size-4" />
@@ -682,19 +685,21 @@ function StudentsPageInner() {
                       ? "Try clearing your filters to see more results."
                       : isTeacher
                         ? "No students are in your class yet. Please contact the school office."
-                        : "Add your first student to get started."
+                        : canManageStudents
+                          ? "Add your first student to get started."
+                          : "No students found."
             }
             emptyAction={
               isFiltered ? (
                 <Button variant="outline" onClick={clearAll}>
                   {isTeacher ? "Clear filters" : "Show all students"}
                 </Button>
-              ) : isTeacher ? undefined : (
+              ) : canManageStudents ? (
                 <Button variant="outline" onClick={openCreate}>
                   <Plus className="size-4" />
                   Add student
                 </Button>
-              )
+              ) : undefined
             }
           />
           {capped && !loading && (

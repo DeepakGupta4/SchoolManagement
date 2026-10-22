@@ -293,7 +293,8 @@ const ACCOUNTANT_NAV_HREFS = new Set<string>([
   "/announcements",
   "/messages",
   "/notices",
-  // Profile
+  // Self-service (Settings is role-aware → accountant sees only "My Profile")
+  "/leave/my",
   "/settings",
 ]);
 
