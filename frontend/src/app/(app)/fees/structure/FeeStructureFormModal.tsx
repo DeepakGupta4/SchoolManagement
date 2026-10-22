@@ -312,6 +312,15 @@ export function FeeStructureFormModal({
               Add another
             </Button>
           </div>
+          {/* Transport is charged per route (by distance), not as a flat class fee,
+              so it's set up elsewhere — point the user there to avoid confusion. */}
+          <p className="mt-1 rounded-md bg-surface px-3 py-2 text-xs text-subtle">
+            <span className="font-medium text-muted">Bus / transport fee?</span> It&rsquo;s charged
+            per route — set each route&rsquo;s monthly fee under{" "}
+            <span className="font-medium text-muted">Transport</span>, then pick the student&rsquo;s
+            route at admission and it&rsquo;s billed automatically. The &ldquo;Transport&rdquo; head
+            here is only a flat fallback.
+          </p>
         </div>
 
         {/* Billing cadence — how many monthly instalments a session runs over, and

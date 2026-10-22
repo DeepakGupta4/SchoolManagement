@@ -65,8 +65,9 @@ export const FEE_HEADS: {
 export function defaultFrequencyFor(name: string): FeeFrequency {
   const n = name.trim().toLowerCase();
   if (n.includes("tuition") || n.includes("transport")) return "monthly";
-  // Exam fee and report-card fee are separate heads, both charged per exam/term.
-  if (n.includes("exam") || n.includes("report card")) return "per-exam";
+  // Exam fee is charged once per exam (the structure's examsPerYear). Report card
+  // is a separate, one-time head (handled by the final return) — not per-exam.
+  if (n.includes("exam")) return "per-exam";
   return "one-time";
 }
 
@@ -86,7 +87,7 @@ export const COMMON_FEE_HEADS: { name: string; frequency: FeeFrequency }[] = [
   { name: "Activity", frequency: "one-time" },
   { name: "Smart Class", frequency: "monthly" },
   { name: "ID Card", frequency: "one-time" },
-  { name: "Report Card", frequency: "per-exam" },
+  { name: "Report Card", frequency: "one-time" },
   { name: "Diary", frequency: "one-time" },
   { name: "Uniform (Tie & Belt)", frequency: "one-time" },
   { name: "Development", frequency: "one-time" },

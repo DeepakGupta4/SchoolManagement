@@ -57,8 +57,9 @@ function periodsFor(freq: FeeFrequency, months: number, exams: number): number {
 function freqForName(name: string): FeeFrequency {
   const n = name.trim().toLowerCase();
   if (n.includes("tuition") || n.includes("transport")) return "monthly";
-  // Exam fee and report-card fee are separate heads, both charged per exam/term.
-  if (n.includes("exam") || n.includes("report card")) return "per-exam";
+  // Exam fee is charged once per exam; report card is a separate one-time head
+  // (falls through to the default) — so the two are billed differently.
+  if (n.includes("exam")) return "per-exam";
   return "one-time";
 }
 
