@@ -29,6 +29,12 @@ export interface CrudOptions<T> {
   filterFields?: (keyof T & string)[];
   /** Overrides who may create/update/delete. */
   writeRoles?: UserRole[];
+  /**
+   * Overrides who may hard-DELETE specifically. Defaults to `writeRoles`. Set it
+   * narrower (e.g. ["super_admin"]) for records whose deletion destroys historical
+   * or financial data — for those, a status change is usually the right action.
+   */
+  deleteRoles?: UserRole[];
   /** When set, restricts who may READ (list + get). Default: any authenticated user. */
   readRoles?: UserRole[];
   /**
@@ -44,7 +50,9 @@ export interface CrudOptions<T> {
   /** Extra routes mounted before the generic ones (so they can shadow `/:id`). */
   extend?: (router: Router) => void;
   /** Fires a school notification after a successful create, if provided. */
-  notifyOnCreate?: (doc: HydratedDocument<T>) => { type: string; title: string; body?: string; link?: string };
+  notifyOnCreate?: (
+    doc: HydratedDocument<T>
+  ) => { type: string; title: string; body?: string; link?: string; className?: string; roles?: string[] };
   /**
    * Server-stamped fields at insert time (reference numbers, codes, gate
    * passes). Receives the current per-school record count as a sequence.
@@ -85,6 +93,7 @@ export function createCrudRouter<T>(options: CrudOptions<T>): Router {
     searchFields,
     filterFields = [],
     writeRoles = DEFAULT_WRITE_ROLES,
+    deleteRoles,
     readRoles,
     readScope,
     sort = { createdAt: -1 },
@@ -104,6 +113,8 @@ export function createCrudRouter<T>(options: CrudOptions<T>): Router {
 
   const router = Router();
   const canWrite: RequestHandler = requireRole(...writeRoles);
+  // Hard delete can be locked down tighter than create/update.
+  const canDelete: RequestHandler = deleteRoles ? requireRole(...deleteRoles) : canWrite;
   // Reads are open to any authenticated user unless the module restricts them
   // (e.g. teacher records carry salary/PII — office/HR roles only).
   const canRead: RequestHandler = readRoles ? requireRole(...readRoles) : (_req, _res, next) => next();
@@ -214,7 +225,7 @@ export function createCrudRouter<T>(options: CrudOptions<T>): Router {
     }
   );
 
-  router.delete("/:id", canWrite, async (req, res, next) => {
+  router.delete("/:id", canDelete, async (req, res, next) => {
     try {
       const doc = await model.findOneAndDelete({
         _id: req.params.id,

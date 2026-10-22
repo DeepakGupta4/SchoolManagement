@@ -110,6 +110,7 @@ export default createCrudRouter({
     title: "New staff member added",
     body: `${t.firstName} ${t.lastName} · ${t.department}`,
     link: "/teachers",
+    roles: ["super_admin", "school_admin", "principal"],
   }),
   // Removing a teacher also removes their uploaded documents (qualification cert,
   // government ID), so no orphaned PII lingers.

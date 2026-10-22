@@ -29,6 +29,14 @@ const notificationSchema = new Schema(
     /** In-app destination when clicked. */
     link: { type: String, default: "" },
     read: { type: Boolean, default: false },
+    /**
+     * Optional scoping for school-wide events so a teacher's feed stays relevant:
+     *  - className: the class a class-specific event belongs to ("" = school-wide).
+     *  - roles: an allow-list of roles that may see it ([] = everyone). Office/
+     *    billing events set this to exclude teachers.
+     */
+    className: { type: String, default: "", index: true },
+    roles: { type: [String], default: [] },
   },
   { timestamps: true }
 );
@@ -69,7 +77,16 @@ export async function notifySuperAdmin(input: {
 /** Records a notification for one tenant school. */
 export async function notifySchool(
   schoolId: string,
-  input: { type: string; title: string; body?: string; link?: string }
+  input: {
+    type: string;
+    title: string;
+    body?: string;
+    link?: string;
+    /** Set for a class-specific event so only that class's teacher sees it. */
+    className?: string;
+    /** Role allow-list ([] = everyone); set to exclude teachers from office/billing events. */
+    roles?: string[];
+  }
 ): Promise<void> {
   try {
     await Notification.create({ audience: "school", schoolId, ...input });

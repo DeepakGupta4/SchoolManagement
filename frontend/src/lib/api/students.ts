@@ -1,5 +1,5 @@
 import { apiRequest, apiList } from "./client";
-import type { Student, StudentFormValues } from "@/types/student";
+import type { Student, StudentFormValues, StudentStatus } from "@/types/student";
 
 /**
  * Students API — now backed by the real server.
@@ -99,6 +99,15 @@ export async function updateStudent(id: string, values: StudentFormValues): Prom
 
 export async function deleteStudent(id: string): Promise<void> {
   await apiRequest<void>(`/api/students/${id}`, { method: "DELETE" });
+}
+
+/**
+ * Changes ONLY a student's status (active/inactive/transferred/alumni) — the
+ * office alternative to deleting, so attendance/marks/fee history is preserved.
+ * The server accepts a partial update, so only `status` is sent.
+ */
+export async function setStudentStatus(id: string, status: StudentStatus): Promise<Student> {
+  return apiRequest<Student>(`/api/students/${id}`, { method: "PUT", body: { status } });
 }
 
 export type PromotionAction = "promote" | "retain" | "graduate";

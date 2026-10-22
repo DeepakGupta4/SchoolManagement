@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { getMySchool, updateMySchool, resetSchoolData } from "@/lib/api/schools";
-import { updateMyName } from "@/lib/api/auth";
+import { updateMyName, updateMyProfile, changeMyPassword } from "@/lib/api/auth";
 import { useAuthStore } from "@/store";
 import { fileToDataUrl } from "@/lib/image";
 import {
@@ -21,6 +21,7 @@ import {
   X,
 } from "lucide-react";
 import {
+  Avatar,
   Badge,
   Button,
   Card,
@@ -114,6 +115,11 @@ const INTEGRATIONS: Integration[] = [];
 export default function SettingsPage() {
   const { toast } = useToast();
   const { user, updateUser } = useAuthStore();
+
+  // Office roles manage the whole school; everyone else sees only "My profile".
+  const canManageSchool = ["super_admin", "school_admin", "principal"].includes(
+    user?.role ?? ""
+  );
 
   // The signed-in user's own display name (header + dashboard greeting).
   const [accountName, setAccountName] = useState("");
@@ -332,6 +338,255 @@ export default function SettingsPage() {
       variant: "info",
     });
   };
+
+  // ── Self-service "My profile" ───────────────────────────────────────────────
+  // Non-office roles (teachers, accountants, librarians, parents, students, …)
+  // never see school configuration — only their own name, photo and password.
+  const [profileAvatar, setProfileAvatar] = useState("");
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [pwErrors, setPwErrors] = useState<{ current?: string; next?: string; confirm?: string }>(
+    {}
+  );
+  const [changingPassword, setChangingPassword] = useState(false);
+
+  // Prefill the photo from the signed-in user. Deferred to keep setState out of
+  // the effect body (same cascading-render guard as the account-name effect).
+  useEffect(() => {
+    const t = setTimeout(() => setProfileAvatar(user?.avatar ?? ""), 0);
+    return () => clearTimeout(t);
+  }, [user?.avatar]);
+
+  // Pick a profile photo — image only, capped ~2 MB raw, then downscaled to a
+  // compact data URL held in state for the preview and the save.
+  const handleAvatar = async (file: File | undefined) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast({
+        title: "Not an image",
+        description: "Please choose a PNG or JPG photo.",
+        variant: "error",
+      });
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      toast({
+        title: "Image too large",
+        description: "Please choose a photo under 2 MB.",
+        variant: "error",
+      });
+      return;
+    }
+    setUploadingAvatar(true);
+    try {
+      const dataUrl = await fileToDataUrl(file, 400);
+      setProfileAvatar(dataUrl);
+    } catch (e) {
+      toast({
+        title: "Could not add photo",
+        description: e instanceof Error ? e.message : "Please try another image.",
+        variant: "error",
+      });
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
+  // Save the signed-in user's own name + photo, then refresh the header/greeting.
+  const handleSaveProfile = async () => {
+    const name = accountName.trim();
+    if (!name) {
+      toast({
+        title: "Name required",
+        description: "Please enter your display name.",
+        variant: "error",
+      });
+      return;
+    }
+    setSavingProfile(true);
+    try {
+      const updated = await updateMyProfile({ name, avatar: profileAvatar });
+      updateUser(updated);
+      toast({ title: "Profile saved", description: "Your changes are live.", variant: "success" });
+    } catch (e) {
+      toast({
+        title: "Could not save",
+        description: e instanceof Error ? e.message : "Please try again.",
+        variant: "error",
+      });
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
+  // Change password — validate client-side (match + min length) before calling
+  // the API; the server verifies the current password and may reject it.
+  const handleChangePassword = async () => {
+    const errors: { current?: string; next?: string; confirm?: string } = {};
+    if (!currentPassword) errors.current = "Enter your current password.";
+    if (newPassword.length < 8) errors.next = "Use at least 8 characters.";
+    if (newPassword !== confirmPassword) errors.confirm = "Passwords do not match.";
+    if (Object.keys(errors).length > 0) {
+      setPwErrors(errors);
+      return;
+    }
+    setPwErrors({});
+    setChangingPassword(true);
+    try {
+      await changeMyPassword(currentPassword, newPassword);
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      toast({
+        title: "Password updated",
+        description: "Use your new password next time you sign in.",
+        variant: "success",
+      });
+    } catch (e) {
+      toast({
+        title: "Could not update password",
+        description: e instanceof Error ? e.message : "Please try again.",
+        variant: "error",
+      });
+    } finally {
+      setChangingPassword(false);
+    }
+  };
+
+  // Non-office roles get ONLY this self-service view — no school config, no tabs,
+  // no danger zone.
+  if (!canManageSchool) {
+    return (
+      <div className="flex flex-col gap-5">
+        <PageHeader
+          title="My profile"
+          description="Update your display name, photo and password."
+        />
+
+        <Card>
+          <CardHeader>
+            <div>
+              <h2 className="text-sm font-semibold text-text">My profile</h2>
+              <p className="mt-0.5 text-xs text-muted">
+                Shown in the top bar and the dashboard greeting.
+              </p>
+            </div>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-5">
+            <Field label="Profile photo" hint="A square PNG or JPG works best. Max 2 MB.">
+              <div className="flex flex-wrap items-center gap-4">
+                <Avatar
+                  name={accountName || user?.name || "You"}
+                  src={profileAvatar || undefined}
+                  size="xl"
+                />
+                <div className="flex flex-wrap items-center gap-2">
+                  <label className="focus-within:outline-none">
+                    <span className="focus-ring inline-flex cursor-pointer items-center gap-2 rounded-md border border-border px-4 py-2 text-sm font-medium text-text transition-colors hover:border-border-strong hover:bg-surface-hover">
+                      <Upload className="size-4" />
+                      {uploadingAvatar
+                        ? "Processing…"
+                        : profileAvatar
+                          ? "Change photo"
+                          : "Upload photo"}
+                    </span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="sr-only"
+                      disabled={uploadingAvatar}
+                      onChange={(e) => {
+                        handleAvatar(e.target.files?.[0]);
+                        e.target.value = ""; // allow re-selecting the same file
+                      }}
+                    />
+                  </label>
+                  {profileAvatar && (
+                    <Button type="button" variant="ghost" onClick={() => setProfileAvatar("")}>
+                      <X className="size-4" />
+                      Remove
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </Field>
+
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              <Input
+                label="Display name"
+                value={accountName}
+                onChange={(e) => setAccountName(e.target.value)}
+                hint="Shown in the top bar and the dashboard greeting."
+              />
+              <Input
+                label="Login email"
+                value={user?.email ?? ""}
+                disabled
+                hint="Contact your school admin to change other details."
+              />
+            </div>
+
+            <div className="flex justify-end">
+              <Button onClick={handleSaveProfile} disabled={savingProfile || uploadingAvatar}>
+                <Save className="size-4" />
+                {savingProfile ? "Saving…" : "Save profile"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <div>
+              <h2 className="text-sm font-semibold text-text">Change password</h2>
+              <p className="mt-0.5 text-xs text-muted">
+                Choose a new password with at least 8 characters.
+              </p>
+            </div>
+            <ShieldCheck className="size-4 text-muted" />
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+              <Input
+                label="Current password"
+                type="password"
+                autoComplete="current-password"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                error={pwErrors.current}
+              />
+              <Input
+                label="New password"
+                type="password"
+                autoComplete="new-password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                error={pwErrors.next}
+                hint="At least 8 characters."
+              />
+              <Input
+                label="Confirm new password"
+                type="password"
+                autoComplete="new-password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                error={pwErrors.confirm}
+              />
+            </div>
+            <div className="flex justify-end">
+              <Button onClick={handleChangePassword} disabled={changingPassword}>
+                <ShieldCheck className="size-4" />
+                {changingPassword ? "Updating…" : "Update password"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-5">

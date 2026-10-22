@@ -43,6 +43,7 @@ async function evaluateRule(schoolId: string, rule: WorkflowDoc): Promise<RuleRe
           title,
           body: `Automation "${name}" flagged ${count} student(s) with attendance under ${threshold}%.`,
           link: "/students",
+          roles: ["super_admin", "school_admin", "principal"],
         });
         return { name, message: title, notified: true };
       }
@@ -60,6 +61,7 @@ async function evaluateRule(schoolId: string, rule: WorkflowDoc): Promise<RuleRe
           title,
           body: `${count} student(s) owe a total of ${inr(total)} in pending fees.`,
           link: "/fees/collect",
+          roles: ["super_admin", "school_admin", "principal"],
         });
         return { name, message: `${title} · ${inr(total)}`, notified: true };
       }
@@ -86,6 +88,7 @@ async function evaluateRule(schoolId: string, rule: WorkflowDoc): Promise<RuleRe
           title,
           body: `${names.join(", ")}${more}. Send them a wish!`,
           link: "/students",
+          roles: ["super_admin", "school_admin", "principal"],
         });
         return { name, message: `${title}: ${names.join(", ")}${more}`, notified: true };
       }
@@ -104,6 +107,7 @@ async function evaluateRule(schoolId: string, rule: WorkflowDoc): Promise<RuleRe
           title,
           body: `${count} application(s) are awaiting review (enquiry / applied / interview).`,
           link: "/students/admissions",
+          roles: ["super_admin", "school_admin", "principal"],
         });
         return { name, message: title, notified: true };
       }

@@ -53,6 +53,7 @@ export async function runSubscriptionReminders(now: Date = new Date()): Promise<
           title: "Subscription expiring soon",
           body: `Your plan ends in ${days(sub.paidEndDate)} day(s). Renew to avoid interruption.`,
           link: "/subscription",
+          roles: ["super_admin", "school_admin", "principal"],
         });
         sub.notifiedPaidEnding = true;
         counts.paidEnding++;
@@ -74,6 +75,7 @@ export async function runSubscriptionReminders(now: Date = new Date()): Promise<
           title: "Free trial ending soon",
           body: `${days(sub.trialEndDate)} day(s) left. Activate a plan to keep access.`,
           link: "/subscription",
+          roles: ["super_admin", "school_admin", "principal"],
         });
         sub.notifiedTrialEnding = true;
         counts.trialEnding++;
@@ -88,6 +90,7 @@ export async function runSubscriptionReminders(now: Date = new Date()): Promise<
           title: "Your free trial has expired",
           body: `Activate a subscription to continue. Your data is safe.`,
           link: "/subscription",
+          roles: ["super_admin", "school_admin", "principal"],
         });
         sub.notifiedTrialExpired = true;
         counts.trialExpired++;

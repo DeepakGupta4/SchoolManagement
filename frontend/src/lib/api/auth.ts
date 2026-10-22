@@ -31,6 +31,23 @@ export async function updateMyName(name: string): Promise<User> {
   return result.user;
 }
 
+/** Updates the signed-in user's own basic profile (display name and/or photo). */
+export async function updateMyProfile(patch: { name?: string; avatar?: string }): Promise<User> {
+  const result = await apiRequest<{ user: User }>("/api/auth/me", {
+    method: "PATCH",
+    body: patch,
+  });
+  return result.user;
+}
+
+/** Changes the signed-in user's own password (the current one is verified server-side). */
+export async function changeMyPassword(currentPassword: string, newPassword: string): Promise<void> {
+  await apiRequest("/api/auth/me/password", {
+    method: "PATCH",
+    body: { currentPassword, newPassword },
+  });
+}
+
 /** Resolves the signed-in user from a stored token, or null if it's invalid. */
 export async function fetchCurrentUser(): Promise<User | null> {
   try {

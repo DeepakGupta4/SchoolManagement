@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Cake, CalendarCheck, Download, Eye, FileText, Pencil, Plus, Search, Trash2, Users, UsersRound, UserCheck, IndianRupee, TrendingDown } from "lucide-react";
+import { Ban, Cake, CalendarCheck, Download, Eye, FileText, Pencil, Plus, Search, Trash2, Users, UsersRound, UserCheck, IndianRupee, TrendingDown } from "lucide-react";
 import {
   Avatar,
   Badge,
@@ -20,7 +20,7 @@ import {
 } from "@/components/ui";
 import { useStudents } from "@/hooks/useStudents";
 import { useClassOptions } from "@/hooks/useClassOptions";
-import { createStudent, deleteStudent, updateStudent, fetchAllStudents } from "@/lib/api/students";
+import { createStudent, deleteStudent, updateStudent, fetchAllStudents, setStudentStatus } from "@/lib/api/students";
 import { getDashboardInsights } from "@/lib/api/dashboard";
 import { getFeeSummary } from "@/lib/api/feeLedger";
 import { getMySchool, type SchoolProfile } from "@/lib/api/schools";
@@ -101,6 +101,8 @@ function StudentsPageInner() {
   // hide write actions, lock the class filter, and show class-scoped stats.
   const { user } = useAuthStore();
   const isTeacher = user?.role === "teacher";
+  // Hard delete is super-admin-only (it erases history); office roles suspend instead.
+  const isSuperAdmin = user?.role === "super_admin";
   const [myClass, setMyClass] = useState<{ className: string; section: string } | null>(null);
 
   const [search, setSearch] = useState("");
@@ -339,6 +341,26 @@ function StudentsPageInner() {
     }
   };
 
+  // Office alternative to deleting: flip active ↔ inactive. Reversible, preserves
+  // all history. (A full status set — transferred/alumni — is on the edit form.)
+  const handleToggleStatus = async (s: Student) => {
+    const next: StudentStatus = s.status === "active" ? "inactive" : "active";
+    try {
+      await setStudentStatus(s.id, next);
+      toast({
+        title: next === "inactive" ? "Student suspended" : "Student activated",
+        description: `${fullName(s)} is now ${next}.`,
+      });
+      refetch();
+    } catch (e) {
+      toast({
+        title: "Could not update status",
+        description: e instanceof Error ? e.message : "Something went wrong.",
+        variant: "error",
+      });
+    }
+  };
+
   const handleDelete = async () => {
     if (!deleting) return;
     setIsDeleting(true);
@@ -464,13 +486,25 @@ function StudentsPageInner() {
                 <Pencil className="size-4" />
               </button>
               <button
-                onClick={() => setDeleting(s)}
-                aria-label={`Delete ${fullName(s)}`}
-                className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-danger-soft hover:text-danger"
+                onClick={() => handleToggleStatus(s)}
+                aria-label={s.status === "active" ? `Suspend ${fullName(s)}` : `Activate ${fullName(s)}`}
+                title={s.status === "active" ? "Suspend (set inactive)" : "Activate"}
+                className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
               >
-                <Trash2 className="size-4" />
+                {s.status === "active" ? <Ban className="size-4" /> : <UserCheck className="size-4" />}
               </button>
             </>
+          )}
+          {/* Hard delete erases fee/attendance/marks history (cascades) — super-admin only. */}
+          {isSuperAdmin && (
+            <button
+              onClick={() => setDeleting(s)}
+              aria-label={`Delete ${fullName(s)}`}
+              title="Delete permanently"
+              className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-danger-soft hover:text-danger"
+            >
+              <Trash2 className="size-4" />
+            </button>
           )}
         </div>
       ),
@@ -697,7 +731,7 @@ function StudentsPageInner() {
         title="Delete student?"
         description={
           deleting
-            ? `${fullName(deleting)} (${deleting.admissionNo}) will be permanently removed. This cannot be undone.`
+            ? `${fullName(deleting)} (${deleting.admissionNo}) will be permanently removed along with their fee account, payments and documents — this erases their history and cannot be undone. To take a student off active lists, suspend or transfer them instead.`
             : ""
         }
         confirmLabel="Delete"

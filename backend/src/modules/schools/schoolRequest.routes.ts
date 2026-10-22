@@ -282,6 +282,7 @@ router.post("/:id/approve", async (req, res, next) => {
       title: "Your school was approved 🎉",
       body: `Your 7-day free trial has started.`,
       link: "/dashboard",
+      roles: ["super_admin", "school_admin", "principal"],
     });
 
     // Fire-and-forget: don't make the admin wait on the SMTP handshake.

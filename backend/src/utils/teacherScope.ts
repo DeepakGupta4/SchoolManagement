@@ -102,3 +102,13 @@ export async function assertTeacherMayAccessClass(req: Request, className: strin
     throw ApiError.forbidden("You can only access the classes you teach.");
   }
 }
+
+/**
+ * The class names a teacher may see (taught ∪ their class-teacher class). Returns
+ * [] for a non-teacher or a teacher with no classes. Used to scope their
+ * notification feed to class-relevant events.
+ */
+export async function teacherClassesFor(req: Request): Promise<string[]> {
+  const scope = await loadScope(req);
+  return scope ? actionableClasses(scope) : [];
+}

@@ -168,6 +168,7 @@ router.post("/verify", validate(verifySchema), async (req, res, next) => {
       title: "Subscription activated",
       body: `Your ${chosen.name} plan is now active. Thank you!`,
       link: "/subscription",
+      roles: ["super_admin", "school_admin", "principal"],
     });
 
     res.json({ data: toPublicSchool(school) });

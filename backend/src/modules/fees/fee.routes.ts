@@ -456,6 +456,7 @@ router.post("/collect", canCollect, validate(collectBody), async (req, res, next
         title: "Fee payment received",
         body: `₹${r.amount.toLocaleString("en-IN")} from ${r.studentName} · ${r.receiptNo}`,
         link: "/fees/receipts",
+        roles: ["super_admin", "school_admin", "principal", "accountant"],
       });
     }
 
@@ -880,6 +881,7 @@ router.post("/pay/verify", validate(payVerifyBody), async (req, res, next) => {
         title: "Online fee payment received",
         body: `₹${r.amount.toLocaleString("en-IN")} from ${r.studentName} · ${r.receiptNo}`,
         link: "/fees/receipts",
+        roles: ["super_admin", "school_admin", "principal", "accountant"],
       });
     }
 

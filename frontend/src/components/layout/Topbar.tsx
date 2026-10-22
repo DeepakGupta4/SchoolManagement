@@ -191,7 +191,7 @@ export function Topbar() {
                 aria-label={`Account menu for ${user?.name ?? "current user"}`}
                 className="focus-ring flex items-center gap-2.5 rounded-md p-1.5 transition-colors hover:bg-surface-hover sm:pr-2.5"
               >
-                <Avatar name={user?.name ?? "Admin"} size="sm" className="rounded-md" />
+                <Avatar name={user?.name ?? "Admin"} src={user?.avatar} size="sm" className="rounded-md" />
                 <div className="text-left max-lg:hidden">
                   <p className="text-[13px] font-semibold leading-tight text-text">{user?.name}</p>
                   <p className="mt-px text-[11px] capitalize text-subtle">

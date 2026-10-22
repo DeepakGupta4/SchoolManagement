@@ -110,11 +110,17 @@ export default createCrudRouter({
   // A teacher is further narrowed to the classes they teach (list AND detail);
   // office/admin roles are unrestricted. Writes stay office-only (default roles).
   readScope: studentRosterScope,
+  // Hard delete CASCADES (fee account, payments, documents) — it erases financial
+  // and academic history, so it's super-admin-only. Office/admin change the
+  // student's status (active/inactive/transferred/alumni) instead of deleting.
+  deleteRoles: ["super_admin"],
   notifyOnCreate: (s) => ({
     type: "student",
     title: "New student admitted",
     body: `${s.firstName} ${s.lastName} · ${s.className}-${s.section}`,
     link: "/students",
+    // Class-scoped so only that class's teacher (plus office/admin) is notified.
+    className: s.className,
   }),
   // Cascade: removing a student also removes their fee account, payments and
   // uploaded documents, so no orphan records linger (e.g. in Fee Defaulters).

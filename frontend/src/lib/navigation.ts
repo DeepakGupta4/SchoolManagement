@@ -97,6 +97,7 @@ export const navGroups: NavGroup[] = [
       },
       { title: "Parents", href: "/parents", icon: Contact },
       { title: "My Leave", href: "/leave/my", icon: CalendarX, hideFromFullAccess: true },
+      { title: "My ID Card", href: "/id-cards/me", icon: IdCard, hideFromFullAccess: true },
     ],
   },
   {
@@ -262,8 +263,12 @@ const TEACHER_NAV_HREFS = new Set<string>([
   "/notices",
   "/events",
   "/holidays",
-  // Self-service (no school Settings — that's office/admin config, incl. the data-reset danger zone)
+  // Self-service
   "/leave/my",
+  "/id-cards/me",
+  // Settings is role-aware: a teacher sees only their own profile here (name/photo/
+  // password), never the school config or data-reset danger zone.
+  "/settings",
 ]);
 
 /**

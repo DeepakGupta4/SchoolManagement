@@ -91,17 +91,49 @@ router.get("/me", requireAuth, async (req, res, next) => {
   }
 });
 
-const updateMeSchema = z.object({ name: z.string().min(2, "Name must be at least 2 characters") });
+const updateMeSchema = z.object({
+  name: z.string().min(2, "Name must be at least 2 characters").optional(),
+  // A downscaled data URL (the app's convention for photos); generously capped
+  // so a huge upload can't be posted.
+  avatar: z.string().max(2_000_000, "Image is too large").optional(),
+});
 
-/** The signed-in user edits their OWN display name (shown in the header/greeting). */
+/** The signed-in user edits their OWN basic profile — display name and photo. */
 router.patch("/me", requireAuth, validate(updateMeSchema), async (req, res, next) => {
   try {
-    const { name } = req.body as z.infer<typeof updateMeSchema>;
+    const { name, avatar } = req.body as z.infer<typeof updateMeSchema>;
     const user = await User.findById(req.user!.id);
     if (!user) throw ApiError.unauthorized("This account no longer exists.");
-    user.name = name.trim();
+    if (typeof name === "string") user.name = name.trim();
+    if (typeof avatar === "string") user.avatar = avatar;
     await user.save();
     res.json({ user: toPublicUser(user) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1, "Current password is required"),
+  newPassword: z.string().min(8, "New password must be at least 8 characters"),
+});
+
+/**
+ * The signed-in user changes their OWN password. The current password is verified
+ * first so a stolen session alone can't silently lock the owner out. passwordHash
+ * is `select:false`, so it must be requested explicitly (as in /login).
+ */
+router.patch("/me/password", requireAuth, validate(changePasswordSchema), async (req, res, next) => {
+  try {
+    const { currentPassword, newPassword } = req.body as z.infer<typeof changePasswordSchema>;
+    const user = await User.findById(req.user!.id).select("+passwordHash");
+    if (!user) throw ApiError.unauthorized("This account no longer exists.");
+    if (!(await user.verifyPassword(currentPassword))) {
+      throw ApiError.badRequest("Your current password is incorrect.");
+    }
+    user.passwordHash = await hashPassword(newPassword);
+    await user.save();
+    res.json({ ok: true });
   } catch (err) {
     next(err);
   }

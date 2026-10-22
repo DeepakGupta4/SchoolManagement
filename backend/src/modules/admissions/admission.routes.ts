@@ -154,6 +154,7 @@ async function enrolIfApproved(doc: HydratedDocument<ApplicationAttrs>, schoolId
       title: "Applicant enrolled as student",
       body: `${firstName} ${lastName} · ${className}-${section}`,
       link: "/students",
+      className,
     });
   } catch (err) {
     console.error("Admission enrolment failed:", err);

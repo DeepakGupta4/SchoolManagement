@@ -415,6 +415,7 @@ router.post(
             (noContact > 0 ? `, ${noContact} without an email on file.` : ".")
           : `${total} absentee(s). Email is not configured on the server, so no messages were sent.`,
         link: "/attendance",
+        className,
       });
 
       res.json({ data: { total, emailed, noContact, emailConfigured } });
