@@ -23,6 +23,13 @@ export interface CrudOptions<T> {
   model: Model<T>;
   /** Body schema for create. Update uses `.partial()` of the same shape. */
   createSchema: ZodType;
+  /**
+   * Body schema for update. Defaults to `createSchema.partial()`. Pass this
+   * explicitly when `createSchema` carries a `.refine()`/`.superRefine()` — zod v4
+   * forbids `.partial()` on a refined object schema, so the default would throw at
+   * router-build time (boot crash). Supply a pre-built partial (optionally re-refined).
+   */
+  updateSchema?: ZodType;
   /** Fields a `?search=` term is matched against, case-insensitively. */
   searchFields: (keyof T & string)[];
   /** Query params that filter on an exact field match, e.g. ["className", "status"]. */
@@ -86,6 +93,20 @@ const listQuerySchema = z.object({
   limit: z.coerce.number<number>().min(1).max(500).default(200),
 });
 
+/**
+ * The partial (PATCH-style) form of a create schema. zod v4 throws when `.partial()`
+ * is called on an object schema that carries a refinement, so fall back to the full
+ * schema rather than crash at router-build time — a module that needs real partial
+ * updates for a refined schema passes `updateSchema` instead.
+ */
+function partialOf(schema: ZodType): ZodType {
+  try {
+    return (schema as unknown as z.ZodObject).partial();
+  } catch {
+    return schema;
+  }
+}
+
 export function createCrudRouter<T>(options: CrudOptions<T>): Router {
   const {
     model,
@@ -104,6 +125,10 @@ export function createCrudRouter<T>(options: CrudOptions<T>): Router {
     afterUpdate,
     afterDelete,
   } = options;
+
+  // Update validates a partial of the create shape; a module may override it (needed
+  // when createSchema is refined — see partialOf / the updateSchema option).
+  const updateSchema = options.updateSchema ?? partialOf(createSchema);
 
   // A stable `_id` tiebreaker appended to the sort so OFFSET pagination can't
   // reorder records that share the primary sort value (e.g. the same createdAt)
@@ -208,7 +233,7 @@ export function createCrudRouter<T>(options: CrudOptions<T>): Router {
     "/:id",
     canWrite,
     // Partial so a client can PATCH-style update a couple of fields.
-    validate((createSchema as unknown as z.ZodObject).partial()),
+    validate(updateSchema),
     async (req, res, next) => {
       try {
         const doc = await model.findOneAndUpdate(
