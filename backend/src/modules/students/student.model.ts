@@ -82,6 +82,8 @@ const studentSchema = new Schema(
     // Transport.
     transportRequired: { type: Boolean, default: false },
     pickupPoint: { type: String, default: "" },
+    /** The bus route (by code) this student rides — drives their transport fee. */
+    transportRouteCode: { type: String, default: "" },
 
     // Server-owned metrics — clients never set these directly.
     attendancePercent: { type: Number, default: 100, min: 0, max: 100 },

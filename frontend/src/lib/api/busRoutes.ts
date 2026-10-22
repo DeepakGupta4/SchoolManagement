@@ -17,6 +17,8 @@ export interface BusRoute {
   arrival: string;
   status: string;
   distance: string;
+  /** Monthly transport fee for this route — billed to students assigned to it. */
+  fee: number;
 }
 
 export interface BusRouteFilters {

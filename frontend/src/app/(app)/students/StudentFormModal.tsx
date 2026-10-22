@@ -14,7 +14,8 @@ import { fileToDataUrl } from "@/lib/image";
 import { AttachmentsField } from "@/components/AttachmentsField";
 import { SingleDocField } from "@/components/SingleDocField";
 import { uploadDocumentFiles, uploadLabeledDocument } from "@/lib/api/documents";
-import { feeStructuresApi, feeTotal, FEE_HEADS, type FeeStructure } from "@/lib/api/feeStructures";
+import { feeStructuresApi, feeTotal, structureHeads, type FeeStructure } from "@/lib/api/feeStructures";
+import { busRoutesApi, type BusRoute } from "@/lib/api/busRoutes";
 import { createFeeAccount } from "@/lib/api/feeLedger";
 import { MIN_STUDENT_DOB, MAX_STUDENT_DOB, MIN_RECORD_DATE, TODAY_ISO } from "@/lib/dates";
 import type { Student, StudentFormValues } from "@/types/student";
@@ -52,14 +53,35 @@ type FeeMode = "none" | "structure" | "custom";
 
 /**
  * The billed fee heads to open the account with — either every non-zero head of
- * the chosen structure, or a single "Tuition Fee" head for a lump-sum total.
- * The concession is applied server-side, so heads here are the gross amounts.
+ * the chosen structure (with transport applied per-student), or a single
+ * "Tuition Fee" head for a lump-sum total. The concession is applied
+ * server-side, so heads here are the gross amounts.
+ *
+ * Transport is NOT a flat structure head: a student who rides the bus is billed
+ * their ROUTE's fee. The transport step below mirrors the backend
+ * `applyTransportHead` EXACTLY, so the account opened here matches what the
+ * server would bill the same student.
  */
-function buildFeeHeads(mode: FeeMode, structure: FeeStructure | null, total: number) {
+function buildFeeHeads(
+  mode: FeeMode,
+  structure: FeeStructure | null,
+  total: number,
+  transport: { required: boolean; routeFee: number | null }
+) {
   if (mode === "structure" && structure) {
-    return FEE_HEADS.map((h) => ({ head: h.label, billed: Number(structure[h.key]) || 0 })).filter(
-      (h) => h.billed > 0
-    );
+    const base = structureHeads(structure).map((h) => ({ head: h.name, billed: h.amount }));
+    // Mirror backend applyTransportHead: drop any flat "Transport" head, then —
+    // only when the student rides the bus — bill their route fee, falling back
+    // to the structure's flat Transport amount when the route has none.
+    const isTransport = (h: { head: string }) => h.head.trim().toLowerCase() === "transport";
+    const rest = base.filter((h) => !isTransport(h));
+    if (!transport.required) return rest;
+    const fallback = base.find(isTransport)?.billed ?? 0;
+    const fee =
+      transport.routeFee != null && transport.routeFee > 0
+        ? Math.round(transport.routeFee)
+        : fallback;
+    return fee > 0 ? [...rest, { head: "Transport", billed: fee }] : rest;
   }
   if (mode === "custom" && total > 0) {
     return [{ head: "Tuition Fee", billed: Math.round(total) }];
@@ -139,6 +161,7 @@ const emptyValues: StudentSchema = {
   previousResult: "",
   transportRequired: false,
   pickupPoint: "",
+  transportRouteCode: "",
 };
 
 interface StudentFormModalProps {
@@ -187,6 +210,9 @@ export function StudentFormModal({
   const [feeStructureId, setFeeStructureId] = useState("");
   const [feeTotalInput, setFeeTotalInput] = useState("");
   const [feeConcession, setFeeConcession] = useState("");
+  // Bus routes for the transport picker. A student rides one route and is billed
+  // its monthly fee, which the fee preview mirrors from the backend's billing.
+  const [busRoutes, setBusRoutes] = useState<BusRoute[]>([]);
   // Classes/sections come from the Classes & Sections module — a single source
   // of truth, so a class added there shows up here automatically.
   const { classOptions, sectionOptions } = useClassOptions();
@@ -209,6 +235,8 @@ export function StudentFormModal({
   const lastName = useWatch({ control, name: "lastName" });
   const className = useWatch({ control, name: "className" });
   const section = useWatch({ control, name: "section" });
+  const transportRequired = useWatch({ control, name: "transportRequired" });
+  const transportRouteCode = useWatch({ control, name: "transportRouteCode" });
 
   const handlePhoto = async (file: File | undefined) => {
     if (!file) return;
@@ -263,6 +291,7 @@ export function StudentFormModal({
             previousResult: student.previousResult ?? "",
             transportRequired: student.transportRequired ?? false,
             pickupPoint: student.pickupPoint ?? "",
+            transportRouteCode: student.transportRouteCode ?? "",
           }
         : emptyValues
     );
@@ -314,6 +343,20 @@ export function StudentFormModal({
     };
   }, [open, isEdit]);
 
+  // Bus routes for the transport picker — loaded in both create and edit, since
+  // the transport section (and its fee impact) applies to every student.
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    busRoutesApi
+      .list()
+      .then((all) => !cancelled && setBusRoutes(all))
+      .catch(() => !cancelled && setBusRoutes([]));
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
   // Auto admission number (school-wide) once the roster is known.
   useEffect(() => {
     if (!open || isEdit) return;
@@ -330,14 +373,15 @@ export function StudentFormModal({
   // the Fees section. Cheap to recompute; the React Compiler memoises it.
   const classStructures = feeStructures.filter((s) => s.class === className);
   const selectedStructure = classStructures.find((s) => s.id === feeStructureId) ?? null;
-  const feeGross =
-    feeMode === "structure"
-      ? selectedStructure
-        ? feeTotal(selectedStructure)
-        : 0
-      : feeMode === "custom"
-        ? Number(feeTotalInput) || 0
-        : 0;
+  const selectedRoute = busRoutes.find((r) => r.code === transportRouteCode) ?? null;
+  // The exact heads the account will be opened with — transport billed from the
+  // chosen route, mirroring the backend. Both the preview and the submit use
+  // these, so what the form shows is what the server is asked to bill.
+  const feeHeads = buildFeeHeads(feeMode, selectedStructure, Number(feeTotalInput) || 0, {
+    required: Boolean(transportRequired),
+    routeFee: selectedRoute?.fee ?? null,
+  });
+  const feeGross = feeHeads.reduce((sum, h) => sum + h.billed, 0);
   const feeConcessionNum = Math.min(Number(feeConcession) || 0, feeGross);
   const feeNet = Math.max(0, feeGross - feeConcessionNum);
 
@@ -389,7 +433,7 @@ export function StudentFormModal({
     // Optional: open a fee account so the student's dues show on their profile
     // and across the Fees pages. Non-fatal — admission still succeeds without it.
     if (!isEdit && feeMode !== "none") {
-      const heads = buildFeeHeads(feeMode, selectedStructure, Number(feeTotalInput) || 0);
+      const heads = feeHeads;
       if (heads.length > 0) {
         try {
           await createFeeAccount({
@@ -625,6 +669,21 @@ export function StudentFormModal({
             />
             <span className="text-sm text-text">Transport required</span>
           </label>
+          {transportRequired && (
+            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Select
+                label="Bus route"
+                placeholder={busRoutes.length ? "Select the route they ride" : "No bus routes yet"}
+                hint="Billed monthly from the route's fee"
+                options={busRoutes.map((r) => ({
+                  label: `${r.name} (${r.code}) · ₹${r.fee.toLocaleString("en-IN")}/mo`,
+                  value: r.code,
+                }))}
+                {...register("transportRouteCode")}
+                error={errors.transportRouteCode?.message}
+              />
+            </div>
+          )}
           <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Input label="Pick-up point / route" {...register("pickupPoint")} error={errors.pickupPoint?.message} />
             <Input label="Emergency contact" hint="Name &amp; phone" {...register("emergencyContact")} error={errors.emergencyContact?.message} />

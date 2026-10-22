@@ -20,6 +20,7 @@ import {
   generateApplicationNo,
   type Application,
 } from "@/lib/api/admissions";
+import { busRoutesApi, type BusRoute } from "@/lib/api/busRoutes";
 
 // Datalist suggestions — pick or type, mirroring the student admission form.
 const NATIONALITY_SUGGESTIONS = ["Indian", "Nepali", "Bhutanese", "Bangladeshi", "Other"];
@@ -77,6 +78,7 @@ function makeEmpty(): AdmissionSchema {
     previousResult: "",
     transportRequired: false,
     pickupPoint: "",
+    transportRouteCode: "",
   };
 }
 
@@ -116,6 +118,8 @@ export function AdmissionFormModal({
   // never ask for "parent" and "father" as two separate people.
   const [primaryContact, setPrimaryContact] = useState<"father" | "mother" | "other">("father");
   const [contactError, setContactError] = useState<string | null>(null);
+  // Bus routes for the transport picker (shown when transport is required).
+  const [busRoutes, setBusRoutes] = useState<BusRoute[]>([]);
 
   const {
     register,
@@ -133,6 +137,7 @@ export function AdmissionFormModal({
   const avatar = useWatch({ control, name: "avatar" });
   const firstName = useWatch({ control, name: "firstName" });
   const lastName = useWatch({ control, name: "lastName" });
+  const transportRequired = useWatch({ control, name: "transportRequired" });
 
   // Repopulate on open so the previous record's values can't leak through. A fresh
   // application number is minted for every new form (in the effect, not render).
@@ -151,6 +156,19 @@ export function AdmissionFormModal({
     }, 0);
     return () => clearTimeout(t);
   }, [open, record, reset]);
+
+  // Bus routes for the transport picker — loaded whenever the form opens.
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    busRoutesApi
+      .list()
+      .then((all) => !cancelled && setBusRoutes(all))
+      .catch(() => !cancelled && setBusRoutes([]));
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
 
   const handlePhoto = async (file: File | undefined) => {
     if (!file) return;
@@ -236,6 +254,7 @@ export function AdmissionFormModal({
       previousResult: values.previousResult ?? "",
       transportRequired: values.transportRequired ?? false,
       pickupPoint: values.pickupPoint ?? "",
+      transportRouteCode: values.transportRouteCode ?? "",
     };
 
     await onSubmit(finalValues);
@@ -420,6 +439,21 @@ export function AdmissionFormModal({
             <input type="checkbox" {...register("transportRequired")} className="focus-ring size-4 cursor-pointer rounded-sm accent-primary" />
             <span className="text-sm text-text">Transport required</span>
           </label>
+          {transportRequired && (
+            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Select
+                label="Bus route"
+                placeholder={busRoutes.length ? "Select the route they ride" : "No bus routes yet"}
+                hint="Billed monthly from the route's fee on enrolment"
+                options={busRoutes.map((r) => ({
+                  label: `${r.name} (${r.code}) · ₹${r.fee.toLocaleString("en-IN")}/mo`,
+                  value: r.code,
+                }))}
+                {...register("transportRouteCode")}
+                error={errors.transportRouteCode?.message}
+              />
+            </div>
+          )}
           <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Input label="Pick-up point / route" {...register("pickupPoint")} error={errors.pickupPoint?.message} />
             <Input label="Emergency contact" hint="Name &amp; phone" {...register("emergencyContact")} error={errors.emergencyContact?.message} />

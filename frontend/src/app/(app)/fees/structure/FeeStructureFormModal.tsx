@@ -1,11 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useForm } from "react-hook-form";
+import { useEffect, useMemo, useState, type BaseSyntheticEvent } from "react";
+import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Modal, Button, Input } from "@/components/ui";
+import { Plus, Trash2 } from "lucide-react";
+import { Modal, Button, Input, Field } from "@/components/ui";
 import { feeStructureSchema, type FeeStructureSchema } from "@/lib/schemas/feeStructure";
-import { FEE_HEADS, type FeeStructure } from "@/lib/api/feeStructures";
+import {
+  COMMON_FEE_HEADS,
+  feeTotal,
+  structureHeads,
+  type FeeStructure,
+} from "@/lib/api/feeStructures";
 
 // Common class groupings a fee structure is defined for — offered as a quick
 // pick, but the field stays free text so any custom grouping works.
@@ -29,15 +35,17 @@ const FEE_CLASS_PRESETS = [
   "Class 12",
 ];
 
+const inr = new Intl.NumberFormat("en-IN", {
+  style: "currency",
+  currency: "INR",
+  maximumFractionDigits: 0,
+});
+
+// Create-mode default: one sensible head so the editor is never empty.
 const emptyValues: FeeStructureSchema = {
   code: "",
   class: "",
-  tuition: 0,
-  transport: 0,
-  lab: 0,
-  library: 0,
-  sports: 0,
-  misc: 0,
+  heads: [{ name: "Tuition", amount: 0 }],
 };
 
 interface FeeStructureFormModalProps {
@@ -64,18 +72,33 @@ export function FeeStructureFormModal({
 
   const {
     register,
+    control,
     handleSubmit,
     reset,
+    watch,
+    getValues,
     formState: { errors },
   } = useForm<FeeStructureSchema>({
     resolver: zodResolver(feeStructureSchema),
     defaultValues: emptyValues,
   });
 
-  // Repopulate on open so the previous record's values can't leak through.
+  const { fields, append, remove } = useFieldArray({ control, name: "heads" });
+
+  // Repopulate on open so the previous record's values can't leak through. On
+  // edit, legacy fixed columns come through structureHeads() as editable heads.
   useEffect(() => {
     if (!open) return;
-    reset(record ? { ...record } : emptyValues);
+    if (record) {
+      const heads = structureHeads(record);
+      reset({
+        code: record.code,
+        class: record.class,
+        heads: heads.length ? heads : [{ name: "", amount: 0 }],
+      });
+    } else {
+      reset(emptyValues);
+    }
     // Deferred: clearing the duplicate error synchronously in an effect trips
     // the react-hooks/set-state-in-effect rule.
     const t = setTimeout(() => setDupError(null), 0);
@@ -93,15 +116,43 @@ export function FeeStructureFormModal({
     return set;
   }, [existing, record]);
 
-  const submit = handleSubmit((values) => {
+  // Live heads drive the running total and the preset "already added" state.
+  const watchedHeads = watch("heads") ?? [];
+  const runningTotal = feeTotal({ heads: watchedHeads } as FeeStructure);
+  const hasHead = (name: string) =>
+    watchedHeads.some((h) => h.name.trim().toLowerCase() === name.trim().toLowerCase());
+
+  // Preset chip: append the head only if that name isn't already in the list.
+  const addPreset = (name: string) => {
+    if (!hasHead(name)) append({ name, amount: 0 });
+  };
+
+  const onValid = (values: FeeStructureSchema) => {
     const cls = values.class.trim();
     if (takenClasses.has(cls.toLowerCase())) {
       setDupError(`A fee structure for "${cls}" already exists.`);
       return;
     }
     setDupError(null);
-    return onSubmit({ ...values, class: cls });
-  });
+    // Defensive: blank-name rows are already pruned before validation, but keep
+    // the payload clean and send no legacy columns.
+    const heads = values.heads
+      .map((h) => ({ name: h.name.trim(), amount: Number(h.amount) || 0 }))
+      .filter((h) => h.name.length > 0);
+    return onSubmit({ code: values.code.trim(), class: cls, heads });
+  };
+
+  // Drop any blank-name rows up-front so a stray "Add another" row the user
+  // left empty is silently dropped instead of blocking submit on validation.
+  const submit = (e?: BaseSyntheticEvent) => {
+    const current = getValues("heads") ?? [];
+    for (let i = current.length - 1; i >= 0; i--) {
+      if (!current[i]?.name?.trim()) remove(i);
+    }
+    return handleSubmit(onValid)(e);
+  };
+
+  const headsError = errors.heads?.root?.message ?? errors.heads?.message;
 
   return (
     <Modal
@@ -125,7 +176,7 @@ export function FeeStructureFormModal({
         </>
       }
     >
-      <form onSubmit={submit} className="flex flex-col gap-4">
+      <form onSubmit={submit} className="flex flex-col gap-5">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Input
             label="Structure code"
@@ -148,16 +199,87 @@ export function FeeStructureFormModal({
               <option key={c} value={c} />
             ))}
           </datalist>
-          {FEE_HEADS.map((head) => (
-            <Input
-              key={head.key}
-              label={`${head.label} (₹)`}
-              type="number"
-              min={0}
-              {...register(head.key as keyof FeeStructureSchema)}
-              error={errors[head.key as keyof FeeStructureSchema]?.message}
-            />
-          ))}
+        </div>
+
+        {/* Dynamic fee heads — one editable name + amount per row. */}
+        <Field label="Fee heads" error={headsError}>
+          <div className="flex flex-col gap-2">
+            {fields.length > 0 && (
+              <div className="flex items-center gap-2 px-0.5 text-xs font-medium text-subtle">
+                <span className="flex-1">Head</span>
+                <span className="w-28 sm:w-36">Amount (₹)</span>
+                <span className="w-9 shrink-0" aria-hidden />
+              </div>
+            )}
+            {fields.map((field, index) => (
+              <div key={field.id} className="flex items-start gap-2">
+                <div className="flex-1">
+                  <Input
+                    aria-label={`Fee head ${index + 1} name`}
+                    placeholder="e.g. Tuition"
+                    {...register(`heads.${index}.name`)}
+                    error={errors.heads?.[index]?.name?.message}
+                  />
+                </div>
+                <div className="w-28 sm:w-36">
+                  <Input
+                    type="number"
+                    min={0}
+                    inputMode="numeric"
+                    aria-label={`Fee head ${index + 1} amount`}
+                    {...register(`heads.${index}.amount`)}
+                    error={errors.heads?.[index]?.amount?.message}
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => remove(index)}
+                  aria-label={`Remove fee head ${index + 1}`}
+                  className="focus-ring mt-1 w-9 shrink-0 rounded-md p-2 text-subtle transition-colors hover:bg-danger-soft hover:text-danger"
+                >
+                  <Trash2 className="size-4" />
+                </button>
+              </div>
+            ))}
+          </div>
+        </Field>
+
+        {/* Quick-add presets + a fully custom row. */}
+        <div className="flex flex-col gap-2">
+          <p className="text-xs font-medium text-subtle">Quick add a head</p>
+          <div className="flex flex-wrap gap-1.5">
+            {COMMON_FEE_HEADS.map((name) => {
+              const added = hasHead(name);
+              return (
+                <button
+                  key={name}
+                  type="button"
+                  disabled={added}
+                  onClick={() => addPreset(name)}
+                  className="focus-ring rounded-full border border-border px-2.5 py-1 text-xs text-muted transition-colors hover:border-border-strong hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  + {name}
+                </button>
+              );
+            })}
+          </div>
+          <div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => append({ name: "", amount: 0 })}
+            >
+              <Plus className="size-4" />
+              Add another
+            </Button>
+          </div>
+        </div>
+
+        {/* Running total of whatever is currently entered. */}
+        <div className="flex items-center justify-between rounded-md border border-border bg-surface px-3 py-2.5">
+          <span className="text-sm font-medium text-muted">Monthly total</span>
+          <span className="text-base font-semibold text-primary">{inr.format(runningTotal)}</span>
         </div>
 
         {/* Enables Enter-to-submit without duplicating the footer button. */}

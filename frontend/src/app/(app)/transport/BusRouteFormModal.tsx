@@ -40,6 +40,7 @@ const emptyValues: DefaultValues<BusRouteSchema> = {
   departure: "",
   arrival: "",
   distance: "",
+  fee: 0,
   status: "active",
 };
 
@@ -251,6 +252,16 @@ export function BusRouteFormModal({
             placeholder="18 km"
             {...register("distance")}
             error={errors.distance?.message}
+          />
+          {/* Monthly transport fee — billed to each student assigned to this route. */}
+          <Input
+            label="Fee (₹/month)"
+            type="number"
+            min={0}
+            placeholder="e.g. 1200"
+            hint="Billed to students who ride this route"
+            {...register("fee")}
+            error={errors.fee?.message}
           />
           <Select
             label="Status"

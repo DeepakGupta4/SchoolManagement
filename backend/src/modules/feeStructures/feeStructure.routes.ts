@@ -2,16 +2,31 @@ import { z } from "zod";
 import { FeeStructure } from "./feeStructure.model.js";
 import { createCrudRouter } from "../../utils/crudRouter.js";
 
-const feeStructureSchema = z.object({
-  code: z.string().min(1),
-  class: z.string().min(1),
-  tuition: z.coerce.number<number>().min(0).default(0),
-  transport: z.coerce.number<number>().min(0).default(0),
-  lab: z.coerce.number<number>().min(0).default(0),
-  library: z.coerce.number<number>().min(0).default(0),
-  sports: z.coerce.number<number>().min(0).default(0),
-  misc: z.coerce.number<number>().min(0).default(0),
+const feeHead = z.object({
+  name: z.string().min(1, "Head name is required"),
+  amount: z.coerce.number<number>().min(0).default(0),
 });
+
+const feeStructureSchema = z
+  .object({
+    code: z.string().min(1),
+    class: z.string().min(1),
+    heads: z.array(feeHead).default([]),
+    // Legacy fixed columns stay optional so old edit payloads don't break.
+    tuition: z.coerce.number<number>().min(0).optional(),
+    transport: z.coerce.number<number>().min(0).optional(),
+    lab: z.coerce.number<number>().min(0).optional(),
+    library: z.coerce.number<number>().min(0).optional(),
+    sports: z.coerce.number<number>().min(0).optional(),
+    misc: z.coerce.number<number>().min(0).optional(),
+  })
+  .refine(
+    (s) => {
+      const names = s.heads.map((h) => h.name.trim().toLowerCase());
+      return new Set(names).size === names.length;
+    },
+    { message: "Each fee head name must be unique within a structure.", path: ["heads"] }
+  );
 
 export default createCrudRouter({
   model: FeeStructure,

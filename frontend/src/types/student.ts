@@ -68,6 +68,8 @@ export interface Student {
   // Transport.
   transportRequired?: boolean;
   pickupPoint?: string;
+  /** Bus route code the student rides (drives their transport fee). */
+  transportRouteCode?: string;
 }
 
 /**

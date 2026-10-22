@@ -59,6 +59,7 @@ const admissionSchema = new Schema(
     // Transport.
     transportRequired: { type: Boolean, default: false },
     pickupPoint: { type: String, default: "" },
+    transportRouteCode: { type: String, default: "" },
   },
   { timestamps: true }
 );

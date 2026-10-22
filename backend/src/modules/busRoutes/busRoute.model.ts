@@ -15,6 +15,8 @@ const busRouteSchema = new Schema(
     arrival: { type: String, default: "" },
     status: { type: String, default: "active" },
     distance: { type: String, default: "" },
+    /** Monthly transport fee for this route — billed to students assigned to it. */
+    fee: { type: Number, default: 0, min: 0 },
   },
   { timestamps: true }
 );

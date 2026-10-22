@@ -14,8 +14,10 @@ import {
 import { Student, type StudentDoc } from "../students/student.model.js";
 import { FeeStructure } from "../feeStructures/feeStructure.model.js";
 import { Scholarship } from "../scholarships/scholarship.model.js";
+import { BusRoute } from "../busRoutes/busRoute.model.js";
 import {
   deriveGrossHeads,
+  applyTransportHead,
   matchStructure,
   netHeadsFor,
   provisionalAccountFor,
@@ -120,13 +122,16 @@ async function loadStudentFeeRows(
   if (students.length === 0) return [];
 
   const ids = students.map((s) => s._id);
-  const [accounts, structures, scholarships] = await Promise.all([
+  const [accounts, structures, scholarships, routes] = await Promise.all([
     FeeAccount.find({ schoolId, studentId: { $in: ids }, session: CURRENT_SESSION }),
     FeeStructure.find({ schoolId }),
     Scholarship.find({ schoolId, status: "active" }),
+    BusRoute.find({ schoolId }),
   ]);
 
   const accountByStudent = new Map(accounts.map((a) => [String(a.studentId), a]));
+  // A route's fee is the transport bill for the students assigned to it (by code).
+  const routeFeeByCode = new Map(routes.map((r) => [r.code, Number(r.fee) || 0]));
 
   // First structure that covers each class (matched case-insensitively).
   const structureByClass = new Map<string, (typeof structures)[number]>();
@@ -148,7 +153,10 @@ async function loadStudentFeeRows(
     const existing = accountByStudent.get(String(student._id));
     if (existing) return publicAccount(existing as FeeAccountDoc);
     const structure = structureByClass.get(student.className.trim().toLowerCase());
-    const gross = deriveGrossHeads(structure);
+    const gross = applyTransportHead(deriveGrossHeads(structure), {
+      transportRequired: student.transportRequired,
+      routeFee: student.transportRouteCode ? routeFeeByCode.get(student.transportRouteCode) ?? null : null,
+    });
     const concession = concessionByStudent.get(String(student._id)) ?? 0;
     return provisionalAccountFor(student, gross, concession);
   });
@@ -325,7 +333,14 @@ async function provisionAccount(
   if (!student) throw ApiError.notFound("Student not found.");
 
   const structure = await matchStructure(schoolId, student.className);
-  const gross = deriveGrossHeads(structure);
+  const route =
+    student.transportRequired && student.transportRouteCode
+      ? await BusRoute.findOne({ schoolId, code: student.transportRouteCode }).session(session)
+      : null;
+  const gross = applyTransportHead(deriveGrossHeads(structure), {
+    transportRequired: student.transportRequired,
+    routeFee: route?.fee ?? null,
+  });
   const concession = await scholarshipConcessionFor(schoolId, studentId);
   const net = netHeadsFor(gross, concession);
 
@@ -699,7 +714,14 @@ async function outstandingFor(schoolId: string, student: StudentDoc) {
   });
   if (stored) return { balance: balanceOf(stored), name: stored.name };
   const structure = await matchStructure(schoolId, student.className);
-  const gross = deriveGrossHeads(structure);
+  const route =
+    student.transportRequired && student.transportRouteCode
+      ? await BusRoute.findOne({ schoolId, code: student.transportRouteCode })
+      : null;
+  const gross = applyTransportHead(deriveGrossHeads(structure), {
+    transportRequired: student.transportRequired,
+    routeFee: route?.fee ?? null,
+  });
   const concession = await scholarshipConcessionFor(schoolId, String(student._id));
   const prov = provisionalAccountFor(student, gross, concession);
   return { balance: balanceOf(prov), name: prov.name };

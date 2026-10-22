@@ -12,6 +12,7 @@ import {
   TrendingDown,
   TrendingUp,
   Trash2,
+  Wallet,
 } from "lucide-react";
 import {
   Button,
@@ -27,7 +28,12 @@ import {
 } from "@/components/ui";
 import { exportToCsv } from "@/lib/exportCsv";
 import { useResource } from "@/hooks/useResource";
-import { FEE_HEADS, feeStructuresApi, feeTotal, type FeeStructure } from "@/lib/api/feeStructures";
+import {
+  feeStructuresApi,
+  feeTotal,
+  structureHeads,
+  type FeeStructure,
+} from "@/lib/api/feeStructures";
 import type { FeeStructureSchema } from "@/lib/schemas/feeStructure";
 import { DetailModal } from "@/components/DetailModal";
 import { FeeStructureFormModal } from "./FeeStructureFormModal";
@@ -69,12 +75,15 @@ export default function FeeStructurePage() {
       [
         { header: "Code", value: (f) => f.code },
         { header: "Class", value: (f) => f.class },
-        // One column per fee head, in the same order the table shows them.
-        ...FEE_HEADS.map((head) => ({
-          header: `${head.label} (INR)`,
-          value: (f: FeeStructure) => f[head.key] as number,
-        })),
         { header: "Monthly Total (INR)", value: (f) => feeTotal(f) },
+        // Fixed-width regardless of head count: all heads collapsed into one cell.
+        {
+          header: "Heads",
+          value: (f) =>
+            structureHeads(f)
+              .map((h) => `${h.name}: ₹${h.amount}`)
+              .join("; "),
+        },
       ],
       items
     );
@@ -86,10 +95,12 @@ export default function FeeStructurePage() {
 
   const stats = useMemo(() => {
     const totals = items.map(feeTotal);
+    const sum = totals.reduce((a, b) => a + b, 0);
     return {
       categories: items.length,
       lowest: totals.length ? Math.min(...totals) : 0,
       highest: totals.length ? Math.max(...totals) : 0,
+      average: totals.length ? Math.round(sum / totals.length) : 0,
     };
   }, [items]);
 
@@ -129,20 +140,6 @@ export default function FeeStructurePage() {
         </div>
       ),
     },
-    ...FEE_HEADS.map<Column<FeeStructure>>(({ key, header }) => ({
-      key,
-      header,
-      align: "right",
-      sortable: true,
-      render: (f) => {
-        const value = f[key] as number;
-        return value === 0 ? (
-          <span className="text-subtle">—</span>
-        ) : (
-          <span className="whitespace-nowrap text-muted">{value.toLocaleString("en-IN")}</span>
-        );
-      },
-    })),
     {
       key: "total",
       header: "Total",
@@ -153,6 +150,25 @@ export default function FeeStructurePage() {
           {inr.format(feeTotal(f))}
         </span>
       ),
+    },
+    {
+      key: "heads",
+      header: "Fee heads",
+      render: (f) => {
+        const heads = structureHeads(f);
+        if (heads.length === 0) return <span className="text-subtle">—</span>;
+        const names = heads.map((h) => h.name).join(", ");
+        return (
+          <div className="min-w-0">
+            <p className="font-medium text-text">
+              {heads.length} {heads.length === 1 ? "head" : "heads"}
+            </p>
+            <p className="max-w-56 truncate text-xs text-subtle" title={names}>
+              {names}
+            </p>
+          </div>
+        );
+      },
     },
     {
       key: "actions",
@@ -212,7 +228,7 @@ export default function FeeStructurePage() {
         <StatCard label="Fee Categories" value={stats.categories} icon={Layers} tone="indigo" />
         <StatCard label="Lowest Fee" value={inr.format(stats.lowest)} icon={TrendingDown} tone="emerald" />
         <StatCard label="Highest Fee" value={inr.format(stats.highest)} icon={TrendingUp} tone="rose" />
-        <StatCard label="Fee Heads" value={FEE_HEADS.length} icon={BookOpen} tone="violet" />
+        <StatCard label="Average Fee" value={inr.format(stats.average)} icon={Wallet} tone="violet" />
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -278,9 +294,9 @@ export default function FeeStructurePage() {
             ? [
                 { label: "Code", value: viewing.code },
                 { label: "Class", value: viewing.class },
-                ...FEE_HEADS.map((head) => ({
-                  label: head.label,
-                  value: inr.format(viewing[head.key] as number),
+                ...structureHeads(viewing).map((head) => ({
+                  label: head.name,
+                  value: inr.format(head.amount),
                 })),
                 { label: "Monthly total", value: inr.format(feeTotal(viewing)) },
               ]

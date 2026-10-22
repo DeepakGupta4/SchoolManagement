@@ -76,6 +76,7 @@ const studentSchema = z.object({
   previousResult: z.string().optional(),
   transportRequired: z.boolean().optional(),
   pickupPoint: z.string().optional(),
+  transportRouteCode: z.string().optional(),
 });
 
 // End-of-session class promotion, scoped to the caller's school so one tenant can

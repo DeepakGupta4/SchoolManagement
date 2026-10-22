@@ -75,6 +75,7 @@ export const studentSchema = z.object({
   previousResult: z.string().optional(),
   transportRequired: z.boolean().optional(),
   pickupPoint: z.string().optional(),
+  transportRouteCode: z.string().optional(),
 });
 
 export type StudentSchema = z.infer<typeof studentSchema>;

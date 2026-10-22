@@ -12,6 +12,7 @@
 import { FeeStructure, type FeeStructureAttrs } from "../feeStructures/feeStructure.model.js";
 import { Scholarship } from "../scholarships/scholarship.model.js";
 import { Student, type StudentDoc } from "../students/student.model.js";
+import { BusRoute } from "../busRoutes/busRoute.model.js";
 import {
   FeeAccount,
   CURRENT_SESSION,
@@ -42,13 +43,46 @@ const STRUCTURE_HEADS = [
   { key: "misc", label: "Misc" },
 ] as const;
 
-/** Non-zero billed heads derived from a fee structure. */
+/**
+ * Non-zero billed heads derived from a fee structure. New structures carry a
+ * flexible `heads` array (any names the school chose); structures created before
+ * that existed are read from the legacy fixed columns as a fallback.
+ */
 export function deriveGrossHeads(structure: FeeStructureAttrs | null | undefined): GrossHead[] {
   if (!structure) return [];
+  const flexible = (structure.heads ?? []) as { name: string; amount: number }[];
+  if (flexible.length > 0) {
+    return flexible
+      .map((h) => ({ head: String(h.name ?? "").trim(), billed: Math.max(0, Math.round(Number(h.amount) || 0)) }))
+      .filter((h) => h.head.length > 0 && h.billed > 0);
+  }
   return STRUCTURE_HEADS.map(({ key, label }) => ({
     head: label,
     billed: Math.max(0, Math.round(Number(structure[key]) || 0)),
   })).filter((h) => h.billed > 0);
+}
+
+/** The canonical transport head name (billed per student from their bus route). */
+export const TRANSPORT_HEAD = "Transport";
+
+/**
+ * Applies per-student transport billing to a set of gross heads. Transport is NOT
+ * a flat class fee: a student who rides the bus is billed their ROUTE's fee (set
+ * per route by the school). So:
+ *   - not required           → drop any Transport head (they don't take the bus);
+ *   - a route fee is set     → bill that;
+ *   - required but no route   → fall back to the structure's flat Transport head.
+ */
+export function applyTransportHead(
+  gross: GrossHead[],
+  opts: { transportRequired?: boolean | null; routeFee?: number | null }
+): GrossHead[] {
+  const isTransport = (h: GrossHead) => h.head.trim().toLowerCase() === TRANSPORT_HEAD.toLowerCase();
+  const rest = gross.filter((h) => !isTransport(h));
+  if (!opts.transportRequired) return rest;
+  const fallback = gross.find(isTransport)?.billed ?? 0;
+  const fee = opts.routeFee != null && opts.routeFee > 0 ? Math.round(opts.routeFee) : fallback;
+  return fee > 0 ? [...rest, { head: TRANSPORT_HEAD, billed: fee }] : rest;
 }
 
 /** Deducts a concession off the billed heads in order, so the balance nets it out. */
@@ -166,7 +200,14 @@ export async function syncStudentConcession(
   const structure = await matchStructure(schoolId, student.className);
   if (!structure) return; // no gross to reconstruct the bill from
 
-  const gross = deriveGrossHeads(structure);
+  const route =
+    student.transportRequired && student.transportRouteCode
+      ? await BusRoute.findOne({ schoolId, code: student.transportRouteCode })
+      : null;
+  const gross = applyTransportHead(deriveGrossHeads(structure), {
+    transportRequired: student.transportRequired,
+    routeFee: route?.fee ?? null,
+  });
   const grossTotal = gross.reduce((sum, h) => sum + h.billed, 0);
 
   // Only re-bill an account that was actually billed FROM this structure — its

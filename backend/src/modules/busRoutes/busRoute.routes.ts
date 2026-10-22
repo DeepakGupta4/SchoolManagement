@@ -15,6 +15,7 @@ const busRouteSchema = z.object({
   arrival: z.string().default(""),
   status: z.string().default("active"),
   distance: z.string().default(""),
+  fee: z.coerce.number<number>().min(0).default(0),
 });
 
 export default createCrudRouter({

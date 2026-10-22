@@ -12,6 +12,7 @@ export const busRouteSchema = z.object({
   departure: z.string().trim().min(3, "Departure time is required"),
   arrival: z.string().trim().min(3, "Arrival time is required"),
   distance: z.string().trim().min(2, "Distance is required"),
+  fee: z.coerce.number<number>().min(0, "Cannot be negative"),
   status: z.string().min(1, "Status is required"),
 });
 

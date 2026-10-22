@@ -53,6 +53,7 @@ const admissionSchema = z.object({
   previousResult: z.string().default(""),
   transportRequired: z.boolean().default(false),
   pickupPoint: z.string().default(""),
+  transportRouteCode: z.string().default(""),
 });
 
 const BLOOD_GROUPS = ["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"];
@@ -147,6 +148,7 @@ async function enrolIfApproved(doc: HydratedDocument<ApplicationAttrs>, schoolId
       previousResult: doc.previousResult || "",
       transportRequired: Boolean(doc.transportRequired),
       pickupPoint: doc.pickupPoint || "",
+      transportRouteCode: doc.transportRouteCode || "",
     });
 
     void notifySchool(schoolId, {

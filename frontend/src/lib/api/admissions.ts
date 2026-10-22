@@ -50,6 +50,7 @@ export interface Application {
   previousResult: string;
   transportRequired: boolean;
   pickupPoint: string;
+  transportRouteCode: string;
 }
 
 export interface ApplicationFilters {
