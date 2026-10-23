@@ -124,6 +124,74 @@ router.post("/logout", async (req, res, next) => {
   }
 });
 
+/** Forgot password — issues a reset token and emails it. Rate-limited. */
+const forgotLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests. Please try again after 15 minutes." },
+});
+
+const forgotSchema = z.object({ email: z.email() });
+
+// In-memory store: token → { userId, expiresAt }. A real deployment should use
+// Redis or a DB collection; this is sufficient for a single-process server.
+const RESET_TOKENS = new Map<string, { userId: string; expiresAt: number }>();
+
+router.post("/forgot-password", forgotLimiter, validate(forgotSchema), async (req, res, next) => {
+  try {
+    const { email } = req.body as z.infer<typeof forgotSchema>;
+    // Always respond 200 — never reveal whether the email exists.
+    const user = await User.findOne({ email: email.toLowerCase() });
+    if (user) {
+      const token = (await import("node:crypto")).randomBytes(32).toString("hex");
+      RESET_TOKENS.set(token, { userId: String(user._id), expiresAt: Date.now() + 15 * 60 * 1000 });
+      // Prune expired tokens.
+      for (const [k, v] of RESET_TOKENS) if (v.expiresAt < Date.now()) RESET_TOKENS.delete(k);
+      const { sendEmail, isEmailConfigured } = await import("../../utils/email.js");
+      const { env } = await import("../../config/env.js");
+      if (isEmailConfigured()) {
+        void sendEmail({
+          to: user.email,
+          subject: `${env.SOFTWARE_NAME}: Reset your password`,
+          text: `Use this link to reset your password (valid 15 minutes):\n\n${env.APP_LOGIN_URL}?reset=${token}\n\nIf you didn't request this, ignore this email.`,
+          html: `<p>Use this link to reset your password (valid 15 minutes):</p><p><a href="${env.APP_LOGIN_URL}?reset=${token}">${env.APP_LOGIN_URL}?reset=${token}</a></p><p>If you didn't request this, ignore this email.</p>`,
+        });
+      }
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+const resetPasswordSchema = z.object({
+  token: z.string().min(1),
+  newPassword: z.string().min(8, "Password must be at least 8 characters"),
+});
+
+router.post("/reset-password", validate(resetPasswordSchema), async (req, res, next) => {
+  try {
+    const { token, newPassword } = req.body as z.infer<typeof resetPasswordSchema>;
+    const entry = RESET_TOKENS.get(token);
+    if (!entry || entry.expiresAt < Date.now()) {
+      RESET_TOKENS.delete(token);
+      throw ApiError.badRequest("This reset link has expired or is invalid. Please request a new one.");
+    }
+    const user = await User.findById(entry.userId);
+    if (!user) throw ApiError.notFound("Account not found.");
+    user.passwordHash = await hashPassword(newPassword);
+    await user.save();
+    RESET_TOKENS.delete(token);
+    // Invalidate all refresh tokens for this user so old sessions can't continue.
+    await RefreshToken.deleteMany({ userId: String(user._id) });
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
 /** Creating accounts is an admin action, not open self-service. */
 router.post(
   "/register",
@@ -210,5 +278,64 @@ router.patch("/me/password", requireAuth, validate(changePasswordSchema), async 
     next(err);
   }
 });
+
+/* ------------------------------------------------------------------ */
+/* User management — school_admin / principal only                      */
+/* ------------------------------------------------------------------ */
+
+/** List all user accounts for the caller's school. */
+router.get(
+  "/users",
+  requireAuth,
+  requireRole("super_admin", "school_admin", "principal"),
+  async (req, res, next) => {
+    try {
+      const schoolId = req.user!.schoolId;
+      const users = await User.find({ schoolId }).sort({ createdAt: -1 }).select("-passwordHash");
+      res.json({
+        data: users.map(toPublicUser),
+        meta: { total: users.length },
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+const updateUserSchema = z.object({
+  name: z.string().min(2).optional(),
+  role: z.enum(USER_ROLES).optional(),
+  isActive: z.boolean().optional(),
+});
+
+/** Update a user's name, role or active status. */
+router.patch(
+  "/users/:id",
+  requireAuth,
+  requireRole("super_admin", "school_admin"),
+  validate(updateUserSchema),
+  async (req, res, next) => {
+    try {
+      const schoolId = req.user!.schoolId;
+      const updates = req.body as z.infer<typeof updateUserSchema>;
+      const user = await User.findOne({ _id: req.params.id, schoolId });
+      if (!user) throw ApiError.notFound("User not found.");
+      // Prevent demoting the last school_admin.
+      if (updates.isActive === false || updates.role) {
+        const adminCount = await User.countDocuments({ schoolId, role: "school_admin", isActive: true });
+        if (user.role === "school_admin" && adminCount <= 1) {
+          throw ApiError.badRequest("Cannot deactivate or change the role of the last school admin.");
+        }
+      }
+      if (typeof updates.name === "string") user.name = updates.name.trim();
+      if (typeof updates.role === "string") user.role = updates.role;
+      if (typeof updates.isActive === "boolean") user.isActive = updates.isActive;
+      await user.save();
+      res.json({ data: toPublicUser(user) });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
 
 export default router;

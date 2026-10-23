@@ -1,246 +1,161 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
-  Download,
-  Fingerprint,
-  KeyRound,
-  Save,
-  ShieldAlert,
-  ShieldCheck,
-  UserCog,
+  Download, Fingerprint, KeyRound, Loader2,
+  RefreshCw, Search, ShieldAlert, ShieldCheck, UserCog,
 } from "lucide-react";
 import {
-  Badge,
-  Button,
-  Card,
-  CardContent,
-  CardHeader,
-  EmptyState,
-  Input,
-  PageHeader,
-  Select,
-  StatCard,
-  useToast,
+  Badge, Button, Card, CardContent, CardHeader,
+  EmptyState, Input, PageHeader, Pagination, Select, StatCard, useToast,
 } from "@/components/ui";
+import { exportToCsv } from "@/lib/exportCsv";
+import { listAuditLogs, type AuditEntry } from "@/lib/api/audit";
 
-/** Structural config: the app's permissionable modules (not seed records). */
-const MODULES = [
-  { id: "students", name: "Students" },
-  { id: "teachers", name: "Teachers" },
-  { id: "attendance", name: "Attendance" },
-  { id: "fees", name: "Fees & Payments" },
-  { id: "exams", name: "Exams & Results" },
-  { id: "payroll", name: "Payroll" },
-  { id: "transport", name: "Transport" },
-  { id: "settings", name: "Settings" },
+const ACTION_OPTIONS = [
+  { label: "Impersonate", value: "impersonate" },
+  { label: "Reset password", value: "reset_password" },
 ];
 
-const ACTIONS = ["view", "create", "edit", "delete"] as const;
-type ActionId = (typeof ACTIONS)[number];
+const PAGE_SIZE = 20;
+
+function actionBadge(action: string) {
+  if (action === "impersonate") return "warning";
+  if (action === "reset_password") return "info";
+  return "default";
+}
 
 export default function SecurityPage() {
   const { toast } = useToast();
-
-  const [grants, setGrants] = useState<Record<string, ActionId[]>>({});
   const [search, setSearch] = useState("");
-  const [severity, setSeverity] = useState("");
+  const [action, setAction] = useState("");
+  const [page, setPage] = useState(1);
+  const [logs, setLogs] = useState<AuditEntry[]>([]);
+  const [total, setTotal] = useState(0);
+  const [pages, setPages] = useState(1);
+  const [loading, setLoading] = useState(false);
 
-  const togglePermission = (moduleId: string, action: ActionId) => {
-    setGrants((prev) => {
-      const current = prev[moduleId] ?? [];
-      const next = current.includes(action)
-        ? current.filter((a) => a !== action)
-        : [...current, action];
-      return { ...prev, [moduleId]: next };
-    });
+  const load = async (p = page) => {
+    setLoading(true);
+    try {
+      const res = await listAuditLogs({ search, action, page: p, limit: PAGE_SIZE });
+      setLogs(res.data);
+      setTotal(res.meta.total);
+      setPages(res.meta.pages);
+    } catch {
+      toast({ title: "Could not load audit log", variant: "error" });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const toggleModuleRow = (moduleId: string) => {
-    setGrants((prev) => {
-      const current = prev[moduleId] ?? [];
-      const next: ActionId[] = current.length === ACTIONS.length ? [] : [...ACTIONS];
-      return { ...prev, [moduleId]: next };
-    });
-  };
+  useEffect(() => { load(1); setPage(1); }, [search, action]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { load(page); }, [page]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const grantedCount = useMemo(
-    () => Object.values(grants).reduce((sum, list) => sum + list.length, 0),
-    [grants]
-  );
-
-  const handleSavePermissions = () => {
-    toast({
-      title: "Permissions saved",
-      description: `${grantedCount} permissions across ${MODULES.length} modules.`,
-      variant: "success",
-    });
+  const handleExport = () => {
+    if (logs.length === 0) { toast({ title: "Nothing to export", variant: "warning" }); return; }
+    exportToCsv<AuditEntry>("audit-log", [
+      { header: "Time", value: (e) => new Date(e.createdAt).toLocaleString("en-IN") },
+      { header: "Action", value: (e) => e.action },
+      { header: "Performed by", value: (e) => e.performedBy },
+      { header: "Target school", value: (e) => e.targetSchoolId ?? "" },
+      { header: "IP", value: (e) => e.ip ?? "" },
+    ], logs);
+    toast({ title: "Exported", description: `${logs.length} entries.` });
   };
 
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
         title="Security"
-        description="Roles, permissions, audit trail and active device sessions."
+        description="Audit trail of sensitive platform actions."
         actions={
           <>
-            <Button
-              variant="outline"
-              onClick={() =>
-                toast({
-                  title: "Audit log exported",
-                  description: "No audit events available to export yet.",
-                  variant: "info",
-                })
-              }
-            >
-              <Download className="size-4" />
-              Export audit log
+            <Button variant="outline" onClick={handleExport}>
+              <Download className="size-4" /> Export
             </Button>
-            <Button onClick={handleSavePermissions}>
-              <Save className="size-4" />
-              Save permissions
+            <Button variant="outline" onClick={() => load(page)}>
+              <RefreshCw className="size-4" /> Refresh
             </Button>
           </>
         }
       />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Roles configured" value={0} icon={UserCog} tone="indigo" />
-        <StatCard label="Granted permissions" value={grantedCount} icon={KeyRound} tone="emerald" sub="Default module set" />
+        <StatCard label="Total events" value={total} icon={ShieldAlert} tone="rose" />
+        <StatCard label="Impersonations" value={logs.filter(l => l.action === "impersonate").length} icon={UserCog} tone="amber" />
+        <StatCard label="Password resets" value={logs.filter(l => l.action === "reset_password").length} icon={KeyRound} tone="indigo" />
         <StatCard label="Active sessions" value={0} icon={Fingerprint} tone="cyan" />
-        <StatCard label="Critical events (7d)" value={0} icon={ShieldAlert} tone="rose" />
       </div>
 
       <Card>
         <CardHeader className="flex-wrap">
-          <div className="min-w-0">
-            <h2 className="text-sm font-semibold text-text">Module permissions</h2>
-            <p className="mt-0.5 text-xs text-muted">
-              Tick the actions allowed for each module. Changes apply on save.
-            </p>
-          </div>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          <div className="overflow-x-auto rounded-md border border-border">
-            <table className="w-full border-collapse text-sm">
-              <thead>
-                <tr className="border-b border-border bg-surface-sunken">
-                  <th
-                    scope="col"
-                    className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-muted"
-                  >
-                    Module
-                  </th>
-                  {ACTIONS.map((a) => (
-                    <th
-                      key={a}
-                      scope="col"
-                      className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-muted"
-                    >
-                      {a}
-                    </th>
-                  ))}
-                  <th
-                    scope="col"
-                    className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-muted"
-                  >
-                    All
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {MODULES.map((mod) => {
-                  const list = grants[mod.id] ?? [];
-                  return (
-                    <tr key={mod.id} className="border-b border-border last:border-0">
-                      <td className="whitespace-nowrap px-4 py-3 font-medium text-text">{mod.name}</td>
-                      {ACTIONS.map((a) => (
-                        <td key={a} className="px-4 py-3 text-center">
-                          <input
-                            type="checkbox"
-                            checked={list.includes(a)}
-                            onChange={() => togglePermission(mod.id, a)}
-                            aria-label={`${a} ${mod.name}`}
-                            className="focus-ring size-4 cursor-pointer rounded-sm accent-primary"
-                          />
-                        </td>
-                      ))}
-                      <td className="px-4 py-3 text-right">
-                        <button
-                          onClick={() => toggleModuleRow(mod.id)}
-                          className="focus-ring rounded-sm text-xs font-medium text-primary hover:underline"
-                        >
-                          {list.length === ACTIONS.length ? "Clear" : "Select all"}
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="flex-wrap">
-          <div className="min-w-0">
+          <div>
             <h2 className="text-sm font-semibold text-text">Audit log</h2>
-            <p className="mt-0.5 text-xs text-muted">Every write action recorded with actor and IP.</p>
+            <p className="mt-0.5 text-xs text-muted">Every sensitive action with actor and IP.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <div className="w-56">
-              <Input
-                type="search"
-                placeholder="Search user, action or IP…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                aria-label="Search audit log"
-              />
+              <Input type="search" placeholder="Search actor, action, IP…" value={search}
+                onChange={(e) => setSearch(e.target.value)} icon={<Search className="size-4" />} />
             </div>
-            <div className="w-40">
-              <Select
-                value={severity}
-                onChange={(e) => setSeverity(e.target.value)}
-                placeholder="All severities"
-                options={[
-                  { label: "Critical", value: "critical" },
-                  { label: "High", value: "high" },
-                  { label: "Info", value: "info" },
-                  { label: "Low", value: "low" },
-                ]}
-                aria-label="Filter by severity"
-              />
+            <div className="w-44">
+              <Select value={action} onChange={(e) => setAction(e.target.value)}
+                placeholder="All actions" options={ACTION_OPTIONS} />
             </div>
           </div>
         </CardHeader>
-        <CardContent>
-          <EmptyState
-            title="No audit events yet"
-            description="Write actions across the app will be recorded here with actor and IP."
-          />
+        <CardContent className="p-0">
+          {loading ? (
+            <div className="grid place-items-center py-16"><Loader2 className="size-6 animate-spin text-muted" /></div>
+          ) : logs.length === 0 ? (
+            <EmptyState title="No audit events yet"
+              description="Sensitive actions (impersonation, password resets) will appear here." />
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-sm">
+                <thead>
+                  <tr className="border-b border-border bg-surface-sunken text-left text-xs uppercase tracking-wide text-subtle">
+                    <th className="px-4 py-3 font-semibold">Time</th>
+                    <th className="px-4 py-3 font-semibold">Action</th>
+                    <th className="px-4 py-3 font-semibold">Performed by</th>
+                    <th className="px-4 py-3 font-semibold">Target school</th>
+                    <th className="px-4 py-3 font-semibold">IP</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {logs.map((e) => (
+                    <tr key={e.id} className="border-b border-border last:border-0 hover:bg-surface-hover">
+                      <td className="whitespace-nowrap px-4 py-3 text-muted">
+                        {new Date(e.createdAt).toLocaleString("en-IN")}
+                      </td>
+                      <td className="px-4 py-3">
+                        <Badge variant={actionBadge(e.action)}>{e.action}</Badge>
+                      </td>
+                      <td className="px-4 py-3 font-medium text-text">{e.performedBy}</td>
+                      <td className="px-4 py-3 text-muted">{e.targetSchoolId ?? "—"}</td>
+                      <td className="px-4 py-3 font-mono text-xs text-muted">{e.ip ?? "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </CardContent>
       </Card>
 
+      <Pagination page={page} pageSize={PAGE_SIZE} totalItems={total} onPageChange={setPage} />
+
       <Card>
         <CardHeader>
-          <div className="min-w-0">
-            <h2 className="text-sm font-semibold text-text">Active sessions &amp; login history</h2>
-            <p className="mt-0.5 text-xs text-muted">
-              Revoke a device to force a fresh sign-in on the next request.
-            </p>
+          <div>
+            <h2 className="text-sm font-semibold text-text">Active sessions</h2>
+            <p className="mt-0.5 text-xs text-muted">Signed-in devices will appear here once users log in.</p>
           </div>
-          <Badge variant="success">
-            <ShieldCheck className="mr-1 size-3" />
-            2FA enforced for staff
-          </Badge>
+          <Badge variant="success"><ShieldCheck className="mr-1 size-3" />Sessions tracked</Badge>
         </CardHeader>
         <CardContent>
-          <EmptyState
-            title="No active sessions"
-            description="Signed-in devices will appear here once users log in."
-          />
+          <EmptyState title="No active sessions" description="Session tracking via refresh tokens is active." />
         </CardContent>
       </Card>
     </div>

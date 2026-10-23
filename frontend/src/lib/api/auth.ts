@@ -65,3 +65,11 @@ export async function logout() {
     } catch { /* ignore */ }
   }
 }
+
+export async function forgotPassword(email: string): Promise<void> {
+  await apiRequest("/api/auth/forgot-password", { method: "POST", body: { email } });
+}
+
+export async function resetPassword(token: string, newPassword: string): Promise<void> {
+  await apiRequest("/api/auth/reset-password", { method: "POST", body: { token, newPassword } });
+}

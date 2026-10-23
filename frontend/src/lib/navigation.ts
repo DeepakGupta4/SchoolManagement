@@ -4,7 +4,7 @@ import {
   Bell, Settings, School, UserCheck, Award,
   FileText, BarChart3, MessageSquare, ShieldCheck, Cpu, Globe,
   Smartphone, Package, Utensils, HeartPulse, Trophy, Workflow,
-  IdCard, Building2, BookMarked, CalendarX, Contact, type LucideIcon,
+  IdCard, Building2, BookMarked, CalendarX, Contact, UserCog, type LucideIcon,
 } from "lucide-react";
 import type { UserRole } from "@/types";
 
@@ -200,6 +200,7 @@ export const navGroups: NavGroup[] = [
     label: "System",
     scope: "both",
     items: [
+      { title: "User Management", href: "/users", icon: UserCog },
       { title: "Settings", href: "/settings", icon: Settings },
       { title: "Security", href: "/security", icon: ShieldCheck },
     ],
@@ -340,7 +341,7 @@ const FULL_ACCESS_ROLES = new Set<string>(["super_admin", "school_admin", "princ
  * Settings page itself, since the rest of Settings IS the principal's.)
  */
 const DENIED_HREFS_BY_ROLE: Partial<Record<string, Set<string>>> = {
-  principal: new Set<string>(["/subscription", "/security", "/workflows", "/mobile"]),
+  principal: new Set<string>(["/subscription", "/security", "/workflows", "/mobile", "/users"]),
 };
 
 function deniedHrefsFor(role: UserRole | undefined): Set<string> | undefined {
