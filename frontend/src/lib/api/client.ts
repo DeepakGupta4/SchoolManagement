@@ -12,6 +12,7 @@
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "https://schoolmanagement-j8fn.onrender.com";
 
 const TOKEN_KEY = "schooldeck.token";
+const REFRESH_KEY = "schooldeck.refresh";
 
 export function getToken(): string | null {
   if (typeof window === "undefined") return null;
@@ -22,6 +23,22 @@ export function setToken(token: string | null) {
   if (typeof window === "undefined") return;
   if (token) window.localStorage.setItem(TOKEN_KEY, token);
   else window.localStorage.removeItem(TOKEN_KEY);
+}
+
+export function getRefreshToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return window.localStorage.getItem(REFRESH_KEY);
+}
+
+export function setRefreshToken(token: string | null) {
+  if (typeof window === "undefined") return;
+  if (token) window.localStorage.setItem(REFRESH_KEY, token);
+  else window.localStorage.removeItem(REFRESH_KEY);
+}
+
+export function clearTokens() {
+  setToken(null);
+  setRefreshToken(null);
 }
 
 export class ApiError extends Error {
@@ -42,6 +59,30 @@ interface RequestOptions {
   /** Extra query parameters; undefined and empty values are dropped. */
   query?: Record<string, string | number | undefined>;
   signal?: AbortSignal;
+  /** Internal: prevents infinite retry loops on 401. */
+  _isRetry?: boolean;
+}
+
+/** Attempts to get a new access token using the stored refresh token.
+ *  Returns true and updates localStorage on success, false otherwise. */
+async function tryRefresh(): Promise<boolean> {
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) return false;
+  try {
+    const url = new URL("api/auth/refresh", `${BASE_URL.replace(/\/$/, "")}/`);
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refreshToken }),
+    });
+    if (!res.ok) { setRefreshToken(null); return false; }
+    const data = await res.json() as { token: string; refreshToken: string };
+    setToken(data.token);
+    setRefreshToken(data.refreshToken);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
@@ -78,6 +119,13 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   const payload = await response.json().catch(() => null);
 
   if (!response.ok) {
+    // On 401, try once to refresh the access token, then retry the original request.
+    if (response.status === 401 && !options._isRetry) {
+      const refreshed = await tryRefresh();
+      if (refreshed) {
+        return apiRequest<T>(path, { ...options, _isRetry: true });
+      }
+    }
     const message =
       (payload as { error?: string } | null)?.error ?? `Request failed (${response.status}).`;
     throw new ApiError(response.status, message, (payload as { details?: unknown } | null)?.details);

@@ -95,15 +95,31 @@ export interface SchoolProfile {
   country: string;
   website: string;
   schoolType: string;
-  /** Board/affiliation line for official documents, e.g. "CBSE Affiliation No. 2730123". */
   affiliation?: string;
   logo: string;
-  /** Authorised signatory image (data URL), printed on ID cards. */
   signatureUrl?: string;
-  /** Daily open/close times ("HH:MM", 24h) — drives the dashboard Open/Closed badge. */
   openingTime?: string;
   closingTime?: string;
   bellSchedule?: { label: string; time: string; isBreak: boolean }[];
+  // Branding
+  displayName?: string;
+  tagline?: string;
+  theme?: string;
+  density?: string;
+  receiptFooter?: string;
+  // Academic session
+  sessionLabel?: string;
+  sessionStartDate?: string;
+  sessionEndDate?: string;
+  terms?: string;
+  weekOff?: string;
+  attendanceMode?: string;
+  // Notifications
+  notifChannel?: string;
+  notifSenderId?: string;
+  notifFeeReminderDays?: string;
+  notifAbsentAlert?: string;
+  notifDigest?: string;
 }
 
 /** The signed-in school's own profile (null for platform owner / no tenant). */
@@ -120,9 +136,15 @@ export interface ResetDataResult {
   cleared: Record<string, number>;
 }
 
-/** Danger zone: wipe all of the current school's domain data for a clean slate. */
+/** Danger zone: get a short-lived confirmation token, then wipe all school data. */
+export async function getResetConfirmToken(): Promise<string> {
+  const res = await apiRequest<{ confirmToken: string }>("/api/schools/reset-data/token", { method: "POST" });
+  return res.confirmToken;
+}
+
 export async function resetSchoolData(): Promise<ResetDataResult> {
-  return apiRequest<ResetDataResult>("/api/schools/reset-data", { method: "POST" });
+  const confirmToken = await getResetConfirmToken();
+  return apiRequest<ResetDataResult>("/api/schools/reset-data", { method: "POST", body: { confirmToken } });
 }
 
 export interface ResetPasswordResult {

@@ -266,6 +266,31 @@ export default function SettingsPage() {
             logo: s.logo || prev.logo,
             signatureUrl: s.signatureUrl || prev.signatureUrl,
           }));
+          setBranding((prev) => ({
+            ...prev,
+            displayName: s.displayName || prev.displayName,
+            tagline: s.tagline || prev.tagline,
+            theme: s.theme || prev.theme,
+            density: s.density || prev.density,
+            receiptFooter: s.receiptFooter || prev.receiptFooter,
+          }));
+          setSession((prev) => ({
+            ...prev,
+            session: s.sessionLabel || prev.session,
+            startDate: s.sessionStartDate || prev.startDate,
+            endDate: s.sessionEndDate || prev.endDate,
+            terms: s.terms || prev.terms,
+            weekOff: s.weekOff || prev.weekOff,
+            attendanceMode: s.attendanceMode || prev.attendanceMode,
+          }));
+          setNotifications((prev) => ({
+            ...prev,
+            channel: s.notifChannel || prev.channel,
+            senderId: s.notifSenderId || prev.senderId,
+            feeReminderDays: s.notifFeeReminderDays || prev.feeReminderDays,
+            absentAlert: s.notifAbsentAlert || prev.absentAlert,
+            digest: s.notifDigest || prev.digest,
+          }));
         })
         .catch(() => {});
     }, 0);
@@ -279,12 +304,12 @@ export default function SettingsPage() {
     setEnabled((prev) => (prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]));
 
   const handleSave = async () => {
-    // Only the School Profile tab persists to the server; other tabs are
-    // client-side preferences for now.
-    if (tab === "profile") {
-      setSaving(true);
-      try {
-        await updateMySchool({
+    setSaving(true);
+    try {
+      const updates: Record<string, unknown> = {};
+
+      if (tab === "profile") {
+        Object.assign(updates, {
           name: profile.name,
           ownerName: profile.principal,
           phone: profile.phone,
@@ -298,35 +323,55 @@ export default function SettingsPage() {
           logo: profile.logo,
           signatureUrl: profile.signatureUrl,
         });
-        // Persist the signed-in user's own name too, and reflect it immediately
-        // in the header/greeting. Best-effort so an older backend without this
-        // route doesn't fail the whole save.
+        // Also update the signed-in user's own display name.
         const newName = accountName.trim();
         if (newName && newName !== (user?.name ?? "")) {
           try {
             const updated = await updateMyName(newName);
             updateUser({ name: updated.name });
-          } catch {
-            /* name endpoint may be unavailable on an older deployment */
-          }
+          } catch { /* older backend */ }
         }
-        toast({ title: "Profile saved", description: "Your changes are live.", variant: "success" });
-      } catch (e) {
-        toast({
-          title: "Could not save",
-          description: e instanceof Error ? e.message : "Please try again.",
-          variant: "error",
+      } else if (tab === "branding") {
+        Object.assign(updates, {
+          displayName: branding.displayName,
+          tagline: branding.tagline,
+          theme: branding.theme,
+          density: branding.density,
+          receiptFooter: branding.receiptFooter,
         });
-      } finally {
-        setSaving(false);
+      } else if (tab === "session") {
+        Object.assign(updates, {
+          sessionLabel: session.session,
+          sessionStartDate: session.startDate,
+          sessionEndDate: session.endDate,
+          terms: session.terms,
+          weekOff: session.weekOff,
+          attendanceMode: session.attendanceMode,
+        });
+      } else if (tab === "notifications") {
+        Object.assign(updates, {
+          notifChannel: notifications.channel,
+          notifSenderId: notifications.senderId,
+          notifFeeReminderDays: notifications.feeReminderDays,
+          notifAbsentAlert: notifications.absentAlert,
+          notifDigest: notifications.digest,
+        });
       }
-      return;
+
+      if (Object.keys(updates).length > 0) {
+        await updateMySchool(updates);
+      }
+
+      toast({ title: `${activeTab.label} saved`, description: "Your changes are live.", variant: "success" });
+    } catch (e) {
+      toast({
+        title: "Could not save",
+        description: e instanceof Error ? e.message : "Please try again.",
+        variant: "error",
+      });
+    } finally {
+      setSaving(false);
     }
-    toast({
-      title: `${activeTab.label} saved`,
-      description: "Your changes are live for every user of this school.",
-      variant: "success",
-    });
   };
 
   const handleReset = () => {

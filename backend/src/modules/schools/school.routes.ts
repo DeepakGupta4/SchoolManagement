@@ -6,6 +6,7 @@ import { z } from "zod";
 import { requireAuth, requireRole, signToken } from "../../middleware/auth.js";
 import { validate } from "../../middleware/validate.js";
 import { ApiError } from "../../utils/ApiError.js";
+import { writeAudit } from "../../utils/auditLog.js";
 import { env } from "../../config/env.js";
 import { User, hashPassword, toPublicUser } from "../auth/user.model.js";
 import { notifySchool } from "../notifications/notification.model.js";
@@ -79,6 +80,7 @@ router.get("/mine", async (req, res, next) => {
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 const profileSchema = z.object({
+  // Profile tab
   name: z.string().min(2).optional(),
   ownerName: z.string().optional(),
   phone: z.string().optional(),
@@ -96,6 +98,25 @@ const profileSchema = z.object({
   bellSchedule: z
     .array(z.object({ label: z.string(), time: z.string(), isBreak: z.boolean() }))
     .optional(),
+  // Branding tab
+  displayName: z.string().optional(),
+  tagline: z.string().optional(),
+  theme: z.string().optional(),
+  density: z.string().optional(),
+  receiptFooter: z.string().optional(),
+  // Academic session tab
+  sessionLabel: z.string().optional(),
+  sessionStartDate: z.string().optional(),
+  sessionEndDate: z.string().optional(),
+  terms: z.string().optional(),
+  weekOff: z.string().optional(),
+  attendanceMode: z.string().optional(),
+  // Notifications tab
+  notifChannel: z.string().optional(),
+  notifSenderId: z.string().optional(),
+  notifFeeReminderDays: z.string().optional(),
+  notifAbsentAlert: z.string().optional(),
+  notifDigest: z.string().optional(),
 });
 
 /** A school edits its own profile. Subscription/status/schoolId are off-limits. */
@@ -138,14 +159,47 @@ router.patch(
  * classes, exams, events, notifications, documents, …) for a clean-slate setup.
  * Auth (users), the school record and school requests are preserved, so the
  * admin stays logged in. Scoped strictly to the caller's own schoolId.
+ *
+ * Requires the caller to echo back a server-issued confirmation token (valid 5
+ * minutes) so a CSRF attack or stale tab can never trigger a wipe — the token
+ * is only issued when the user explicitly opens the danger-zone modal.
  */
+
+const RESET_TOKENS = new Map<string, { schoolId: string; expiresAt: number }>();
+
+/** Issues a short-lived (5 min) confirmation token for the reset-data flow. */
 router.post(
-  "/reset-data",
-  // Wiping ALL school data is an account-owner action — never the principal's.
+  "/reset-data/token",
   requireRole("super_admin", "school_admin"),
   async (req, res, next) => {
     try {
       const schoolId = req.user!.schoolId;
+      const token = require("crypto").randomBytes(24).toString("hex") as string;
+      RESET_TOKENS.set(token, { schoolId, expiresAt: Date.now() + 5 * 60 * 1000 });
+      // Prune expired tokens so the map doesn't grow unbounded.
+      for (const [k, v] of RESET_TOKENS) if (v.expiresAt < Date.now()) RESET_TOKENS.delete(k);
+      res.json({ data: { confirmToken: token } });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+router.post(
+  "/reset-data",
+  requireRole("super_admin", "school_admin"),
+  async (req, res, next) => {
+    try {
+      const schoolId = req.user!.schoolId;
+
+      // Verify the server-issued confirmation token.
+      const { confirmToken } = req.body as { confirmToken?: string };
+      const entry = confirmToken ? RESET_TOKENS.get(confirmToken) : null;
+      if (!entry || entry.schoolId !== schoolId || entry.expiresAt < Date.now()) {
+        throw ApiError.badRequest("Invalid or expired confirmation token. Please try again.");
+      }
+      RESET_TOKENS.delete(confirmToken!);
+
       const db = mongoose.connection.db;
       if (!db) throw new Error("Database not connected");
 
@@ -216,6 +270,15 @@ router.post("/:schoolId/impersonate", async (req, res, next) => {
       role: user.role,
       schoolId: user.schoolId,
     });
+
+    void writeAudit({
+      action: "impersonate",
+      performedBy: req.user!.email,
+      targetSchoolId: school.schoolId,
+      meta: { impersonatedEmail: user.email, impersonatedRole: user.role },
+      ip: req.ip,
+    });
+
     res.json({ data: { token, user: toPublicUser(user), schoolName: school.name } });
   } catch (err) {
     next(err);
@@ -436,6 +499,14 @@ router.post("/:schoolId/reset-password", async (req, res, next) => {
         loginUrl: env.APP_LOGIN_URL,
       })
     );
+
+    void writeAudit({
+      action: "reset_password",
+      performedBy: req.user!.email,
+      targetSchoolId: school.schoolId,
+      meta: { targetEmail: school.email },
+      ip: req.ip,
+    });
 
     res.json({
       data: { email: school.email, temporaryPassword: tempPassword, emailDelivered: isEmailConfigured() },

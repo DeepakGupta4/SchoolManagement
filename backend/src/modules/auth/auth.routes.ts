@@ -1,9 +1,12 @@
 import { Router } from "express";
+import rateLimit from "express-rate-limit";
 import { z } from "zod";
 import { User, hashPassword, toPublicUser, USER_ROLES } from "./user.model.js";
+import { RefreshToken, generateRefreshToken, hashRefreshToken } from "./refreshToken.model.js";
 import { signToken, requireAuth, requireRole } from "../../middleware/auth.js";
 import { validate } from "../../middleware/validate.js";
 import { ApiError } from "../../utils/ApiError.js";
+import { env } from "../../config/env.js";
 
 const router = Router();
 
@@ -20,7 +23,16 @@ const registerSchema = z.object({
   schoolId: z.string().default("school_1"),
 });
 
-router.post("/login", validate(loginSchema), async (req, res, next) => {
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many login attempts. Please try again after 15 minutes." },
+  skip: (req) => req.ip === "127.0.0.1" || req.ip === "::1",
+});
+
+router.post("/login", loginLimiter, validate(loginSchema), async (req, res, next) => {
   try {
     const { email, password } = req.body as z.infer<typeof loginSchema>;
 
@@ -46,7 +58,67 @@ router.post("/login", validate(loginSchema), async (req, res, next) => {
       schoolId: user.schoolId,
     });
 
-    res.json({ token, user: toPublicUser(user) });
+    // Issue a refresh token (30-day, stored hashed) so the client can get a
+    // new access token without re-entering credentials.
+    const rawRefresh = generateRefreshToken();
+    await RefreshToken.create({
+      tokenHash: hashRefreshToken(rawRefresh),
+      userId: user._id.toString(),
+      schoolId: user.schoolId,
+      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+    });
+
+    res.json({ token, refreshToken: rawRefresh, user: toPublicUser(user) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** Exchange a valid refresh token for a new access token. */
+router.post("/refresh", async (req, res, next) => {
+  try {
+    const raw = (req.body as { refreshToken?: string })?.refreshToken;
+    if (!raw) throw ApiError.unauthorized("Refresh token is required.");
+
+    const hash = hashRefreshToken(raw);
+    const stored = await RefreshToken.findOne({ tokenHash: hash });
+    if (!stored || stored.expiresAt < new Date()) {
+      if (stored) await stored.deleteOne();
+      throw ApiError.unauthorized("Session expired. Please sign in again.");
+    }
+
+    const user = await User.findById(stored.userId);
+    if (!user || !user.isActive) throw ApiError.unauthorized("Account not found or deactivated.");
+
+    const token = signToken({
+      sub: user._id.toString(),
+      email: user.email,
+      role: user.role,
+      schoolId: user.schoolId,
+    });
+
+    // Rotate: delete old refresh token, issue a new one.
+    await stored.deleteOne();
+    const newRaw = generateRefreshToken();
+    await RefreshToken.create({
+      tokenHash: hashRefreshToken(newRaw),
+      userId: user._id.toString(),
+      schoolId: user.schoolId,
+      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+    });
+
+    res.json({ token, refreshToken: newRaw, user: toPublicUser(user) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** Invalidate the refresh token so the session can't be silently renewed. */
+router.post("/logout", async (req, res, next) => {
+  try {
+    const raw = (req.body as { refreshToken?: string })?.refreshToken;
+    if (raw) await RefreshToken.deleteOne({ tokenHash: hashRefreshToken(raw) });
+    res.json({ ok: true });
   } catch (err) {
     next(err);
   }

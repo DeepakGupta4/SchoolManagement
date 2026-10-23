@@ -95,6 +95,28 @@ const schoolSchema = new Schema(
       ],
       default: [],
     },
+
+    // ── Branding ──────────────────────────────────────────────────────────────
+    displayName: { type: String, default: "" },
+    tagline: { type: String, default: "" },
+    theme: { type: String, default: "indigo" },
+    density: { type: String, default: "comfortable" },
+    receiptFooter: { type: String, default: "" },
+
+    // ── Academic Session ──────────────────────────────────────────────────────
+    sessionLabel: { type: String, default: "" },
+    sessionStartDate: { type: String, default: "" },
+    sessionEndDate: { type: String, default: "" },
+    terms: { type: String, default: "3" },
+    weekOff: { type: String, default: "sunday" },
+    attendanceMode: { type: String, default: "period" },
+
+    // ── Notifications ─────────────────────────────────────────────────────────
+    notifChannel: { type: String, default: "email" },
+    notifSenderId: { type: String, default: "" },
+    notifFeeReminderDays: { type: String, default: "3" },
+    notifAbsentAlert: { type: String, default: "immediate" },
+    notifDigest: { type: String, default: "" },
   },
   { timestamps: true }
 );
@@ -211,6 +233,25 @@ export function toPublicSchool(school: SchoolDoc) {
       isBreak: Boolean(p.isBreak),
     })),
     status: school.status,
+    // Branding
+    displayName: school.displayName ?? "",
+    tagline: school.tagline ?? "",
+    theme: school.theme ?? "indigo",
+    density: school.density ?? "comfortable",
+    receiptFooter: school.receiptFooter ?? "",
+    // Academic session
+    sessionLabel: school.sessionLabel ?? "",
+    sessionStartDate: school.sessionStartDate ?? "",
+    sessionEndDate: school.sessionEndDate ?? "",
+    terms: school.terms ?? "3",
+    weekOff: school.weekOff ?? "sunday",
+    attendanceMode: school.attendanceMode ?? "period",
+    // Notifications
+    notifChannel: school.notifChannel ?? "email",
+    notifSenderId: school.notifSenderId ?? "",
+    notifFeeReminderDays: school.notifFeeReminderDays ?? "3",
+    notifAbsentAlert: school.notifAbsentAlert ?? "immediate",
+    notifDigest: school.notifDigest ?? "",
     subscription: {
       plan: school.subscription.plan,
       status: school.subscription.status,
