@@ -6,6 +6,7 @@ import {
   CheckCircle,
   Clock,
   Download,
+  Eye,
   RotateCcw,
   Receipt as ReceiptIcon,
   Search,
@@ -40,6 +41,7 @@ import {
   type Payment,
   type PaymentStatus,
 } from "@/lib/api/feeLedger";
+import { ReceiptPreviewModal } from "./ReceiptPreviewModal";
 
 const statusConfig: Record<
   PaymentStatus,
@@ -100,6 +102,7 @@ export default function ReceiptsPage() {
   const [reversal, setReversal] = useState<Reversal | null>(null);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
+  const [preview, setPreview] = useState<Payment | null>(null);
 
   const applyFilter = (fn: (v: string) => void) => (v: string) => {
     fn(v);
@@ -260,6 +263,14 @@ export default function ReceiptsPage() {
         const reversed = r.status === "cancelled" || r.status === "bounced";
         return (
           <div className="flex items-center justify-end gap-1">
+            <button
+              onClick={() => setPreview(r)}
+              title="Preview receipt"
+              aria-label={`Preview ${r.receiptNo}`}
+              className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+            >
+              <Eye className="size-4" />
+            </button>
             {r.status === "pending-clearance" && (
               <>
                 <button
@@ -290,7 +301,6 @@ export default function ReceiptsPage() {
                 <RotateCcw className="size-4" />
               </button>
             )}
-            {reversed && <span className="pr-1 text-xs text-subtle">—</span>}
           </div>
         );
       },
@@ -422,6 +432,9 @@ export default function ReceiptsPage() {
           error={reason.trim().length > 0 && reason.trim().length < 3 ? "Too short" : undefined}
         />
       </ConfirmDialog>
+
+      {/* Preview any receipt from the register — view on screen, print, or save PDF. */}
+      <ReceiptPreviewModal payment={preview} onOpenChange={(o) => !o && setPreview(null)} />
     </div>
   );
 }
