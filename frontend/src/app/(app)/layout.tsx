@@ -17,6 +17,7 @@ import { isPathAllowed } from "@/lib/navigation";
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const status = useAuthStore((s) => s.status);
   const role = useAuthStore((s) => s.user?.role);
+  const permissions = useAuthStore((s) => s.user?.permissions);
   const router = useRouter();
   const pathname = usePathname();
 
@@ -30,10 +31,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   // or an old link) is sent back to their dashboard. Non-teachers are
   // unrestricted, so this is a no-op for them.
   useEffect(() => {
-    if (status === "authenticated" && !isPathAllowed(role, pathname)) {
+    if (status === "authenticated" && !isPathAllowed(role, pathname, permissions)) {
       router.replace("/dashboard");
     }
-  }, [status, role, pathname, router]);
+  }, [status, role, permissions, pathname, router]);
 
   if (status === "loading") {
     return (

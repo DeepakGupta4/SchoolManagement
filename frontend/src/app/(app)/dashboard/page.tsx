@@ -19,6 +19,7 @@ import { DriverDashboard } from "@/components/dashboard/DriverDashboard";
 import { StaffDashboard } from "@/components/dashboard/StaffDashboard";
 import { LibrarianDashboard } from "@/components/dashboard/LibrarianDashboard";
 import { AccountantDashboard } from "@/components/dashboard/AccountantDashboard";
+import { CustomRoleDashboard } from "@/components/dashboard/CustomRoleDashboard";
 import { useAuthStore } from "@/store";
 import type { UserRole } from "@/types";
 import { useDashboardInsights, type DashboardInsights } from "@/hooks/useDashboardInsights";
@@ -642,6 +643,28 @@ const PORTAL_DASHBOARDS: Partial<Record<UserRole, { Comp: React.ComponentType; s
 
 export default function DashboardPage() {
   const { user } = useAuthStore();
+
+  // A custom role has no fixed portal — surface its granted sections instead of
+  // the office-gated admin dashboard (which would 403 for it).
+  if (user?.role === "custom") {
+    return (
+      <div className="flex flex-col gap-5">
+        <Card className="relative overflow-hidden">
+          <span className="absolute inset-x-0 top-0 h-0.5 bg-primary" aria-hidden />
+          <CardContent className="p-5 sm:p-6">
+            <h1 className="text-xl font-bold text-text sm:text-2xl">
+              {getGreeting()}, {user?.name?.split(" ")[0]} 👋
+            </h1>
+            <p className="mt-0.5 text-sm text-muted">
+              {user.roleName ? `${user.roleName} — ` : ""}your sections
+            </p>
+          </CardContent>
+        </Card>
+        <CustomRoleDashboard />
+      </div>
+    );
+  }
+
   const portal = user?.role ? PORTAL_DASHBOARDS[user.role] : undefined;
 
   if (portal) {

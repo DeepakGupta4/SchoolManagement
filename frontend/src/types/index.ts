@@ -1,3 +1,5 @@
+import type { PermissionMap } from "@/lib/permissions";
+
 export type UserRole =
   | "super_admin"
   | "school_admin"
@@ -8,7 +10,9 @@ export type UserRole =
   | "parent"
   | "student"
   | "staff"
-  | "driver";
+  | "driver"
+  // A school-defined custom role; its actual access lives in `permissions`.
+  | "custom";
 
 export interface User {
   id: string;
@@ -17,6 +21,10 @@ export interface User {
   role: UserRole;
   avatar?: string;
   schoolId?: string;
+  /** For a custom role: which Role document (its key) and its resolved access. */
+  customRoleKey?: string;
+  roleName?: string;
+  permissions?: PermissionMap;
 }
 
 export interface School {

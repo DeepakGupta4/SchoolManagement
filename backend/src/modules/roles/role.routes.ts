@@ -22,6 +22,8 @@ export default createCrudRouter({
   model: Role,
   createSchema: roleSchema,
   searchFields: ["name", "key"],
-  writeRoles: ["super_admin", "school_admin", "principal"],
-  readRoles: ["super_admin", "school_admin", "principal"],
+  // Role management is an account-owner function (like user management) — not the
+  // principal, and never a custom role (role mgmt isn't a grantable module).
+  writeRoles: ["super_admin", "school_admin"],
+  readRoles: ["super_admin", "school_admin"],
 });

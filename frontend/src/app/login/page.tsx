@@ -191,6 +191,18 @@ function LoginPageInner() {
                   );
                 })}
               </div>
+              {/* Anyone who isn't one of the demo roles — including a school's own
+                  custom roles — signs in here with their own email & password. */}
+              <button
+                type="button"
+                onClick={() => {
+                  setValue("email", "");
+                  setValue("password", "");
+                }}
+                className="focus-ring mt-1.5 w-full rounded-md border border-dashed border-border px-2 py-1.5 text-xs font-medium text-muted transition-colors hover:border-border-strong hover:text-text"
+              >
+                Others — sign in with your own account
+              </button>
             </div>
 
             <form onSubmit={onSubmit} className="flex flex-col gap-4">

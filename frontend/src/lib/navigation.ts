@@ -4,9 +4,14 @@ import {
   Bell, Settings, School, UserCheck, Award,
   FileText, BarChart3, MessageSquare, ShieldCheck, Cpu, Globe,
   Smartphone, Package, Utensils, HeartPulse, Trophy, Workflow,
-  IdCard, Building2, BookMarked, CalendarX, Contact, UserCog, type LucideIcon,
+  IdCard, Building2, BookMarked, CalendarX, Contact, UserCog, KeyRound, type LucideIcon,
 } from "lucide-react";
 import type { UserRole } from "@/types";
+import {
+  allowedHrefsForPermissions,
+  customRoleCanAccessPath,
+  type PermissionMap,
+} from "@/lib/permissions";
 
 export interface NavChild {
   title: string;
@@ -201,6 +206,7 @@ export const navGroups: NavGroup[] = [
     scope: "both",
     items: [
       { title: "User Management", href: "/users", icon: UserCog },
+      { title: "Roles & Permissions", href: "/roles", icon: KeyRound },
       { title: "Settings", href: "/settings", icon: Settings },
       { title: "Security", href: "/security", icon: ShieldCheck },
     ],
@@ -341,7 +347,7 @@ const FULL_ACCESS_ROLES = new Set<string>(["super_admin", "school_admin", "princ
  * Settings page itself, since the rest of Settings IS the principal's.)
  */
 const DENIED_HREFS_BY_ROLE: Partial<Record<string, Set<string>>> = {
-  principal: new Set<string>(["/subscription", "/security", "/workflows", "/mobile", "/users"]),
+  principal: new Set<string>(["/subscription", "/security", "/workflows", "/mobile", "/users", "/roles"]),
 };
 
 function deniedHrefsFor(role: UserRole | undefined): Set<string> | undefined {
@@ -375,8 +381,13 @@ const SELF_SERVICE_ONLY_HREFS = new Set<string>(
 const MINIMAL_NAV_HREFS = new Set<string>(["/dashboard"]);
 
 /** The nav allow-list for a role, or `undefined` when the role may see everything. */
-function allowedHrefsFor(role: UserRole | undefined): Set<string> | undefined {
+function allowedHrefsFor(
+  role: UserRole | undefined,
+  permissions?: PermissionMap
+): Set<string> | undefined {
   if (!role || FULL_ACCESS_ROLES.has(role)) return undefined;
+  // A custom role's nav is derived from its granted modules (view or edit).
+  if (role === "custom") return allowedHrefsForPermissions(permissions);
   return RESTRICTED_ROLE_HREFS[role] ?? MINIMAL_NAV_HREFS;
 }
 
@@ -391,7 +402,13 @@ const STUDENT_ADMIN_SUBROUTES = new Set([
 ]);
 
 /** True when `pathname` is reachable by `role`. Unlisted roles are unrestricted. */
-export function isPathAllowed(role: UserRole | undefined, pathname: string): boolean {
+export function isPathAllowed(
+  role: UserRole | undefined,
+  pathname: string,
+  permissions?: PermissionMap
+): boolean {
+  // A custom role is governed entirely by its permission map.
+  if (role === "custom") return customRoleCanAccessPath(permissions, pathname);
   const allowed = allowedHrefsFor(role);
   // Full-access roles may open everything except personal self-service pages
   // (e.g. "/leave/my") and anything on their role's deny-list (the principal
@@ -418,9 +435,12 @@ export function isPathAllowed(role: UserRole | undefined, pathname: string): boo
 }
 
 /** Filters the nav tree to what `role` should see. */
-export function navGroupsForRole(role: UserRole | undefined): NavGroup[] {
+export function navGroupsForRole(
+  role: UserRole | undefined,
+  permissions?: PermissionMap
+): NavGroup[] {
   const isSuper = role === "super_admin";
-  const allowed = allowedHrefsFor(role);
+  const allowed = allowedHrefsFor(role, permissions);
 
   return navGroups
     .filter((g) => {

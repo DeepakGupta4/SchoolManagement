@@ -7,9 +7,10 @@ import {
   EmptyState, Input, Modal, PageHeader, Select, StatCard, useToast,
 } from "@/components/ui";
 import { listUsers, updateUser, type ManagedUser } from "@/lib/api/users";
+import { rolesApi, type CustomRole } from "@/lib/api/roles";
 import { useAuthStore } from "@/store";
 
-const ROLE_OPTIONS = [
+const BUILTIN_ROLE_OPTIONS = [
   { label: "School Admin", value: "school_admin" },
   { label: "Principal", value: "principal" },
   { label: "Teacher", value: "teacher" },
@@ -21,10 +22,14 @@ const ROLE_OPTIONS = [
   { label: "Student", value: "student" },
 ];
 
+/** A custom role is encoded in the role <Select> as "custom:<key>". */
+const CUSTOM_PREFIX = "custom:";
+
 export default function UsersPage() {
   const { toast } = useToast();
   const { user: me } = useAuthStore();
   const [users, setUsers] = useState<ManagedUser[]>([]);
+  const [customRoles, setCustomRoles] = useState<CustomRole[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<ManagedUser | null>(null);
@@ -33,11 +38,25 @@ export default function UsersPage() {
   const [editActive, setEditActive] = useState(true);
   const [saving, setSaving] = useState(false);
 
+  // Built-in roles plus any custom roles the school has defined.
+  const roleOptions = [
+    ...BUILTIN_ROLE_OPTIONS,
+    ...customRoles
+      .filter((r) => r.isActive)
+      .map((r) => ({ label: `Custom: ${r.name}`, value: `${CUSTOM_PREFIX}${r.key}` })),
+  ];
+  const customRoleName = (key: string | undefined) =>
+    customRoles.find((r) => r.key === key)?.name;
+
   const load = async () => {
     setLoading(true);
     try {
-      const data = await listUsers();
+      const [data, roles] = await Promise.all([
+        listUsers(),
+        rolesApi.list({}).catch(() => [] as CustomRole[]),
+      ]);
       setUsers(data);
+      setCustomRoles(roles);
     } catch {
       toast({ title: "Could not load users", variant: "error" });
     } finally {
@@ -45,13 +64,17 @@ export default function UsersPage() {
     }
   };
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { load(); }, []);
+  // Deferred so state isn't set synchronously in the effect (set-state-in-effect).
+  useEffect(() => {
+    const t = setTimeout(() => void load(), 0);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const openEdit = (u: ManagedUser) => {
     setEditing(u);
     setEditName(u.name);
-    setEditRole(u.role);
+    setEditRole(u.role === "custom" ? `${CUSTOM_PREFIX}${u.customRoleKey ?? ""}` : u.role);
     setEditActive(u.isActive !== false);
   };
 
@@ -59,9 +82,11 @@ export default function UsersPage() {
     if (!editing) return;
     setSaving(true);
     try {
+      const isCustom = editRole.startsWith(CUSTOM_PREFIX);
       const updated = await updateUser(editing.id, {
         name: editName.trim() || undefined,
-        role: editRole as ManagedUser["role"],
+        role: (isCustom ? "custom" : editRole) as ManagedUser["role"],
+        customRoleKey: isCustom ? editRole.slice(CUSTOM_PREFIX.length) : "",
         isActive: editActive,
       });
       setUsers((prev) => prev.map((u) => (u.id === updated.id ? { ...u, ...updated } : u)));
@@ -144,7 +169,11 @@ export default function UsersPage() {
                         </div>
                       </td>
                       <td className="px-4 py-3">
-                        <Badge variant="info">{u.role.replace("_", " ")}</Badge>
+                        <Badge variant="info">
+                          {u.role === "custom"
+                            ? (customRoleName(u.customRoleKey) ?? "Custom role")
+                            : u.role.replace("_", " ")}
+                        </Badge>
                       </td>
                       <td className="px-4 py-3">
                         <Badge variant={u.isActive !== false ? "success" : "danger"}>
@@ -182,7 +211,7 @@ export default function UsersPage() {
       >
         <div className="flex flex-col gap-4">
           <Input label="Display name" value={editName} onChange={(e) => setEditName(e.target.value)} />
-          <Select label="Role" value={editRole} onChange={(e) => setEditRole(e.target.value)} options={ROLE_OPTIONS} />
+          <Select label="Role" value={editRole} onChange={(e) => setEditRole(e.target.value)} options={roleOptions} />
           <Select
             label="Status"
             value={editActive ? "active" : "inactive"}

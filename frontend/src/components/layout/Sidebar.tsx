@@ -182,12 +182,13 @@ export function Sidebar({ schoolName }: { schoolName?: string | null }) {
 
   const query = filter.trim().toLowerCase();
   const role = useAuthStore((s) => s.user?.role);
+  const permissions = useAuthStore((s) => s.user?.permissions);
 
   const visibleGroups = useMemo(() => {
     // Role decides which groups/items appear: the platform owner sees only
     // platform modules, teachers see a restricted teaching set, school admins
-    // see everything tenant-side. "both" groups (Settings) show to everyone.
-    const allowed = navGroupsForRole(role);
+    // see everything tenant-side. A custom role sees exactly its granted sections.
+    const allowed = navGroupsForRole(role, permissions);
     if (!query) return allowed;
     return allowed
       .map((group) => ({
@@ -199,7 +200,7 @@ export function Sidebar({ schoolName }: { schoolName?: string | null }) {
         ),
       }))
       .filter((group) => group.items.length > 0);
-  }, [query, role]);
+  }, [query, role, permissions]);
 
   const width = isCollapsed ? "72px" : "260px";
 
