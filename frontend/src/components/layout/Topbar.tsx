@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { Bell, ChevronDown, LogOut, Menu, Search, Settings } from "lucide-react";
+import { Bell, ChevronDown, KeyRound, LogOut, Menu, Search, Settings } from "lucide-react";
 import { useAuthStore, useSidebarStore } from "@/store";
 import { logout as apiLogout } from "@/lib/api/auth";
 import { Avatar } from "@/components/ui";
@@ -12,6 +12,7 @@ import { useNotifications } from "@/hooks/useNotifications";
 import type { AppNotification } from "@/lib/api/notifications";
 import { ThemeToggle } from "./ThemeToggle";
 import { CommandPalette } from "./CommandPalette";
+import { ChangePasswordModal } from "./ChangePasswordModal";
 import { cn } from "@/lib/utils";
 
 const menuItemClasses =
@@ -36,6 +37,7 @@ export function Topbar() {
   const router = useRouter();
 
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [pwOpen, setPwOpen] = useState(false);
   const { items: notifications, unread: unreadCount, markAll, markOne } = useNotifications();
 
   const handleLogout = () => {
@@ -217,18 +219,26 @@ export function Topbar() {
                     can't open it (e.g. teachers), so the item isn't a dead link
                     that just bounces back to the dashboard. */}
                 {isPathAllowed(user?.role, "/settings") && (
-                  <>
-                    <DropdownMenu.Item
-                      onSelect={() => router.push("/settings")}
-                      className={`${menuItemClasses} text-text data-[highlighted]:bg-surface-hover`}
-                    >
-                      <Settings size={15} className="text-subtle" />
-                      Settings
-                    </DropdownMenu.Item>
-
-                    <div className="my-1 h-px bg-border" />
-                  </>
+                  <DropdownMenu.Item
+                    onSelect={() => router.push("/settings")}
+                    className={`${menuItemClasses} text-text data-[highlighted]:bg-surface-hover`}
+                  >
+                    <Settings size={15} className="text-subtle" />
+                    Settings
+                  </DropdownMenu.Item>
                 )}
+
+                {/* Self-service password change — available to EVERY role, incl.
+                    custom roles that can't open Settings. */}
+                <DropdownMenu.Item
+                  onSelect={() => setPwOpen(true)}
+                  className={`${menuItemClasses} text-text data-[highlighted]:bg-surface-hover`}
+                >
+                  <KeyRound size={15} className="text-subtle" />
+                  Change password
+                </DropdownMenu.Item>
+
+                <div className="my-1 h-px bg-border" />
 
                 <DropdownMenu.Item
                   onSelect={handleLogout}
@@ -244,6 +254,7 @@ export function Topbar() {
       </header>
 
       <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
+      <ChangePasswordModal open={pwOpen} onOpenChange={setPwOpen} />
     </>
   );
 }
