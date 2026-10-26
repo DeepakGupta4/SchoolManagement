@@ -17,6 +17,10 @@ export const USER_ROLES = [
   "student",
   "driver",
   "staff",
+  // A school-defined custom role; the actual permissions live on a Role document
+  // referenced by `customRoleKey` (see modules/roles). Lets admins add their own
+  // roles without touching this fixed built-in list.
+  "custom",
 ] as const;
 
 export type UserRole = (typeof USER_ROLES)[number];
@@ -36,6 +40,9 @@ const userSchema = new Schema(
     // it can't be leaked by a careless `res.json(user)`.
     passwordHash: { type: String, required: true, select: false },
     role: { type: String, enum: USER_ROLES, required: true },
+    /** When role is "custom", the key of the Role document that holds this user's
+     *  permissions (modules/roles). Empty for every built-in role. */
+    customRoleKey: { type: String, default: "" },
     schoolId: { type: String, required: true, default: "school_1", index: true },
     avatar: { type: String, default: "" },
     isActive: { type: Boolean, default: true },
@@ -67,6 +74,7 @@ export function toPublicUser(user: UserDoc) {
     name: user.name,
     email: user.email,
     role: user.role,
+    customRoleKey: user.customRoleKey ?? "",
     schoolId: user.schoolId,
     avatar: user.avatar,
   };

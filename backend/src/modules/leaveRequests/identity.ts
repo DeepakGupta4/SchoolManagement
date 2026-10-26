@@ -14,6 +14,7 @@ const ROLE_LABELS: Record<UserRole, string> = {
   student: "Student",
   driver: "Driver",
   staff: "Staff",
+  custom: "Custom Role",
 };
 
 export interface LeaveIdentity {

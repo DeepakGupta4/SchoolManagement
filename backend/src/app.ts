@@ -22,7 +22,7 @@ import documentRoutes from "./modules/documents/document.routes.js";
 import portalRoutes from "./modules/portal/portal.routes.js";
 import auditRoutes from "./modules/audit/audit.routes.js";
 import { crudModules } from "./modules/crudModules.js";
-import { requireAuth } from "./middleware/auth.js";
+import { requireAuth, customRolePermissionGate } from "./middleware/auth.js";
 import { checkSubscription } from "./middleware/subscription.js";
 
 export function createApp() {
@@ -72,7 +72,7 @@ export function createApp() {
   // Tenant data is gated by the subscription: an expired or suspended school is
   // blocked at the server, not just in the UI. `checkSubscription` runs after
   // auth and lets the platform owner and legacy tenants through.
-  const tenantGuard = [requireAuth, checkSubscription];
+  const tenantGuard = [requireAuth, checkSubscription, customRolePermissionGate];
   app.use("/api/students", tenantGuard, studentRoutes);
   app.use("/api/teachers", tenantGuard, teacherRoutes);
   app.use("/api/fees", tenantGuard, feeRoutes);

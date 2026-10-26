@@ -1,9 +1,10 @@
 import { Router } from "express";
 import rateLimit from "express-rate-limit";
 import { z } from "zod";
-import { User, hashPassword, toPublicUser, USER_ROLES } from "./user.model.js";
+import { User, hashPassword, toPublicUser, USER_ROLES, type UserDoc } from "./user.model.js";
 import { RefreshToken, generateRefreshToken, hashRefreshToken } from "./refreshToken.model.js";
 import { signToken, requireAuth, requireRole } from "../../middleware/auth.js";
+import { Role, permissionsOf } from "../roles/role.model.js";
 import { validate } from "../../middleware/validate.js";
 import { ApiError } from "../../utils/ApiError.js";
 import { env } from "../../config/env.js";
@@ -15,13 +16,35 @@ const loginSchema = z.object({
   password: z.string().min(1, "Password is required"),
 });
 
-const registerSchema = z.object({
-  name: z.string().min(2),
-  email: z.email(),
-  password: z.string().min(8, "Password must be at least 8 characters"),
-  role: z.enum(USER_ROLES),
-  schoolId: z.string().default("school_1"),
-});
+const registerSchema = z
+  .object({
+    name: z.string().min(2),
+    email: z.email(),
+    password: z.string().min(8, "Password must be at least 8 characters"),
+    role: z.enum(USER_ROLES),
+    /** Required when role is "custom" — the Role document's key. */
+    customRoleKey: z.string().trim().default(""),
+    schoolId: z.string().default("school_1"),
+  })
+  .refine((d) => d.role !== "custom" || d.customRoleKey.length > 0, {
+    message: "A custom role requires a role to be selected.",
+    path: ["customRoleKey"],
+  });
+
+/**
+ * Public user shape + resolved permissions for a custom role. Built-in roles get
+ * their fixed client-side gating, so they carry no permission map.
+ */
+async function publicUserWithPermissions(user: UserDoc) {
+  const base = toPublicUser(user);
+  if (user.role !== "custom" || !user.customRoleKey) return base;
+  const role = await Role.findOne({
+    schoolId: user.schoolId,
+    key: user.customRoleKey,
+    isActive: true,
+  });
+  return { ...base, permissions: permissionsOf(role), roleName: role?.name ?? "" };
+}
 
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -56,6 +79,7 @@ router.post("/login", loginLimiter, validate(loginSchema), async (req, res, next
       email: user.email,
       role: user.role,
       schoolId: user.schoolId,
+      customRoleKey: user.customRoleKey ?? "",
     });
 
     // Issue a refresh token (30-day, stored hashed) so the client can get a
@@ -68,7 +92,7 @@ router.post("/login", loginLimiter, validate(loginSchema), async (req, res, next
       expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
     });
 
-    res.json({ token, refreshToken: rawRefresh, user: toPublicUser(user) });
+    res.json({ token, refreshToken: rawRefresh, user: await publicUserWithPermissions(user) });
   } catch (err) {
     next(err);
   }
@@ -95,6 +119,7 @@ router.post("/refresh", async (req, res, next) => {
       email: user.email,
       role: user.role,
       schoolId: user.schoolId,
+      customRoleKey: user.customRoleKey ?? "",
     });
 
     // Rotate: delete old refresh token, issue a new one.
@@ -107,7 +132,7 @@ router.post("/refresh", async (req, res, next) => {
       expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
     });
 
-    res.json({ token, refreshToken: newRaw, user: toPublicUser(user) });
+    res.json({ token, refreshToken: newRaw, user: await publicUserWithPermissions(user) });
   } catch (err) {
     next(err);
   }
@@ -200,7 +225,9 @@ router.post(
   validate(registerSchema),
   async (req, res, next) => {
     try {
-      const { name, email, password, role, schoolId } = req.body as z.infer<typeof registerSchema>;
+      const { name, email, password, role, customRoleKey, schoolId } = req.body as z.infer<
+        typeof registerSchema
+      >;
 
       if (await User.exists({ email: email.toLowerCase() })) {
         throw ApiError.conflict(`An account already exists for ${email}.`);
@@ -211,6 +238,8 @@ router.post(
         email: email.toLowerCase(),
         passwordHash: await hashPassword(password),
         role,
+        // Only a custom role carries a key; built-in roles never do.
+        customRoleKey: role === "custom" ? customRoleKey : "",
         schoolId,
       });
 
@@ -225,7 +254,7 @@ router.get("/me", requireAuth, async (req, res, next) => {
   try {
     const user = await User.findById(req.user!.id);
     if (!user) throw ApiError.unauthorized("This account no longer exists.");
-    res.json({ user: toPublicUser(user) });
+    res.json({ user: await publicUserWithPermissions(user) });
   } catch (err) {
     next(err);
   }
@@ -305,6 +334,8 @@ router.get(
 const updateUserSchema = z.object({
   name: z.string().min(2).optional(),
   role: z.enum(USER_ROLES).optional(),
+  /** Set alongside role "custom" to point at the Role document. */
+  customRoleKey: z.string().trim().optional(),
   isActive: z.boolean().optional(),
 });
 
@@ -328,7 +359,18 @@ router.patch(
         }
       }
       if (typeof updates.name === "string") user.name = updates.name.trim();
-      if (typeof updates.role === "string") user.role = updates.role;
+      if (typeof updates.role === "string") {
+        user.role = updates.role;
+        // Keep the custom-role key consistent: set it for a custom role, clear it
+        // for any built-in role.
+        if (updates.role === "custom") {
+          user.customRoleKey = (updates.customRoleKey ?? user.customRoleKey ?? "").trim();
+        } else {
+          user.customRoleKey = "";
+        }
+      } else if (typeof updates.customRoleKey === "string" && user.role === "custom") {
+        user.customRoleKey = updates.customRoleKey.trim();
+      }
       if (typeof updates.isActive === "boolean") user.isActive = updates.isActive;
       await user.save();
       res.json({ data: toPublicUser(user) });
