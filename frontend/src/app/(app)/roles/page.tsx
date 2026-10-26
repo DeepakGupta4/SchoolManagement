@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Copy, KeyRound, Lock, Pencil, Plus, Search, ShieldCheck, Trash2, Users } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Copy, Info, KeyRound, Lock, Pencil, Plus, Search, ShieldCheck, Trash2, UserPlus, Users } from "lucide-react";
 import {
   Badge,
   Button,
@@ -10,6 +11,7 @@ import {
   CardHeader,
   ConfirmDialog,
   Input,
+  Modal,
   PageHeader,
   StatCard,
   Table,
@@ -32,10 +34,19 @@ export default function RolesPage() {
     { label: "role", describe: (r) => r.name }
   );
 
+  const router = useRouter();
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<CustomRole | null>(null);
   const [cloneTemplate, setCloneTemplate] = useState<{ name: string; permissions: PermissionMap } | null>(null);
   const [pendingDelete, setPendingDelete] = useState<CustomRole | null>(null);
+  // After creating a role, prompt to add a user with it (role != login).
+  const [justCreated, setJustCreated] = useState<{ name: string; roleValue: string } | null>(null);
+
+  /** Jump to User Management, pre-opening "Add user" with this role selected. */
+  const addUserWithRole = (roleValue: string) => {
+    setJustCreated(null);
+    router.push(`/users?role=${encodeURIComponent(roleValue)}`);
+  };
 
   const stats = useMemo(() => {
     const active = items.filter((r) => r.isActive).length;
@@ -56,10 +67,15 @@ export default function RolesPage() {
   };
 
   const handleSubmit = async (values: Omit<CustomRole, "id">) => {
+    const wasCreate = !editing;
     const ok = await save(values, editing);
     if (ok) {
       setFormOpen(false);
       setEditing(null);
+      setCloneTemplate(null);
+      // A new role has no users yet — nudge the admin to add one so someone can
+      // actually log in with it.
+      if (wasCreate) setJustCreated({ name: values.name, roleValue: `custom:${values.key}` });
     }
   };
 
@@ -123,6 +139,14 @@ export default function RolesPage() {
       render: (r) => (
         <div className="flex items-center justify-end gap-1">
           <button
+            onClick={() => addUserWithRole(`custom:${r.key}`)}
+            title="Add a user with this role"
+            aria-label={`Add a user with ${r.name}`}
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+          >
+            <UserPlus className="size-4" />
+          </button>
+          <button
             onClick={() => {
               setEditing(r);
               setCloneTemplate(null);
@@ -157,6 +181,15 @@ export default function RolesPage() {
           </Button>
         }
       />
+
+      <div className="flex items-start gap-2.5 rounded-md border border-border bg-primary-soft/30 px-3.5 py-2.5 text-sm">
+        <Info className="mt-0.5 size-4 shrink-0 text-primary-text" />
+        <p className="text-muted">
+          A role is a <span className="font-medium text-text">permission template</span>, not a login. Create a
+          role here, then open <span className="font-medium text-text">User Management</span> to add a person
+          (name, email, password) and give them a role — many people can share one role.
+        </p>
+      </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <StatCard label="Custom roles" value={stats.total} icon={KeyRound} tone="indigo" />
@@ -277,6 +310,35 @@ export default function RolesPage() {
         loading={deleting}
         onConfirm={handleDelete}
       />
+
+      {/* After creating a role, bridge the role→login gap explicitly. */}
+      <Modal
+        open={Boolean(justCreated)}
+        onOpenChange={(o) => !o && setJustCreated(null)}
+        size="sm"
+        title="Role created"
+        description={
+          justCreated
+            ? `"${justCreated.name}" is ready. A role is just permissions — add a user (a login) and give them this role so they can sign in.`
+            : ""
+        }
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setJustCreated(null)}>
+              Later
+            </Button>
+            <Button onClick={() => justCreated && addUserWithRole(justCreated.roleValue)}>
+              <UserPlus className="size-4" />
+              Add a user with this role
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-muted">
+          You&rsquo;ll enter the person&rsquo;s name &amp; email next, and they&rsquo;ll get a password to
+          sign in with — already carrying this role&rsquo;s access.
+        </p>
+      </Modal>
     </div>
   );
 }

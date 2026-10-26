@@ -92,6 +92,22 @@ export default function UsersPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Deep-link from Roles & Permissions ("Add a user with this role") — open the
+  // Add-user modal with that role pre-selected, then clean the URL.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const role = new URLSearchParams(window.location.search).get("role");
+    if (!role) return;
+    window.history.replaceState(null, "", "/users");
+    const t = setTimeout(() => {
+      setAddName("");
+      setAddEmail("");
+      setAddRole(role);
+      setAddOpen(true);
+    }, 0);
+    return () => clearTimeout(t);
+  }, []);
+
   const openEdit = (u: ManagedUser) => {
     setEditing(u);
     setEditName(u.name);
