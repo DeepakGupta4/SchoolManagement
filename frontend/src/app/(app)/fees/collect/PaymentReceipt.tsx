@@ -1,6 +1,7 @@
 "use client";
 
 import { School } from "lucide-react";
+import { cn } from "@/lib/utils";
 import type { Payment } from "@/lib/api/feeLedger";
 import type { SchoolIdentity } from "@/lib/schoolIdentity";
 
@@ -52,7 +53,16 @@ function amountInWords(value: number): string {
  * Colours are fixed rather than themed — the printed artefact must not change
  * with the clerk's light/dark preference. Same reasoning as the ID cards.
  */
-export function PaymentReceipt({ payment, school }: { payment: Payment; school?: SchoolIdentity }) {
+export function PaymentReceipt({
+  payment,
+  school,
+  copyLabel,
+}: {
+  payment: Payment;
+  school?: SchoolIdentity;
+  /** Optional tag printed in the masthead, e.g. "School Copy" / "Guardian Copy". */
+  copyLabel?: string;
+}) {
   const unconfirmed = payment.status === "pending-clearance";
 
   return (
@@ -63,8 +73,20 @@ export function PaymentReceipt({ payment, school }: { payment: Payment; school?:
       <div className="flex h-full flex-col p-5">
         {/* Masthead */}
         <div className="flex items-center gap-3 border-b-2 border-indigo-600 pb-3">
-          <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-indigo-600 text-white">
-            <School className="size-5" />
+          <div
+            className={cn(
+              "flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-md",
+              school?.logo ? "bg-white ring-1 ring-slate-200" : "bg-indigo-600 text-white"
+            )}
+          >
+            {school?.logo ? (
+              // Real school logo when the profile has one. Plain <img>: the receipt
+              // is a fixed-layout print artefact, so Next's image optimiser adds nothing.
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={school.logo} alt="" className="size-full object-contain p-0.5" />
+            ) : (
+              <School className="size-5" />
+            )}
           </div>
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-bold uppercase tracking-wide">{school?.name || "Your School"}</p>
@@ -75,7 +97,9 @@ export function PaymentReceipt({ payment, school }: { payment: Payment; school?:
             )}
           </div>
           <div className="shrink-0 text-right">
-            <p className="text-[9px] uppercase tracking-wide text-slate-500">Fee Receipt</p>
+            <p className="text-[9px] uppercase tracking-wide text-slate-500">
+              Fee Receipt{copyLabel ? ` · ${copyLabel}` : ""}
+            </p>
             <p className="font-mono text-sm font-bold text-indigo-700">{payment.receiptNo}</p>
           </div>
         </div>

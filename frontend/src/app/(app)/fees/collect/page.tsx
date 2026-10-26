@@ -55,7 +55,7 @@ import {
   type Payment,
   type StudentFeeAccount,
 } from "@/lib/api/feeLedger";
-import { PaymentReceipt } from "./PaymentReceipt";
+import { ReceiptCopies } from "./ReceiptCopies";
 
 const inr = (n: number) => `₹${n.toLocaleString("en-IN")}`;
 
@@ -864,9 +864,7 @@ export default function CollectFeePage() {
               </Button>
             </div>
           </div>
-          <div className="mx-auto w-full max-w-2xl">
-            <PaymentReceipt payment={receipt} school={identity} />
-          </div>
+          <ReceiptCopies payment={receipt} school={identity} />
         </div>
       )}
     </div>

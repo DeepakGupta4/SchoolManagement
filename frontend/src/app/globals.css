@@ -315,6 +315,22 @@ body {
   .print-hide {
     display: none !important;
   }
+  /* Two receipt copies (school + guardian) share one sheet — keep them narrow
+     enough that both fit a single A4 page. */
+  .print-sheet .receipt-copies {
+    max-width: 175mm;
+    gap: 7mm;
+    padding-top: 2mm;
+  }
+}
+
+/* Rendered in the DOM but shown ONLY when printing — e.g. a dedicated print sheet
+   mounted at the page root (via a portal) so a modal's layout can't clip or
+   mis-position it. Paired with `.print-sheet`, it becomes the printed page. */
+@media screen {
+  .print-only {
+    display: none;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
