@@ -9,7 +9,7 @@ import { Role, permissionsOf } from "../roles/role.model.js";
 import { validate } from "../../middleware/validate.js";
 import { ApiError } from "../../utils/ApiError.js";
 import { env } from "../../config/env.js";
-import { sendEmail } from "../../utils/email.js";
+import { sendEmail, isEmailConfigured } from "../../utils/email.js";
 
 /**
  * A readable but strong temporary password (no ambiguous characters), used when
@@ -285,14 +285,16 @@ router.post(
         schoolId,
       });
 
-      const emailed = await emailCredentials(user, plainPassword);
+      // Fire-and-forget: never block the response on email delivery (SMTP can be
+      // slow or blocked on the host). The admin always gets the credentials popup.
+      void emailCredentials(user, plainPassword);
 
       res.status(201).json({
         user: toPublicUser(user),
         // Returned ONCE, right after creation, so the admin can relay it. The
         // plaintext is never stored (only the hash is).
         credentials: { email: user.email, password: plainPassword },
-        emailed,
+        emailed: isEmailConfigured(),
       });
     } catch (err) {
       next(err);
@@ -460,8 +462,11 @@ router.post(
       await user.save();
       await RefreshToken.deleteMany({ userId: String(user._id) });
 
-      const emailed = await emailCredentials(user, plainPassword);
-      res.json({ credentials: { email: user.email, password: plainPassword }, emailed });
+      void emailCredentials(user, plainPassword); // background — don't block the response
+      res.json({
+        credentials: { email: user.email, password: plainPassword },
+        emailed: isEmailConfigured(),
+      });
     } catch (err) {
       next(err);
     }
@@ -496,7 +501,6 @@ router.post(
 
       const created: { name: string; email: string; role: string }[] = [];
       const skipped: string[] = [];
-      let emailed = 0;
 
       for (const s of SAMPLE_STAFF) {
         const email = `${s.local}.${slug}@sample.school`.toLowerCase();
@@ -506,10 +510,15 @@ router.post(
         }
         const user = await User.create({ name: s.name, email, passwordHash, role: s.role, schoolId });
         created.push({ name: s.name, email, role: s.role });
-        if (await emailCredentials(user, password)) emailed += 1;
+        void emailCredentials(user, password); // background — don't block the response
       }
 
-      res.status(201).json({ created, skipped, password, emailed });
+      res.status(201).json({
+        created,
+        skipped,
+        password,
+        emailed: isEmailConfigured() ? created.length : 0,
+      });
     } catch (err) {
       next(err);
     }
