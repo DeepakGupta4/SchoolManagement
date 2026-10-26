@@ -1,5 +1,6 @@
 import { Router } from "express";
 import rateLimit from "express-rate-limit";
+import crypto from "node:crypto";
 import { z } from "zod";
 import { User, hashPassword, toPublicUser, USER_ROLES, type UserDoc } from "./user.model.js";
 import { RefreshToken, generateRefreshToken, hashRefreshToken } from "./refreshToken.model.js";
@@ -8,6 +9,41 @@ import { Role, permissionsOf } from "../roles/role.model.js";
 import { validate } from "../../middleware/validate.js";
 import { ApiError } from "../../utils/ApiError.js";
 import { env } from "../../config/env.js";
+import { sendEmail } from "../../utils/email.js";
+
+/**
+ * A readable but strong temporary password (no ambiguous characters), used when
+ * an admin creates an account or resets a password without typing one. Always
+ * contains letters + a digit + a symbol.
+ */
+function generateTempPassword(): string {
+  const alpha = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz";
+  const digits = "23456789";
+  const pick = (set: string, n: number) =>
+    Array.from({ length: n }, () => set[crypto.randomInt(set.length)]).join("");
+  return `${pick(alpha, 8)}${pick(digits, 2)}#`;
+}
+
+/**
+ * Emails a user their login credentials. Never throws — a mail failure just means
+ * the admin relays the password from the on-screen popup. Returns delivered.
+ */
+async function emailCredentials(user: UserDoc, password: string): Promise<boolean> {
+  const loginUrl = env.APP_LOGIN_URL;
+  const res = await sendEmail({
+    to: user.email,
+    subject: `${env.SOFTWARE_NAME}: your login details`,
+    text:
+      `Hello ${user.name},\n\nAn account has been created for you on ${env.SOFTWARE_NAME}.\n\n` +
+      `Login: ${user.email}\nPassword: ${password}\n\nSign in: ${loginUrl}\n\n` +
+      `Please change your password after signing in.`,
+    html:
+      `<p>Hello ${user.name},</p><p>An account has been created for you on <b>${env.SOFTWARE_NAME}</b>.</p>` +
+      `<p><b>Login:</b> ${user.email}<br/><b>Password:</b> ${password}</p>` +
+      `<p><a href="${loginUrl}">Sign in</a></p><p>Please change your password after signing in.</p>`,
+  });
+  return res.delivered;
+}
 
 const router = Router();
 
@@ -20,7 +56,9 @@ const registerSchema = z
   .object({
     name: z.string().min(2),
     email: z.email(),
-    password: z.string().min(8, "Password must be at least 8 characters"),
+    // Optional: when an admin creates an account they usually leave this blank and
+    // the server generates a temporary password it emails + shows once.
+    password: z.string().min(8, "Password must be at least 8 characters").optional(),
     role: z.enum(USER_ROLES),
     /** Required when role is "custom" — the Role document's key. */
     customRoleKey: z.string().trim().default(""),
@@ -233,17 +271,29 @@ router.post(
         throw ApiError.conflict(`An account already exists for ${email}.`);
       }
 
+      // Admin-created accounts normally get a generated password, surfaced once to
+      // the admin and emailed to the user.
+      const plainPassword = password && password.length >= 8 ? password : generateTempPassword();
+
       const user = await User.create({
         name,
         email: email.toLowerCase(),
-        passwordHash: await hashPassword(password),
+        passwordHash: await hashPassword(plainPassword),
         role,
         // Only a custom role carries a key; built-in roles never do.
         customRoleKey: role === "custom" ? customRoleKey : "",
         schoolId,
       });
 
-      res.status(201).json({ user: toPublicUser(user) });
+      const emailed = await emailCredentials(user, plainPassword);
+
+      res.status(201).json({
+        user: toPublicUser(user),
+        // Returned ONCE, right after creation, so the admin can relay it. The
+        // plaintext is never stored (only the hash is).
+        credentials: { email: user.email, password: plainPassword },
+        emailed,
+      });
     } catch (err) {
       next(err);
     }
@@ -333,6 +383,8 @@ router.get(
 
 const updateUserSchema = z.object({
   name: z.string().min(2).optional(),
+  /** The login email — admins can correct it; must stay unique. */
+  email: z.email().optional(),
   role: z.enum(USER_ROLES).optional(),
   /** Set alongside role "custom" to point at the Role document. */
   customRoleKey: z.string().trim().optional(),
@@ -359,6 +411,14 @@ router.patch(
         }
       }
       if (typeof updates.name === "string") user.name = updates.name.trim();
+      if (typeof updates.email === "string" && updates.email.toLowerCase() !== user.email) {
+        const taken = await User.exists({
+          email: updates.email.toLowerCase(),
+          _id: { $ne: user._id },
+        });
+        if (taken) throw ApiError.conflict(`${updates.email} is already in use by another account.`);
+        user.email = updates.email.toLowerCase();
+      }
       if (typeof updates.role === "string") {
         user.role = updates.role;
         // Keep the custom-role key consistent: set it for a custom role, clear it
@@ -374,6 +434,34 @@ router.patch(
       if (typeof updates.isActive === "boolean") user.isActive = updates.isActive;
       await user.save();
       res.json({ data: toPublicUser(user) });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+/**
+ * Admin resets a user's password: a new temporary password is generated, emailed,
+ * and returned ONCE so the admin can relay it. All of that user's refresh tokens
+ * are invalidated so any stolen session ends.
+ */
+router.post(
+  "/users/:id/reset-password",
+  requireAuth,
+  requireRole("super_admin", "school_admin"),
+  async (req, res, next) => {
+    try {
+      const schoolId = req.user!.schoolId;
+      const user = await User.findOne({ _id: req.params.id, schoolId });
+      if (!user) throw ApiError.notFound("User not found.");
+
+      const plainPassword = generateTempPassword();
+      user.passwordHash = await hashPassword(plainPassword);
+      await user.save();
+      await RefreshToken.deleteMany({ userId: String(user._id) });
+
+      const emailed = await emailCredentials(user, plainPassword);
+      res.json({ credentials: { email: user.email, password: plainPassword }, emailed });
     } catch (err) {
       next(err);
     }
