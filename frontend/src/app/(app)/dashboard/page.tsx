@@ -519,7 +519,7 @@ function AdminDashboard() {
         <TeacherDashboard />
       ) : user?.role === "parent" ? (
         <ParentDashboard />
-      ) : setupPending && data && user?.role !== "accountant" ? (
+      ) : setupPending && data && user?.role !== "accountant" && user?.role !== "custom" ? (
         <Onboarding name={user?.name?.split(" ")[0]} data={data} />
       ) : (
        <>
@@ -644,9 +644,13 @@ const PORTAL_DASHBOARDS: Partial<Record<UserRole, { Comp: React.ComponentType; s
 export default function DashboardPage() {
   const { user } = useAuthStore();
 
-  // A custom role has no fixed portal — surface its granted sections instead of
-  // the office-gated admin dashboard (which would 403 for it).
+  // A custom role granted "Analytics" has access to the dashboard aggregates, so
+  // it gets the FULL admin dashboard (same as a full-access clone would expect).
+  // A custom role WITHOUT analytics gets a clean launcher of just its sections —
+  // never the office-gated dashboard (which would 403 for it).
   if (user?.role === "custom") {
+    const perms = user.permissions ?? {};
+    if (perms.analytics === "view" || perms.analytics === "edit") return <AdminDashboard />;
     return (
       <div className="flex flex-col gap-5">
         <Card className="relative overflow-hidden">
