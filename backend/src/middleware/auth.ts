@@ -49,7 +49,7 @@ export const requireAuth: RequestHandler = (req, _res, next) => {
  * Restricts a route to specific roles. Always used AFTER `requireAuth`, which
  * is what puts `req.user` in place.
  */
-export function requireRole(...roles: UserRole[]): RequestHandler {
+function roleGate(roles: UserRole[], customViaFlag: boolean): RequestHandler {
   return (req, _res, next) => {
     if (!req.user) {
       next(ApiError.unauthorized());
@@ -58,10 +58,13 @@ export function requireRole(...roles: UserRole[]): RequestHandler {
     // A custom role isn't in any fixed list — it's authorised by the permission
     // gate (customRolePermissionGate), which runs first on tenant routes and sets
     // this flag. Routes the gate doesn't cover (e.g. owner-only /api/schools)
-    // leave it unset, so a custom role is correctly denied there.
+    // leave it unset, so a custom role is correctly denied there. STRICT gates
+    // (customViaFlag=false) never accept a custom role even with the flag — used
+    // for narrowed, dangerous permissions (e.g. a super_admin-only hard delete)
+    // that a custom role must not inherit from a module "edit" grant.
     if (req.user.role === "custom") {
-      if (req.customAccessGranted) next();
-      else next(ApiError.forbidden("Your role doesn't have access to this section."));
+      if (customViaFlag && req.customAccessGranted) next();
+      else next(ApiError.forbidden("Your role doesn't have access to this action."));
       return;
     }
     if (!roles.includes(req.user.role)) {
@@ -70,6 +73,19 @@ export function requireRole(...roles: UserRole[]): RequestHandler {
     }
     next();
   };
+}
+
+export function requireRole(...roles: UserRole[]): RequestHandler {
+  return roleGate(roles, true);
+}
+
+/**
+ * Like {@link requireRole}, but a custom role is NEVER accepted via the permission
+ * gate's flag — it must literally be one of `roles`. Use for narrowed/dangerous
+ * gates (e.g. a super_admin-only hard delete) a custom role must not inherit.
+ */
+export function requireRoleStrict(...roles: UserRole[]): RequestHandler {
+  return roleGate(roles, false);
 }
 
 /**
@@ -102,7 +118,10 @@ export const customRolePermissionGate: RequestHandler = (req, _res, next) => {
 
   const path = (req.originalUrl || req.url).split("?")[0] ?? "";
   if (isBaselinePath(path)) {
-    req.customAccessGranted = true;
+    // Baseline (shared) paths are READ-ONLY for custom roles: grant reads only,
+    // never writes. A write on a baseline path leaves the flag unset, so the
+    // route's own requireRole then denies the custom user.
+    if (!WRITE_METHODS.has(req.method)) req.customAccessGranted = true;
     next();
     return;
   }

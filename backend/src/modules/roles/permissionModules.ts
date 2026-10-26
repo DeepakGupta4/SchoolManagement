@@ -61,11 +61,15 @@ export const PERMISSION_MODULES: PermissionModule[] = [
 export const PERMISSION_MODULE_KEYS: string[] = PERMISSION_MODULES.map((m) => m.key);
 
 /**
- * Tenant API paths every signed-in user may use regardless of role — profile,
- * session, notifications, the school's own identity (document headers) and the
- * shared document service. These are never module-gated.
+ * Tenant API paths a custom role may use regardless of its granted modules.
+ * Deliberately EMPTY: the document vault (/api/documents) is NOT baseline — it
+ * returns every student's/teacher's files (Aadhaar, marksheets) and allows
+ * delete/verify, so a custom role reaches it only through a future owner-scoped
+ * mapping, never a blanket carve-out. Profile/session/notifications/school
+ * identity live on non-tenant routes the gate never runs on, so they need no
+ * entry here. If a baseline path is ever added, the gate grants it read-only.
  */
-export const CUSTOM_ROLE_BASELINE_PREFIXES: string[] = ["/api/documents"];
+export const CUSTOM_ROLE_BASELINE_PREFIXES: string[] = [];
 
 const norm = (p: string) => (p.endsWith("/") ? p.slice(0, -1) : p);
 

@@ -37,14 +37,16 @@ const NAVIGABLE = flatNav.filter((item) => !item.soon);
 function PaletteContent({ onClose }: { onClose: () => void }) {
   const router = useRouter();
   const role = useAuthStore((s) => s.user?.role);
+  const permissions = useAuthStore((s) => s.user?.permissions);
   const [query, setQuery] = useState("");
   const [rawIndex, setRawIndex] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
 
-  // Don't surface destinations the current role can't open.
+  // Don't surface destinations the current role can't open — for a custom role,
+  // that means honouring its permission map (not just the role name).
   const navigable = useMemo(
-    () => NAVIGABLE.filter((item) => isPathAllowed(role, item.href)),
-    [role]
+    () => NAVIGABLE.filter((item) => isPathAllowed(role, item.href, permissions)),
+    [role, permissions]
   );
 
   const results = useMemo(() => {

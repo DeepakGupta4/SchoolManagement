@@ -211,10 +211,13 @@ router.get("/insights", validate(insightsQuery, "query"), async (req, res, next)
               { band: "95%+", students: b.b4 },
             ]
           : [],
-        // A teacher must not receive named at-risk students from classes they
-        // don't teach — the aggregate counts above are fine, but this per-student
-        // list is office/admin only.
-        attention: req.user!.role === "teacher" ? [] : (attentionAgg as Array<{ _id: unknown; [k: string]: unknown }>).map((s) => ({
+        // The named at-risk list is office/admin PII only — the aggregate counts
+        // above are fine, but this per-student list goes ONLY to office roles. An
+        // allow-list (not "not a teacher") so a custom analytics-view role, and any
+        // other non-office role, are also correctly redacted.
+        attention: !["super_admin", "school_admin", "principal", "accountant"].includes(req.user!.role)
+          ? []
+          : (attentionAgg as Array<{ _id: unknown; [k: string]: unknown }>).map((s) => ({
           id: String(s._id),
           firstName: s.firstName ?? "",
           lastName: s.lastName ?? "",

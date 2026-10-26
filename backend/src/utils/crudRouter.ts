@@ -1,7 +1,7 @@
 import { Router, type RequestHandler, type Request } from "express";
 import type { Model, HydratedDocument } from "mongoose";
 import { z, type ZodType } from "zod";
-import { requireAuth, requireRole } from "../middleware/auth.js";
+import { requireAuth, requireRole, requireRoleStrict } from "../middleware/auth.js";
 import { validate, parsed } from "../middleware/validate.js";
 import { ApiError } from "../utils/ApiError.js";
 import type { UserRole } from "../modules/auth/user.model.js";
@@ -139,7 +139,12 @@ export function createCrudRouter<T>(options: CrudOptions<T>): Router {
   const router = Router();
   const canWrite: RequestHandler = requireRole(...writeRoles);
   // Hard delete can be locked down tighter than create/update.
-  const canDelete: RequestHandler = deleteRoles ? requireRole(...deleteRoles) : canWrite;
+  // An explicit (narrowed) deleteRoles is a deliberate safeguard — e.g. only
+  // super_admin may hard-delete a student (cascades fees/payments/docs). Use the
+  // STRICT gate so a custom role can't inherit that delete from a module "edit"
+  // grant; it must literally be one of the listed roles. Without an explicit
+  // deleteRoles, delete follows write (a custom "edit" may delete ordinary rows).
+  const canDelete: RequestHandler = deleteRoles ? requireRoleStrict(...deleteRoles) : canWrite;
   // Reads are open to any authenticated user unless the module restricts them
   // (e.g. teacher records carry salary/PII — office/HR roles only).
   const canRead: RequestHandler = readRoles ? requireRole(...readRoles) : (_req, _res, next) => next();
