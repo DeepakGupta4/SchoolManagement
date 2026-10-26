@@ -1,14 +1,14 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { KeyRound, Loader2, RefreshCw, Search, ShieldCheck, UserCog, UserPlus, Users } from "lucide-react";
+import { KeyRound, Loader2, RefreshCw, Search, ShieldCheck, Sparkles, UserCog, UserPlus, Users } from "lucide-react";
 import {
   Avatar, Badge, Button, Card, CardContent, CardHeader,
   EmptyState, Input, Modal, PageHeader, Select, StatCard, useToast,
 } from "@/components/ui";
 import {
-  listUsers, updateUser, createUser, resetUserPassword,
-  type ManagedUser, type UserCredentials,
+  listUsers, updateUser, createUser, resetUserPassword, addSampleStaff,
+  type ManagedUser, type UserCredentials, type SampleStaffResult,
 } from "@/lib/api/users";
 import { rolesApi, type CustomRole } from "@/lib/api/roles";
 import { useAuthStore } from "@/store";
@@ -54,6 +54,10 @@ export default function UsersPage() {
   // Credentials popup, shown once after a create or password-reset.
   const [creds, setCreds] = useState<UserCredentials | null>(null);
   const [credsEmailed, setCredsEmailed] = useState(false);
+
+  // One-click sample-staff onboarding.
+  const [sampling, setSampling] = useState(false);
+  const [sampleResult, setSampleResult] = useState<SampleStaffResult | null>(null);
 
   // Built-in roles plus any custom roles the school has defined.
   const roleOptions = [
@@ -158,6 +162,23 @@ export default function UsersPage() {
     }
   };
 
+  const handleSampleStaff = async () => {
+    setSampling(true);
+    try {
+      const result = await addSampleStaff();
+      await load();
+      setSampleResult(result);
+    } catch (e) {
+      toast({
+        title: "Could not add sample staff",
+        description: e instanceof Error ? e.message : "Try again.",
+        variant: "error",
+      });
+    } finally {
+      setSampling(false);
+    }
+  };
+
   const handleSave = async () => {
     if (!editing) return;
     setSaving(true);
@@ -199,6 +220,10 @@ export default function UsersPage() {
           <>
             <Button variant="outline" onClick={load}>
               <RefreshCw className="size-4" /> Refresh
+            </Button>
+            <Button variant="outline" onClick={handleSampleStaff} disabled={sampling}>
+              {sampling ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
+              Sample staff
             </Button>
             <Button onClick={openAdd}>
               <UserPlus className="size-4" /> Add user
@@ -357,6 +382,51 @@ export default function UsersPage() {
       </Modal>
 
       <CredentialsDialog data={creds} emailed={credsEmailed} onClose={() => setCreds(null)} />
+
+      {/* Sample-staff results */}
+      <Modal
+        open={Boolean(sampleResult)}
+        onOpenChange={(o) => !o && setSampleResult(null)}
+        title="Sample staff ready"
+        description="Ready-to-use accounts in your school — the shared password is shown once."
+        footer={<Button onClick={() => setSampleResult(null)}>Done</Button>}
+      >
+        {sampleResult && (
+          <div className="flex flex-col gap-3">
+            {sampleResult.created.length > 0 ? (
+              <>
+                <div className="rounded-md border border-border bg-surface px-3 py-2">
+                  <p className="text-xs text-subtle">Shared password (all sample accounts)</p>
+                  <p className="font-mono text-sm text-text">{sampleResult.password}</p>
+                </div>
+                <div className="overflow-hidden rounded-md border border-border">
+                  {sampleResult.created.map((c) => (
+                    <div
+                      key={c.email}
+                      className="flex items-center justify-between gap-2 border-b border-border px-3 py-2 text-sm last:border-0"
+                    >
+                      <span className="min-w-0">
+                        <span className="font-medium text-text">{c.name}</span>
+                        <span className="ml-1 text-xs capitalize text-subtle">({c.role})</span>
+                      </span>
+                      <span className="truncate font-mono text-xs text-muted">{c.email}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <p className="text-sm text-muted">All sample accounts already exist in your school.</p>
+            )}
+            <p className="text-xs text-subtle">
+              {sampleResult.emailed > 0 ? `${sampleResult.emailed} emailed. ` : ""}
+              {sampleResult.skipped.length > 0 && sampleResult.created.length > 0
+                ? `${sampleResult.skipped.length} already existed. `
+                : ""}
+              These are normal accounts — edit, reset or delete them anytime.
+            </p>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

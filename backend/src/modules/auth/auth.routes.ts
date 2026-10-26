@@ -2,7 +2,7 @@ import { Router } from "express";
 import rateLimit from "express-rate-limit";
 import crypto from "node:crypto";
 import { z } from "zod";
-import { User, hashPassword, toPublicUser, USER_ROLES, type UserDoc } from "./user.model.js";
+import { User, hashPassword, toPublicUser, USER_ROLES, type UserDoc, type UserRole } from "./user.model.js";
 import { RefreshToken, generateRefreshToken, hashRefreshToken } from "./refreshToken.model.js";
 import { signToken, requireAuth, requireRole } from "../../middleware/auth.js";
 import { Role, permissionsOf } from "../roles/role.model.js";
@@ -462,6 +462,54 @@ router.post(
 
       const emailed = await emailCredentials(user, plainPassword);
       res.json({ credentials: { email: user.email, password: plainPassword }, emailed });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+/**
+ * One-click onboarding: create a set of ready-to-use SAMPLE staff accounts in the
+ * caller's OWN school (teacher/principal/accountant/librarian), so a fresh school
+ * can immediately try roles, logins and permissions. They're ordinary accounts the
+ * admin can edit, reset or delete. All share one generated password (shown once +
+ * emailed). Idempotent: an email that already exists is skipped.
+ */
+const SAMPLE_STAFF: { name: string; role: UserRole; local: string }[] = [
+  { name: "Sample Teacher", role: "teacher", local: "teacher" },
+  { name: "Sample Principal", role: "principal", local: "principal" },
+  { name: "Sample Accountant", role: "accountant", local: "accounts" },
+  { name: "Sample Librarian", role: "librarian", local: "librarian" },
+];
+
+router.post(
+  "/users/sample-staff",
+  requireAuth,
+  requireRole("super_admin", "school_admin"),
+  async (req, res, next) => {
+    try {
+      const schoolId = req.user!.schoolId;
+      const slug =
+        schoolId.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "school";
+      const password = generateTempPassword();
+      const passwordHash = await hashPassword(password);
+
+      const created: { name: string; email: string; role: string }[] = [];
+      const skipped: string[] = [];
+      let emailed = 0;
+
+      for (const s of SAMPLE_STAFF) {
+        const email = `${s.local}.${slug}@sample.school`.toLowerCase();
+        if (await User.exists({ email })) {
+          skipped.push(email);
+          continue;
+        }
+        const user = await User.create({ name: s.name, email, passwordHash, role: s.role, schoolId });
+        created.push({ name: s.name, email, role: s.role });
+        if (await emailCredentials(user, password)) emailed += 1;
+      }
+
+      res.status(201).json({ created, skipped, password, emailed });
     } catch (err) {
       next(err);
     }

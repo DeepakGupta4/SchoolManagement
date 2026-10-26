@@ -56,3 +56,19 @@ export async function resetUserPassword(
 ): Promise<{ credentials: UserCredentials; emailed: boolean }> {
   return apiRequest(`/api/auth/users/${id}/reset-password`, { method: "POST" });
 }
+
+export interface SampleStaffResult {
+  created: { name: string; email: string; role: UserRole }[];
+  skipped: string[];
+  /** The shared temporary password for all created sample accounts (shown once). */
+  password: string;
+  emailed: number;
+}
+
+/**
+ * One-click onboarding: create ready-to-use sample staff accounts (teacher,
+ * principal, accountant, librarian) in the admin's own school. Idempotent.
+ */
+export async function addSampleStaff(): Promise<SampleStaffResult> {
+  return apiRequest<SampleStaffResult>("/api/auth/users/sample-staff", { method: "POST" });
+}
