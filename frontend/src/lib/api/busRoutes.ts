@@ -32,39 +32,8 @@ export const ROUTE_STATUS_OPTIONS = [
   { label: "Inactive", value: "inactive" },
 ];
 
-/** Shared stop network — every route picks its pickup points from this list. */
-export const ROUTE_STOP_OPTIONS = [
-  "Dwarka Mor",
-  "Dwarka Sector 12",
-  "Palam Vihar",
-  "Janakpuri West",
-  "Uttam Nagar",
-  "Rajouri Garden",
-  "Rohini Sector 7",
-  "Netaji Subhash Place",
-  "Pitampura Metro",
-  "Karol Bagh",
-  "Laxmi Nagar Metro",
-  "Preet Vihar",
-  "Mayur Vihar Phase 1",
-  "Noida Sector 18",
-  "Noida Sector 62",
-  "Gurgaon MG Road",
-  "Gurgaon Cyber Hub",
-  "Sohna Road",
-  "Faridabad NIT",
-  "Ballabgarh Bus Stand",
-];
-
-export const ROUTE_DRIVER_OPTIONS = [
-  "Ramesh Kumar",
-  "Suresh Yadav",
-  "Mohan Singh",
-  "Vijay Sharma",
-  "Anil Gupta",
-  "Deepak Verma",
-  "Rajesh Tiwari",
-  "Sanjay Mishra",
-];
+// Stops and drivers are NOT hardcoded: a school enters its own stops per route
+// (reusing ones from its other routes), and drivers come from real "driver" user
+// accounts — see BusRouteFormModal.
 
 export const busRoutesApi = createApiResource<BusRoute, BusRouteFilters>("/api/bus-routes");
