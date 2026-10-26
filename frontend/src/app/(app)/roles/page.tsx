@@ -1,12 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { KeyRound, Pencil, Plus, Search, ShieldCheck, Trash2, Users } from "lucide-react";
+import { Copy, KeyRound, Lock, Pencil, Plus, Search, ShieldCheck, Trash2, Users } from "lucide-react";
 import {
   Badge,
   Button,
   Card,
   CardContent,
+  CardHeader,
   ConfirmDialog,
   Input,
   PageHeader,
@@ -16,7 +17,7 @@ import {
 } from "@/components/ui";
 import { useResource } from "@/hooks/useResource";
 import { rolesApi, type CustomRole } from "@/lib/api/roles";
-import { PERMISSION_MODULES } from "@/lib/permissions";
+import { BUILTIN_ROLES, PERMISSION_MODULES, type PermissionMap } from "@/lib/permissions";
 import { RoleFormModal } from "./RoleFormModal";
 
 const moduleLabel = (key: string) => PERMISSION_MODULES.find((m) => m.key === key)?.label ?? key;
@@ -33,6 +34,7 @@ export default function RolesPage() {
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<CustomRole | null>(null);
+  const [cloneTemplate, setCloneTemplate] = useState<{ name: string; permissions: PermissionMap } | null>(null);
   const [pendingDelete, setPendingDelete] = useState<CustomRole | null>(null);
 
   const stats = useMemo(() => {
@@ -42,6 +44,14 @@ export default function RolesPage() {
 
   const openCreate = () => {
     setEditing(null);
+    setCloneTemplate(null);
+    setFormOpen(true);
+  };
+
+  /** Clone a built-in role into a new, fully-editable custom role. */
+  const openClone = (b: (typeof BUILTIN_ROLES)[number]) => {
+    setEditing(null);
+    setCloneTemplate({ name: `${b.name} (custom)`, permissions: { ...b.defaultPermissions } });
     setFormOpen(true);
   };
 
@@ -115,6 +125,7 @@ export default function RolesPage() {
           <button
             onClick={() => {
               setEditing(r);
+              setCloneTemplate(null);
               setFormOpen(true);
             }}
             aria-label={`Edit ${r.name}`}
@@ -193,10 +204,60 @@ export default function RolesPage() {
         />
       )}
 
+      {/* Built-in roles — shown for reference; clone one into an editable custom
+          role. super_admin is intentionally absent (platform owner, not a school
+          role). The built-in roles themselves keep their fixed, tested access. */}
+      <Card>
+        <CardHeader className="flex-col items-stretch gap-1">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="size-4 text-muted" />
+            <h2 className="text-sm font-semibold text-text">Built-in roles</h2>
+          </div>
+          <p className="text-xs text-muted">
+            The standard roles and what they cover. Clone any one to create a custom role you can
+            tailor — the built-in roles themselves stay fixed so their tested behaviour never breaks.
+          </p>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {BUILTIN_ROLES.map((b) => {
+              const count = Object.values(b.defaultPermissions).filter(
+                (l) => l === "view" || l === "edit"
+              ).length;
+              return (
+                <div
+                  key={b.role}
+                  className="flex flex-col gap-2 rounded-md border border-border bg-surface p-3"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="font-medium text-text">{b.name}</p>
+                    <Badge variant="default" className="gap-1">
+                      <Lock className="size-3" />
+                      Built-in
+                    </Badge>
+                  </div>
+                  <p className="min-h-8 text-xs text-subtle">{b.note}</p>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs text-muted">
+                      {count > 0 ? `${count} section${count === 1 ? "" : "s"}` : "Full / portal access"}
+                    </span>
+                    <Button variant="outline" size="sm" onClick={() => openClone(b)}>
+                      <Copy className="size-3.5" />
+                      Clone
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+
       <RoleFormModal
         open={formOpen}
         onOpenChange={setFormOpen}
         record={editing}
+        template={cloneTemplate}
         existing={items}
         saving={saving}
         onSubmit={handleSubmit}

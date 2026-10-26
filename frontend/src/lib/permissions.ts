@@ -68,6 +68,53 @@ export const PERMISSION_MODULES: PermissionModule[] = [
 /** The permission map a user carries: moduleKey -> level. Absent = "none". */
 export type PermissionMap = Record<string, PermissionLevel>;
 
+/** Every grantable module at "edit" — the full-access template. */
+const ALL_EDIT: PermissionMap = Object.fromEntries(
+  PERMISSION_MODULES.map((m) => [m.key, "edit" as PermissionLevel])
+);
+
+export interface BuiltinRoleInfo {
+  /** The UserRole literal. */
+  role: string;
+  name: string;
+  note: string;
+  /** A sensible default access profile, used as the starting point when cloning. */
+  defaultPermissions: PermissionMap;
+}
+
+/**
+ * The built-in roles shown (read-only) in Roles & Permissions, so an admin can
+ * see what each covers and CLONE one into an editable custom role. super_admin is
+ * deliberately absent — it's the SchoolDeck platform owner, never a school role.
+ * These profiles are a convenient starting point for a clone, not the exact
+ * hardcoded gating (which stays fixed for the built-in roles themselves).
+ */
+export const BUILTIN_ROLES: BuiltinRoleInfo[] = [
+  { role: "school_admin", name: "School Admin", note: "Account owner — full access to everything.", defaultPermissions: ALL_EDIT },
+  { role: "principal", name: "Principal", note: "Runs the school day-to-day; full access minus billing & security.", defaultPermissions: ALL_EDIT },
+  {
+    role: "accountant",
+    name: "Accountant",
+    note: "Finance — fees, expenses, payroll.",
+    defaultPermissions: { fees: "edit", expenses: "edit", payroll: "edit", analytics: "view", students: "view" },
+  },
+  {
+    role: "teacher",
+    name: "Teacher",
+    note: "Teaching — classes, attendance, marks, assignments, material.",
+    defaultPermissions: {
+      students: "view", classes: "view", subjects: "view", timetable: "view",
+      attendance: "edit", exams: "edit", assignments: "edit", syllabus: "edit",
+      lms: "edit", messages: "edit", announcements: "view",
+    },
+  },
+  { role: "librarian", name: "Librarian", note: "Library circulation.", defaultPermissions: { library: "edit" } },
+  { role: "driver", name: "Driver", note: "Transport routes.", defaultPermissions: { transport: "view" } },
+  { role: "staff", name: "Staff", note: "General staff — minimal, mostly self-service.", defaultPermissions: {} },
+  { role: "parent", name: "Parent", note: "Parent portal — their children's information.", defaultPermissions: {} },
+  { role: "student", name: "Student", note: "Student portal.", defaultPermissions: {} },
+];
+
 /** Every signed-in user can reach their dashboard, whatever their permissions. */
 export const ALWAYS_ALLOWED_HREFS = ["/dashboard"];
 

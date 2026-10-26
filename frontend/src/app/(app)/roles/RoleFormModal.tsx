@@ -19,6 +19,8 @@ interface RoleFormModalProps {
   onOpenChange: (open: boolean) => void;
   /** Present = edit mode, absent = create mode. */
   record?: CustomRole | null;
+  /** Create-mode seed (e.g. cloning a built-in role): pre-fills name + permissions. */
+  template?: { name: string; permissions: PermissionMap } | null;
   /** Existing roles — used to block a duplicate name/key on create. */
   existing?: CustomRole[];
   saving?: boolean;
@@ -29,6 +31,7 @@ export function RoleFormModal({
   open,
   onOpenChange,
   record,
+  template,
   existing = [],
   saving,
   onSubmit,
@@ -43,13 +46,13 @@ export function RoleFormModal({
     if (!open) return;
     // Deferred so state isn't set synchronously in the effect (lint rule).
     const t = setTimeout(() => {
-      setName(record?.name ?? "");
+      setName(record?.name ?? template?.name ?? "");
       setDescription(record?.description ?? "");
-      setPermissions({ ...(record?.permissions ?? {}) });
+      setPermissions({ ...(record?.permissions ?? template?.permissions ?? {}) });
       setError(null);
     }, 0);
     return () => clearTimeout(t);
-  }, [open, record]);
+  }, [open, record, template]);
 
   const grouped = useMemo(
     () =>
