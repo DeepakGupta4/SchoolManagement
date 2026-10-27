@@ -55,6 +55,7 @@ export default function AlumniPage() {
   const [batch, setBatch] = useState("");
   const [stream, setStream] = useState("");
   const [city, setCity] = useState("");
+  const [mentorsOnly, setMentorsOnly] = useState(false);
   const [page, setPage] = useState(1);
 
   const filters = useMemo(
@@ -91,10 +92,13 @@ export default function AlumniPage() {
     [items]
   );
 
+  // "Mentors only" narrows the loaded directory to alumni offering mentorship.
+  const visible = useMemo(() => (mentorsOnly ? items.filter((a) => a.mentor) : items), [items, mentorsOnly]);
+
   // Clamp during render — resetting page state from an effect is not allowed.
-  const totalPages = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
-  const paged = items.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  const paged = visible.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   /** Every filter here is applied server-side, so `items` is what the table shows. */
   const handleExport = () => {
@@ -371,7 +375,17 @@ export default function AlumniPage() {
         <StatCard label="Registered Alumni" value={stats.total} icon={Users} tone="indigo" />
         <StatCard label="Batches Covered" value={stats.batches} icon={Award} tone="violet" />
         <StatCard label="Cities" value={stats.cities} icon={Briefcase} tone="cyan" />
-        <StatCard label="Volunteer Mentors" value={stats.mentors} icon={Award} tone="emerald" />
+        <StatCard
+          label="Volunteer Mentors"
+          value={stats.mentors}
+          icon={Award}
+          tone="emerald"
+          active={mentorsOnly}
+          onClick={() => {
+            setMentorsOnly((v) => !v);
+            setPage(1);
+          }}
+        />
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
