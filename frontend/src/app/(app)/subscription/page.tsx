@@ -204,14 +204,17 @@ export default function SubscriptionPage() {
             setError("We couldn't load your subscription. Please try again.");
           }
           if (planRes.status === "fulfilled") {
+            // Guard every field: a not-yet-redeployed backend returns the OLD
+            // /plans shape ({plans,...}), so tiers/students/… are undefined here.
+            // Without defaults, `tiers.length` in render throws.
             const p = planRes.value;
-            setTiers(p.tiers);
-            setStudents(p.students);
-            setBilledStudents(p.billedStudents);
-            setMinBilled(p.minBilledStudents);
-            setPaymentEnabled(p.paymentEnabled);
-            setCurrentTier(p.currentTier);
-            setCurrentCycle(p.currentCycle);
+            setTiers(Array.isArray(p.tiers) ? p.tiers : []);
+            setStudents(p.students ?? 0);
+            setBilledStudents(p.billedStudents ?? 0);
+            setMinBilled(p.minBilledStudents ?? 0);
+            setPaymentEnabled(Boolean(p.paymentEnabled));
+            setCurrentTier(p.currentTier ?? null);
+            setCurrentCycle(p.currentCycle ?? null);
             if (p.currentCycle) setCycle(p.currentCycle);
           } else {
             setTiers([]);
