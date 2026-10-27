@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Copy, Info, KeyRound, Lock, Pencil, Plus, Search, ShieldCheck, Trash2, UserPlus, Users } from "lucide-react";
 import {
@@ -19,6 +19,7 @@ import {
 } from "@/components/ui";
 import { useResource } from "@/hooks/useResource";
 import { rolesApi, type CustomRole } from "@/lib/api/roles";
+import { listUsers, type ManagedUser } from "@/lib/api/users";
 import { BUILTIN_ROLES, PERMISSION_MODULES, type PermissionMap } from "@/lib/permissions";
 import { RoleFormModal } from "./RoleFormModal";
 
@@ -48,10 +49,39 @@ export default function RolesPage() {
     router.push(`/users?role=${encodeURIComponent(roleValue)}`);
   };
 
+  // Existing accounts in THIS school, so every role shows who actually holds it
+  // (the created admin, principal, teachers, …) — not just the role definition.
+  const [users, setUsers] = useState<ManagedUser[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    const t = setTimeout(() => {
+      listUsers()
+        .then((data) => {
+          if (!cancelled) setUsers(data);
+        })
+        .catch(() => {
+          /* non-critical — the page still shows the role definitions */
+        });
+    }, 0);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, []);
+
+  /** Accounts holding a role — a built-in role string, or "custom:<key>". */
+  const holdersFor = (roleValue: string): ManagedUser[] => {
+    if (roleValue.startsWith("custom:")) {
+      const key = roleValue.slice("custom:".length);
+      return users.filter((u) => u.role === "custom" && (u.customRoleKey ?? "") === key);
+    }
+    return users.filter((u) => u.role === roleValue);
+  };
+
   const stats = useMemo(() => {
     const active = items.filter((r) => r.isActive).length;
-    return { total: items.length, active };
-  }, [items]);
+    return { total: items.length, active, accounts: users.length };
+  }, [items, users]);
 
   const openCreate = () => {
     setEditing(null);
@@ -125,6 +155,25 @@ export default function RolesPage() {
       },
     },
     {
+      key: "accounts",
+      header: "Accounts",
+      render: (r) => {
+        const h = holdersFor(`custom:${r.key}`);
+        if (h.length === 0) return <span className="text-subtle">None yet</span>;
+        return (
+          <div className="min-w-0">
+            <p className="font-medium text-text">
+              {h.length} user{h.length === 1 ? "" : "s"}
+            </p>
+            <p className="max-w-56 truncate text-xs text-subtle">
+              {h.slice(0, 2).map((u) => u.name).join(", ")}
+              {h.length > 2 ? `, +${h.length - 2} more` : ""}
+            </p>
+          </div>
+        );
+      },
+    },
+    {
       key: "status",
       header: "Status",
       sortable: true,
@@ -191,9 +240,10 @@ export default function RolesPage() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatCard label="Custom roles" value={stats.total} icon={KeyRound} tone="indigo" />
         <StatCard label="Active" value={stats.active} icon={ShieldCheck} tone="emerald" />
+        <StatCard label="Accounts" value={stats.accounts} icon={UserPlus} tone="amber" />
         <StatCard label="Grantable sections" value={PERMISSION_MODULES.length} icon={Users} tone="violet" />
       </div>
 
@@ -247,8 +297,9 @@ export default function RolesPage() {
             <h2 className="text-sm font-semibold text-text">Built-in roles</h2>
           </div>
           <p className="text-xs text-muted">
-            The standard roles and what they cover. Clone any one to create a custom role you can
-            tailor — the built-in roles themselves stay fixed so their tested behaviour never breaks.
+            The standard roles and what they cover, plus the accounts in your school that currently
+            hold each one. Clone any role to create a custom role you can tailor — the built-in roles
+            themselves stay fixed so their tested behaviour never breaks.
           </p>
         </CardHeader>
         <CardContent>
@@ -257,27 +308,66 @@ export default function RolesPage() {
               const count = Object.values(b.defaultPermissions).filter(
                 (l) => l === "view" || l === "edit"
               ).length;
+              const holders = holdersFor(b.role);
+              const isSingleton = b.role === "school_admin" || b.role === "principal";
+              const slotFilled = isSingleton && holders.some((h) => h.isActive !== false);
               return (
                 <div
                   key={b.role}
                   className="flex flex-col gap-2 rounded-md border border-border bg-surface p-3"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <p className="font-medium text-text">{b.name}</p>
-                    <Badge variant="default" className="gap-1">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <p className="truncate font-medium text-text">{b.name}</p>
+                      {holders.length > 0 && <Badge variant="info">{holders.length}</Badge>}
+                    </div>
+                    <Badge variant="default" className="shrink-0 gap-1">
                       <Lock className="size-3" />
                       Built-in
                     </Badge>
                   </div>
-                  <p className="min-h-8 text-xs text-subtle">{b.note}</p>
-                  <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs text-subtle">{b.note}</p>
+
+                  {/* Accounts in THIS school that currently hold this role. */}
+                  <div className="rounded-md border border-border bg-surface-hover p-2">
+                    {holders.length === 0 ? (
+                      <p className="text-xs text-subtle">
+                        {isSingleton ? "Not assigned yet" : "No accounts yet"}
+                      </p>
+                    ) : (
+                      <ul className="flex flex-col gap-1.5">
+                        {holders.slice(0, 3).map((u) => (
+                          <li key={u.id} className="flex items-center justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="truncate text-xs font-medium text-text">{u.name}</p>
+                              <p className="truncate text-[11px] text-subtle">{u.email}</p>
+                            </div>
+                            {u.isActive === false && <Badge variant="default" className="shrink-0">Inactive</Badge>}
+                          </li>
+                        ))}
+                        {holders.length > 3 && (
+                          <li className="text-[11px] text-muted">+{holders.length - 3} more</li>
+                        )}
+                      </ul>
+                    )}
+                  </div>
+
+                  <div className="mt-auto flex items-center justify-between gap-2 pt-1">
                     <span className="text-xs text-muted">
                       {count > 0 ? `${count} section${count === 1 ? "" : "s"}` : "Full / portal access"}
                     </span>
-                    <Button variant="outline" size="sm" onClick={() => openClone(b)}>
-                      <Copy className="size-3.5" />
-                      Clone
-                    </Button>
+                    <div className="flex items-center gap-1.5">
+                      {!slotFilled && (
+                        <Button variant="ghost" size="sm" onClick={() => addUserWithRole(b.role)}>
+                          <UserPlus className="size-3.5" />
+                          Add
+                        </Button>
+                      )}
+                      <Button variant="outline" size="sm" onClick={() => openClone(b)}>
+                        <Copy className="size-3.5" />
+                        Clone
+                      </Button>
+                    </div>
                   </div>
                 </div>
               );
