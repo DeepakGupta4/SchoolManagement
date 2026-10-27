@@ -34,6 +34,8 @@ import { fetchAllStudents } from "@/lib/api/students";
 import { examsApi } from "@/lib/api/exams";
 import { getMarks } from "@/lib/api/marks";
 import type { Student as ApiStudent } from "@/types/student";
+import { useSchoolIdentity } from "@/lib/schoolIdentity";
+import { gradeForPercent, passPercentOf, gradeToneClass } from "@/lib/grading";
 
 type MeritStudent = {
   id: string;
@@ -44,26 +46,8 @@ type MeritStudent = {
   maxTotal: number;
   pct: number;
   grade: string;
+  gradePoint: number;
   attendance: number;
-};
-
-function gradeFor(pct: number) {
-  if (pct >= 90) return "A+";
-  if (pct >= 80) return "A";
-  if (pct >= 70) return "B+";
-  if (pct >= 60) return "B";
-  if (pct >= 50) return "C";
-  return "F";
-}
-
-/** Grade chip tones, expressed only in semantic tokens. */
-const gradeClass: Record<string, string> = {
-  "A+": "bg-success-soft text-success-text",
-  A: "bg-info-soft text-info-text",
-  "B+": "bg-primary-soft text-primary-text",
-  B: "bg-warning-soft text-warning-text",
-  C: "bg-surface-hover text-muted",
-  F: "bg-danger-soft text-danger-text",
 };
 
 /** Podium/rank medal styling for the top three, by zero-based position. */
@@ -79,6 +63,10 @@ const toOptions = (values: string[]) => values.map((v) => ({ label: v, value: v 
 export default function MeritListPage() {
   const { toast } = useToast();
   const { classOptions, sectionOptions } = useClassOptions();
+  // Grades + pass cut-off come from the school's own scheme (Settings → Grading).
+  const { identity } = useSchoolIdentity();
+  const scheme = identity.gradingScheme;
+  const passPct = passPercentOf(scheme);
 
   const [search, setSearch] = useState("");
   const [selClass, setSelClass] = useState("");
@@ -144,7 +132,8 @@ export default function MeritListPage() {
               total,
               maxTotal,
               pct,
-              grade: gradeFor(pct),
+              grade: gradeForPercent(scheme, pct).grade,
+              gradePoint: gradeForPercent(scheme, pct).gradePoint,
               attendance: Math.round(s.attendancePercent ?? 0),
             };
           })
@@ -166,7 +155,7 @@ export default function MeritListPage() {
     return () => {
       cancelled = true;
     };
-  }, [ready, selClass, selSection, selExam, toast]);
+  }, [ready, selClass, selSection, selExam, toast, scheme]);
 
   const query = search.trim().toLowerCase();
   const filtered = cohort.filter((s) => !query || s.name.toLowerCase().includes(query));
@@ -279,7 +268,7 @@ export default function MeritListPage() {
       header: "Grade",
       sortable: true,
       render: (s) => (
-        <Badge className={cn("font-semibold", gradeClass[s.grade])}>{s.grade}</Badge>
+        <Badge className={cn("font-semibold", gradeToneClass(s.gradePoint, s.pct >= passPct))}>{s.grade}</Badge>
       ),
     },
     {
@@ -333,13 +322,13 @@ export default function MeritListPage() {
         />
         <StatCard
           label="Pass"
-          value={cohort.filter((s) => s.grade !== "F").length}
+          value={cohort.filter((s) => s.pct >= passPct).length}
           icon={Award}
           tone="emerald"
         />
         <StatCard
           label="Fail"
-          value={cohort.filter((s) => s.grade === "F").length}
+          value={cohort.filter((s) => s.pct < passPct).length}
           icon={XCircle}
           tone="rose"
         />

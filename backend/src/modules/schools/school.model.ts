@@ -102,6 +102,30 @@ const schoolSchema = new Schema(
       default: [],
     },
 
+    // Per-school grade bands (A1/A2/…) with %-cut-offs, grade points and remarks.
+    // Grades are DERIVED from these at read time (never stored on marks), so
+    // editing the scheme re-grades every result. Empty bands → the app falls back
+    // to the built-in CBSE-style default (see utils/grading.ts).
+    gradingScheme: {
+      enabled: { type: Boolean, default: true },
+      passPercent: { type: Number, default: 33 },
+      bands: {
+        type: [
+          new Schema(
+            {
+              grade: { type: String, default: "" },
+              minPercent: { type: Number, default: 0 },
+              maxPercent: { type: Number, default: 100 },
+              gradePoint: { type: Number, default: 0 },
+              remark: { type: String, default: "" },
+            },
+            { _id: false }
+          ),
+        ],
+        default: [],
+      },
+    },
+
     // ── Branding ──────────────────────────────────────────────────────────────
     displayName: { type: String, default: "" },
     tagline: { type: String, default: "" },
@@ -238,6 +262,17 @@ export function toPublicSchool(school: SchoolDoc) {
       time: p.time ?? "",
       isBreak: Boolean(p.isBreak),
     })),
+    gradingScheme: {
+      enabled: school.gradingScheme?.enabled !== false,
+      passPercent: school.gradingScheme?.passPercent ?? 33,
+      bands: (school.gradingScheme?.bands ?? []).map((b) => ({
+        grade: b.grade ?? "",
+        minPercent: b.minPercent ?? 0,
+        maxPercent: b.maxPercent ?? 100,
+        gradePoint: b.gradePoint ?? 0,
+        remark: b.remark ?? "",
+      })),
+    },
     status: school.status,
     // Branding
     displayName: school.displayName ?? "",

@@ -15,6 +15,7 @@ import { sendEmail, isEmailConfigured } from "../../utils/email.js";
 import { passwordResetEmail } from "./emails.js";
 import { School, evaluateAccess, toPublicSchool, resetReminders, type SchoolDoc } from "./school.model.js";
 import { tierDef } from "./tiers.js";
+import { validateGradingScheme } from "../../utils/grading.js";
 import { SchoolRequest } from "./schoolRequest.model.js";
 import { Student } from "../students/student.model.js";
 import { Teacher } from "../teachers/teacher.model.js";
@@ -110,6 +111,27 @@ const profileSchema = z.object({
   closingTime: z.string().regex(TIME_RE, "Use a HH:MM time").optional(),
   bellSchedule: z
     .array(z.object({ label: z.string(), time: z.string(), isBreak: z.boolean() }))
+    .optional(),
+  // Grading scheme (grade bands). Validated to cover 0–100% with no gaps/overlaps.
+  gradingScheme: z
+    .object({
+      enabled: z.boolean().default(true),
+      passPercent: z.coerce.number<number>().min(0).max(100).default(33),
+      bands: z
+        .array(
+          z.object({
+            grade: z.string().trim().min(1, "Grade label required"),
+            minPercent: z.coerce.number<number>().min(0).max(100),
+            maxPercent: z.coerce.number<number>().min(0).max(100),
+            gradePoint: z.coerce.number<number>().min(0).default(0),
+            remark: z.string().trim().default(""),
+          })
+        )
+        .min(1),
+    })
+    .refine((s) => validateGradingScheme(s.bands), {
+      message: "Grade bands must be contiguous, non-overlapping and cover 0–100%.",
+    })
     .optional(),
   // Branding tab
   displayName: z.string().optional(),

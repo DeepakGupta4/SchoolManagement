@@ -26,28 +26,10 @@ import { getMyTeacher } from "@/lib/api/teachers";
 import { isValidDateString, TODAY_ISO } from "@/lib/dates";
 import type { Student as ApiStudent } from "@/types/student";
 import { useAuthStore } from "@/store";
+import { useSchoolIdentity } from "@/lib/schoolIdentity";
+import { gradeForPercent, passPercentOf, gradeToneClass } from "@/lib/grading";
 
 type Row = { id: string; name: string; roll: number };
-
-/** Grade chip tones, expressed only in semantic tokens. */
-const gradeClass: Record<string, string> = {
-  "A+": "bg-success-soft text-success-text",
-  A: "bg-info-soft text-info-text",
-  "B+": "bg-primary-soft text-primary-text",
-  B: "bg-warning-soft text-warning-text",
-  C: "bg-surface-hover text-muted",
-  F: "bg-danger-soft text-danger-text",
-};
-
-function getGrade(mark: number, total: number) {
-  const pct = (mark / total) * 100;
-  if (pct >= 90) return "A+";
-  if (pct >= 80) return "A";
-  if (pct >= 70) return "B+";
-  if (pct >= 60) return "B";
-  if (pct >= 50) return "C";
-  return "F";
-}
 
 const toOptions = (values: string[]) => values.map((v) => ({ label: v, value: v }));
 
@@ -55,6 +37,10 @@ export default function MarkEntryPage() {
   const { toast } = useToast();
   const { classOptions, sectionOptions } = useClassOptions();
   const { subjectOptions } = useSubjectOptions();
+  // Grades + pass cut-off come from the school's own grading scheme.
+  const { identity } = useSchoolIdentity();
+  const scheme = identity.gradingScheme;
+  const passPct = passPercentOf(scheme);
 
   // A teacher only enters marks for the classes they teach; other roles are
   // unrestricted. `isTeacher` gates all the class-scoping added below.
@@ -305,7 +291,7 @@ export default function MarkEntryPage() {
       ? Math.round(enteredValues.reduce((a, b) => a + parseInt(b), 0) / entered)
       : 0;
   const passCount = enteredValues.filter(
-    (v) => (parseInt(v) / totalMarks) * 100 >= 33
+    (v) => (parseInt(v) / totalMarks) * 100 >= passPct
   ).length;
 
   const columns: Column<Row>[] = [
@@ -342,7 +328,7 @@ export default function MarkEntryPage() {
         const filledTone =
           pct === null
             ? undefined
-            : pct >= 33
+            : pct >= passPct
               ? "border-success bg-success-soft"
               : "border-danger bg-danger-soft";
         return (
@@ -386,9 +372,12 @@ export default function MarkEntryPage() {
         const markVal = markOf(s.id);
         const num = parseInt(markVal);
         if (markVal === "" || isNaN(num)) return <span className="text-subtle">—</span>;
-        const grade = getGrade(num, totalMarks);
+        const pct = Math.round((num / totalMarks) * 100);
+        const g = gradeForPercent(scheme, pct);
         return (
-          <Badge className={cn("font-semibold", gradeClass[grade])}>{grade}</Badge>
+          <Badge className={cn("font-semibold", gradeToneClass(g.gradePoint, pct >= passPct))}>
+            {g.grade}
+          </Badge>
         );
       },
     },
@@ -401,10 +390,10 @@ export default function MarkEntryPage() {
         if (markVal === "" || isNaN(num)) return null;
         const pct = Math.round((num / totalMarks) * 100);
         const tone =
-          pct >= 75 ? "text-success-text" : pct >= 33 ? "text-warning-text" : "text-danger-text";
+          pct >= 75 ? "text-success-text" : pct >= passPct ? "text-warning-text" : "text-danger-text";
         return (
           <span className={cn("text-xs font-medium", tone)}>
-            {pct >= 75 ? "Excellent" : pct >= 60 ? "Good" : pct >= 33 ? "Average" : "Fail"}
+            {pct >= 75 ? "Excellent" : pct >= 60 ? "Good" : pct >= passPct ? "Average" : "Fail"}
           </span>
         );
       },

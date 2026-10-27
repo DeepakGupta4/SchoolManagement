@@ -24,6 +24,8 @@ import { fetchAllStudents } from "@/lib/api/students";
 import { examsApi } from "@/lib/api/exams";
 import { getMarks } from "@/lib/api/marks";
 import type { Student as ApiStudent } from "@/types/student";
+import { useSchoolIdentity } from "@/lib/schoolIdentity";
+import { gradeForPercent, passPercentOf, gradeToneClass } from "@/lib/grading";
 
 const SESSION = "2025-26";
 
@@ -48,25 +50,6 @@ type Report = {
   rank: number;
 };
 
-/** Grade chip + progress-bar tones, expressed only in semantic tokens. */
-const gradeStyle: Record<string, { chip: string; bar: string; text: string }> = {
-  "A+": { chip: "bg-success-soft text-success-text", bar: "bg-success", text: "text-success-text" },
-  A: { chip: "bg-info-soft text-info-text", bar: "bg-info", text: "text-info-text" },
-  "B+": { chip: "bg-primary-soft text-primary-text", bar: "bg-primary", text: "text-primary-text" },
-  B: { chip: "bg-warning-soft text-warning-text", bar: "bg-warning", text: "text-warning-text" },
-  C: { chip: "bg-surface-hover text-muted", bar: "bg-border-strong", text: "text-muted" },
-  F: { chip: "bg-danger-soft text-danger-text", bar: "bg-danger", text: "text-danger-text" },
-};
-
-function getGrade(pct: number) {
-  if (pct >= 90) return "A+";
-  if (pct >= 80) return "A";
-  if (pct >= 70) return "B+";
-  if (pct >= 60) return "B";
-  if (pct >= 50) return "C";
-  return "F";
-}
-
 const toOptions = (values: string[]) => values.map((v) => ({ label: v, value: v }));
 
 const subjectRank = (name: string) => {
@@ -77,6 +60,21 @@ const subjectRank = (name: string) => {
 export default function ReportCardsPage() {
   const { toast } = useToast();
   const { classOptions, sectionOptions } = useClassOptions();
+  // Grades + pass cut-off come from the school's own scheme (Settings → Grading).
+  const { identity } = useSchoolIdentity();
+  const scheme = identity.gradingScheme;
+  const passPct = passPercentOf(scheme);
+  /** Grade label + chip/bar/text tones for a percentage, from the school scheme. */
+  const gradeInfo = (pct: number) => {
+    const g = gradeForPercent(scheme, pct);
+    const passed = pct >= passPct;
+    return {
+      grade: g.grade,
+      chip: gradeToneClass(g.gradePoint, passed),
+      bar: pct >= 75 ? "bg-success" : passed ? "bg-warning" : "bg-danger",
+      text: pct >= 75 ? "text-success-text" : passed ? "text-warning-text" : "text-danger-text",
+    };
+  };
 
   const [selectedClass, setSelectedClass] = useState("");
   const [selectedSection, setSelectedSection] = useState("");
@@ -262,7 +260,7 @@ export default function ReportCardsPage() {
       sortable: true,
       sortValue: (s) => s.pct,
       render: (s) => {
-        const g = gradeStyle[getGrade(s.pct)];
+        const g = gradeInfo(s.pct);
         return (
           <div className="flex items-center gap-2">
             <div className="h-1.5 w-14 overflow-hidden rounded-full bg-surface-hover">
@@ -277,8 +275,8 @@ export default function ReportCardsPage() {
       key: "grade",
       header: "Grade",
       render: (s) => {
-        const grade = getGrade(s.pct);
-        return <Badge className={cn("font-semibold", gradeStyle[grade].chip)}>{grade}</Badge>;
+        const g = gradeInfo(s.pct);
+        return <Badge className={cn("font-semibold", g.chip)}>{g.grade}</Badge>;
       },
     },
     {
@@ -337,7 +335,7 @@ export default function ReportCardsPage() {
                   { header: "Total", value: (s) => s.total },
                   { header: "Max", value: (s) => s.maxTotal },
                   { header: "Percentage", value: (s) => s.pct },
-                  { header: "Grade", value: (s) => getGrade(s.pct) },
+                  { header: "Grade", value: (s) => gradeForPercent(scheme, s.pct).grade },
                   { header: "Rank", value: (s) => s.rank },
                   { header: "Attendance", value: (s) => s.attendance },
                 ],
@@ -421,7 +419,7 @@ export default function ReportCardsPage() {
 
           {selected && (() => {
             const pct = selected.pct;
-            const grade = getGrade(pct);
+            const grade = gradeForPercent(scheme, pct).grade;
             const summary = [
               { label: "Total", value: `${selected.total}/${selected.maxTotal || 0}` },
               { label: "Percentage", value: `${pct}%` },
@@ -461,7 +459,7 @@ export default function ReportCardsPage() {
                       {selected.subjects.map((sub) => {
                         const sp =
                           sub.maxMarks > 0 ? Math.round((sub.obtained / sub.maxMarks) * 100) : 0;
-                        const sg = gradeStyle[getGrade(sp)];
+                        const sg = gradeInfo(sp);
                         return (
                           <div key={sub.subject} className="flex items-center gap-3">
                             <p className="w-28 shrink-0 truncate text-sm text-text">{sub.subject}</p>
@@ -475,7 +473,7 @@ export default function ReportCardsPage() {
                               {sub.obtained}
                             </span>
                             <Badge className={cn("w-10 justify-center font-semibold", sg.chip)}>
-                              {getGrade(sp)}
+                              {sg.grade}
                             </Badge>
                           </div>
                         );

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { getMySchool, type SchoolProfile } from "@/lib/api/schools";
+import { effectiveScheme, DEFAULT_GRADING_SCHEME, type GradingScheme } from "@/lib/grading";
 
 /**
  * The tenant's identity as printed on official documents (report cards, ID
@@ -19,6 +20,8 @@ export interface SchoolIdentity {
   phone: string;
   website: string;
   logo: string;
+  /** The school's grade bands, for grades printed on report cards. */
+  gradingScheme: GradingScheme;
 }
 
 export const FALLBACK_SCHOOL_IDENTITY: SchoolIdentity = {
@@ -28,6 +31,7 @@ export const FALLBACK_SCHOOL_IDENTITY: SchoolIdentity = {
   phone: "",
   website: "",
   logo: "",
+  gradingScheme: DEFAULT_GRADING_SCHEME,
 };
 
 /** Pure: compose a SchoolIdentity from a (possibly null) profile. */
@@ -44,6 +48,7 @@ export function schoolIdentity(p: SchoolProfile | null | undefined): SchoolIdent
     phone: (p.phone ?? "").trim(),
     website: (p.website ?? "").trim(),
     logo: (p.logo ?? "").trim(),
+    gradingScheme: effectiveScheme(p.gradingScheme),
   };
 }
 

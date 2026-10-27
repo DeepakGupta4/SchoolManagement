@@ -4,6 +4,7 @@ import { GraduationCap } from "lucide-react";
 import { PhotoFrame } from "./PhotoFrame";
 import { QrCode } from "./QrCode";
 import type { SchoolIdentity } from "@/lib/schoolIdentity";
+import { gradeForPercent, effectiveScheme } from "@/lib/grading";
 
 export interface ReportCardSubject {
   subject: string;
@@ -25,16 +26,6 @@ export interface ReportCardData {
   attendancePercent: number;
   rank: number;
   classSize: number;
-}
-
-function grade(pct: number): { label: string; remark: string } {
-  if (pct >= 90) return { label: "A+", remark: "Outstanding" };
-  if (pct >= 80) return { label: "A", remark: "Excellent" };
-  if (pct >= 70) return { label: "B+", remark: "Very Good" };
-  if (pct >= 60) return { label: "B", remark: "Good" };
-  if (pct >= 50) return { label: "C", remark: "Satisfactory" };
-  if (pct >= 33) return { label: "D", remark: "Needs Improvement" };
-  return { label: "E", remark: "Unsatisfactory" };
 }
 
 /** Rule-based remark — transparent, not an AI model. */
@@ -61,7 +52,21 @@ export function ReportCard({ data, school }: { data: ReportCardData; school?: Sc
   const totalMax = data.subjects.reduce((s, x) => s + x.maxMarks, 0);
   const totalObtained = data.subjects.reduce((s, x) => s + x.obtained, 0);
   const pct = totalMax ? Math.round((totalObtained / totalMax) * 100) : 0;
-  const overall = grade(pct);
+  // Grades come from the SCHOOL's own scheme (see Settings → Grading), not a
+  // hardcoded scale, so the card matches the rest of the app.
+  const scheme = effectiveScheme(school?.gradingScheme);
+  const overall = gradeForPercent(scheme, pct);
+  const gradedSubjects = data.subjects.filter((x) => x.maxMarks > 0);
+  const gpa = gradedSubjects.length
+    ? Math.round(
+        (gradedSubjects.reduce(
+          (sum, x) => sum + gradeForPercent(scheme, Math.round((x.obtained / x.maxMarks) * 100)).gradePoint,
+          0
+        ) /
+          gradedSubjects.length) *
+          100
+      ) / 100
+    : 0;
 
   return (
     <div
@@ -124,13 +129,13 @@ export function ReportCard({ data, school }: { data: ReportCardData; school?: Sc
             <tbody>
               {data.subjects.map((s, i) => {
                 const sp = s.maxMarks ? Math.round((s.obtained / s.maxMarks) * 100) : 0;
-                const g = grade(sp);
+                const g = gradeForPercent(scheme, sp);
                 return (
                   <tr key={s.subject} className={i % 2 ? "bg-slate-50" : "bg-white"}>
                     <td className="px-3 py-1.5 font-medium">{s.subject}</td>
                     <td className="px-3 py-1.5 text-right font-mono">{s.maxMarks}</td>
                     <td className="px-3 py-1.5 text-right font-mono font-semibold">{s.obtained}</td>
-                    <td className="px-3 py-1.5 text-center font-bold">{g.label}</td>
+                    <td className="px-3 py-1.5 text-center font-bold">{g.grade}</td>
                     <td className="px-3 py-1.5 text-slate-600">{g.remark}</td>
                   </tr>
                 );
@@ -141,7 +146,7 @@ export function ReportCard({ data, school }: { data: ReportCardData; school?: Sc
                 <td className="px-3 py-2">Total</td>
                 <td className="px-3 py-2 text-right font-mono">{inr0(totalMax)}</td>
                 <td className="px-3 py-2 text-right font-mono text-indigo-700">{inr0(totalObtained)}</td>
-                <td className="px-3 py-2 text-center text-indigo-700">{overall.label}</td>
+                <td className="px-3 py-2 text-center text-indigo-700">{overall.grade}</td>
                 <td className="px-3 py-2 text-indigo-700">{pct}%</td>
               </tr>
             </tfoot>
@@ -149,10 +154,11 @@ export function ReportCard({ data, school }: { data: ReportCardData; school?: Sc
         </div>
 
         {/* Result strip */}
-        <div className="grid grid-cols-4 gap-3">
+        <div className="grid grid-cols-5 gap-3">
           {[
             ["Percentage", `${pct}%`],
-            ["Grade", overall.label],
+            ["Grade", overall.grade],
+            ["GPA", gpa.toFixed(1)],
             ["Rank", `${data.rank} / ${data.classSize}`],
             ["Attendance", `${data.attendancePercent}%`],
           ].map(([label, value]) => (
@@ -178,12 +184,13 @@ export function ReportCard({ data, school }: { data: ReportCardData; school?: Sc
         {/* Grade scale */}
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[8px] text-slate-500">
           <span className="font-semibold uppercase tracking-wide">Grading:</span>
-          {[
-            "A+ (90-100)", "A (80-89)", "B+ (70-79)", "B (60-69)",
-            "C (50-59)", "D (33-49)", "E (<33)",
-          ].map((g) => (
-            <span key={g}>{g}</span>
-          ))}
+          {[...scheme.bands]
+            .sort((a, b) => b.minPercent - a.minPercent)
+            .map((b) => (
+              <span key={b.grade}>
+                {b.grade} ({b.minPercent}-{b.maxPercent})
+              </span>
+            ))}
         </div>
 
         {/* Signatures + QR */}

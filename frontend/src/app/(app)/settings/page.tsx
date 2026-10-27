@@ -6,13 +6,21 @@ import { updateMyName, updateMyProfile, changeMyPassword } from "@/lib/api/auth"
 import { useAuthStore } from "@/store";
 import { fileToDataUrl } from "@/lib/image";
 import {
+  DEFAULT_GRADING_SCHEME,
+  effectiveScheme,
+  validateGradingScheme,
+  type GradingScheme,
+} from "@/lib/grading";
+import {
   AlertTriangle,
   Bell,
   Building2,
   CalendarRange,
+  GraduationCap,
   Loader2,
   Palette,
   Plug,
+  Plus,
   RotateCcw,
   Save,
   ShieldCheck,
@@ -43,6 +51,7 @@ const TABS = [
   { id: "profile", label: "School Profile", icon: Building2 },
   { id: "branding", label: "Branding", icon: Palette },
   { id: "session", label: "Academic Session", icon: CalendarRange },
+  { id: "grading", label: "Grading", icon: GraduationCap },
   { id: "notifications", label: "Notifications", icon: Bell },
   { id: "integrations", label: "Integrations", icon: Plug },
 ] as const;
@@ -138,6 +147,7 @@ export default function SettingsPage() {
   const [branding, setBranding] = useState(BRANDING_DEFAULTS);
   const [session, setSession] = useState(SESSION_DEFAULTS);
   const [notifications, setNotifications] = useState(NOTIFICATION_DEFAULTS);
+  const [grading, setGrading] = useState<GradingScheme>(DEFAULT_GRADING_SCHEME);
   const [enabled, setEnabled] = useState<string[]>([]);
 
   const activeTab = TABS.find((t) => t.id === tab) ?? TABS[0];
@@ -291,6 +301,7 @@ export default function SettingsPage() {
             absentAlert: s.notifAbsentAlert || prev.absentAlert,
             digest: s.notifDigest || prev.digest,
           }));
+          setGrading(effectiveScheme(s.gradingScheme));
         })
         .catch(() => {});
     }, 0);
@@ -356,6 +367,17 @@ export default function SettingsPage() {
           notifAbsentAlert: notifications.absentAlert,
           notifDigest: notifications.digest,
         });
+      } else if (tab === "grading") {
+        if (!validateGradingScheme(grading.bands)) {
+          toast({
+            title: "Grade bands aren't valid",
+            description: "Bands must cover 0–100% with no gaps or overlaps.",
+            variant: "error",
+          });
+          setSaving(false);
+          return;
+        }
+        updates.gradingScheme = grading;
       }
 
       if (Object.keys(updates).length > 0) {
@@ -379,6 +401,7 @@ export default function SettingsPage() {
     setBranding(BRANDING_DEFAULTS);
     setSession(SESSION_DEFAULTS);
     setNotifications(NOTIFICATION_DEFAULTS);
+    setGrading(DEFAULT_GRADING_SCHEME);
     setEnabled([]);
     toast({
       title: "Settings reset",
@@ -1053,6 +1076,126 @@ export default function SettingsPage() {
                 { label: "Twice daily", value: "twice" },
               ]}
             />
+          </CardContent>
+        </Card>
+      )}
+
+      {tab === "grading" && (
+        <Card>
+          <CardHeader className="flex-col items-stretch gap-1">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-sm font-semibold text-text">Grading scheme</h2>
+              <Badge variant={validateGradingScheme(grading.bands) ? "success" : "danger"}>
+                {validateGradingScheme(grading.bands) ? "Valid" : "Fix bands"}
+              </Badge>
+            </div>
+            <p className="text-xs text-muted">
+              The grade bands used across mark entry, report cards, merit lists and the parent
+              portal. Grades are derived from these, so editing a band re-grades existing results.
+              Bands must cover 0–100% with no gaps or overlaps.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex flex-wrap items-end gap-4">
+              <Field label="Pass mark (%)">
+                <Input
+                  type="number"
+                  className="w-28"
+                  value={String(grading.passPercent)}
+                  onChange={(e) => setGrading({ ...grading, passPercent: Number(e.target.value) || 0 })}
+                />
+              </Field>
+              <label className="flex items-center gap-2 pb-2.5 text-sm text-text">
+                <input
+                  type="checkbox"
+                  className="size-4 accent-primary"
+                  checked={grading.enabled}
+                  onChange={(e) => setGrading({ ...grading, enabled: e.target.checked })}
+                />
+                Show grades on documents
+              </label>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="ml-auto"
+                onClick={() => setGrading(DEFAULT_GRADING_SCHEME)}
+              >
+                <RotateCcw className="size-3.5" /> CBSE default
+              </Button>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-sm">
+                <thead>
+                  <tr className="text-left text-xs text-muted">
+                    <th className="px-2 py-1 font-medium">Grade</th>
+                    <th className="px-2 py-1 font-medium">Min %</th>
+                    <th className="px-2 py-1 font-medium">Max %</th>
+                    <th className="px-2 py-1 font-medium">Grade point</th>
+                    <th className="px-2 py-1 font-medium">Remark</th>
+                    <th className="px-2 py-1" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {grading.bands.map((b, i) => {
+                    const edit = (patch: Partial<typeof b>) =>
+                      setGrading({
+                        ...grading,
+                        bands: grading.bands.map((x, idx) => (idx === i ? { ...x, ...patch } : x)),
+                      });
+                    return (
+                      <tr key={i} className="border-t border-border">
+                        <td className="px-2 py-1.5">
+                          <Input className="w-16" value={b.grade} onChange={(e) => edit({ grade: e.target.value })} />
+                        </td>
+                        <td className="px-2 py-1.5">
+                          <Input type="number" className="w-20" value={String(b.minPercent)} onChange={(e) => edit({ minPercent: Number(e.target.value) || 0 })} />
+                        </td>
+                        <td className="px-2 py-1.5">
+                          <Input type="number" className="w-20" value={String(b.maxPercent)} onChange={(e) => edit({ maxPercent: Number(e.target.value) || 0 })} />
+                        </td>
+                        <td className="px-2 py-1.5">
+                          <Input type="number" className="w-20" value={String(b.gradePoint)} onChange={(e) => edit({ gradePoint: Number(e.target.value) || 0 })} />
+                        </td>
+                        <td className="px-2 py-1.5">
+                          <Input value={b.remark} onChange={(e) => edit({ remark: e.target.value })} />
+                        </td>
+                        <td className="px-2 py-1.5 text-right">
+                          <button
+                            type="button"
+                            onClick={() => setGrading({ ...grading, bands: grading.bands.filter((_, idx) => idx !== i) })}
+                            aria-label={`Remove ${b.grade || "band"}`}
+                            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-danger-soft hover:text-danger"
+                          >
+                            <Trash2 className="size-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                setGrading({
+                  ...grading,
+                  bands: [...grading.bands, { grade: "", minPercent: 0, maxPercent: 0, gradePoint: 0, remark: "" }],
+                })
+              }
+            >
+              <Plus className="size-3.5" /> Add band
+            </Button>
+
+            {!validateGradingScheme(grading.bands) && (
+              <p className="text-xs text-danger-text">
+                Bands must be contiguous and cover 0–100% exactly (e.g. 0–32, 33–40, 41–50 … 91–100),
+                sorted with no gaps or overlaps.
+              </p>
+            )}
           </CardContent>
         </Card>
       )}

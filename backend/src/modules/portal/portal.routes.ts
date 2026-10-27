@@ -7,6 +7,8 @@ import { BusRoute } from "../busRoutes/busRoute.model.js";
 import { StaffMember } from "../staff/staff.model.js";
 import { User } from "../auth/user.model.js";
 import { Mark } from "../marks/mark.model.js";
+import { School } from "../schools/school.model.js";
+import { gradeForPercent, effectiveScheme } from "../../utils/grading.js";
 
 const router = Router();
 router.use(requireAuth);
@@ -85,12 +87,19 @@ router.get("/children/:id", async (req, res, next) => {
       cur.maxMarks += m.maxMarks ?? 0;
       bySubject.set(key, cur);
     }
-    const subjects = [...bySubject.entries()].map(([subject, v]) => ({
-      subject,
-      marks: v.marks,
-      maxMarks: v.maxMarks,
-      percent: v.maxMarks > 0 ? Math.round((v.marks / v.maxMarks) * 100) : 0,
-    }));
+    // Derive each subject's grade from the school's own scheme, so the parent
+    // view matches the report card exactly.
+    const school = await School.findOne({ schoolId }).lean();
+    const scheme = effectiveScheme(school?.gradingScheme);
+    const subjects = [...bySubject.entries()].map(([subject, v]) => {
+      const percent = v.maxMarks > 0 ? Math.round((v.marks / v.maxMarks) * 100) : 0;
+      const g = gradeForPercent(scheme, percent);
+      return { subject, marks: v.marks, maxMarks: v.maxMarks, percent, grade: g.grade, gradePoint: g.gradePoint };
+    });
+    const graded = subjects.filter((x) => x.maxMarks > 0);
+    const gpa = graded.length
+      ? Math.round((graded.reduce((sum, x) => sum + x.gradePoint, 0) / graded.length) * 100) / 100
+      : 0;
     res.json({
       data: {
         profile: {
@@ -103,6 +112,7 @@ router.get("/children/:id", async (req, res, next) => {
           attendancePercent: s.attendancePercent ?? 0,
           performancePercent: s.performancePercent ?? 0,
           feeDue: s.feeDue ?? 0,
+          gpa,
         },
         subjects,
       },

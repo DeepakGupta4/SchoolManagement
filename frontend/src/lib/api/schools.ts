@@ -1,5 +1,6 @@
 import { apiRequest, setToken } from "./client";
 import type { SubscriptionStatus } from "./subscription";
+import type { GradingScheme } from "@/lib/grading";
 import type { User } from "@/types";
 
 /**
@@ -102,6 +103,8 @@ export interface SchoolProfile {
   openingTime?: string;
   closingTime?: string;
   bellSchedule?: { label: string; time: string; isBreak: boolean }[];
+  /** Per-school grade bands (A1/A2/…); drives grades on report cards/marks/portal. */
+  gradingScheme?: GradingScheme;
   // Branding
   displayName?: string;
   tagline?: string;
