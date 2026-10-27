@@ -38,7 +38,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     if (!isPathAllowed(role, pathname, permissions)) {
       router.replace("/dashboard");
     } else if (!isPathInTier(pathname, tierModules)) {
-      router.replace("/subscription");
+      // Steer to the upgrade page when the role can open it (the account owner);
+      // otherwise (e.g. a principal, who can't) fall back to the dashboard.
+      router.replace(isPathAllowed(role, "/subscription", permissions) ? "/subscription" : "/dashboard");
     }
   }, [status, role, permissions, tierModules, pathname, router]);
 

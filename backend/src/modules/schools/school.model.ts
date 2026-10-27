@@ -39,6 +39,9 @@ const subscriptionSchema = new Schema(
     paymentStatus: { type: String, enum: ["pending", "paid", "failed"], default: "pending" },
     paymentId: { type: String, default: "" },
     orderId: { type: String, default: "" },
+    // Every gateway payment id we've already activated, so a (replayable) verify
+    // call with an old but valid signature can't extend the plan for free.
+    processedPaymentIds: { type: [String], default: [] },
     autoRenew: { type: Boolean, default: false },
     /** Free access granted by a Super Admin, bypassing payment. */
     freeAccess: { type: Boolean, default: false },

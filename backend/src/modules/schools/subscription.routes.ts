@@ -149,7 +149,7 @@ const verifySchema = z.object({
   razorpay_signature: z.string().min(1),
 });
 
-/** Verify the gateway signature and activate the subscription at the chosen tier. */
+/** Verify the gateway signature and activate the subscription at the paid tier. */
 router.post("/verify", canBill, validate(verifySchema), async (req, res, next) => {
   try {
     if (!paymentConfigured()) throw new ApiError(503, "Payment is not configured.");
@@ -168,23 +168,69 @@ router.post("/verify", canBill, validate(verifySchema), async (req, res, next) =
     const school = await School.findOne({ schoolId: req.user!.schoolId });
     if (!school) throw ApiError.notFound("School not found for this account.");
 
-    const def = tierDef(body.tier)!;
-    const { billed } = await studentBilling(school.schoolId);
-    const amountInr = tierPriceInr(body.tier as Tier, body.cycle) * billed;
-    const months = body.cycle === "yearly" ? 12 : 1;
+    // SECURITY: the tier/cycle in the request body are NOT trusted — a valid
+    // signature only proves the order/payment pair is genuine, not WHAT was paid
+    // for. We fetch the order from Razorpay and read the tier/cycle/amount from
+    // the notes WE set at /order time (the client cannot alter them), so a buyer
+    // can't order Starter and then claim Premium.
+    const auth = Buffer.from(`${env.RAZORPAY_KEY_ID}:${env.RAZORPAY_KEY_SECRET}`).toString("base64");
+    const orderRes = await fetch(`https://api.razorpay.com/v1/orders/${encodeURIComponent(body.razorpay_order_id)}`, {
+      headers: { Authorization: `Basic ${auth}` },
+    });
+    if (!orderRes.ok) {
+      const detail = await orderRes.text().catch(() => "");
+      console.error("Razorpay order fetch failed:", orderRes.status, detail);
+      throw new ApiError(502, "Could not confirm the payment. If you were charged, contact support.");
+    }
+    const order = (await orderRes.json()) as {
+      status?: string;
+      amount_paid?: number;
+      amount?: number;
+      notes?: { schoolId?: string; tier?: string; cycle?: string };
+    };
+
+    // The order must belong to THIS school and must actually be paid.
+    if (order.notes?.schoolId && order.notes.schoolId !== school.schoolId) {
+      throw ApiError.badRequest("This payment does not belong to your account.");
+    }
+    if (order.status !== "paid") {
+      throw ApiError.badRequest("This payment has not been captured yet.");
+    }
+
+    // Idempotency / anti-replay: a payment id is activated at most once. Without
+    // this, an admin could re-POST a saved (order, payment, signature) and keep
+    // extending the plan without paying again.
+    const sub = school.subscription;
+    const consumed = sub.processedPaymentIds ?? [];
+    if (consumed.includes(body.razorpay_payment_id)) {
+      throw ApiError.badRequest("This payment has already been applied to your subscription.");
+    }
+
+    const paidTier = order.notes?.tier;
+    const paidCycle = order.notes?.cycle;
+    if (paidTier !== "starter" && paidTier !== "standard" && paidTier !== "premium") {
+      throw new ApiError(502, "Payment is missing plan details. Please contact support.");
+    }
+    if (paidCycle !== "monthly" && paidCycle !== "yearly") {
+      throw new ApiError(502, "Payment is missing billing details. Please contact support.");
+    }
+
+    const def = tierDef(paidTier)!;
+    const amountInr = Math.round((order.amount_paid ?? order.amount ?? 0) / 100);
+    const months = paidCycle === "yearly" ? 12 : 1;
     const now = new Date();
     const end = new Date(now);
     end.setMonth(end.getMonth() + months);
 
-    const sub = school.subscription;
-    sub.plan = body.cycle; // billing cycle
-    sub.tier = body.tier; // feature tier
+    sub.plan = paidCycle; // billing cycle
+    sub.tier = paidTier; // feature tier
     sub.status = "active";
     sub.paidStartDate = now;
     sub.paidEndDate = end;
     sub.paymentStatus = "paid";
     sub.paymentId = body.razorpay_payment_id;
     sub.orderId = body.razorpay_order_id;
+    sub.processedPaymentIds = [...consumed, body.razorpay_payment_id];
     sub.freeAccess = false;
     school.status = "active";
     resetReminders(sub);
@@ -194,7 +240,7 @@ router.post("/verify", canBill, validate(verifySchema), async (req, res, next) =
       paymentSuccessEmail({
         to: school.email,
         schoolName: school.name,
-        plan: `${def.name} (${body.cycle})`,
+        plan: `${def.name} (${paidCycle})`,
         amountInr,
         paidUntil: end,
       })
@@ -202,7 +248,7 @@ router.post("/verify", canBill, validate(verifySchema), async (req, res, next) =
     void notifySchool(school.schoolId, {
       type: "payment",
       title: "Subscription activated",
-      body: `Your ${def.name} plan (${body.cycle}) is now active. Thank you!`,
+      body: `Your ${def.name} plan (${paidCycle}) is now active. Thank you!`,
       link: "/subscription",
       roles: ["super_admin", "school_admin", "principal"],
     });
