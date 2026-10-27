@@ -14,6 +14,7 @@ import { generateTempPassword } from "../../utils/password.js";
 import { sendEmail, isEmailConfigured } from "../../utils/email.js";
 import { passwordResetEmail } from "./emails.js";
 import { School, evaluateAccess, toPublicSchool, resetReminders, type SchoolDoc } from "./school.model.js";
+import { tierDef } from "./tiers.js";
 import { SchoolRequest } from "./schoolRequest.model.js";
 import { Student } from "../students/student.model.js";
 import { Teacher } from "../teachers/teacher.model.js";
@@ -49,6 +50,10 @@ router.get("/me", async (req, res, next) => {
     }
 
     const access = evaluateAccess(school);
+    const sub = school.subscription;
+    // Feature tier only restricts a PAID plan; trial/complimentary access is full,
+    // so `tierModules` is null (no nav gating) unless the school is on a paid tier.
+    const paid = (sub.plan === "monthly" || sub.plan === "yearly") && !sub.freeAccess;
     res.json({
       data: {
         hasSubscription: true,
@@ -61,6 +66,11 @@ router.get("/me", async (req, res, next) => {
         // Admin-granted complimentary access: full access, no expiry/billing. The
         // client shows "Unlimited / Never expires" instead of empty date fields.
         freeAccess: Boolean(school.subscription.freeAccess),
+        // Current feature tier, and the module keys it unlocks. `tierModules: null`
+        // means "no tier restriction" (trial/complimentary) — the UI gates nav only
+        // when this is a concrete list.
+        tier: paid ? sub.tier ?? "premium" : null,
+        tierModules: paid ? tierDef(sub.tier)?.modules ?? null : null,
         schoolName: school.name,
       },
     });

@@ -28,6 +28,9 @@ export type SubscriptionStatus = (typeof SUBSCRIPTION_STATUSES)[number];
 const subscriptionSchema = new Schema(
   {
     plan: { type: String, enum: SUBSCRIPTION_PLANS, default: "trial" },
+    /** Feature tier of a PAID plan. Trial/complimentary access is always full, so
+     *  the default is "premium" and the tier gate only restricts a paid tier. */
+    tier: { type: String, enum: ["starter", "standard", "premium"], default: "premium" },
     status: { type: String, enum: SUBSCRIPTION_STATUSES, default: "trial" },
     trialStartDate: { type: Date, default: null },
     trialEndDate: { type: Date, default: null },
@@ -254,6 +257,7 @@ export function toPublicSchool(school: SchoolDoc) {
     notifDigest: school.notifDigest ?? "",
     subscription: {
       plan: school.subscription.plan,
+      tier: school.subscription.tier,
       status: school.subscription.status,
       trialStartDate: school.subscription.trialStartDate,
       trialEndDate: school.subscription.trialEndDate,
