@@ -25,6 +25,8 @@ export interface User {
   customRoleKey?: string;
   roleName?: string;
   permissions?: PermissionMap;
+  /** Whether authenticator-app 2FA is on for this account. */
+  twoFactorEnabled?: boolean;
 }
 
 export interface School {

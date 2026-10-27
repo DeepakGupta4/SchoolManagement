@@ -11,6 +11,7 @@ import {
 } from "@/components/ui";
 import { exportToCsv } from "@/lib/exportCsv";
 import { listAuditLogs, type AuditEntry } from "@/lib/api/audit";
+import { TwoFactorCard } from "./TwoFactorCard";
 
 const ACTION_OPTIONS = [
   { label: "Impersonate", value: "impersonate" },
@@ -49,8 +50,15 @@ export default function SecurityPage() {
     }
   };
 
-  useEffect(() => { load(1); setPage(1); }, [search, action]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { load(page); }, [page]); // eslint-disable-line react-hooks/exhaustive-deps
+  // setTimeout(…,0) keeps setState out of the effect body (cascading-render rule).
+  useEffect(() => {
+    const t = setTimeout(() => { load(1); setPage(1); }, 0);
+    return () => clearTimeout(t);
+  }, [search, action]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const t = setTimeout(() => load(page), 0);
+    return () => clearTimeout(t);
+  }, [page]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleExport = () => {
     if (logs.length === 0) { toast({ title: "Nothing to export", variant: "warning" }); return; }
@@ -87,6 +95,8 @@ export default function SecurityPage() {
         <StatCard label="Password resets" value={logs.filter(l => l.action === "reset_password").length} icon={KeyRound} tone="indigo" />
         <StatCard label="Active sessions" value={0} icon={Fingerprint} tone="cyan" />
       </div>
+
+      <TwoFactorCard />
 
       <Card>
         <CardHeader className="flex-wrap">

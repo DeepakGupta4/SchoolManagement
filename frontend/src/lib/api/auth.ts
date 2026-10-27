@@ -2,20 +2,42 @@ import { apiRequest, setToken, setRefreshToken, getRefreshToken, clearTokens } f
 import type { User } from "@/types";
 
 interface LoginResponse {
-  token: string;
-  refreshToken: string;
-  user: User;
+  token?: string;
+  refreshToken?: string;
+  user?: User;
+  /** Set when 2FA is on and no code was supplied — the client must ask for one. */
+  twoFactorRequired?: boolean;
 }
 
-export async function login(email: string, password: string): Promise<User> {
+/** Either the signed-in user, or a signal that a 2FA code is still needed. */
+export type LoginResult = { twoFactorRequired: true } | { user: User };
+
+export async function login(email: string, password: string, code?: string): Promise<LoginResult> {
   const result = await apiRequest<LoginResponse>("/api/auth/login", {
     method: "POST",
-    body: { email, password },
+    body: { email, password, code },
   });
 
-  setToken(result.token);
-  setRefreshToken(result.refreshToken);
-  return result.user;
+  if (result.twoFactorRequired) return { twoFactorRequired: true };
+
+  setToken(result.token ?? null);
+  setRefreshToken(result.refreshToken ?? null);
+  return { user: result.user as User };
+}
+
+/* -------- Two-factor authentication -------- */
+
+export async function get2faStatus() {
+  return apiRequest<{ enabled: boolean }>("/api/auth/2fa/status");
+}
+export async function setup2fa() {
+  return apiRequest<{ secret: string; otpauthUri: string }>("/api/auth/2fa/setup", { method: "POST" });
+}
+export async function enable2fa(code: string) {
+  return apiRequest<{ enabled: boolean }>("/api/auth/2fa/enable", { method: "POST", body: { code } });
+}
+export async function disable2fa(code: string) {
+  return apiRequest<{ enabled: boolean }>("/api/auth/2fa/disable", { method: "POST", body: { code } });
 }
 
 /** Updates the signed-in user's own display name; returns the refreshed user. */

@@ -41,6 +41,9 @@ function LoginPageInner() {
   const [newPassword, setNewPassword] = useState("");
   const [resetDone, setResetDone] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
+  // Two-factor: once the password is accepted and 2FA is on, ask for the code.
+  const [twoFaStep, setTwoFaStep] = useState(false);
+  const [code, setCode] = useState("");
 
   const handleForgot = async () => {
     if (!forgotEmail.trim()) return;
@@ -94,10 +97,15 @@ function LoginPageInner() {
   const onSubmit = handleSubmit(async (values) => {
     setError(null);
     try {
-      const user = await login(values.email, values.password);
-      signIn(user);
+      const res = await login(values.email, values.password, twoFaStep ? code : undefined);
+      if ("twoFactorRequired" in res) {
+        // Password was right; now collect the authenticator code.
+        setTwoFaStep(true);
+        return;
+      }
+      signIn(res.user);
       // The platform owner has no school dashboard — send them to their console.
-      router.replace(user.role === "super_admin" ? "/overview" : "/dashboard");
+      router.replace(res.user.role === "super_admin" ? "/overview" : "/dashboard");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not sign in. Please try again.");
     }
@@ -221,6 +229,19 @@ function LoginPageInner() {
                 error={errors.password?.message}
               />
 
+              {twoFaStep && (
+                <Input
+                  label="Authentication code"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  maxLength={6}
+                  value={code}
+                  onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  hint="Enter the 6-digit code from your authenticator app."
+                  autoFocus
+                />
+              )}
+
               <label className="flex cursor-pointer items-center gap-2.5">
                 <input
                   type="checkbox"
@@ -237,8 +258,14 @@ function LoginPageInner() {
                 </p>
               )}
 
-              <Button type="submit" disabled={isSubmitting} className="w-full">
-                {isSubmitting ? "Signing in…" : "Sign in"}
+              <Button type="submit" disabled={isSubmitting || (twoFaStep && code.length !== 6)} className="w-full">
+                {twoFaStep
+                  ? isSubmitting
+                    ? "Verifying…"
+                    : "Verify code"
+                  : isSubmitting
+                    ? "Signing in…"
+                    : "Sign in"}
               </Button>
 
               <button type="button" onClick={() => { setMode("forgot"); setError(null); setForgotSent(false); }} className="text-center text-xs text-primary hover:underline">

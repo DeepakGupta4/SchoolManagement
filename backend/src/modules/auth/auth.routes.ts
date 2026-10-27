@@ -3,6 +3,7 @@ import rateLimit from "express-rate-limit";
 import crypto from "node:crypto";
 import { z } from "zod";
 import { User, hashPassword, toPublicUser, isSingletonRole, USER_ROLES, type UserDoc, type UserRole } from "./user.model.js";
+import { generateSecret, verifyTotp, otpauthUri } from "../../utils/totp.js";
 import { RefreshToken, generateRefreshToken, hashRefreshToken } from "./refreshToken.model.js";
 import { signToken, requireAuth, requireRole } from "../../middleware/auth.js";
 import { Role, permissionsOf } from "../roles/role.model.js";
@@ -76,6 +77,8 @@ const router = Router();
 const loginSchema = z.object({
   email: z.email(),
   password: z.string().min(1, "Password is required"),
+  /** Authenticator code, supplied on the second step when 2FA is on. */
+  code: z.string().optional(),
 });
 
 const registerSchema = z
@@ -121,10 +124,10 @@ const loginLimiter = rateLimit({
 
 router.post("/login", loginLimiter, validate(loginSchema), async (req, res, next) => {
   try {
-    const { email, password } = req.body as z.infer<typeof loginSchema>;
+    const { email, password, code } = req.body as z.infer<typeof loginSchema>;
 
-    // The hash is `select: false`, so it must be asked for explicitly.
-    const user = await User.findOne({ email: email.toLowerCase() }).select("+passwordHash");
+    // The hash + 2FA secret are `select: false`, so ask for them explicitly.
+    const user = await User.findOne({ email: email.toLowerCase() }).select("+passwordHash +twoFactorSecret");
 
     // Same message whether the email is unknown or the password is wrong —
     // distinguishing them would let an attacker enumerate valid accounts.
@@ -133,6 +136,18 @@ router.post("/login", loginLimiter, validate(loginSchema), async (req, res, next
     }
     if (!user.isActive) {
       throw ApiError.forbidden("This account has been deactivated.");
+    }
+
+    // Two-factor: password alone isn't enough once 2FA is on. Ask for the code,
+    // then verify it before issuing any token.
+    if (user.twoFactorEnabled) {
+      const otp = (code ?? "").trim();
+      if (!otp) {
+        return res.json({ twoFactorRequired: true });
+      }
+      if (!verifyTotp(user.twoFactorSecret || "", otp)) {
+        throw ApiError.unauthorized("Invalid authentication code.");
+      }
     }
 
     user.lastLoginAt = new Date();
@@ -639,5 +654,75 @@ router.post(
     }
   }
 );
+
+/* ------------------------------------------------------------------ */
+/* Two-factor authentication (authenticator app, TOTP)                   */
+/* ------------------------------------------------------------------ */
+
+const codeSchema = z.object({ code: z.string().regex(/^\d{6}$/, "Enter the 6-digit code") });
+
+/** Whether the signed-in user has 2FA on. */
+router.get("/2fa/status", requireAuth, async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user!.id);
+    res.json({ data: { enabled: Boolean(user?.twoFactorEnabled) } });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** Begin setup: generate a secret and return the otpauth URI to render a QR. */
+router.post("/2fa/setup", requireAuth, async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user!.id).select("+twoFactorSecret");
+    if (!user) throw ApiError.unauthorized("This account no longer exists.");
+    const secret = generateSecret();
+    user.twoFactorSecret = secret;
+    user.twoFactorEnabled = false; // only switches on after a code is verified
+    await user.save();
+    res.json({
+      data: { secret, otpauthUri: otpauthUri(secret, user.email, env.SOFTWARE_NAME || "SchoolDeck") },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** Verify the first code and switch 2FA on. */
+router.post("/2fa/enable", requireAuth, validate(codeSchema), async (req, res, next) => {
+  try {
+    const { code } = req.body as z.infer<typeof codeSchema>;
+    const user = await User.findById(req.user!.id).select("+twoFactorSecret");
+    if (!user) throw ApiError.unauthorized("This account no longer exists.");
+    if (!user.twoFactorSecret) throw ApiError.badRequest("Start 2FA setup first.");
+    if (!verifyTotp(user.twoFactorSecret, code)) {
+      throw ApiError.badRequest("That code isn't right — use the current one from your app.");
+    }
+    user.twoFactorEnabled = true;
+    await user.save();
+    await RefreshToken.deleteMany({ userId: String(user._id) }); // re-auth other sessions
+    res.json({ data: { enabled: true } });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** Turn 2FA off — needs a current code so a hijacked session can't disable it. */
+router.post("/2fa/disable", requireAuth, validate(codeSchema), async (req, res, next) => {
+  try {
+    const { code } = req.body as z.infer<typeof codeSchema>;
+    const user = await User.findById(req.user!.id).select("+twoFactorSecret");
+    if (!user) throw ApiError.unauthorized("This account no longer exists.");
+    if (user.twoFactorEnabled && !verifyTotp(user.twoFactorSecret || "", code)) {
+      throw ApiError.badRequest("That code isn't right.");
+    }
+    user.twoFactorEnabled = false;
+    user.twoFactorSecret = "";
+    await user.save();
+    res.json({ data: { enabled: false } });
+  } catch (err) {
+    next(err);
+  }
+});
 
 export default router;

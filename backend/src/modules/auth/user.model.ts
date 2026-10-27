@@ -47,6 +47,10 @@ const userSchema = new Schema(
     avatar: { type: String, default: "" },
     isActive: { type: Boolean, default: true },
     lastLoginAt: { type: Date, default: null },
+    // Authenticator-app 2FA. The secret is select:false so it never leaks via a
+    // careless query; `enabled` flips on only after a first code is verified.
+    twoFactorEnabled: { type: Boolean, default: false },
+    twoFactorSecret: { type: String, default: "", select: false },
   },
   { timestamps: true }
 );
@@ -102,5 +106,6 @@ export function toPublicUser(user: UserDoc) {
     customRoleKey: user.customRoleKey ?? "",
     schoolId: user.schoolId,
     avatar: user.avatar,
+    twoFactorEnabled: Boolean(user.twoFactorEnabled),
   };
 }
