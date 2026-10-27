@@ -41,11 +41,22 @@ export interface ChatTurn {
 }
 
 /** Sends a message (with recent history) to the SchoolDeck assistant. */
-export function chatWithAssistant(message: string, history: ChatTurn[]) {
+export function chatWithAssistant(message: string, history: ChatTurn[], copilot?: string) {
   return apiRequest<{ reply: string; source: AiSource }>("/api/ai/chat", {
     method: "POST",
-    body: { message, history },
+    body: { message, history, copilot },
   });
+}
+
+/** A role-aware AI copilot persona. */
+export interface Copilot {
+  key: string;
+  name: string;
+  blurb: string;
+  prompts: string[];
+}
+export function getCopilots() {
+  return apiRequest<{ copilots: Copilot[] }>("/api/ai/copilots");
 }
 
 export function getStudentRisk(studentId: string) {

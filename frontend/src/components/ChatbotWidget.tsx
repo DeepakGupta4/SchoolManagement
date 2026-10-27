@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { Send, Sparkles, X } from "lucide-react";
-import { chatWithAssistant, type ChatTurn } from "@/lib/api/ai";
+import { chatWithAssistant, getCopilots, type ChatTurn, type Copilot } from "@/lib/api/ai";
 import { cn } from "@/lib/utils";
 
 interface Msg {
@@ -35,12 +35,30 @@ export function ChatbotWidget() {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Msg[]>([GREETING]);
   const [loading, setLoading] = useState(false);
+  const [copilots, setCopilots] = useState<Copilot[]>([]);
+  const [copilot, setCopilot] = useState<string>("");
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Keep the newest message in view.
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, open]);
+
+  // Load the role-aware copilots once the chat is first opened.
+  useEffect(() => {
+    if (!open || copilots.length > 0) return;
+    getCopilots()
+      .then((d) => {
+        setCopilots(d.copilots);
+        if (d.copilots.length > 0) setCopilot((cur) => cur || d.copilots[0].key);
+      })
+      .catch(() => {
+        /* copilots are optional — the assistant still works without a persona */
+      });
+  }, [open, copilots.length]);
+
+  const activeCopilot = copilots.find((c) => c.key === copilot);
+  const suggestions = activeCopilot?.prompts?.length ? activeCopilot.prompts : SUGGESTIONS;
 
   const send = async (text: string) => {
     const trimmed = text.trim();
@@ -54,7 +72,7 @@ export function ChatbotWidget() {
     setInput("");
     setLoading(true);
     try {
-      const { reply } = await chatWithAssistant(trimmed, history);
+      const { reply } = await chatWithAssistant(trimmed, history, copilot || undefined);
       setMessages((prev) => [...prev, { id: nextId("a"), role: "assistant", content: reply }]);
     } catch {
       setMessages((prev) => [
@@ -136,6 +154,28 @@ export function ChatbotWidget() {
             </button>
           </div>
 
+          {/* Copilot picker — role-aware personas */}
+          {copilots.length > 1 && (
+            <div className="border-b border-border px-3 py-2">
+              <select
+                value={copilot}
+                onChange={(e) => {
+                  setCopilot(e.target.value);
+                  setMessages([GREETING]);
+                }}
+                aria-label="Choose a copilot"
+                className="focus-ring w-full cursor-pointer rounded-md border border-border bg-surface px-2 py-1.5 text-xs font-medium text-text"
+              >
+                {copilots.map((c) => (
+                  <option key={c.key} value={c.key}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+              {activeCopilot && <p className="mt-1 text-[11px] text-subtle">{activeCopilot.blurb}</p>}
+            </div>
+          )}
+
           {/* Messages */}
           <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto px-4 py-3">
             {messages.map((m) => (
@@ -163,10 +203,10 @@ export function ChatbotWidget() {
               </div>
             )}
 
-            {/* Suggestions — only before the first question */}
+            {/* Suggestions — only before the first question (copilot-specific) */}
             {messages.length === 1 && !loading && (
               <div className="flex flex-col gap-1.5 pt-1">
-                {SUGGESTIONS.map((s) => (
+                {suggestions.map((s) => (
                   <button
                     key={s}
                     type="button"

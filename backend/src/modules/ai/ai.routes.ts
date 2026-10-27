@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { Student } from "../students/student.model.js";
+import { copilotsForRole, copilotByKey } from "./copilots.js";
 import {
   isLLMConfigured,
   llmProvider,
@@ -92,6 +93,11 @@ function ruleRisk(s: {
 /** GET /api/ai/status — whether an AI provider is wired up, and which one. */
 router.get("/status", (_req, res) => {
   res.json({ data: { configured: isLLMConfigured(), provider: llmProvider() } });
+});
+
+/** GET /api/ai/copilots — the role-aware copilots available to this user. */
+router.get("/copilots", (req, res) => {
+  res.json({ data: { copilots: copilotsForRole(req.user?.role) } });
 });
 
 /** POST /api/ai/risk { studentId } — per-student risk assessment. */
@@ -475,9 +481,10 @@ Teachers and Accounts users see a restricted menu. New IDs (admission, employee)
 /** POST /api/ai/chat { message, history? } — project assistant chatbot. */
 router.post("/chat", async (req, res, next) => {
   try {
-    const { message, history } = req.body as {
+    const { message, history, copilot } = req.body as {
       message?: string;
       history?: { role?: string; content?: string }[];
+      copilot?: string;
     };
     if (!message || !message.trim()) {
       return res.status(400).json({ error: "message is required" });
@@ -512,10 +519,12 @@ router.post("/chat", async (req, res, next) => {
       totalOutstandingDues: dues,
     };
 
-    const system = `You are SchoolDeck Assistant, a friendly in-app helper for a school's staff.
+    // A role-aware copilot (if chosen) shapes the persona and focus.
+    const persona = copilotByKey(copilot);
+    const system = `You are SchoolDeck Assistant${persona ? ` — ${persona.name}` : ""}, a friendly in-app helper for a school's staff.
 Answer ONLY questions about this SchoolDeck app (how to use its features, where to find things) and about this school's data provided below. If asked something unrelated (general knowledge, coding, etc.), politely say you can only help with SchoolDeck.
 Be concise and practical (usually under 5 sentences). Plain text, no markdown headings. When explaining a feature, name the exact menu path (e.g. "Academic → Attendance"). You may reply in the same language the user writes in (English or Hindi/Hinglish).
-
+${persona ? `\nYOUR ROLE AS THIS COPILOT: ${persona.persona}\n` : ""}
 APP CAPABILITIES:
 ${APP_OVERVIEW}
 
