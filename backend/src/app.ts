@@ -28,6 +28,11 @@ import { checkSubscription } from "./middleware/subscription.js";
 export function createApp() {
   const app = express();
 
+  // Route strictly by case so a path-casing variant (e.g. /api/Payroll) can't be
+  // used to dodge the path-based gates (subscription tier, custom-role access).
+  // The gates also normalise case, so this is defence-in-depth.
+  app.set("case sensitive routing", true);
+
   app.use(helmet());
   app.use(
     cors({

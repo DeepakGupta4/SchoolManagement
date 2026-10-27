@@ -12,7 +12,7 @@ import { TIERS, tierAllowsModule, tierDef, type Tier } from "../modules/schools/
  * module's prefix, so without this exemption a Starter school would lose its home
  * dashboard — the Analytics *page* is hidden in the nav instead (frontend gate).
  */
-const TIER_EXEMPT_PREFIXES = ["/api/dashboard", "/api/schools", "/api/notifications", "/api/profile"];
+const TIER_EXEMPT_PREFIXES = ["/api/dashboard", "/api/schools", "/api/notifications"];
 
 /**
  * For a PAID school, decides whether the requested path is inside its tier.
@@ -24,7 +24,10 @@ function tierDenial(school: SchoolDoc, rawUrl: string): ApiError | null {
   const paid = (sub.plan === "monthly" || sub.plan === "yearly") && !sub.freeAccess;
   if (!paid) return null;
 
-  const path = (rawUrl || "").split("?")[0] ?? "";
+  // Lowercase to mirror Express's case-insensitive routing (so `/api/Dashboard`
+  // is still treated as the exempt `/api/dashboard`, and a cased premium path is
+  // still resolved to its module below rather than slipping through).
+  const path = ((rawUrl || "").split("?")[0] ?? "").toLowerCase();
   if (TIER_EXEMPT_PREFIXES.some((p) => path === p || path.startsWith(p + "/"))) return null;
 
   const mod = moduleForPath(path);

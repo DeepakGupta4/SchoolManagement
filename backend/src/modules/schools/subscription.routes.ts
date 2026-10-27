@@ -160,9 +160,12 @@ router.post("/verify", canBill, validate(verifySchema), async (req, res, next) =
       .update(`${body.razorpay_order_id}|${body.razorpay_payment_id}`)
       .digest("hex");
 
+    // Decode both as hex (the signature format) so a crafted multibyte string of
+    // equal CHAR length can't make timingSafeEqual throw on mismatched byte lengths.
+    const expectedBuf = Buffer.from(expected, "hex");
+    const providedBuf = Buffer.from(body.razorpay_signature, "hex");
     const ok =
-      expected.length === body.razorpay_signature.length &&
-      crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(body.razorpay_signature));
+      expectedBuf.length === providedBuf.length && crypto.timingSafeEqual(expectedBuf, providedBuf);
     if (!ok) throw ApiError.badRequest("Payment verification failed.");
 
     const school = await School.findOne({ schoolId: req.user!.schoolId });
@@ -189,8 +192,10 @@ router.post("/verify", canBill, validate(verifySchema), async (req, res, next) =
       notes?: { schoolId?: string; tier?: string; cycle?: string };
     };
 
-    // The order must belong to THIS school and must actually be paid.
-    if (order.notes?.schoolId && order.notes.schoolId !== school.schoolId) {
+    // The order must belong to THIS school and must actually be paid. Fail CLOSED:
+    // require the note to be present AND match — a payment whose order carries no
+    // schoolId (e.g. some future/manual order path) must never be applied blindly.
+    if (order.notes?.schoolId !== school.schoolId) {
       throw ApiError.badRequest("This payment does not belong to your account.");
     }
     if (order.status !== "paid") {

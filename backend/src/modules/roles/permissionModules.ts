@@ -71,7 +71,14 @@ export const PERMISSION_MODULE_KEYS: string[] = PERMISSION_MODULES.map((m) => m.
  */
 export const CUSTOM_ROLE_BASELINE_PREFIXES: string[] = [];
 
-const norm = (p: string) => (p.endsWith("/") ? p.slice(0, -1) : p);
+// Lowercased so matching MIRRORS Express's default case-insensitive routing:
+// `/api/Payroll` reaches the same router as `/api/payroll`, so the module gate
+// (and the custom-role gate) must resolve both to the same module — otherwise a
+// cased path variant would slip through as "no module → allowed".
+const norm = (p: string) => {
+  const lower = p.toLowerCase();
+  return lower.endsWith("/") ? lower.slice(0, -1) : lower;
+};
 
 /** True when `path` is `prefix` or a sub-path of it (prefix-boundary aware). */
 function underPrefix(path: string, prefix: string): boolean {
