@@ -9,9 +9,12 @@ import {
   CURRENT_SESSION,
   balanceOf,
   headBalance,
+  totalBilled,
+  totalPaid,
   type FeeAccountDoc,
   type PaymentDoc,
 } from "./fee.model.js";
+import { Expense } from "../expenses/expense.model.js";
 import { Student, type StudentDoc } from "../students/student.model.js";
 import { FeeStructure } from "../feeStructures/feeStructure.model.js";
 import { Scholarship } from "../scholarships/scholarship.model.js";
@@ -31,7 +34,7 @@ import { requireAuth, requireRole } from "../../middleware/auth.js";
 import { validate, parsed } from "../../middleware/validate.js";
 import { ApiError } from "../../utils/ApiError.js";
 import { toPublic } from "../../utils/crudRouter.js";
-import { notifySchool } from "../notifications/notification.model.js";
+import { notifySchool, notifyUser } from "../notifications/notification.model.js";
 import {
   isRazorpayConfigured,
   razorpayKeyId,
@@ -718,6 +721,199 @@ router.get("/summary", canCollect, async (req, res, next) => {
         receipts: live.length,
       },
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/* ------------------------------------------------------------------ */
+/* Finance depth: accounting ledger, collection analytics, escalations  */
+/* ------------------------------------------------------------------ */
+
+const ledgerQuery = z.object({ from: z.string().optional(), to: z.string().optional() });
+
+/** Unified cash book — fee income + expenses, chronological, with running balance. */
+router.get("/ledger", canCollect, validate(ledgerQuery, "query"), async (req, res, next) => {
+  try {
+    const schoolId = req.user!.schoolId;
+    const { from, to } = parsed<z.infer<typeof ledgerQuery>>(req, "query");
+    const [payments, expenses] = await Promise.all([
+      Payment.find({ schoolId, status: { $in: ["paid", "pending-clearance"] } }),
+      Expense.find({ schoolId }),
+    ]);
+    type Entry = {
+      date: string;
+      type: "income" | "expense";
+      label: string;
+      ref: string;
+      method: string;
+      amount: number;
+    };
+    let entries: Entry[] = [
+      ...payments.map((p) => ({
+        date: p.date,
+        type: "income" as const,
+        label: `Fee · ${p.studentName}`,
+        ref: p.receiptNo,
+        method: p.method,
+        amount: p.amount,
+      })),
+      ...expenses
+        .filter((e) => e.status !== "rejected" && e.status !== "cancelled")
+        .map((e) => ({
+          date: String(e.date || ""),
+          type: "expense" as const,
+          label: e.title + (e.category ? ` · ${e.category}` : ""),
+          ref: e.voucherNo,
+          method: String(e.method || ""),
+          amount: Number(e.amount) || 0,
+        })),
+    ].filter((e) => e.date);
+    if (from) entries = entries.filter((e) => e.date >= from);
+    if (to) entries = entries.filter((e) => e.date <= to);
+    entries.sort((a, b) => a.date.localeCompare(b.date) || (a.type === b.type ? 0 : a.type === "income" ? -1 : 1));
+    let running = 0;
+    const ledger = entries.map((e) => {
+      running += e.type === "income" ? e.amount : -e.amount;
+      return { ...e, balance: running };
+    });
+    const income = entries.filter((e) => e.type === "income").reduce((s, e) => s + e.amount, 0);
+    const expense = entries.filter((e) => e.type === "expense").reduce((s, e) => s + e.amount, 0);
+    res.json({ data: { entries: ledger, totals: { income, expense, net: income - expense } } });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** Collection analytics — trend by month, and billed-vs-collected by class and head. */
+router.get("/analytics", canCollect, async (req, res, next) => {
+  try {
+    const schoolId = req.user!.schoolId;
+    const [rows, payments] = await Promise.all([
+      loadStudentFeeRows(schoolId),
+      Payment.find({ schoolId, status: { $in: ["paid", "pending-clearance"] } }),
+    ]);
+    const monthly = new Map<string, number>();
+    for (const p of payments) {
+      const m = (p.date || "").slice(0, 7);
+      if (m) monthly.set(m, (monthly.get(m) ?? 0) + p.amount);
+    }
+    const byClass = new Map<string, { billed: number; collected: number }>();
+    const byHead = new Map<string, { billed: number; collected: number }>();
+    for (const r of rows) {
+      const c = r.className || "—";
+      const cc = byClass.get(c) ?? { billed: 0, collected: 0 };
+      cc.billed += totalBilled(r);
+      cc.collected += totalPaid(r);
+      byClass.set(c, cc);
+      for (const h of r.heads) {
+        const hh = byHead.get(h.head) ?? { billed: 0, collected: 0 };
+        hh.billed += h.billed;
+        hh.collected += h.paid;
+        byHead.set(h.head, hh);
+      }
+    }
+    const billed = rows.reduce((s, r) => s + totalBilled(r), 0);
+    const collected = rows.reduce((s, r) => s + totalPaid(r), 0);
+    const pct = (c: number, b: number) => (b > 0 ? Math.round((c / b) * 100) : 0);
+    res.json({
+      data: {
+        totals: { billed, collected, outstanding: Math.max(0, billed - collected), rate: pct(collected, billed) },
+        monthly: [...monthly.entries()]
+          .sort((a, b) => a[0].localeCompare(b[0]))
+          .map(([month, amt]) => ({ month, collected: amt })),
+        byClass: [...byClass.entries()]
+          .map(([className, v]) => ({ className, ...v, rate: pct(v.collected, v.billed) }))
+          .sort((a, b) => b.billed - a.billed),
+        byHead: [...byHead.entries()]
+          .map(([head, v]) => ({ head, ...v, rate: pct(v.collected, v.billed) }))
+          .sort((a, b) => b.billed - a.billed),
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** Overdue tier by how long an account has been past its due date. */
+function escalationTier(
+  dueDate: string | null,
+  today: string
+): { tier: "none" | "reminder" | "warning" | "final"; daysOverdue: number } {
+  if (!dueDate || dueDate >= today) return { tier: "none", daysOverdue: 0 };
+  const days = Math.floor((Date.parse(today) - Date.parse(dueDate)) / 86_400_000);
+  const tier = days > 60 ? "final" : days > 30 ? "warning" : "reminder";
+  return { tier, daysOverdue: Math.max(0, days) };
+}
+
+/** Defaulters with a dues-escalation tier, for staged reminders. */
+router.get("/escalations", canCollect, async (req, res, next) => {
+  try {
+    const schoolId = req.user!.schoolId;
+    const today = new Date().toISOString().slice(0, 10);
+    const rows = await loadStudentFeeRows(schoolId);
+    const list = rows
+      .filter((r) => balanceOf(r) > 0)
+      .map((r) => {
+        const { tier, daysOverdue } = escalationTier(r.dueDate, today);
+        return {
+          studentId: r.studentId,
+          name: r.name,
+          className: r.className,
+          section: r.section,
+          rollNo: r.rollNo,
+          guardian: r.guardian,
+          guardianPhone: r.guardianPhone,
+          dueDate: r.dueDate,
+          balance: balanceOf(r),
+          daysOverdue,
+          tier,
+        };
+      })
+      .sort((a, b) => b.daysOverdue - a.daysOverdue || b.balance - a.balance);
+    const counts = {
+      reminder: list.filter((x) => x.tier === "reminder").length,
+      warning: list.filter((x) => x.tier === "warning").length,
+      final: list.filter((x) => x.tier === "final").length,
+      none: list.filter((x) => x.tier === "none").length,
+    };
+    res.json({ data: { escalations: list, counts } });
+  } catch (err) {
+    next(err);
+  }
+});
+
+const notifyBody = z.object({ studentIds: z.array(z.string()).min(1).max(2000) });
+
+/** Sends a fee-due reminder to the guardians of the given students. */
+router.post("/escalations/notify", canCollect, validate(notifyBody), async (req, res, next) => {
+  try {
+    const schoolId = req.user!.schoolId;
+    const { studentIds } = req.body as z.infer<typeof notifyBody>;
+    const ids = studentIds
+      .filter((id) => mongoose.isValidObjectId(id))
+      .map((id) => new mongoose.Types.ObjectId(id));
+    const students = await Student.find({ schoolId, _id: { $in: ids } });
+    let notified = 0;
+    for (const s of students) {
+      const emails = [...new Set(
+        [s.guardian?.email, s.fatherEmail, s.motherEmail]
+          .map((e) => String(e ?? "").trim().toLowerCase())
+          .filter(Boolean)
+      )];
+      for (const email of emails) {
+        await notifyUser({
+          schoolId,
+          email,
+          type: "fee",
+          title: "Fee reminder",
+          body: `A fee payment is pending for ${`${s.firstName ?? ""} ${s.lastName ?? ""}`.trim()}. Please clear the outstanding amount.`,
+          link: "/dashboard",
+        });
+        notified++;
+      }
+    }
+    res.json({ data: { notified } });
   } catch (err) {
     next(err);
   }

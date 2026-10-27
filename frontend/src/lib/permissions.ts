@@ -43,7 +43,7 @@ export const PERMISSION_MODULES: PermissionModule[] = [
   { key: "lms", label: "LMS (online classes & material)", group: "Academic", hrefs: ["/lms", "/lms/classes", "/lms/material"] },
   { key: "certificates", label: "Certificates", group: "Academic", hrefs: ["/certificates"] },
   // Finance
-  { key: "fees", label: "Fees", group: "Finance", hrefs: ["/fees", "/fees/structure", "/fees/collect", "/fees/receipts", "/fees/defaulters", "/fees/scholarships"] },
+  { key: "fees", label: "Fees", group: "Finance", hrefs: ["/fees", "/fees/structure", "/fees/collect", "/fees/receipts", "/fees/defaulters", "/fees/ledger", "/fees/analytics", "/fees/scholarships"] },
   { key: "expenses", label: "Expenses", group: "Finance", hrefs: ["/expenses"] },
   { key: "payroll", label: "Payroll", group: "Finance", hrefs: ["/payroll"] },
   // Operations

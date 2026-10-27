@@ -19,6 +19,7 @@ import { exportToCsv } from "@/lib/exportCsv";
 import { useAsyncList } from "@/hooks/useAsyncList";
 import {
   feeAccountsApi,
+  notifyEscalations,
   balanceOf,
   totalBilled,
   totalPaid,
@@ -54,6 +55,7 @@ export default function DefaultersPage() {
   const { toast } = useToast();
   const [search, setSearch] = useState("");
   const [tier, setTier] = useState("All");
+  const [sending, setSending] = useState(false);
 
   // Only accounts with an outstanding balance — the server computes standing.
   const fetcher = useCallback(() => feeAccountsApi.list({ search, standing: "due" }), [search]);
@@ -99,6 +101,31 @@ export default function DefaultersPage() {
       rows
     );
     toast({ title: "Export ready", description: `${rows.length} records exported.` });
+  };
+
+  // Staged escalation: send a fee-due reminder to the guardians of everyone
+  // currently listed (filter by urgency first to target a tier).
+  const handleRemind = async () => {
+    if (rows.length === 0) {
+      toast({ title: "No one to remind", description: "No students with dues match the filters.", variant: "warning" });
+      return;
+    }
+    setSending(true);
+    try {
+      const res = await notifyEscalations(rows.map((r) => r.account.studentId));
+      toast({
+        title: "Reminders sent",
+        description: `${res.notified} guardian notification(s) sent across ${rows.length} student(s).`,
+      });
+    } catch (e) {
+      toast({
+        title: "Could not send reminders",
+        description: e instanceof Error ? e.message : "Try again.",
+        variant: "error",
+      });
+    } finally {
+      setSending(false);
+    }
   };
 
   type Row = (typeof rows)[number];
@@ -195,10 +222,16 @@ export default function DefaultersPage() {
         title="Fee Dues"
         description="Students with outstanding fees, derived live from the ledger."
         actions={
-          <Button variant="outline" onClick={handleExport}>
-            <Download className="size-4" />
-            Export
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="primary" onClick={handleRemind} disabled={sending || rows.length === 0}>
+              <Siren className="size-4" />
+              {sending ? "Sending…" : "Send reminders"}
+            </Button>
+            <Button variant="outline" onClick={handleExport}>
+              <Download className="size-4" />
+              Export
+            </Button>
+          </div>
         }
       />
 

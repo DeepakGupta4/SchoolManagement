@@ -317,3 +317,57 @@ export async function cancelPayment(id: string, reason: string): Promise<Payment
 export async function getFeeSummary(): Promise<FeeSummary> {
   return apiRequest<FeeSummary>("/api/fees/summary");
 }
+
+/* ----------------------------------------------------------- Finance depth */
+
+export interface LedgerEntry {
+  date: string;
+  type: "income" | "expense";
+  label: string;
+  ref: string;
+  method: string;
+  amount: number;
+  balance: number;
+}
+export interface LedgerResult {
+  entries: LedgerEntry[];
+  totals: { income: number; expense: number; net: number };
+}
+export async function getLedger(range?: { from?: string; to?: string }): Promise<LedgerResult> {
+  return apiRequest<LedgerResult>("/api/fees/ledger", { query: { from: range?.from, to: range?.to } });
+}
+
+export interface FeeAnalytics {
+  totals: { billed: number; collected: number; outstanding: number; rate: number };
+  monthly: { month: string; collected: number }[];
+  byClass: { className: string; billed: number; collected: number; rate: number }[];
+  byHead: { head: string; billed: number; collected: number; rate: number }[];
+}
+export async function getFeeAnalytics(): Promise<FeeAnalytics> {
+  return apiRequest<FeeAnalytics>("/api/fees/analytics");
+}
+
+export type EscalationTier = "none" | "reminder" | "warning" | "final";
+export interface Escalation {
+  studentId: string;
+  name: string;
+  className: string;
+  section: string;
+  rollNo: string;
+  guardian: string;
+  guardianPhone: string;
+  dueDate: string | null;
+  balance: number;
+  daysOverdue: number;
+  tier: EscalationTier;
+}
+export interface EscalationResult {
+  escalations: Escalation[];
+  counts: Record<EscalationTier, number>;
+}
+export async function getEscalations(): Promise<EscalationResult> {
+  return apiRequest<EscalationResult>("/api/fees/escalations");
+}
+export async function notifyEscalations(studentIds: string[]): Promise<{ notified: number }> {
+  return apiRequest("/api/fees/escalations/notify", { method: "POST", body: { studentIds } });
+}
