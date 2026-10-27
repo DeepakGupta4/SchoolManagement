@@ -95,7 +95,12 @@ function AdmissionsPageInner() {
     setPage(1);
   };
 
+  // A lead whose follow-up date has arrived and isn't closed yet.
+  const isFollowUpDue = (a: Application, today: string) =>
+    !!a.nextFollowUpDate && a.nextFollowUpDate <= today && a.stage !== "approved" && a.stage !== "rejected";
+
   const staged = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10);
     // "in-process" is a synthetic filter used by the top stat card.
     if (stage === "in-process") {
       return items.filter((a) => a.stage === "applied" || a.stage === "interview");
@@ -105,10 +110,15 @@ function AdmissionsPageInner() {
     if (stage === "pending") {
       return items.filter((a) => a.stage !== "approved" && a.stage !== "rejected");
     }
+    // Leads whose follow-up is due — the CRM's "chase these today" list.
+    if (stage === "follow-ups-due") {
+      return items.filter((a) => isFollowUpDue(a, today));
+    }
     return stage ? items.filter((a) => a.stage === stage) : items;
   }, [items, stage]);
 
   const stats = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10);
     const countOf = (s: string) => items.filter((a) => a.stage === s).length;
     const approved = countOf("approved");
     return {
@@ -116,6 +126,7 @@ function AdmissionsPageInner() {
       approved,
       inProcess: countOf("applied") + countOf("interview"),
       conversion: items.length ? Math.round((approved / items.length) * 100) : 0,
+      dueFollowUps: items.filter((a) => isFollowUpDue(a, today)).length,
       byStage: Object.fromEntries(PIPELINE.map((s) => [s, countOf(s)])) as Record<string, number>,
     };
   }, [items]);
@@ -352,7 +363,7 @@ function AdmissionsPageInner() {
         }
       />
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <StatCard
           label="Total Applications"
           value={stats.total}
@@ -385,6 +396,14 @@ function AdmissionsPageInner() {
           tone="violet"
           active={stage === "approved"}
           onClick={() => applyFilter(setStage)(stage === "approved" ? "" : "approved")}
+        />
+        <StatCard
+          label="Follow-ups Due"
+          value={stats.dueFollowUps}
+          icon={CalendarDays}
+          tone="rose"
+          active={stage === "follow-ups-due"}
+          onClick={() => applyFilter(setStage)(stage === "follow-ups-due" ? "" : "follow-ups-due")}
         />
       </div>
 

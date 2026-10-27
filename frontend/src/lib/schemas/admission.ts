@@ -50,6 +50,8 @@ export const admissionSchema = z.object({
   stage: z.string().min(1, "Stage is required"),
   score: z.coerce.number<number>().min(0, "Cannot be negative").max(100, "Cannot exceed 100"),
   notes: z.string().max(300, "Keep notes under 300 characters").optional(),
+  /** CRM: when to next chase this lead. */
+  nextFollowUpDate: z.string().optional(),
 
   // ── Detailed fields (mirror the student admission form) ─────
   avatar: z.string().optional(),

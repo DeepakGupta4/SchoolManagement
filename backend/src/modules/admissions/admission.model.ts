@@ -26,6 +26,23 @@ const admissionSchema = new Schema(
     score: { type: Number, default: 0 },
     notes: { type: String, default: "" },
 
+    // CRM follow-up tracking: when to chase this lead next, and a dated log of
+    // every touchpoint so the funnel is a real pipeline, not a static list.
+    nextFollowUpDate: { type: String, default: "" },
+    followUps: {
+      type: [
+        new Schema(
+          {
+            date: { type: String, default: "" },
+            note: { type: String, default: "" },
+            by: { type: String, default: "" },
+          },
+          { _id: false }
+        ),
+      ],
+      default: [],
+    },
+
     // Photo + medical, mirroring the student admission form.
     avatar: { type: String, default: "" },
     medicalNotes: { type: String, default: "" },

@@ -4,6 +4,10 @@ import { Application, type ApplicationAttrs } from "./admission.model.js";
 import { Student } from "../students/student.model.js";
 import { notifySchool } from "../notifications/notification.model.js";
 import { createCrudRouter } from "../../utils/crudRouter.js";
+import { requireRole } from "../../middleware/auth.js";
+
+/** The admissions pipeline, in order — shared by the funnel analytics. */
+const STAGE_ORDER = ["enquiry", "applied", "interview", "approved", "rejected"];
 
 const admissionSchema = z.object({
   applicationNo: z.string().min(1),
@@ -26,6 +30,10 @@ const admissionSchema = z.object({
   stage: z.string().default("enquiry"),
   score: z.coerce.number<number>().min(0).default(0),
   notes: z.string().default(""),
+  nextFollowUpDate: z.string().default(""),
+  followUps: z
+    .array(z.object({ date: z.string().default(""), note: z.string().default(""), by: z.string().default("") }))
+    .optional(),
 
   // Detailed admission-form fields (all optional) — mirror the student form and
   // carry into the enrolled student on approval.
@@ -171,4 +179,56 @@ export default createCrudRouter({
   readRoles: ["super_admin", "school_admin", "principal"],
   afterCreate: (doc, req) => enrolIfApproved(doc, req.user!.schoolId),
   afterUpdate: (doc, req) => enrolIfApproved(doc, req.user!.schoolId),
+  extend: (router) => {
+    // Lead-funnel analytics: accurate server-side counts per stage, by source,
+    // conversion rate and how many follow-ups are due — the CRM view.
+    router.get(
+      "/funnel",
+      requireRole("super_admin", "school_admin", "principal"),
+      async (req, res, next) => {
+        try {
+          const schoolId = req.user!.schoolId;
+          const today = new Date().toISOString().slice(0, 10);
+          const apps = await Application.find({ schoolId })
+            .select("stage source nextFollowUpDate")
+            .lean();
+
+          const byStage: Record<string, number> = {};
+          const bySource: Record<string, number> = {};
+          let dueFollowUps = 0;
+          for (const a of apps) {
+            const st = a.stage || "enquiry";
+            byStage[st] = (byStage[st] ?? 0) + 1;
+            const src = (a.source || "").trim() || "Unknown";
+            bySource[src] = (bySource[src] ?? 0) + 1;
+            if (
+              a.nextFollowUpDate &&
+              a.nextFollowUpDate <= today &&
+              st !== "approved" &&
+              st !== "rejected"
+            ) {
+              dueFollowUps++;
+            }
+          }
+          const total = apps.length;
+          const converted = byStage.approved ?? 0;
+          res.json({
+            data: {
+              total,
+              converted,
+              rejected: byStage.rejected ?? 0,
+              dueFollowUps,
+              conversionRate: total ? Math.round((converted / total) * 100) : 0,
+              byStage: STAGE_ORDER.map((stage) => ({ stage, count: byStage[stage] ?? 0 })),
+              bySource: Object.entries(bySource)
+                .map(([source, count]) => ({ source, count }))
+                .sort((a, b) => b.count - a.count),
+            },
+          });
+        } catch (err) {
+          next(err);
+        }
+      }
+    );
+  },
 });

@@ -1,4 +1,11 @@
 import { createApiResource } from "./createApiResource";
+import { apiRequest } from "./client";
+
+export interface AdmissionFollowUp {
+  date: string;
+  note: string;
+  by: string;
+}
 
 export interface Application {
   id: string;
@@ -25,6 +32,9 @@ export interface Application {
   stage: string;
   score: number;
   notes: string;
+  // CRM follow-up tracking.
+  nextFollowUpDate?: string;
+  followUps?: AdmissionFollowUp[];
   // Detailed admission-form fields (mirror the student admission form).
   avatar: string;
   medicalNotes: string;
@@ -120,3 +130,17 @@ export function generateApplicationNo(): string {
 }
 
 export const admissionsApi = createApiResource<Application, ApplicationFilters>("/api/admissions");
+
+/** Lead-funnel analytics (server-computed, accurate at any size). */
+export interface AdmissionFunnel {
+  total: number;
+  converted: number;
+  rejected: number;
+  dueFollowUps: number;
+  conversionRate: number;
+  byStage: { stage: string; count: number }[];
+  bySource: { source: string; count: number }[];
+}
+export async function getAdmissionFunnel(): Promise<AdmissionFunnel> {
+  return apiRequest<AdmissionFunnel>("/api/admissions/funnel");
+}

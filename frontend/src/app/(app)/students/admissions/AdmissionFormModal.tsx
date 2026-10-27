@@ -54,6 +54,7 @@ function makeEmpty(): AdmissionSchema {
     stage: "enquiry",
     score: 0,
     notes: "",
+    nextFollowUpDate: "",
     avatar: "",
     medicalNotes: "",
     fatherName: "",
@@ -230,6 +231,7 @@ export function AdmissionFormModal({
       stage: values.stage,
       score: values.score,
       notes: values.notes ?? "",
+      nextFollowUpDate: values.nextFollowUpDate ?? "",
       avatar: values.avatar ?? "",
       medicalNotes: values.medicalNotes ?? "",
       fatherName: values.fatherName ?? "",
@@ -471,6 +473,7 @@ export function AdmissionFormModal({
             <Input label="Applied on" type="date" required min={MIN_RECORD_DATE} max={TODAY_ISO} {...register("appliedOn")} error={errors.appliedOn?.message} />
             <Select label="Stage" required options={STAGE_OPTIONS} {...register("stage")} error={errors.stage?.message} />
             <Input label="Entrance score" type="number" min={0} max={100} hint="Leave at 0 until the test is taken." {...register("score")} error={errors.score?.message} />
+            <Input label="Next follow-up" type="date" hint="When to next contact this lead." {...register("nextFollowUpDate")} error={errors.nextFollowUpDate?.message} />
           </div>
           <div className="mt-4">
             <Textarea label="Notes" placeholder="Anything the admissions team should know…" {...register("notes")} error={errors.notes?.message} />
