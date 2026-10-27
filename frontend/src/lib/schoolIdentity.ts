@@ -20,6 +20,10 @@ export interface SchoolIdentity {
   phone: string;
   website: string;
   logo: string;
+  /** Brand name shown in the app shell (falls back to the school name). */
+  displayName: string;
+  /** White-label: show the school's own brand and hide "SchoolDeck". */
+  whiteLabel: boolean;
   /** The school's grade bands, for grades printed on report cards. */
   gradingScheme: GradingScheme;
 }
@@ -31,6 +35,8 @@ export const FALLBACK_SCHOOL_IDENTITY: SchoolIdentity = {
   phone: "",
   website: "",
   logo: "",
+  displayName: "",
+  whiteLabel: false,
   gradingScheme: DEFAULT_GRADING_SCHEME,
 };
 
@@ -48,6 +54,8 @@ export function schoolIdentity(p: SchoolProfile | null | undefined): SchoolIdent
     phone: (p.phone ?? "").trim(),
     website: (p.website ?? "").trim(),
     logo: (p.logo ?? "").trim(),
+    displayName: (p.displayName ?? "").trim(),
+    whiteLabel: Boolean(p.whiteLabel),
     gradingScheme: effectiveScheme(p.gradingScheme),
   };
 }

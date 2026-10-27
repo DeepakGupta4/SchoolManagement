@@ -111,6 +111,7 @@ export interface SchoolProfile {
   theme?: string;
   density?: string;
   receiptFooter?: string;
+  whiteLabel?: boolean;
   // Academic session
   sessionLabel?: string;
   sessionStartDate?: string;

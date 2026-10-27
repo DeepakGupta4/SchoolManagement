@@ -139,6 +139,7 @@ const profileSchema = z.object({
   theme: z.string().optional(),
   density: z.string().optional(),
   receiptFooter: z.string().optional(),
+  whiteLabel: z.boolean().optional(),
   // Academic session tab
   sessionLabel: z.string().optional(),
   sessionStartDate: z.string().optional(),

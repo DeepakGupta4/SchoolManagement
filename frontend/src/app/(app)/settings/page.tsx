@@ -83,6 +83,7 @@ const BRANDING_DEFAULTS = {
   theme: "indigo",
   density: "comfortable",
   receiptFooter: "",
+  whiteLabel: false,
 };
 
 const SESSION_DEFAULTS = {
@@ -283,6 +284,7 @@ export default function SettingsPage() {
             theme: s.theme || prev.theme,
             density: s.density || prev.density,
             receiptFooter: s.receiptFooter || prev.receiptFooter,
+            whiteLabel: Boolean(s.whiteLabel),
           }));
           setSession((prev) => ({
             ...prev,
@@ -349,6 +351,7 @@ export default function SettingsPage() {
           theme: branding.theme,
           density: branding.density,
           receiptFooter: branding.receiptFooter,
+          whiteLabel: branding.whiteLabel,
         });
       } else if (tab === "session") {
         Object.assign(updates, {
@@ -995,6 +998,23 @@ export default function SettingsPage() {
                 onChange={(e) => setBranding({ ...branding, receiptFooter: e.target.value })}
                 hint="Appears at the bottom of every fee receipt PDF."
               />
+            </div>
+            <div className="lg:col-span-2">
+              <label className="flex items-start gap-3 rounded-md border border-border bg-surface p-3">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 size-4 accent-primary"
+                  checked={branding.whiteLabel}
+                  onChange={(e) => setBranding({ ...branding, whiteLabel: e.target.checked })}
+                />
+                <span className="text-sm">
+                  <span className="font-medium text-text">White-label</span>
+                  <span className="mt-0.5 block text-xs text-muted">
+                    Show your school&apos;s logo and name in the app instead of SchoolDeck. Upload your
+                    logo in School Profile; it then appears in the sidebar and on documents.
+                  </span>
+                </span>
+              </label>
             </div>
             <div className="lg:col-span-2">
               <Field label="Preview">

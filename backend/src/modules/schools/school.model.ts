@@ -132,6 +132,8 @@ const schoolSchema = new Schema(
     theme: { type: String, default: "indigo" },
     density: { type: String, default: "comfortable" },
     receiptFooter: { type: String, default: "" },
+    /** White-label: show the school's own brand and hide the "SchoolDeck" name. */
+    whiteLabel: { type: Boolean, default: false },
 
     // ── Academic Session ──────────────────────────────────────────────────────
     sessionLabel: { type: String, default: "" },
@@ -280,6 +282,7 @@ export function toPublicSchool(school: SchoolDoc) {
     theme: school.theme ?? "indigo",
     density: school.density ?? "comfortable",
     receiptFooter: school.receiptFooter ?? "",
+    whiteLabel: Boolean(school.whiteLabel),
     // Academic session
     sessionLabel: school.sessionLabel ?? "",
     sessionStartDate: school.sessionStartDate ?? "",

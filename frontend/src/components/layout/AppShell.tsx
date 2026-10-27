@@ -5,6 +5,7 @@ import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
 import { useSidebarStore } from "@/store";
 import { useSubscription } from "@/hooks/useSubscription";
+import { useSchoolIdentity } from "@/lib/schoolIdentity";
 import { TrialBanner } from "@/components/subscription/TrialBanner";
 import { SubscriptionLock } from "@/components/subscription/SubscriptionLock";
 import { ChatbotWidget } from "@/components/ChatbotWidget";
@@ -23,10 +24,14 @@ import { ChatbotWidget } from "@/components/ChatbotWidget";
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { isCollapsed } = useSidebarStore();
   const { sub } = useSubscription();
+  const { identity } = useSchoolIdentity();
 
   return (
     <div className="min-h-screen bg-bg">
-      <Sidebar schoolName={sub?.schoolName ?? null} />
+      <Sidebar
+        schoolName={sub?.schoolName ?? identity.name}
+        brand={{ logo: identity.logo, displayName: identity.displayName, whiteLabel: identity.whiteLabel }}
+      />
       <Topbar />
       <main
         className="min-h-screen pt-16 lg:ml-[var(--rail)]"

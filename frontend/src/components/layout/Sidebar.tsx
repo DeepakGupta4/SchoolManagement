@@ -165,7 +165,14 @@ function NavBranch({
 /* Sidebar                                                             */
 /* ------------------------------------------------------------------ */
 
-export function Sidebar({ schoolName }: { schoolName?: string | null }) {
+export function Sidebar({
+  schoolName,
+  brand,
+}: {
+  schoolName?: string | null;
+  /** School branding for the app shell (white-label). */
+  brand?: { logo?: string; displayName?: string; whiteLabel?: boolean } | null;
+}) {
   const { isCollapsed, toggle, isMobileOpen, closeMobile } = useSidebarStore();
   const pathname = usePathname();
 
@@ -236,15 +243,25 @@ export function Sidebar({ schoolName }: { schoolName?: string | null }) {
             isCollapsed && !isMobileOpen ? "justify-center px-0" : "px-4"
           )}
         >
-          {/* White tile so the logo (which has a light background) reads cleanly
-              on the sidebar surface in both light and dark themes. */}
+          {/* Brand: the school's own logo + name when white-labelled, else SchoolDeck.
+              White tile so a light-background logo reads cleanly in both themes. */}
           <div className="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-md bg-white shadow-sm ring-1 ring-border">
-            <Image src="/logo-icon.png" alt="SchoolDeck" width={32} height={32} className="size-full object-contain" />
+            {brand?.logo ? (
+              // School-uploaded logo is a data URL — plain img avoids next/image loader.
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={brand.logo} alt="" className="size-full object-contain" />
+            ) : (
+              <Image src="/logo-icon.png" alt="SchoolDeck" width={32} height={32} className="size-full object-contain" />
+            )}
           </div>
           {(!isCollapsed || isMobileOpen) && (
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold text-text">SchoolDeck</p>
-              <p className="truncate text-[11px] text-subtle">{schoolName || "Your school"}</p>
+              <p className="truncate text-sm font-semibold text-text">
+                {brand?.whiteLabel ? brand.displayName?.trim() || schoolName || "Your school" : "SchoolDeck"}
+              </p>
+              <p className="truncate text-[11px] text-subtle">
+                {brand?.whiteLabel ? "" : schoolName || "Your school"}
+              </p>
             </div>
           )}
           <button
