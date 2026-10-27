@@ -73,8 +73,10 @@ export function verifyTotp(secret: string, token: string, window = 1): boolean {
   const t = String(token || "").trim();
   if (!secret || !/^\d{6}$/.test(t)) return false;
   const counter = Math.floor(Date.now() / 1000 / STEP);
+  const tBuf = Buffer.from(t);
   for (let i = -window; i <= window; i++) {
-    if (hotp(secret, counter + i) === t) return true;
+    const candidate = Buffer.from(hotp(secret, counter + i));
+    if (candidate.length === tBuf.length && crypto.timingSafeEqual(candidate, tBuf)) return true;
   }
   return false;
 }

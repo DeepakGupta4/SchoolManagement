@@ -671,14 +671,15 @@ router.get("/2fa/status", requireAuth, async (req, res, next) => {
   }
 });
 
-/** Begin setup: generate a secret and return the otpauth URI to render a QR. */
+/** Begin setup: stash a PENDING secret and return the otpauth URI to render a QR.
+ *  Crucially this never touches the LIVE secret or `enabled`, so a stray/forged
+ *  setup call on an already-protected account can't disarm 2FA. */
 router.post("/2fa/setup", requireAuth, async (req, res, next) => {
   try {
-    const user = await User.findById(req.user!.id).select("+twoFactorSecret");
+    const user = await User.findById(req.user!.id).select("+twoFactorPendingSecret");
     if (!user) throw ApiError.unauthorized("This account no longer exists.");
     const secret = generateSecret();
-    user.twoFactorSecret = secret;
-    user.twoFactorEnabled = false; // only switches on after a code is verified
+    user.twoFactorPendingSecret = secret;
     await user.save();
     res.json({
       data: { secret, otpauthUri: otpauthUri(secret, user.email, env.SOFTWARE_NAME || "SchoolDeck") },
@@ -688,16 +689,18 @@ router.post("/2fa/setup", requireAuth, async (req, res, next) => {
   }
 });
 
-/** Verify the first code and switch 2FA on. */
+/** Verify a code against the PENDING secret, then promote it to the live secret. */
 router.post("/2fa/enable", requireAuth, validate(codeSchema), async (req, res, next) => {
   try {
     const { code } = req.body as z.infer<typeof codeSchema>;
-    const user = await User.findById(req.user!.id).select("+twoFactorSecret");
+    const user = await User.findById(req.user!.id).select("+twoFactorSecret +twoFactorPendingSecret");
     if (!user) throw ApiError.unauthorized("This account no longer exists.");
-    if (!user.twoFactorSecret) throw ApiError.badRequest("Start 2FA setup first.");
-    if (!verifyTotp(user.twoFactorSecret, code)) {
+    if (!user.twoFactorPendingSecret) throw ApiError.badRequest("Start 2FA setup first.");
+    if (!verifyTotp(user.twoFactorPendingSecret, code)) {
       throw ApiError.badRequest("That code isn't right — use the current one from your app.");
     }
+    user.twoFactorSecret = user.twoFactorPendingSecret;
+    user.twoFactorPendingSecret = "";
     user.twoFactorEnabled = true;
     await user.save();
     await RefreshToken.deleteMany({ userId: String(user._id) }); // re-auth other sessions
@@ -711,13 +714,14 @@ router.post("/2fa/enable", requireAuth, validate(codeSchema), async (req, res, n
 router.post("/2fa/disable", requireAuth, validate(codeSchema), async (req, res, next) => {
   try {
     const { code } = req.body as z.infer<typeof codeSchema>;
-    const user = await User.findById(req.user!.id).select("+twoFactorSecret");
+    const user = await User.findById(req.user!.id).select("+twoFactorSecret +twoFactorPendingSecret");
     if (!user) throw ApiError.unauthorized("This account no longer exists.");
     if (user.twoFactorEnabled && !verifyTotp(user.twoFactorSecret || "", code)) {
       throw ApiError.badRequest("That code isn't right.");
     }
     user.twoFactorEnabled = false;
     user.twoFactorSecret = "";
+    user.twoFactorPendingSecret = "";
     await user.save();
     res.json({ data: { enabled: false } });
   } catch (err) {

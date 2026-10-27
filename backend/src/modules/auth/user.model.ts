@@ -51,6 +51,9 @@ const userSchema = new Schema(
     // careless query; `enabled` flips on only after a first code is verified.
     twoFactorEnabled: { type: Boolean, default: false },
     twoFactorSecret: { type: String, default: "", select: false },
+    // Secret for an IN-PROGRESS (re-)enrolment, promoted to the live secret only
+    // once a code is verified — so starting setup never disarms live 2FA.
+    twoFactorPendingSecret: { type: String, default: "", select: false },
   },
   { timestamps: true }
 );

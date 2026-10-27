@@ -331,7 +331,8 @@ export interface LedgerEntry {
 }
 export interface LedgerResult {
   entries: LedgerEntry[];
-  totals: { income: number; expense: number; net: number };
+  /** `opening` is the cash carried in from before a date filter (0 otherwise). */
+  totals: { income: number; expense: number; net: number; opening?: number };
 }
 export async function getLedger(range?: { from?: string; to?: string }): Promise<LedgerResult> {
   return apiRequest<LedgerResult>("/api/fees/ledger", { query: { from: range?.from, to: range?.to } });
@@ -368,6 +369,8 @@ export interface EscalationResult {
 export async function getEscalations(): Promise<EscalationResult> {
   return apiRequest<EscalationResult>("/api/fees/escalations");
 }
-export async function notifyEscalations(studentIds: string[]): Promise<{ notified: number }> {
+export async function notifyEscalations(
+  studentIds: string[]
+): Promise<{ notified: number; skipped?: number }> {
   return apiRequest("/api/fees/escalations/notify", { method: "POST", body: { studentIds } });
 }

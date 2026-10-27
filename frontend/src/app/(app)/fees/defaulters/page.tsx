@@ -115,7 +115,9 @@ export default function DefaultersPage() {
       const res = await notifyEscalations(rows.map((r) => r.account.studentId));
       toast({
         title: "Reminders sent",
-        description: `${res.notified} guardian notification(s) sent across ${rows.length} student(s).`,
+        description:
+          `${res.notified} guardian notification(s) sent.` +
+          (res.skipped ? ` ${res.skipped} skipped (already cleared).` : ""),
       });
     } catch (e) {
       toast({

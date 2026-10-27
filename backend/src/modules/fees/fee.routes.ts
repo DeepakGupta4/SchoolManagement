@@ -749,9 +749,13 @@ router.get("/ledger", canCollect, validate(ledgerQuery, "query"), async (req, re
       method: string;
       amount: number;
     };
-    let entries: Entry[] = [
+    // Normalise dates to yyyy-mm-dd so a stray ISO timestamp can't break the
+    // string range filter/sort. A cash book, so only PAID expenses count as money
+    // out (a "pending" voucher hasn't left the account yet).
+    const norm = (d: unknown) => String(d || "").slice(0, 10);
+    const all: Entry[] = [
       ...payments.map((p) => ({
-        date: p.date,
+        date: norm(p.date),
         type: "income" as const,
         label: `Fee · ${p.studentName}`,
         ref: p.receiptNo,
@@ -759,9 +763,9 @@ router.get("/ledger", canCollect, validate(ledgerQuery, "query"), async (req, re
         amount: p.amount,
       })),
       ...expenses
-        .filter((e) => e.status !== "rejected" && e.status !== "cancelled")
+        .filter((e) => e.status === "paid")
         .map((e) => ({
-          date: String(e.date || ""),
+          date: norm(e.date),
           type: "expense" as const,
           label: e.title + (e.category ? ` · ${e.category}` : ""),
           ref: e.voucherNo,
@@ -769,17 +773,27 @@ router.get("/ledger", canCollect, validate(ledgerQuery, "query"), async (req, re
           amount: Number(e.amount) || 0,
         })),
     ].filter((e) => e.date);
-    if (from) entries = entries.filter((e) => e.date >= from);
-    if (to) entries = entries.filter((e) => e.date <= to);
-    entries.sort((a, b) => a.date.localeCompare(b.date) || (a.type === b.type ? 0 : a.type === "income" ? -1 : 1));
-    let running = 0;
-    const ledger = entries.map((e) => {
+    all.sort((a, b) => a.date.localeCompare(b.date) || (a.type === b.type ? 0 : a.type === "income" ? -1 : 1));
+
+    // Carry the real cash position into a date-filtered view: everything before
+    // `from` seeds the opening balance instead of being dropped silently.
+    let opening = 0;
+    const inRange = all.filter((e) => {
+      if (from && e.date < from) {
+        opening += e.type === "income" ? e.amount : -e.amount;
+        return false;
+      }
+      return !(to && e.date > to);
+    });
+
+    let running = opening;
+    const ledger = inRange.map((e) => {
       running += e.type === "income" ? e.amount : -e.amount;
       return { ...e, balance: running };
     });
-    const income = entries.filter((e) => e.type === "income").reduce((s, e) => s + e.amount, 0);
-    const expense = entries.filter((e) => e.type === "expense").reduce((s, e) => s + e.amount, 0);
-    res.json({ data: { entries: ledger, totals: { income, expense, net: income - expense } } });
+    const income = inRange.filter((e) => e.type === "income").reduce((s, e) => s + e.amount, 0);
+    const expense = inRange.filter((e) => e.type === "expense").reduce((s, e) => s + e.amount, 0);
+    res.json({ data: { entries: ledger, totals: { income, expense, net: income - expense, opening } } });
   } catch (err) {
     next(err);
   }
@@ -793,28 +807,34 @@ router.get("/analytics", canCollect, async (req, res, next) => {
       loadStudentFeeRows(schoolId),
       Payment.find({ schoolId, status: { $in: ["paid", "pending-clearance"] } }),
     ]);
-    const monthly = new Map<string, number>();
-    for (const p of payments) {
-      const m = (p.date || "").slice(0, 7);
-      if (m) monthly.set(m, (monthly.get(m) ?? 0) + p.amount);
-    }
+    // ONE source of truth for "collected": the payment register. Everything that
+    // reports money received (monthly trend, totals, by-class, by-head) sums the
+    // same live payments, so the bars reconcile with the headline figure. "Billed"
+    // is the only thing taken from accounts.
     const byClass = new Map<string, { billed: number; collected: number }>();
     const byHead = new Map<string, { billed: number; collected: number }>();
+    const bump = (map: typeof byClass, key: string, field: "billed" | "collected", amt: number) => {
+      const cur = map.get(key) ?? { billed: 0, collected: 0 };
+      cur[field] += amt;
+      map.set(key, cur);
+    };
+
     for (const r of rows) {
-      const c = r.className || "—";
-      const cc = byClass.get(c) ?? { billed: 0, collected: 0 };
-      cc.billed += totalBilled(r);
-      cc.collected += totalPaid(r);
-      byClass.set(c, cc);
-      for (const h of r.heads) {
-        const hh = byHead.get(h.head) ?? { billed: 0, collected: 0 };
-        hh.billed += h.billed;
-        hh.collected += h.paid;
-        byHead.set(h.head, hh);
-      }
+      bump(byClass, r.className || "—", "billed", totalBilled(r));
+      for (const h of r.heads) bump(byHead, h.head, "billed", h.billed);
     }
+
+    const monthly = new Map<string, number>();
+    let collected = 0;
+    for (const p of payments) {
+      collected += p.amount;
+      const m = (p.date || "").slice(0, 7);
+      if (m) monthly.set(m, (monthly.get(m) ?? 0) + p.amount);
+      bump(byClass, p.className || "—", "collected", p.amount);
+      for (const a of p.allocations ?? []) bump(byHead, a.head, "collected", a.amount);
+    }
+
     const billed = rows.reduce((s, r) => s + totalBilled(r), 0);
-    const collected = rows.reduce((s, r) => s + totalPaid(r), 0);
     const pct = (c: number, b: number) => (b > 0 ? Math.round((c / b) * 100) : 0);
     res.json({
       data: {
@@ -893,9 +913,19 @@ router.post("/escalations/notify", canCollect, validate(notifyBody), async (req,
     const ids = studentIds
       .filter((id) => mongoose.isValidObjectId(id))
       .map((id) => new mongoose.Types.ObjectId(id));
+    // Re-derive dues server-side so a stale tab (or a bug) can't dun paid-up
+    // families — only students who actually owe get a reminder.
+    const owing = new Set(
+      (await loadStudentFeeRows(schoolId)).filter((r) => balanceOf(r) > 0).map((r) => r.studentId)
+    );
     const students = await Student.find({ schoolId, _id: { $in: ids } });
     let notified = 0;
+    let skipped = 0;
     for (const s of students) {
+      if (!owing.has(String(s._id))) {
+        skipped++;
+        continue;
+      }
       const emails = [...new Set(
         [s.guardian?.email, s.fatherEmail, s.motherEmail]
           .map((e) => String(e ?? "").trim().toLowerCase())
@@ -913,7 +943,7 @@ router.post("/escalations/notify", canCollect, validate(notifyBody), async (req,
         notified++;
       }
     }
-    res.json({ data: { notified } });
+    res.json({ data: { notified, skipped } });
   } catch (err) {
     next(err);
   }

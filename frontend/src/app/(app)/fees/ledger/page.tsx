@@ -115,7 +115,17 @@ export default function FeeLedgerPage() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <StatCard label="Total income" value={inr.format(data?.totals.income ?? 0)} icon={ArrowDownCircle} tone="emerald" />
         <StatCard label="Total expense" value={inr.format(data?.totals.expense ?? 0)} icon={ArrowUpCircle} tone="rose" />
-        <StatCard label="Net balance" value={inr.format(data?.totals.net ?? 0)} icon={Scale} tone="indigo" />
+        <StatCard
+          label="Net balance"
+          value={inr.format(data?.totals.net ?? 0)}
+          icon={Scale}
+          tone="indigo"
+          sub={
+            (from || to) && data?.totals.opening
+              ? `${inr.format(data.totals.opening)} carried in`
+              : undefined
+          }
+        />
       </div>
 
       <Card>
