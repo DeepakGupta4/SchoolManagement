@@ -268,6 +268,9 @@ export default function SubscriptionPage() {
 
   const meta = sub ? STATUS_META[sub.status] : null;
   const end = sub ? endInfo(sub) : null;
+  // Complimentary (admin-granted free) access — full access with no expiry/billing.
+  // Shown as "Unlimited / Never expires" rather than empty date fields.
+  const freeAccess = !!sub?.freeAccess;
   const currentPlanPrice = sub ? plans.find((p) => p.id === sub.plan)?.priceInr : undefined;
   const activePaid = !!sub && sub.status === "active" && (sub.plan === "monthly" || sub.plan === "yearly");
   const showPlanCta = !!sub && paymentEnabled && ["trial", "expired", "cancelled"].includes(sub.status);
@@ -288,15 +291,20 @@ export default function SubscriptionPage() {
                 <p className="text-xs font-medium uppercase tracking-wide text-subtle">Current subscription</p>
                 <div className="mt-0.5 flex flex-wrap items-center gap-2">
                   <h2 className="text-lg font-semibold text-text">
-                    {sub.plan ? `${PLAN_LABEL[sub.plan]} plan` : "No active plan"}
+                    {freeAccess ? "Complimentary access" : sub.plan ? `${PLAN_LABEL[sub.plan]} plan` : "No active plan"}
                   </h2>
                   <Badge variant={meta.variant}>{meta.label}</Badge>
+                  {freeAccess && <Badge variant="info">Complimentary</Badge>}
                 </div>
                 {sub.schoolName && <p className="mt-0.5 truncate text-sm text-muted">{sub.schoolName}</p>}
               </div>
             </div>
 
-            <p className="text-sm text-muted">{meta.message}</p>
+            <p className="text-sm text-muted">
+              {freeAccess
+                ? "You have complimentary full access to every SchoolDeck module — no expiry and no billing."
+                : meta.message}
+            </p>
 
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               <Metric
@@ -314,12 +322,22 @@ export default function SubscriptionPage() {
               <Metric
                 icon={CalendarClock}
                 label="Days remaining"
-                value={sub.daysRemaining != null ? String(sub.daysRemaining) : "—"}
+                value={freeAccess ? "Unlimited" : sub.daysRemaining != null ? String(sub.daysRemaining) : "—"}
                 hint={
-                  sub.daysRemaining != null ? (sub.daysRemaining === 1 ? "day left" : "days left") : undefined
+                  freeAccess
+                    ? "no expiry"
+                    : sub.daysRemaining != null
+                      ? sub.daysRemaining === 1
+                        ? "day left"
+                        : "days left"
+                      : undefined
                 }
               />
-              <Metric icon={CalendarDays} label={end.label} value={fmtLong(end.date)} />
+              <Metric
+                icon={CalendarDays}
+                label={freeAccess ? "Validity" : end.label}
+                value={freeAccess ? "Never expires" : fmtLong(end.date)}
+              />
             </div>
 
             {showPlanCta && (

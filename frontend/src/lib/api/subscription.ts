@@ -23,6 +23,8 @@ export interface MySubscription {
   daysRemaining: number | null;
   trialEndDate: string | null;
   paidEndDate: string | null;
+  /** Admin-granted complimentary access — full access, no expiry or billing. */
+  freeAccess?: boolean;
   schoolName: string | null;
 }
 

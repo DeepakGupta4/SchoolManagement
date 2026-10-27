@@ -58,6 +58,9 @@ router.get("/me", async (req, res, next) => {
         daysRemaining: access.daysRemaining,
         trialEndDate: access.trialEndDate,
         paidEndDate: access.paidEndDate,
+        // Admin-granted complimentary access: full access, no expiry/billing. The
+        // client shows "Unlimited / Never expires" instead of empty date fields.
+        freeAccess: Boolean(school.subscription.freeAccess),
         schoolName: school.name,
       },
     });
