@@ -72,3 +72,26 @@ export interface SampleStaffResult {
 export async function addSampleStaff(): Promise<SampleStaffResult> {
   return apiRequest<SampleStaffResult>("/api/auth/users/sample-staff", { method: "POST" });
 }
+
+/** A few sample account holders of a role, with the totals. */
+export interface RoleHolderSummary {
+  total: number;
+  active: number;
+  sample: { id: string; name: string; email: string; isActive: boolean }[];
+}
+
+/**
+ * Per-role account summary for the Roles page — counts + a few sample holders,
+ * computed server-side so the page never fetches the whole school's users.
+ */
+export interface RoleSummary {
+  /** Built-in role name -> summary (e.g. "school_admin", "principal", "teacher"). */
+  roles: Record<string, RoleHolderSummary>;
+  /** Custom role key -> summary. */
+  custom: Record<string, RoleHolderSummary>;
+  totalAccounts: number;
+}
+
+export async function getRoleSummary(): Promise<RoleSummary> {
+  return apiRequest<RoleSummary>("/api/auth/users/role-summary");
+}

@@ -417,6 +417,72 @@ router.get(
   }
 );
 
+/**
+ * Per-role account summary for the Roles & Permissions page: how many accounts
+ * hold each role (total + active) plus a few sample holders — WITHOUT shipping
+ * every student/parent to the browser. One aggregation; `$topN` keeps only a
+ * handful of sample docs per group in memory, so it scales to large schools.
+ */
+router.get(
+  "/users/role-summary",
+  requireAuth,
+  requireRole("super_admin", "school_admin", "principal"),
+  async (req, res, next) => {
+    try {
+      const schoolId = req.user!.schoolId;
+      const groups = await User.aggregate<{
+        _id: { role: string; customRoleKey: string };
+        total: number;
+        active: number;
+        sample: { id: unknown; name: string; email: string; isActive: boolean }[];
+      }>([
+        { $match: { schoolId } },
+        {
+          $group: {
+            _id: { role: "$role", customRoleKey: { $ifNull: ["$customRoleKey", ""] } },
+            total: { $sum: 1 },
+            // Count anything not explicitly deactivated as active (isActive defaults true).
+            active: { $sum: { $cond: [{ $ne: ["$isActive", false] }, 1, 0] } },
+            sample: {
+              $topN: {
+                n: 5,
+                sortBy: { createdAt: -1 },
+                output: { id: "$_id", name: "$name", email: "$email", isActive: "$isActive" },
+              },
+            },
+          },
+        },
+      ]);
+
+      const roles: Record<string, unknown> = {};
+      const custom: Record<string, unknown> = {};
+      let totalAccounts = 0;
+      for (const g of groups) {
+        totalAccounts += g.total;
+        const entry = {
+          total: g.total,
+          active: g.active,
+          sample: g.sample.map((s) => ({
+            id: String(s.id),
+            name: s.name ?? "",
+            email: s.email ?? "",
+            isActive: s.isActive !== false,
+          })),
+        };
+        if (g._id.role === "custom") {
+          if (g._id.customRoleKey) custom[g._id.customRoleKey] = entry;
+        } else {
+          roles[g._id.role] = entry;
+        }
+      }
+
+      res.json({ data: { roles, custom, totalAccounts } });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
 const updateUserSchema = z.object({
   name: z.string().min(2).optional(),
   /** The login email — admins can correct it; must stay unique. */

@@ -13,17 +13,65 @@ import {
   Input,
   Modal,
   PageHeader,
+  Skeleton,
   StatCard,
   Table,
   type Column,
 } from "@/components/ui";
 import { useResource } from "@/hooks/useResource";
 import { rolesApi, type CustomRole } from "@/lib/api/roles";
-import { listUsers, type ManagedUser } from "@/lib/api/users";
+import { getRoleSummary, type RoleSummary, type RoleHolderSummary } from "@/lib/api/users";
 import { BUILTIN_ROLES, PERMISSION_MODULES, type PermissionMap } from "@/lib/permissions";
 import { RoleFormModal } from "./RoleFormModal";
 
 const moduleLabel = (key: string) => PERMISSION_MODULES.find((m) => m.key === key)?.label ?? key;
+
+/** The accounts holding a role: loading skeleton, error, empty, or the holder list. */
+function HolderList({
+  loading,
+  error,
+  entry,
+  isSingleton,
+}: {
+  loading: boolean;
+  error: boolean;
+  entry?: RoleHolderSummary;
+  isSingleton: boolean;
+}) {
+  if (loading && !entry) {
+    return (
+      <div className="flex flex-col gap-1.5">
+        {[0, 1].map((i) => (
+          <Skeleton key={i} className="h-7" />
+        ))}
+      </div>
+    );
+  }
+  if (error && !entry) return <p className="text-xs text-subtle">Couldn&apos;t load accounts</p>;
+  if (!entry || entry.total === 0) {
+    return <p className="text-xs text-subtle">{isSingleton ? "Not assigned yet" : "No accounts yet"}</p>;
+  }
+  const shown = entry.sample.slice(0, 3);
+  const remaining = entry.total - shown.length;
+  return (
+    <ul className="flex flex-col gap-1.5">
+      {shown.map((u) => (
+        <li key={u.id} className="flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <p className="truncate text-xs font-medium text-text">{u.name || "(no name)"}</p>
+            <p className="truncate text-[11px] text-subtle">{u.email}</p>
+          </div>
+          {!u.isActive && (
+            <Badge variant="default" className="shrink-0">
+              Inactive
+            </Badge>
+          )}
+        </li>
+      ))}
+      {remaining > 0 && <li className="text-[11px] text-muted">+{remaining} more</li>}
+    </ul>
+  );
+}
 
 export default function RolesPage() {
   const [search, setSearch] = useState("");
@@ -49,18 +97,28 @@ export default function RolesPage() {
     router.push(`/users?role=${encodeURIComponent(roleValue)}`);
   };
 
-  // Existing accounts in THIS school, so every role shows who actually holds it
-  // (the created admin, principal, teachers, …) — not just the role definition.
-  const [users, setUsers] = useState<ManagedUser[]>([]);
+  // Who actually holds each role in THIS school (the created admin, principal,
+  // teachers, …) — counts + a few sample holders, computed server-side so the
+  // page never pulls the whole school's users.
+  const [summary, setSummary] = useState<RoleSummary | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(true);
+  const [summaryError, setSummaryError] = useState(false);
+
   useEffect(() => {
     let cancelled = false;
     const t = setTimeout(() => {
-      listUsers()
+      setSummaryLoading(true);
+      getRoleSummary()
         .then((data) => {
-          if (!cancelled) setUsers(data);
+          if (cancelled) return;
+          setSummary(data);
+          setSummaryError(false);
+          setSummaryLoading(false);
         })
         .catch(() => {
-          /* non-critical — the page still shows the role definitions */
+          if (cancelled) return;
+          setSummaryError(true);
+          setSummaryLoading(false);
         });
     }, 0);
     return () => {
@@ -69,19 +127,17 @@ export default function RolesPage() {
     };
   }, []);
 
-  /** Accounts holding a role — a built-in role string, or "custom:<key>". */
-  const holdersFor = (roleValue: string): ManagedUser[] => {
-    if (roleValue.startsWith("custom:")) {
-      const key = roleValue.slice("custom:".length);
-      return users.filter((u) => u.role === "custom" && (u.customRoleKey ?? "") === key);
-    }
-    return users.filter((u) => u.role === roleValue);
+  /** The summary for a role — a built-in role string, or "custom:<key>". */
+  const summaryFor = (roleValue: string): RoleHolderSummary | undefined => {
+    if (!summary) return undefined;
+    if (roleValue.startsWith("custom:")) return summary.custom[roleValue.slice("custom:".length)];
+    return summary.roles[roleValue];
   };
 
   const stats = useMemo(() => {
     const active = items.filter((r) => r.isActive).length;
-    return { total: items.length, active, accounts: users.length };
-  }, [items, users]);
+    return { total: items.length, active };
+  }, [items]);
 
   const openCreate = () => {
     setEditing(null);
@@ -158,16 +214,19 @@ export default function RolesPage() {
       key: "accounts",
       header: "Accounts",
       render: (r) => {
-        const h = holdersFor(`custom:${r.key}`);
-        if (h.length === 0) return <span className="text-subtle">None yet</span>;
+        if (summaryLoading && !summary) return <Skeleton className="h-4 w-16" />;
+        if (summaryError && !summary) return <span className="text-subtle">—</span>;
+        const e = summaryFor(`custom:${r.key}`);
+        if (!e || e.total === 0) return <span className="text-subtle">None yet</span>;
+        const names = e.sample.slice(0, 2).map((u) => u.name || u.email).join(", ");
         return (
           <div className="min-w-0">
             <p className="font-medium text-text">
-              {h.length} user{h.length === 1 ? "" : "s"}
+              {e.total} user{e.total === 1 ? "" : "s"}
             </p>
             <p className="max-w-56 truncate text-xs text-subtle">
-              {h.slice(0, 2).map((u) => u.name).join(", ")}
-              {h.length > 2 ? `, +${h.length - 2} more` : ""}
+              {names}
+              {e.total > 2 ? `, +${e.total - 2} more` : ""}
             </p>
           </div>
         );
@@ -243,7 +302,12 @@ export default function RolesPage() {
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatCard label="Custom roles" value={stats.total} icon={KeyRound} tone="indigo" />
         <StatCard label="Active" value={stats.active} icon={ShieldCheck} tone="emerald" />
-        <StatCard label="Accounts" value={stats.accounts} icon={UserPlus} tone="amber" />
+        <StatCard
+          label="Accounts"
+          value={summaryLoading && !summary ? "…" : summaryError && !summary ? "—" : summary?.totalAccounts ?? 0}
+          icon={UserPlus}
+          tone="amber"
+        />
         <StatCard label="Grantable sections" value={PERMISSION_MODULES.length} icon={Users} tone="violet" />
       </div>
 
@@ -308,9 +372,9 @@ export default function RolesPage() {
               const count = Object.values(b.defaultPermissions).filter(
                 (l) => l === "view" || l === "edit"
               ).length;
-              const holders = holdersFor(b.role);
+              const entry = summaryFor(b.role);
               const isSingleton = b.role === "school_admin" || b.role === "principal";
-              const slotFilled = isSingleton && holders.some((h) => h.isActive !== false);
+              const slotFilled = isSingleton && (entry?.active ?? 0) > 0;
               return (
                 <div
                   key={b.role}
@@ -319,7 +383,7 @@ export default function RolesPage() {
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex min-w-0 items-center gap-2">
                       <p className="truncate font-medium text-text">{b.name}</p>
-                      {holders.length > 0 && <Badge variant="info">{holders.length}</Badge>}
+                      {entry && entry.total > 0 && <Badge variant="info">{entry.total}</Badge>}
                     </div>
                     <Badge variant="default" className="shrink-0 gap-1">
                       <Lock className="size-3" />
@@ -330,26 +394,12 @@ export default function RolesPage() {
 
                   {/* Accounts in THIS school that currently hold this role. */}
                   <div className="rounded-md border border-border bg-surface-hover p-2">
-                    {holders.length === 0 ? (
-                      <p className="text-xs text-subtle">
-                        {isSingleton ? "Not assigned yet" : "No accounts yet"}
-                      </p>
-                    ) : (
-                      <ul className="flex flex-col gap-1.5">
-                        {holders.slice(0, 3).map((u) => (
-                          <li key={u.id} className="flex items-center justify-between gap-2">
-                            <div className="min-w-0">
-                              <p className="truncate text-xs font-medium text-text">{u.name}</p>
-                              <p className="truncate text-[11px] text-subtle">{u.email}</p>
-                            </div>
-                            {u.isActive === false && <Badge variant="default" className="shrink-0">Inactive</Badge>}
-                          </li>
-                        ))}
-                        {holders.length > 3 && (
-                          <li className="text-[11px] text-muted">+{holders.length - 3} more</li>
-                        )}
-                      </ul>
-                    )}
+                    <HolderList
+                      loading={summaryLoading}
+                      error={summaryError}
+                      entry={entry}
+                      isSingleton={isSingleton}
+                    />
                   </div>
 
                   <div className="mt-auto flex items-center justify-between gap-2 pt-1">
