@@ -6,6 +6,8 @@ import { MapPin } from "lucide-react";
 import { Badge, Card, CardHeader, Skeleton } from "@/components/ui";
 import { eventsApi, type SchoolEvent, type EventCategory } from "@/lib/api/events";
 import { todayIso } from "@/lib/dates";
+import { useEntitlementsStore } from "@/store";
+import { hrefInTier } from "@/lib/permissions";
 
 const categoryVariant: Record<EventCategory, "info" | "warning" | "danger" | "success"> = {
   Cultural: "info",
@@ -29,8 +31,13 @@ function parseDate(iso: string): { month: string; day: string } {
 export function UpcomingEvents() {
   const [events, setEvents] = useState<SchoolEvent[] | null>(null);
   const [error, setError] = useState(false);
+  // Events is a Standard+ module — don't fetch (it 402s) or render on a plan
+  // that doesn't include it.
+  const tierModules = useEntitlementsStore((s) => s.tierModules);
+  const eventsInTier = hrefInTier("/events", tierModules);
 
   useEffect(() => {
+    if (!eventsInTier) return;
     let cancelled = false;
     const t = setTimeout(() => {
       eventsApi
@@ -63,7 +70,9 @@ export function UpcomingEvents() {
       cancelled = true;
       clearTimeout(t);
     };
-  }, []);
+  }, [eventsInTier]);
+
+  if (!eventsInTier) return null;
 
   return (
     <Card className="overflow-hidden">

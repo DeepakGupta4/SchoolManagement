@@ -493,7 +493,9 @@ export default function SubscriptionPage() {
               const yearlySavings = t.monthlyTotalInr * 12 - t.yearlyTotalInr;
               const yearlySavingsPct =
                 t.monthlyTotalInr > 0 ? Math.round((yearlySavings / (t.monthlyTotalInr * 12)) * 100) : 0;
-              const effMonthlyPerStudent = Math.round(t.perStudentYearlyInr / 12);
+              // Exact effective monthly rate (yearly ÷ 12), trailing zeros trimmed,
+              // so Premium reads ₹12.5 — not a rounded-up ₹13.
+              const effMonthlyPerStudent = (t.perStudentYearlyInr / 12).toFixed(2).replace(/\.?0+$/, "");
 
               const isCurrentExact = activePaid && currentTier === t.id && currentCycle === cycle;
               const isCurrentTier = activePaid && currentTier === t.id;
@@ -541,7 +543,7 @@ export default function SubscriptionPage() {
                       </div>
                       {cycle === "yearly" ? (
                         <p className="mt-1 text-xs text-muted">
-                          ≈ {inr.format(effMonthlyPerStudent)} / student / month
+                          ≈ ₹{effMonthlyPerStudent} / student / month
                           {yearlySavings > 0 && (
                             <span className="text-success-text"> · Save {yearlySavingsPct}%</span>
                           )}

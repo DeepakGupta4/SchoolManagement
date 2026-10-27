@@ -20,7 +20,8 @@ import { StaffDashboard } from "@/components/dashboard/StaffDashboard";
 import { LibrarianDashboard } from "@/components/dashboard/LibrarianDashboard";
 import { AccountantDashboard } from "@/components/dashboard/AccountantDashboard";
 import { CustomRoleDashboard } from "@/components/dashboard/CustomRoleDashboard";
-import { useAuthStore } from "@/store";
+import { useAuthStore, useEntitlementsStore } from "@/store";
+import { hrefInTier } from "@/lib/permissions";
 import type { UserRole } from "@/types";
 import { useDashboardInsights, type DashboardInsights } from "@/hooks/useDashboardInsights";
 import { fullName } from "@/types/student";
@@ -460,6 +461,7 @@ function BentoSkeleton() {
 
 function AdminDashboard() {
   const { user } = useAuthStore();
+  const tierModules = useEntitlementsStore((s) => s.tierModules);
   const router = useRouter();
   const { data, loading, error } = useDashboardInsights();
 
@@ -470,7 +472,12 @@ function AdminDashboard() {
     day: "numeric",
   });
 
-  const metrics = data ? buildMetrics(data) : [];
+  // Drop metric tiles whose module isn't in the school's plan (e.g. the exams
+  // tile on a Starter plan), so a tile never links to a locked page. Strip the
+  // query string before matching the module.
+  const metrics = data
+    ? buildMetrics(data).filter((m) => hrefInTier(m.href.split("?")[0] ?? m.href, tierModules))
+    : [];
   const schoolName = data?.schoolName ?? null;
   const setupPending = !loading && !!data && !SETUP_STEPS.every((s) => s.done(data));
 

@@ -15,6 +15,8 @@ import {
 } from "@/lib/api/feeLedger";
 import { expensesApi, expenseMonthBucket } from "@/lib/api/expenses";
 import { todayIso } from "@/lib/dates";
+import { useEntitlementsStore } from "@/store";
+import { hrefInTier } from "@/lib/permissions";
 
 /** All money is whole-rupee INR, the house style for the fee desk. */
 const inr = new Intl.NumberFormat("en-IN", {
@@ -84,6 +86,10 @@ function StatCard({
 }
 
 export function AccountantDashboard() {
+  // Hide quick-actions whose module isn't in the school's plan (Expenses/Payroll
+  // are Premium) so a card never links to a page the plan can't open.
+  const tierModules = useEntitlementsStore((s) => s.tierModules);
+  const quickActions = QUICK_ACTIONS.filter((a) => hrefInTier(a.href, tierModules));
   // undefined = still loading; null = that source failed; value = loaded.
   const [summary, setSummary] = useState<FeeSummary | null | undefined>(undefined);
   const [payments, setPayments] = useState<Payment[] | null | undefined>(undefined);
@@ -293,7 +299,7 @@ export function AccountantDashboard() {
           <h2 className="text-sm font-semibold text-text">Quick actions</h2>
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {QUICK_ACTIONS.map((a) => {
+          {quickActions.map((a) => {
             const Icon = a.icon;
             return (
               <Link key={a.href} href={a.href} className="focus-ring group">

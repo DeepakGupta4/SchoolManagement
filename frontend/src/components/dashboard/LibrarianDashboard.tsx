@@ -5,6 +5,8 @@ import Link from "next/link";
 import { Library, BookOpen, BookCheck, Boxes, ArrowRight } from "lucide-react";
 import { Card, CardContent, Skeleton } from "@/components/ui";
 import { apiList } from "@/lib/api/client";
+import { useEntitlementsStore } from "@/store";
+import { hrefInTier } from "@/lib/permissions";
 
 interface BookRow {
   total?: number;
@@ -35,8 +37,13 @@ function StatCard({ icon: Icon, label, value, tone }: { icon: typeof Library; la
 
 export function LibrarianDashboard() {
   const [stats, setStats] = useState<LibStats | null>(null);
+  // Library is a Standard+ module; if this school's plan excludes it, don't call
+  // /api/books (it 402s) and show an upgrade note instead of a dead catalog link.
+  const tierModules = useEntitlementsStore((s) => s.tierModules);
+  const libInTier = hrefInTier("/library", tierModules);
 
   useEffect(() => {
+    if (!libInTier) return;
     let cancelled = false;
     apiList<BookRow>("/api/books", { query: { limit: 500 } })
       .then((res) => {
@@ -55,7 +62,17 @@ export function LibrarianDashboard() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [libInTier]);
+
+  if (!libInTier) {
+    return (
+      <Card>
+        <CardContent className="py-10 text-center text-sm text-muted">
+          Your current plan doesn&apos;t include the Library module. Ask your administrator to upgrade to unlock it.
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-5">

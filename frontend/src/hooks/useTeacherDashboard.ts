@@ -45,13 +45,8 @@ export function useTeacherDashboard(email: string | undefined) {
     (async () => {
       let self: Teacher | null;
       let timetable: TimetableEntry[];
-      let assignments: Assignment[];
       try {
-        [self, timetable, assignments] = await Promise.all([
-          getMyTeacher(),
-          timetableApi.list(),
-          assignmentsApi.list(),
-        ]);
+        [self, timetable] = await Promise.all([getMyTeacher(), timetableApi.list()]);
       } catch (e) {
         if (cancelled) return;
         setError(e instanceof Error ? e.message : "Could not load your dashboard.");
@@ -59,6 +54,17 @@ export function useTeacherDashboard(email: string | undefined) {
         return;
       }
       if (cancelled) return;
+
+      // Assignments are a Standard+ module: a Starter-plan school 402s here. They're
+      // not essential to the core dashboard, so default to none instead of failing
+      // the whole screen (timetable, classes and students are all Starter-level).
+      let assignments: Assignment[] = [];
+      try {
+        assignments = await assignmentsApi.list();
+        if (cancelled) return;
+      } catch {
+        /* module not in this school's plan (402) or a transient error — show none */
+      }
 
       const name = self ? teacherName(self) : "";
       const classes = [...new Set(self?.classes ?? [])];
