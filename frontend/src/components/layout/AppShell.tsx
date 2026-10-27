@@ -41,8 +41,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </main>
 
-      {/* In-app AI assistant — available on every authenticated page. */}
-      {(!sub || sub.allowed) && <ChatbotWidget />}
+      {/* In-app AI assistant — available on every authenticated page, but only
+          when the school's plan includes AI (tierModules null = no restriction). */}
+      {(!sub || sub.allowed) && (!sub?.tierModules || sub.tierModules.includes("ai")) && <ChatbotWidget />}
 
       {/* Full-screen wall when the server says access is not allowed. Covers
           the chrome too, so an expired/suspended school cannot interact. */}

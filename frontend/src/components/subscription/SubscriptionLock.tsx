@@ -4,10 +4,11 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Ban, Check, LockKeyhole, LogOut, Mail, Loader2, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui";
+import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store";
 import { logout as apiLogout } from "@/lib/api/auth";
 import type { MySubscription } from "@/lib/api/subscription";
-import { getPlans, type Plan } from "@/lib/api/payment";
+import { getPlans, type TierPlan, type TierId, type BillingCycle } from "@/lib/api/payment";
 import { startCheckout } from "@/lib/payment";
 
 const SUPPORT_EMAIL = "schooldeck.in@gmail.com";
@@ -28,8 +29,10 @@ export function SubscriptionLock({ sub }: { sub: MySubscription }) {
 
   const suspended = sub.status === "suspended";
 
-  const [plans, setPlans] = useState<Plan[]>([]);
+  const [tiers, setTiers] = useState<TierPlan[]>([]);
+  const [billedStudents, setBilledStudents] = useState(0);
   const [paymentEnabled, setPaymentEnabled] = useState(false);
+  const [cycle, setCycle] = useState<BillingCycle>("monthly");
   const [paying, setPaying] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -39,7 +42,8 @@ export function SubscriptionLock({ sub }: { sub: MySubscription }) {
     getPlans()
       .then((res) => {
         if (!cancelled) {
-          setPlans(res.plans);
+          setTiers(res.tiers);
+          setBilledStudents(res.billedStudents);
           setPaymentEnabled(res.paymentEnabled);
         }
       })
@@ -57,11 +61,11 @@ export function SubscriptionLock({ sub }: { sub: MySubscription }) {
     router.replace("/login");
   };
 
-  const pay = async (plan: "monthly" | "yearly") => {
+  const pay = async (tier: TierId) => {
     setError(null);
-    setPaying(plan);
+    setPaying(tier);
     try {
-      await startCheckout({ plan, prefill: { name: user?.name, email: user?.email } });
+      await startCheckout({ tier, cycle, prefill: { name: user?.name, email: user?.email } });
       // Verified and activated on the server — reload to drop the lock.
       window.location.reload();
     } catch (e) {
@@ -90,8 +94,8 @@ export function SubscriptionLock({ sub }: { sub: MySubscription }) {
             <>This account has been suspended. Please contact us to restore access.</>
           ) : (
             <>
-              Your {sub.plan === "trial" ? "7-day free demo" : "subscription"} has ended. To keep
-              using {sub.schoolName ?? "SchoolDeck"}, activate your subscription.
+              Your {sub.plan === "trial" ? "free trial" : "subscription"} has ended. To keep
+              using {sub.schoolName ?? "SchoolDeck"}, activate a plan below.
             </>
           )}
         </p>
@@ -102,32 +106,67 @@ export function SubscriptionLock({ sub }: { sub: MySubscription }) {
         </div>
 
         {/* Self-service payment */}
-        {!suspended && paymentEnabled && plans.length > 0 && (
-          <div className="mt-6 grid gap-2.5">
-            {plans.map((p) => (
+        {!suspended && paymentEnabled && tiers.length > 0 && (
+          <>
+            {/* Billing-cycle toggle */}
+            <div className="mt-6 inline-flex rounded-lg border border-border bg-surface p-1 text-sm">
               <button
-                key={p.id}
-                disabled={!!paying}
-                onClick={() => pay(p.id)}
-                className="flex items-center justify-between rounded-xl border border-border bg-surface-hover px-4 py-3 text-left transition-colors hover:border-primary disabled:opacity-60"
+                type="button"
+                onClick={() => setCycle("monthly")}
+                className={cn(
+                  "rounded-md px-3 py-1.5 font-medium transition-colors",
+                  cycle === "monthly" ? "bg-primary text-white" : "text-muted hover:text-text"
+                )}
               >
-                <span>
-                  <span className="block text-sm font-semibold text-text">{p.name} plan</span>
-                  <span className="block text-xs text-muted">
-                    {p.id === "yearly" ? "Best value — billed yearly" : "Billed monthly"}
-                  </span>
-                </span>
-                <span className="flex items-center gap-2">
-                  <span className="text-base font-bold text-text">{inr.format(p.priceInr)}</span>
-                  {paying === p.id ? (
-                    <Loader2 className="size-4 animate-spin text-primary" />
-                  ) : (
-                    <Check className="size-4 text-primary" />
-                  )}
-                </span>
+                Monthly
               </button>
-            ))}
-          </div>
+              <button
+                type="button"
+                onClick={() => setCycle("yearly")}
+                className={cn(
+                  "rounded-md px-3 py-1.5 font-medium transition-colors",
+                  cycle === "yearly" ? "bg-primary text-white" : "text-muted hover:text-text"
+                )}
+              >
+                Yearly · 2 months free
+              </button>
+            </div>
+
+            <div className="mt-3 grid gap-2.5 text-left">
+              {tiers.map((t) => {
+                const perStudent = cycle === "yearly" ? t.perStudentYearlyInr : t.perStudentMonthlyInr;
+                const total = cycle === "yearly" ? t.yearlyTotalInr : t.monthlyTotalInr;
+                return (
+                  <button
+                    key={t.id}
+                    disabled={!!paying}
+                    onClick={() => pay(t.id)}
+                    className="flex items-center justify-between rounded-xl border border-border bg-surface-hover px-4 py-3 text-left transition-colors hover:border-primary disabled:opacity-60"
+                  >
+                    <span>
+                      <span className="block text-sm font-semibold text-text">{t.name} plan</span>
+                      <span className="block text-xs text-muted">
+                        {inr.format(perStudent)} / student / {cycle === "yearly" ? "year" : "month"}
+                      </span>
+                    </span>
+                    <span className="flex items-center gap-2">
+                      <span className="text-right">
+                        <span className="block text-base font-bold text-text">{inr.format(total)}</span>
+                        <span className="block text-[11px] text-muted">
+                          /{cycle === "yearly" ? "yr" : "mo"} · {billedStudents} students
+                        </span>
+                      </span>
+                      {paying === t.id ? (
+                        <Loader2 className="size-4 animate-spin text-primary" />
+                      ) : (
+                        <Check className="size-4 text-primary" />
+                      )}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </>
         )}
 
         {error && <p className="mt-3 text-sm text-danger-text">{error}</p>}

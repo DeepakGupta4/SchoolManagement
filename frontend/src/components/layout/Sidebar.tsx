@@ -5,7 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ChevronDown, PanelLeftClose, PanelLeftOpen, Search, X } from "lucide-react";
-import { useSidebarStore, useAuthStore } from "@/store";
+import { useSidebarStore, useAuthStore, useEntitlementsStore } from "@/store";
 import { navGroupsForRole, type NavEntry } from "@/lib/navigation";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { cn } from "@/lib/utils";
@@ -183,12 +183,14 @@ export function Sidebar({ schoolName }: { schoolName?: string | null }) {
   const query = filter.trim().toLowerCase();
   const role = useAuthStore((s) => s.user?.role);
   const permissions = useAuthStore((s) => s.user?.permissions);
+  const tierModules = useEntitlementsStore((s) => s.tierModules);
 
   const visibleGroups = useMemo(() => {
     // Role decides which groups/items appear: the platform owner sees only
     // platform modules, teachers see a restricted teaching set, school admins
     // see everything tenant-side. A custom role sees exactly its granted sections.
-    const allowed = navGroupsForRole(role, permissions);
+    // The school's feature tier then hides any module its plan doesn't include.
+    const allowed = navGroupsForRole(role, permissions, tierModules);
     if (!query) return allowed;
     return allowed
       .map((group) => ({
@@ -200,7 +202,7 @@ export function Sidebar({ schoolName }: { schoolName?: string | null }) {
         ),
       }))
       .filter((group) => group.items.length > 0);
-  }, [query, role, permissions]);
+  }, [query, role, permissions, tierModules]);
 
   const width = isCollapsed ? "72px" : "260px";
 

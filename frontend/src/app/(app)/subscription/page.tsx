@@ -15,6 +15,7 @@ import {
   RefreshCw,
   ShieldCheck,
   Sparkles,
+  Users,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -35,7 +36,7 @@ import {
   type MySubscription,
   type SubscriptionStatus,
 } from "@/lib/api/subscription";
-import { getPlans, type Plan } from "@/lib/api/payment";
+import { getPlans, type TierPlan, type TierId, type BillingCycle } from "@/lib/api/payment";
 import { startCheckout } from "@/lib/payment";
 
 const SUPPORT_EMAIL = "schooldeck.in@gmail.com";
@@ -53,7 +54,7 @@ const STATUS_META: Record<
     variant: "info",
     Icon: Sparkles,
     iconClass: "bg-info-soft text-info-text",
-    message: "You're exploring SchoolDeck on a free trial. Choose a plan below to keep your access after it ends.",
+    message: "You're exploring SchoolDeck on a free trial with full access. Choose a plan below to keep going after it ends.",
   },
   active: {
     label: "Active",
@@ -92,14 +93,55 @@ const STATUS_META: Record<
   },
 };
 
-const PLAN_LABEL: Record<NonNullable<MySubscription["plan"]>, string> = {
+const CYCLE_LABEL: Record<NonNullable<MySubscription["plan"]>, string> = {
   trial: "Trial",
   monthly: "Monthly",
   yearly: "Yearly",
 };
 
-/** Shared across tiers — SchoolDeck ships as a single, fully-featured plan. */
-const FEATURES = ["Every SchoolDeck module included", "Unlimited students & staff", "Priority email support"];
+const TIER_NAME: Record<TierId, string> = { starter: "Starter", standard: "Standard", premium: "Premium" };
+
+/**
+ * Marketing highlights per tier. The AUTHORITATIVE feature set (what the API
+ * actually unlocks) lives in backend/src/modules/schools/tiers.ts — these are the
+ * human-friendly bullets, kept in step with it (and with the showcase site).
+ */
+const TIER_HIGHLIGHTS: Record<TierId, { headline: string; features: string[] }> = {
+  starter: {
+    headline: "Core school operations",
+    features: [
+      "Students, teachers, staff & parents",
+      "Classes, subjects & timetable",
+      "Attendance & holidays",
+      "Fee collection & receipts",
+      "Announcements, notices & messaging",
+      "Certificates",
+    ],
+  },
+  standard: {
+    headline: "Everything in Starter, plus",
+    features: [
+      "Examinations, marks & report cards",
+      "Assignments & syllabus",
+      "Online classes & study material (LMS)",
+      "Library circulation",
+      "Transport & hostel",
+      "Events & visitor management",
+    ],
+  },
+  premium: {
+    headline: "Everything in Standard, plus",
+    features: [
+      "Expenses & payroll",
+      "Inventory & canteen",
+      "Health / infirmary & labs",
+      "Advanced analytics & dashboards",
+      "AI assistant",
+    ],
+  },
+};
+
+const TIER_RANK: Record<TierId, number> = { starter: 0, standard: 1, premium: 2 };
 
 function fmtLong(d: string | null): string {
   return d ? new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" }) : "—";
@@ -131,8 +173,14 @@ export default function SubscriptionPage() {
   const user = useAuthStore((s) => s.user);
 
   const [sub, setSub] = useState<MySubscription | null>(null);
-  const [plans, setPlans] = useState<Plan[]>([]);
+  const [tiers, setTiers] = useState<TierPlan[]>([]);
+  const [students, setStudents] = useState(0);
+  const [billedStudents, setBilledStudents] = useState(0);
+  const [minBilled, setMinBilled] = useState(0);
+  const [currentTier, setCurrentTier] = useState<TierId | null>(null);
+  const [currentCycle, setCurrentCycle] = useState<BillingCycle | null>(null);
   const [paymentEnabled, setPaymentEnabled] = useState(false);
+  const [cycle, setCycle] = useState<BillingCycle>("monthly");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [paying, setPaying] = useState<string | null>(null);
@@ -156,10 +204,17 @@ export default function SubscriptionPage() {
             setError("We couldn't load your subscription. Please try again.");
           }
           if (planRes.status === "fulfilled") {
-            setPlans(planRes.value.plans);
-            setPaymentEnabled(planRes.value.paymentEnabled);
+            const p = planRes.value;
+            setTiers(p.tiers);
+            setStudents(p.students);
+            setBilledStudents(p.billedStudents);
+            setMinBilled(p.minBilledStudents);
+            setPaymentEnabled(p.paymentEnabled);
+            setCurrentTier(p.currentTier);
+            setCurrentCycle(p.currentCycle);
+            if (p.currentCycle) setCycle(p.currentCycle);
           } else {
-            setPlans([]);
+            setTiers([]);
           }
         })
         .finally(() => {
@@ -172,11 +227,11 @@ export default function SubscriptionPage() {
     };
   }, [reloadKey]);
 
-  const pay = async (plan: "monthly" | "yearly") => {
-    setPaying(plan);
+  const pay = async (tier: TierId) => {
+    setPaying(tier);
     try {
-      await startCheckout({ plan, prefill: { name: user?.name, email: user?.email } });
-      toast({ title: "Subscription activated", description: "Thank you! Your plan is now active." });
+      await startCheckout({ tier, cycle, prefill: { name: user?.name, email: user?.email } });
+      toast({ title: "Subscription activated", description: `Thank you! Your ${TIER_NAME[tier]} plan is now active.` });
       reload();
     } catch (e) {
       toast({
@@ -189,19 +244,10 @@ export default function SubscriptionPage() {
     }
   };
 
-  // Savings are derived from the real API prices — never hard-coded.
-  const monthlyPlan = plans.find((p) => p.id === "monthly");
-  const yearlyPlan = plans.find((p) => p.id === "yearly");
-  const yearlySavings = monthlyPlan && yearlyPlan ? monthlyPlan.priceInr * 12 - yearlyPlan.priceInr : 0;
-  const yearlySavingsPct =
-    monthlyPlan && yearlyPlan && monthlyPlan.priceInr > 0
-      ? Math.round((yearlySavings / (monthlyPlan.priceInr * 12)) * 100)
-      : 0;
-
   const header = (
     <PageHeader
       title="Subscription"
-      description="Manage your SchoolDeck plan and billing."
+      description="Per-student pricing — pick the plan that fits your school."
       actions={
         <Button variant="ghost" onClick={reload} disabled={loading}>
           <RefreshCw className={cn("size-4", loading && "animate-spin")} /> Refresh
@@ -269,11 +315,25 @@ export default function SubscriptionPage() {
   const meta = sub ? STATUS_META[sub.status] : null;
   const end = sub ? endInfo(sub) : null;
   // Complimentary (admin-granted free) access — full access with no expiry/billing.
-  // Shown as "Unlimited / Never expires" rather than empty date fields.
   const freeAccess = !!sub?.freeAccess;
-  const currentPlanPrice = sub ? plans.find((p) => p.id === sub.plan)?.priceInr : undefined;
   const activePaid = !!sub && sub.status === "active" && (sub.plan === "monthly" || sub.plan === "yearly");
+  const currentTierDef = currentTier ? tiers.find((t) => t.id === currentTier) : undefined;
+  const currentTotal =
+    currentTierDef && currentCycle
+      ? currentCycle === "yearly"
+        ? currentTierDef.yearlyTotalInr
+        : currentTierDef.monthlyTotalInr
+      : undefined;
   const showPlanCta = !!sub && paymentEnabled && ["trial", "expired", "cancelled"].includes(sub.status);
+
+  // Heading for the current-plan card.
+  const currentHeading = freeAccess
+    ? "Complimentary access"
+    : activePaid && currentTierDef
+      ? `${currentTierDef.name} plan`
+      : sub?.plan
+        ? `${CYCLE_LABEL[sub.plan]} plan`
+        : "No active plan";
 
   return (
     <div className="space-y-6">
@@ -290,10 +350,9 @@ export default function SubscriptionPage() {
               <div className="min-w-0">
                 <p className="text-xs font-medium uppercase tracking-wide text-subtle">Current subscription</p>
                 <div className="mt-0.5 flex flex-wrap items-center gap-2">
-                  <h2 className="text-lg font-semibold text-text">
-                    {freeAccess ? "Complimentary access" : sub.plan ? `${PLAN_LABEL[sub.plan]} plan` : "No active plan"}
-                  </h2>
+                  <h2 className="text-lg font-semibold text-text">{currentHeading}</h2>
                   <Badge variant={meta.variant}>{meta.label}</Badge>
+                  {activePaid && currentCycle && <Badge variant="outline">{CYCLE_LABEL[currentCycle]}</Badge>}
                   {freeAccess && <Badge variant="info">Complimentary</Badge>}
                 </div>
                 {sub.schoolName && <p className="mt-0.5 truncate text-sm text-muted">{sub.schoolName}</p>}
@@ -306,18 +365,24 @@ export default function SubscriptionPage() {
                 : meta.message}
             </p>
 
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               <Metric
                 icon={CircleDollarSign}
                 label="Plan cost"
                 value={
                   sub.plan === "trial" || sub.plan == null
                     ? "Free"
-                    : currentPlanPrice != null
-                      ? inr.format(currentPlanPrice)
+                    : currentTotal != null
+                      ? inr.format(currentTotal)
                       : "—"
                 }
-                hint={sub.plan === "monthly" ? "per month" : sub.plan === "yearly" ? "per year" : undefined}
+                hint={currentCycle === "monthly" ? "per month" : currentCycle === "yearly" ? "per year" : undefined}
+              />
+              <Metric
+                icon={Users}
+                label="Students"
+                value={students > 0 ? String(students) : "—"}
+                hint={billedStudents > students ? `billed for ${billedStudents}` : "active"}
               />
               <Metric
                 icon={CalendarClock}
@@ -353,13 +418,58 @@ export default function SubscriptionPage() {
       )}
 
       {/* Available plans */}
-      <div id="plans" className="scroll-mt-6 space-y-3">
-        <div>
-          <h2 className="text-base font-semibold text-text">Choose your plan</h2>
-          <p className="text-sm text-muted">Every plan unlocks the complete SchoolDeck platform. Prices are in INR.</p>
+      <div id="plans" className="scroll-mt-6 space-y-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 className="text-base font-semibold text-text">Choose your plan</h2>
+            <p className="text-sm text-muted">
+              Pricing is <span className="font-medium text-text">per student, per month</span>.{" "}
+              {students > 0 ? (
+                <>
+                  You have <span className="font-medium text-text">{students}</span> active{" "}
+                  {students === 1 ? "student" : "students"}
+                  {billedStudents > students && <> (billed for a minimum of {minBilled})</>}.
+                </>
+              ) : (
+                <>Add students to see your exact total.</>
+              )}
+            </p>
+          </div>
+
+          {/* Billing-cycle toggle */}
+          <div className="inline-flex shrink-0 self-start rounded-lg border border-border bg-surface p-1 text-sm">
+            <button
+              type="button"
+              onClick={() => setCycle("monthly")}
+              className={cn(
+                "rounded-md px-3 py-1.5 font-medium transition-colors",
+                cycle === "monthly" ? "bg-primary text-white" : "text-muted hover:text-text"
+              )}
+            >
+              Monthly
+            </button>
+            <button
+              type="button"
+              onClick={() => setCycle("yearly")}
+              className={cn(
+                "flex items-center gap-1.5 rounded-md px-3 py-1.5 font-medium transition-colors",
+                cycle === "yearly" ? "bg-primary text-white" : "text-muted hover:text-text"
+              )}
+            >
+              Yearly
+              <span
+                className={cn(
+                  "rounded-full px-1.5 py-0.5 text-[10px] font-semibold",
+                  cycle === "yearly" ? "bg-white/20 text-white" : "bg-success-soft text-success-text"
+                )}
+              >
+                2 months free
+              </span>
+            </button>
+          </div>
         </div>
 
-        {plans.length === 0 ? (
+        {tiers.length === 0 ? (
           <Card>
             <CardContent>
               <EmptyState
@@ -375,80 +485,115 @@ export default function SubscriptionPage() {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid gap-4 md:grid-cols-2">
-            {plans.map((p) => {
-              const yearly = p.id === "yearly";
-              const isCurrent = !!sub && sub.plan === p.id && sub.status === "active";
-              const per = yearly ? "year" : "month";
-              const effectiveMonthly = yearly && p.priceInr > 0 ? Math.round(p.priceInr / 12) : null;
+          <div className="grid gap-4 lg:grid-cols-3">
+            {tiers.map((t) => {
+              const highlight = TIER_HIGHLIGHTS[t.id];
+              const perStudent = cycle === "yearly" ? t.perStudentYearlyInr : t.perStudentMonthlyInr;
+              const total = cycle === "yearly" ? t.yearlyTotalInr : t.monthlyTotalInr;
+              const yearlySavings = t.monthlyTotalInr * 12 - t.yearlyTotalInr;
+              const yearlySavingsPct =
+                t.monthlyTotalInr > 0 ? Math.round((yearlySavings / (t.monthlyTotalInr * 12)) * 100) : 0;
+              const effMonthlyPerStudent = Math.round(t.perStudentYearlyInr / 12);
+
+              const isCurrentExact = activePaid && currentTier === t.id && currentCycle === cycle;
+              const isCurrentTier = activePaid && currentTier === t.id;
+              const featured = t.id === "standard"; // the recommended middle tier
+
+              let ctaLabel: string;
+              if (isCurrentExact) ctaLabel = "Renew plan";
+              else if (activePaid && currentTier)
+                ctaLabel =
+                  TIER_RANK[t.id] > TIER_RANK[currentTier]
+                    ? `Upgrade to ${t.name}`
+                    : TIER_RANK[t.id] < TIER_RANK[currentTier]
+                      ? `Switch to ${t.name}`
+                      : `Switch to ${cycle === "yearly" ? "Yearly" : "Monthly"}`;
+              else ctaLabel = `Choose ${t.name}`;
 
               return (
                 <Card
-                  key={p.id}
+                  key={t.id}
                   className={cn(
-                    "flex flex-col",
-                    isCurrent ? "border-primary ring-1 ring-primary" : yearly ? "border-primary/40" : ""
+                    "relative flex flex-col",
+                    isCurrentTier ? "border-primary ring-1 ring-primary" : featured ? "border-primary/40" : ""
                   )}
                 >
                   <CardContent className="flex flex-1 flex-col gap-4">
                     <div className="flex items-center justify-between gap-2">
-                      <h3 className="text-base font-semibold text-text">{p.name}</h3>
-                      {isCurrent ? (
+                      <h3 className="text-base font-semibold text-text">{t.name}</h3>
+                      {isCurrentTier ? (
                         <Badge variant="success">
                           <BadgeCheck className="mr-1 size-3" /> Current plan
                         </Badge>
-                      ) : yearly ? (
+                      ) : featured ? (
                         <Badge variant="info">
-                          <Sparkles className="mr-1 size-3" /> Best value
+                          <Sparkles className="mr-1 size-3" /> Most popular
                         </Badge>
                       ) : null}
                     </div>
 
+                    <p className="text-sm text-muted">{t.blurb}</p>
+
                     <div>
                       <div className="flex items-baseline gap-1">
-                        <span className="text-3xl font-bold text-text">{inr.format(p.priceInr)}</span>
-                        <span className="text-sm text-muted">/ {per}</span>
+                        <span className="text-3xl font-bold text-text">{inr.format(perStudent)}</span>
+                        <span className="text-sm text-muted">/ student / {cycle === "yearly" ? "year" : "month"}</span>
                       </div>
-                      {yearly && effectiveMonthly != null && (
+                      {cycle === "yearly" ? (
                         <p className="mt-1 text-xs text-muted">
-                          ≈ {inr.format(effectiveMonthly)} / month
+                          ≈ {inr.format(effMonthlyPerStudent)} / student / month
                           {yearlySavings > 0 && (
-                            <span className="text-success-text">
-                              {" "}
-                              · Save {inr.format(yearlySavings)} ({yearlySavingsPct}%)
-                            </span>
+                            <span className="text-success-text"> · Save {yearlySavingsPct}%</span>
                           )}
                         </p>
+                      ) : (
+                        <p className="mt-1 text-xs text-subtle">Billed monthly</p>
                       )}
                     </div>
 
-                    <ul className="space-y-2 text-sm text-muted">
-                      {FEATURES.map((f) => (
-                        <li key={f} className="flex items-center gap-2">
-                          <Check className="size-4 shrink-0 text-primary" /> {f}
-                        </li>
-                      ))}
-                    </ul>
+                    {/* What the school actually pays */}
+                    <div className="rounded-lg border border-border bg-surface-hover px-3 py-2">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span className="text-xs text-muted">
+                          Total for {billedStudents} {billedStudents === 1 ? "student" : "students"}
+                        </span>
+                        <span className="text-sm font-semibold text-text">
+                          {inr.format(total)}
+                          <span className="font-normal text-muted"> / {cycle === "yearly" ? "yr" : "mo"}</span>
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <p className="text-xs font-medium uppercase tracking-wide text-subtle">{highlight.headline}</p>
+                      <ul className="space-y-2 text-sm text-muted">
+                        {highlight.features.map((f) => (
+                          <li key={f} className="flex items-start gap-2">
+                            <Check className="mt-0.5 size-4 shrink-0 text-primary" /> {f}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
 
                     <div className="mt-auto pt-2">
                       {paymentEnabled ? (
                         <Button
                           className="w-full"
-                          variant={isCurrent ? "outline" : yearly ? "primary" : "outline"}
+                          variant={featured || isCurrentTier ? "primary" : "outline"}
                           disabled={!!paying}
-                          onClick={() => pay(p.id)}
+                          onClick={() => pay(t.id)}
                         >
-                          {paying === p.id ? <Spinner size="sm" /> : null}
-                          {isCurrent ? "Renew plan" : activePaid ? `Switch to ${p.name}` : `Choose ${p.name}`}
+                          {paying === t.id ? <Spinner size="sm" /> : null}
+                          {ctaLabel}
                         </Button>
                       ) : (
                         <a
                           href={`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(
-                            `Activate ${p.name} plan${sub?.schoolName ? ` — ${sub.schoolName}` : ""}`
+                            `Activate ${t.name} plan${sub?.schoolName ? ` — ${sub.schoolName}` : ""}`
                           )}`}
                           className="block"
                         >
-                          <Button className="w-full" variant={yearly ? "primary" : "outline"}>
+                          <Button className="w-full" variant={featured ? "primary" : "outline"}>
                             <Mail className="size-4" /> Contact to activate
                           </Button>
                         </a>
@@ -461,7 +606,7 @@ export default function SubscriptionPage() {
           </div>
         )}
 
-        {!paymentEnabled && plans.length > 0 && (
+        {!paymentEnabled && tiers.length > 0 && (
           <div className="flex items-start gap-2 rounded-lg border border-border bg-surface-hover px-4 py-3 text-sm text-muted">
             <Info className="mt-0.5 size-4 shrink-0 text-info-text" />
             <p>

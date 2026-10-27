@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useAuthStore } from "@/store";
+import { useAuthStore, useEntitlementsStore } from "@/store";
 import { getMySubscription, type MySubscription } from "@/lib/api/subscription";
 
 /**
@@ -11,6 +11,7 @@ import { getMySubscription, type MySubscription } from "@/lib/api/subscription";
  */
 export function useSubscription() {
   const status = useAuthStore((s) => s.status);
+  const setEntitlements = useEntitlementsStore((s) => s.setEntitlements);
   const [sub, setSub] = useState<MySubscription | null>(null);
   const [loading, setLoading] = useState(true);
   const [reloadKey, setReloadKey] = useState(0);
@@ -25,6 +26,7 @@ export function useSubscription() {
         .then((data) => {
           if (!cancelled) {
             setSub(data);
+            setEntitlements({ tier: data.tier ?? null, tierModules: data.tierModules ?? null });
             setLoading(false);
           }
         })
@@ -38,7 +40,7 @@ export function useSubscription() {
       cancelled = true;
       clearTimeout(t);
     };
-  }, [status, reloadKey]);
+  }, [status, reloadKey, setEntitlements]);
 
   const refetch = useCallback(() => setReloadKey((k) => k + 1), []);
   return { sub, loading, refetch };

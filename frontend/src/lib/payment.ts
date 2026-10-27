@@ -1,4 +1,4 @@
-import { createOrder, verifyPayment } from "@/lib/api/payment";
+import { createOrder, verifyPayment, type TierId, type BillingCycle } from "@/lib/api/payment";
 
 /**
  * Razorpay checkout, end to end. Loads the gateway script on demand, asks the
@@ -42,19 +42,22 @@ function loadScript(): Promise<boolean> {
 }
 
 export interface CheckoutOptions {
-  plan: "monthly" | "yearly";
+  tier: TierId;
+  cycle: BillingCycle;
   prefill?: { name?: string; email?: string };
 }
+
+const TIER_NAMES: Record<TierId, string> = { starter: "Starter", standard: "Standard", premium: "Premium" };
 
 /**
  * Runs the whole flow. Resolves once the server has verified and activated the
  * subscription; rejects on failure or if the user dismisses the checkout.
  */
-export async function startCheckout({ plan, prefill }: CheckoutOptions): Promise<void> {
+export async function startCheckout({ tier, cycle, prefill }: CheckoutOptions): Promise<void> {
   const ready = await loadScript();
   if (!ready) throw new Error("Could not load the payment gateway. Check your connection.");
 
-  const order = await createOrder(plan);
+  const order = await createOrder(tier, cycle);
 
   const Razorpay = (window as unknown as { Razorpay?: RazorpayCtor }).Razorpay;
   if (!Razorpay) throw new Error("Payment gateway unavailable.");
@@ -66,12 +69,13 @@ export async function startCheckout({ plan, prefill }: CheckoutOptions): Promise
       amount: order.amount,
       currency: order.currency,
       name: "SchoolDeck",
-      description: `${plan === "yearly" ? "Yearly" : "Monthly"} subscription`,
+      description: `${TIER_NAMES[tier]} plan — ${cycle === "yearly" ? "Yearly" : "Monthly"}`,
       prefill,
       theme: { color: "#2563eb" },
       handler: (response: RazorpayHandlerResponse) => {
         verifyPayment({
-          plan,
+          tier,
+          cycle,
           razorpay_order_id: response.razorpay_order_id,
           razorpay_payment_id: response.razorpay_payment_id,
           razorpay_signature: response.razorpay_signature,

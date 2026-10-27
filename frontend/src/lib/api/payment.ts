@@ -1,18 +1,38 @@
 import { apiRequest } from "./client";
 
-/** Subscription plans and Razorpay checkout wiring. */
+/** Subscription tiers (per-student pricing) and Razorpay checkout wiring. */
 
-export interface Plan {
-  id: "monthly" | "yearly";
+export type TierId = "starter" | "standard" | "premium";
+export type BillingCycle = "monthly" | "yearly";
+
+export interface TierPlan {
+  id: TierId;
   name: string;
-  months: number;
-  amount: number; // paise
-  priceInr: number;
+  blurb: string;
+  /** Module keys this tier unlocks. */
+  modules: string[];
+  perStudentMonthlyInr: number;
+  perStudentYearlyInr: number;
+  /** Per-student rate × this school's billed student count. */
+  monthlyTotalInr: number;
+  yearlyTotalInr: number;
 }
 
 export interface PlansResponse {
-  plans: Plan[];
+  tiers: TierPlan[];
+  /** Active students in this school (what the price is based on). */
+  students: number;
+  /** Billed count — students floored to a minimum so a tiny school still pays a real amount. */
+  billedStudents: number;
+  minBilledStudents: number;
   paymentEnabled: boolean;
+  /** The school's current paid tier + cycle, if any. */
+  currentTier: TierId | null;
+  currentCycle: BillingCycle | null;
+}
+
+export async function getPlans(): Promise<PlansResponse> {
+  return apiRequest<PlansResponse>("/api/subscription/plans");
 }
 
 export interface RazorpayOrder {
@@ -20,19 +40,18 @@ export interface RazorpayOrder {
   amount: number;
   currency: string;
   keyId: string;
-  plan: "monthly" | "yearly";
+  tier: TierId;
+  cycle: BillingCycle;
+  billedStudents: number;
 }
 
-export async function getPlans(): Promise<PlansResponse> {
-  return apiRequest<PlansResponse>("/api/subscription/plans");
-}
-
-export async function createOrder(plan: "monthly" | "yearly"): Promise<RazorpayOrder> {
-  return apiRequest<RazorpayOrder>("/api/subscription/order", { method: "POST", body: { plan } });
+export async function createOrder(tier: TierId, cycle: BillingCycle): Promise<RazorpayOrder> {
+  return apiRequest<RazorpayOrder>("/api/subscription/order", { method: "POST", body: { tier, cycle } });
 }
 
 export interface VerifyPayload {
-  plan: "monthly" | "yearly";
+  tier: TierId;
+  cycle: BillingCycle;
   razorpay_order_id: string;
   razorpay_payment_id: string;
   razorpay_signature: string;

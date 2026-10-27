@@ -3,8 +3,8 @@
 import React, { useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { AppShell } from "@/components/layout/AppShell";
-import { useAuthStore } from "@/store";
-import { isPathAllowed } from "@/lib/navigation";
+import { useAuthStore, useEntitlementsStore } from "@/store";
+import { isPathAllowed, isPathInTier } from "@/lib/navigation";
 
 /**
  * Single shell for every authenticated route.
@@ -18,6 +18,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const status = useAuthStore((s) => s.status);
   const role = useAuthStore((s) => s.user?.role);
   const permissions = useAuthStore((s) => s.user?.permissions);
+  const tierModules = useEntitlementsStore((s) => s.tierModules);
   const router = useRouter();
   const pathname = usePathname();
 
@@ -29,12 +30,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   // Role guard: a teacher who lands on an admin-only route (by typing the URL
   // or an old link) is sent back to their dashboard. Non-teachers are
-  // unrestricted, so this is a no-op for them.
+  // unrestricted, so this is a no-op for them. A route the role CAN open but the
+  // school's plan does NOT include is steered to the upgrade page instead, so the
+  // user is told how to unlock it rather than silently bounced.
   useEffect(() => {
-    if (status === "authenticated" && !isPathAllowed(role, pathname, permissions)) {
+    if (status !== "authenticated") return;
+    if (!isPathAllowed(role, pathname, permissions)) {
       router.replace("/dashboard");
+    } else if (!isPathInTier(pathname, tierModules)) {
+      router.replace("/subscription");
     }
-  }, [status, role, permissions, pathname, router]);
+  }, [status, role, permissions, tierModules, pathname, router]);
 
   if (status === "loading") {
     return (

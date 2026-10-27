@@ -10,6 +10,7 @@ import type { UserRole } from "@/types";
 import {
   allowedHrefsForPermissions,
   customRoleCanAccessPath,
+  hrefInTier,
   type PermissionMap,
 } from "@/lib/permissions";
 
@@ -434,13 +435,26 @@ export function isPathAllowed(
   return false;
 }
 
-/** Filters the nav tree to what `role` should see. */
+/**
+ * Whether a path is inside the school's feature tier (its paid plan's modules).
+ * `tierModules` null/undefined = no restriction (trial, complimentary, platform
+ * owner, or still loading). Separate from `isPathAllowed` (role gating) so a
+ * tier-locked route can be steered to the upgrade page, not the dashboard.
+ */
+export function isPathInTier(pathname: string, tierModules?: string[] | null): boolean {
+  return hrefInTier(pathname, tierModules);
+}
+
+/** Filters the nav tree to what `role` should see, within the school's `tierModules`. */
 export function navGroupsForRole(
   role: UserRole | undefined,
-  permissions?: PermissionMap
+  permissions?: PermissionMap,
+  tierModules?: string[] | null
 ): NavGroup[] {
   const isSuper = role === "super_admin";
   const allowed = allowedHrefsFor(role, permissions);
+  // A nav href survives tier gating when its module is in the school's plan.
+  const inTier = (href: string) => hrefInTier(href, tierModules);
 
   return navGroups
     .filter((g) => {
@@ -452,25 +466,28 @@ export function navGroupsForRole(
     .map((g) => {
       if (!allowed) {
         // Full-access roles see every module EXCEPT personal self-service items
-        // (e.g. "My Leave") and anything on their role's deny-list (the principal
-        // doesn't see the account-owner items).
+        // (e.g. "My Leave"), anything on their role's deny-list (the principal
+        // doesn't see the account-owner items), and modules outside their plan.
         const denied = deniedHrefsFor(role);
         const items = g.items
           .filter((it) => !it.hideFromFullAccess)
           .filter((it) => !denied || !denied.has(it.href))
+          .filter((it) => inTier(it.href))
           .map((it) =>
-            denied && it.children ? { ...it, children: it.children.filter((c) => !denied.has(c.href)) } : it
+            it.children
+              ? { ...it, children: it.children.filter((c) => (!denied || !denied.has(c.href)) && inTier(c.href)) }
+              : it
           );
         return { ...g, items };
       }
-      // Restricted roles see only their allowed items; parent items keep only
-      // the children they may open.
+      // Restricted roles see only their allowed items, within their plan; parent
+      // items keep only the children they may open.
       const items = g.items
         .map((it) => {
-          const children = it.children?.filter((c) => allowed.has(c.href));
+          const children = it.children?.filter((c) => allowed.has(c.href) && inTier(c.href));
           return children && it.children ? { ...it, children } : it;
         })
-        .filter((it) => allowed.has(it.href) || (it.children?.length ?? 0) > 0)
+        .filter((it) => (allowed.has(it.href) && inTier(it.href)) || (it.children?.length ?? 0) > 0)
         // A teacher's student list is only their own class, so "All Students"
         // reads as "My Class".
         .map((it) =>

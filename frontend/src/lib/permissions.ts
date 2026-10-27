@@ -145,6 +145,44 @@ export function customRoleCanAccessPath(
   return false;
 }
 
+/* ------------------------------------------------------------------ */
+/* Feature tier (per-school plan) gating                               */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The module key that owns a nav href / path (longest-prefix match), or null
+ * when no module owns it. The reverse of `PERMISSION_MODULES[].hrefs`.
+ */
+export function moduleKeyForHref(href: string): string | null {
+  const path = norm(href);
+  let best: { key: string; len: number } | null = null;
+  for (const mod of PERMISSION_MODULES) {
+    for (const h of mod.hrefs) {
+      const n = norm(h);
+      if (path === n || path.startsWith(n + "/")) {
+        if (!best || n.length > best.len) best = { key: mod.key, len: n.length };
+      }
+    }
+  }
+  return best ? best.key : null;
+}
+
+/**
+ * Whether a href/path is inside the school's feature tier.
+ *
+ * `tierModules` is the list of module keys the school's PAID tier unlocks;
+ * `null`/`undefined` means "no tier restriction" (trial, complimentary access,
+ * the platform owner, or still loading) and always passes. A href not owned by
+ * any module — the dashboard, Settings, billing, self-service — is part of the
+ * app shell and is never tier-gated.
+ */
+export function hrefInTier(href: string, tierModules: string[] | null | undefined): boolean {
+  if (!tierModules) return true;
+  const key = moduleKeyForHref(href);
+  if (!key) return true;
+  return tierModules.includes(key);
+}
+
 /** Whether these permissions grant edit (write) on the module owning a path. */
 export function customRoleCanEditPath(
   permissions: PermissionMap | undefined,

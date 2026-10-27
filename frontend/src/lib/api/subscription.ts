@@ -25,6 +25,10 @@ export interface MySubscription {
   paidEndDate: string | null;
   /** Admin-granted complimentary access — full access, no expiry or billing. */
   freeAccess?: boolean;
+  /** Current paid feature tier id, or null (trial / complimentary / platform owner). */
+  tier?: "starter" | "standard" | "premium" | null;
+  /** Module keys the plan unlocks; null = no tier restriction (full access). */
+  tierModules?: string[] | null;
   schoolName: string | null;
 }
 

@@ -4,8 +4,8 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import * as Dialog from "@radix-ui/react-dialog";
 import { CornerDownLeft, Search } from "lucide-react";
-import { flatNav, isPathAllowed, type FlatNavItem } from "@/lib/navigation";
-import { useAuthStore } from "@/store";
+import { flatNav, isPathAllowed, isPathInTier, type FlatNavItem } from "@/lib/navigation";
+import { useAuthStore, useEntitlementsStore } from "@/store";
 import { cn } from "@/lib/utils";
 
 /** Subsequence match, so "merl" finds "Merit List". */
@@ -38,15 +38,20 @@ function PaletteContent({ onClose }: { onClose: () => void }) {
   const router = useRouter();
   const role = useAuthStore((s) => s.user?.role);
   const permissions = useAuthStore((s) => s.user?.permissions);
+  const tierModules = useEntitlementsStore((s) => s.tierModules);
   const [query, setQuery] = useState("");
   const [rawIndex, setRawIndex] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
 
   // Don't surface destinations the current role can't open — for a custom role,
-  // that means honouring its permission map (not just the role name).
+  // that means honouring its permission map (not just the role name) — nor
+  // modules outside the school's plan (feature tier).
   const navigable = useMemo(
-    () => NAVIGABLE.filter((item) => isPathAllowed(role, item.href, permissions)),
-    [role, permissions]
+    () =>
+      NAVIGABLE.filter(
+        (item) => isPathAllowed(role, item.href, permissions) && isPathInTier(item.href, tierModules)
+      ),
+    [role, permissions, tierModules]
   );
 
   const results = useMemo(() => {

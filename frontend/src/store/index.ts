@@ -30,6 +30,25 @@ export const useAuthStore = create<AuthStore>((set) => ({
   updateUser: (patch) => set((s) => (s.user ? { user: { ...s.user, ...patch } } : {})),
 }));
 
+/**
+ * The signed-in school's feature-tier entitlements, loaded once by
+ * `useSubscription` and shared with the nav/route-guard so a module outside the
+ * school's plan is hidden and blocked everywhere consistently.
+ */
+interface EntitlementsStore {
+  /** Current paid tier id, or null (trial / complimentary / platform owner). */
+  tier: string | null;
+  /** Module keys the plan unlocks; null = no tier restriction (full access). */
+  tierModules: string[] | null;
+  setEntitlements: (e: { tier: string | null; tierModules: string[] | null }) => void;
+}
+
+export const useEntitlementsStore = create<EntitlementsStore>((set) => ({
+  tier: null,
+  tierModules: null,
+  setEntitlements: (e) => set({ tier: e.tier, tierModules: e.tierModules }),
+}));
+
 interface SidebarStore {
   /** Desktop rail collapse. Persisted — it's a deliberate user preference. */
   isCollapsed: boolean;
