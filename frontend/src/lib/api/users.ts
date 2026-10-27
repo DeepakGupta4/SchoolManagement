@@ -92,6 +92,33 @@ export interface RoleSummary {
   totalAccounts: number;
 }
 
+/** Group a full user list into the per-role summary shape (client-side fallback). */
+function summarizeUsers(users: ManagedUser[]): RoleSummary {
+  const roles: Record<string, RoleHolderSummary> = {};
+  const custom: Record<string, RoleHolderSummary> = {};
+  for (const u of users) {
+    const isCustom = u.role === "custom";
+    const key = isCustom ? u.customRoleKey ?? "" : u.role;
+    if (isCustom && !key) continue; // a custom user with no role key can't be grouped
+    const bucket = isCustom ? custom : roles;
+    const entry = (bucket[key] ??= { total: 0, active: 0, sample: [] });
+    const active = u.isActive !== false; // undefined (not exposed) counts as active
+    entry.total += 1;
+    if (active) entry.active += 1;
+    if (entry.sample.length < 5) entry.sample.push({ id: u.id, name: u.name, email: u.email, isActive: active });
+  }
+  return { roles, custom, totalAccounts: users.length };
+}
+
+/**
+ * Prefers the efficient server summary, but falls back to deriving it from the
+ * full user list when that endpoint isn't available yet (backend not redeployed,
+ * or an older MongoDB) — so the Roles page shows accounts either way.
+ */
 export async function getRoleSummary(): Promise<RoleSummary> {
-  return apiRequest<RoleSummary>("/api/auth/users/role-summary");
+  try {
+    return await apiRequest<RoleSummary>("/api/auth/users/role-summary");
+  } catch {
+    return summarizeUsers(await listUsers());
+  }
 }
