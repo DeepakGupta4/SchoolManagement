@@ -51,6 +51,31 @@ const userSchema = new Schema(
   { timestamps: true }
 );
 
+/**
+ * Roles that are one-per-school: a school has exactly one account owner
+ * (school_admin) and one principal. Enforced in the routes (for a friendly
+ * message) and by the partial unique indexes below (race-safe, DB-level).
+ */
+export const SINGLETON_ROLES = ["school_admin", "principal"] as const;
+
+export function isSingletonRole(role: string): role is (typeof SINGLETON_ROLES)[number] {
+  return (SINGLETON_ROLES as readonly string[]).includes(role);
+}
+
+// One ACTIVE school_admin and one ACTIVE principal per school. Partial indexes so
+// only active holders are constrained — a deactivated admin/principal can be
+// replaced. NOTE: if a school already has two active holders of either role, the
+// matching index won't build until the duplicates are resolved; the route-level
+// check still blocks new duplicates in the meantime.
+userSchema.index(
+  { schoolId: 1 },
+  { unique: true, partialFilterExpression: { role: "school_admin", isActive: true } }
+);
+userSchema.index(
+  { schoolId: 1 },
+  { unique: true, partialFilterExpression: { role: "principal", isActive: true } }
+);
+
 userSchema.methods.verifyPassword = function (plain: string): Promise<boolean> {
   return bcrypt.compare(plain, this.passwordHash);
 };

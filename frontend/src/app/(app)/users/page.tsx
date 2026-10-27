@@ -69,6 +69,26 @@ export default function UsersPage() {
   const customRoleName = (key: string | undefined) =>
     customRoles.find((r) => r.key === key)?.name;
 
+  // One school_admin and one principal per school: find the current ACTIVE holder
+  // of each singleton role so those options can be greyed out where they'd clash.
+  const singletonHolderId: Record<string, string | undefined> = {};
+  for (const u of users) {
+    if (u.isActive !== false && (u.role === "school_admin" || u.role === "principal")) {
+      singletonHolderId[u.role] = u.id;
+    }
+  }
+  /** Disable a taken singleton role, except for the user who already holds it. */
+  const gateSingletons = (currentUserId?: string) =>
+    roleOptions.map((o) =>
+      (o.value === "school_admin" || o.value === "principal") &&
+      singletonHolderId[o.value] &&
+      singletonHolderId[o.value] !== currentUserId
+        ? { ...o, label: `${o.label} — already assigned`, disabled: true }
+        : o
+    );
+  const addRoleOptions = gateSingletons();
+  const editRoleOptions = gateSingletons(editing?.id);
+
   const load = async () => {
     setLoading(true);
     try {
@@ -345,7 +365,7 @@ export default function UsersPage() {
             onChange={(e) => setEditEmail(e.target.value)}
             hint="The email this user signs in with."
           />
-          <Select label="Role" value={editRole} onChange={(e) => setEditRole(e.target.value)} options={roleOptions} />
+          <Select label="Role" value={editRole} onChange={(e) => setEditRole(e.target.value)} options={editRoleOptions} />
           <Select
             label="Status"
             value={editActive ? "active" : "inactive"}
@@ -390,7 +410,7 @@ export default function UsersPage() {
         <div className="flex flex-col gap-4">
           <Input label="Full name" required value={addName} onChange={(e) => setAddName(e.target.value)} placeholder="e.g. Priya Sharma" />
           <Input label="Login email" required type="email" value={addEmail} onChange={(e) => setAddEmail(e.target.value)} placeholder="priya@school.edu" />
-          <Select label="Role" value={addRole} onChange={(e) => setAddRole(e.target.value)} options={roleOptions} />
+          <Select label="Role" value={addRole} onChange={(e) => setAddRole(e.target.value)} options={addRoleOptions} />
           <p className="rounded-md bg-surface px-3 py-2 text-xs text-subtle">
             No password needed — a secure one is generated, emailed to the user, and shown to you once.
           </p>

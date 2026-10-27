@@ -8,6 +8,8 @@ import { Field, controlClasses } from "./Input";
 export interface SelectOption {
   label: string;
   value: string;
+  /** Render the option greyed-out and unselectable (e.g. a role already taken). */
+  disabled?: boolean;
 }
 
 interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
@@ -46,7 +48,7 @@ export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(function 
       >
         {placeholder && <option value="">{placeholder}</option>}
         {options.map((o) => (
-          <option key={o.value} value={o.value}>
+          <option key={o.value} value={o.value} disabled={o.disabled}>
             {o.label}
           </option>
         ))}

@@ -2,7 +2,7 @@ import { Router } from "express";
 import rateLimit from "express-rate-limit";
 import crypto from "node:crypto";
 import { z } from "zod";
-import { User, hashPassword, toPublicUser, USER_ROLES, type UserDoc, type UserRole } from "./user.model.js";
+import { User, hashPassword, toPublicUser, isSingletonRole, USER_ROLES, type UserDoc, type UserRole } from "./user.model.js";
 import { RefreshToken, generateRefreshToken, hashRefreshToken } from "./refreshToken.model.js";
 import { signToken, requireAuth, requireRole } from "../../middleware/auth.js";
 import { Role, permissionsOf } from "../roles/role.model.js";
@@ -43,6 +43,32 @@ async function emailCredentials(user: UserDoc, password: string): Promise<boolea
       `<p><a href="${loginUrl}">Sign in</a></p><p>Please change your password after signing in.</p>`,
   });
   return res.delivered;
+}
+
+const SINGLETON_ROLE_LABEL: Record<string, string> = {
+  school_admin: "school admin",
+  principal: "principal",
+};
+
+/**
+ * school_admin and principal are one-per-school. Throws 409 if an ACTIVE holder of
+ * a singleton role already exists in the school (excluding `excludeUserId`, used
+ * when re-saving the holder themselves). No-op for every non-singleton role.
+ */
+async function assertSingletonRoleFree(
+  schoolId: string,
+  role: string,
+  excludeUserId?: string
+): Promise<void> {
+  if (!isSingletonRole(role)) return;
+  const query: Record<string, unknown> = { schoolId, role, isActive: true };
+  if (excludeUserId) query._id = { $ne: excludeUserId };
+  if (await User.exists(query)) {
+    const label = SINGLETON_ROLE_LABEL[role] ?? role;
+    throw ApiError.conflict(
+      `This school already has a ${label}. Only one ${label} is allowed per school — deactivate or reassign the existing one first.`
+    );
+  }
 }
 
 const router = Router();
@@ -271,6 +297,14 @@ router.post(
         throw ApiError.conflict(`An account already exists for ${email}.`);
       }
 
+      // A school admin can only create accounts in their OWN school; only the
+      // platform owner may target another school. (This also stops the schema's
+      // "school_1" default from silently placing a user in the wrong tenant.)
+      const targetSchoolId = req.user!.role === "super_admin" ? schoolId : req.user!.schoolId;
+
+      // One school_admin and one principal per school — reject a second.
+      await assertSingletonRoleFree(targetSchoolId, role);
+
       // Admin-created accounts normally get a generated password, surfaced once to
       // the admin and emailed to the user.
       const plainPassword = password && password.length >= 8 ? password : generateTempPassword();
@@ -282,7 +316,7 @@ router.post(
         role,
         // Only a custom role carries a key; built-in roles never do.
         customRoleKey: role === "custom" ? customRoleKey : "",
-        schoolId,
+        schoolId: targetSchoolId,
       });
 
       // Fire-and-forget: never block the response on email delivery (SMTP can be
@@ -412,6 +446,15 @@ router.patch(
           throw ApiError.badRequest("Cannot deactivate or change the role of the last school admin.");
         }
       }
+
+      // One active school_admin / principal per school: block changing a user INTO
+      // a singleton role, or re-activating a singleton, when the slot is taken.
+      const finalRole = updates.role ?? user.role;
+      const becomingSingleton = !!updates.role && isSingletonRole(updates.role) && updates.role !== user.role;
+      const reactivatingSingleton = updates.isActive === true && !user.isActive && isSingletonRole(finalRole);
+      if (becomingSingleton || reactivatingSingleton) {
+        await assertSingletonRoleFree(schoolId, finalRole, String(user._id));
+      }
       if (typeof updates.name === "string") user.name = updates.name.trim();
       if (typeof updates.email === "string" && updates.email.toLowerCase() !== user.email) {
         const taken = await User.exists({
@@ -505,6 +548,12 @@ router.post(
       for (const s of SAMPLE_STAFF) {
         const email = `${s.local}.${slug}@sample.school`.toLowerCase();
         if (await User.exists({ email })) {
+          skipped.push(email);
+          continue;
+        }
+        // Respect one-per-school: skip the sample principal (or admin) if the slot
+        // is already filled, rather than creating a forbidden second holder.
+        if (isSingletonRole(s.role) && (await User.exists({ schoolId, role: s.role, isActive: true }))) {
           skipped.push(email);
           continue;
         }
