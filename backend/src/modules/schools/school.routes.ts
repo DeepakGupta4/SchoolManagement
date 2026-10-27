@@ -441,13 +441,15 @@ router.post("/:schoolId/activate-free", async (req, res, next) => {
 
 const activatePaidSchema = z.object({
   plan: z.enum(["monthly", "yearly"]),
+  // The feature tier to grant. Omitted keeps the current tier (default premium).
+  tier: z.enum(["starter", "standard", "premium"]).optional(),
   months: z.coerce.number<number>().min(1).max(120).optional(),
 });
 
-/** Manually activate a paid plan without going through the gateway. */
+/** Manually activate a paid plan + tier without going through the gateway. */
 router.post("/:schoolId/activate-paid", validate(activatePaidSchema), async (req, res, next) => {
   try {
-    const { plan, months } = req.body as z.infer<typeof activatePaidSchema>;
+    const { plan, tier, months } = req.body as z.infer<typeof activatePaidSchema>;
     const school = await findSchool(String(req.params.schoolId));
     const now = new Date();
     const span = plan === "yearly" ? 12 : months ?? 1;
@@ -456,6 +458,9 @@ router.post("/:schoolId/activate-paid", validate(activatePaidSchema), async (req
 
     const sub = school.subscription;
     sub.plan = plan;
+    // Set the feature tier so the gate restricts correctly; without this a manual
+    // activation would leave the schema default (premium) and grant everything.
+    if (tier) sub.tier = tier;
     sub.status = "active";
     sub.paidStartDate = now;
     sub.paidEndDate = end;

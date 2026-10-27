@@ -59,11 +59,12 @@ export async function activateFree(schoolId: string): Promise<ManagedSchool> {
 
 export async function activatePaid(
   schoolId: string,
-  plan: "monthly" | "yearly"
+  plan: "monthly" | "yearly",
+  tier?: "starter" | "standard" | "premium"
 ): Promise<ManagedSchool> {
   return apiRequest<ManagedSchool>(`/api/schools/${schoolId}/activate-paid`, {
     method: "POST",
-    body: { plan },
+    body: { plan, tier },
   });
 }
 

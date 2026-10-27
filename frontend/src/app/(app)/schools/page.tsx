@@ -30,6 +30,7 @@ import {
   Input,
   Modal,
   PageHeader,
+  Select,
   Table,
   Textarea,
   useToast,
@@ -149,6 +150,8 @@ export default function SchoolsPage() {
   const { items: schools, loading, error, refetch } = useAsyncList<ManagedSchool>(fetcher);
 
   const [managing, setManaging] = useState<ManagedSchool | null>(null);
+  // Feature tier applied by "Activate Monthly/Yearly" (manual/offline activation).
+  const [activateTier, setActivateTier] = useState<"starter" | "standard" | "premium">("premium");
   const [busy, setBusy] = useState(false);
   const [creds, setCreds] = useState<{ schoolName: string; email: string; password: string; emailDelivered: boolean } | null>(null);
   const [deleting, setDeleting] = useState<ManagedSchool | null>(null);
@@ -407,9 +410,26 @@ export default function SchoolsPage() {
               ) : (
                 <ManageBtn icon={Ban} label="Suspend" disabled={busy} danger onClick={() => run("Account suspended", () => suspendSchool(managing.schoolId))} />
               )}
-              <ManageBtn icon={CreditCard} label="Activate Monthly" disabled={busy} onClick={() => run("Monthly plan activated", () => activatePaid(managing.schoolId, "monthly"))} />
-              <ManageBtn icon={CreditCard} label="Activate Yearly" disabled={busy} onClick={() => run("Yearly plan activated", () => activatePaid(managing.schoolId, "yearly"))} />
               <ManageBtn icon={KeyRound} label="Reset password" disabled={busy} onClick={() => resetPassword(managing)} />
+            </div>
+
+            {/* Manually activate a paid plan at a chosen feature tier (offline
+                payment, or to test the tier locks without the gateway). */}
+            <div className="rounded-lg border border-border bg-surface-hover p-3">
+              <Select
+                label="Feature tier"
+                value={activateTier}
+                onChange={(e) => setActivateTier(e.target.value as "starter" | "standard" | "premium")}
+                options={[
+                  { label: "Starter (₹10/student/mo)", value: "starter" },
+                  { label: "Standard (₹12/student/mo)", value: "standard" },
+                  { label: "Premium (₹15/student/mo)", value: "premium" },
+                ]}
+              />
+              <div className="mt-2.5 grid grid-cols-2 gap-2.5">
+                <ManageBtn icon={CreditCard} label="Activate Monthly" disabled={busy} onClick={() => run(`${activateTier} monthly activated`, () => activatePaid(managing.schoolId, "monthly", activateTier))} />
+                <ManageBtn icon={CreditCard} label="Activate Yearly" disabled={busy} onClick={() => run(`${activateTier} yearly activated`, () => activatePaid(managing.schoolId, "yearly", activateTier))} />
+              </div>
             </div>
 
             <button
