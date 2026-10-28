@@ -36,6 +36,13 @@ const assignmentSchema = new Schema(
     total: { type: Number, default: 0 },
     status: { type: String, default: "upcoming" },
     type: { type: String, default: "" },
+    // Homework instructions (free text) + one optional attachment stored inline as
+    // a base64 data URL (photo/PDF), like study material. Size-capped in the route.
+    description: { type: String, default: "" },
+    fileDataUrl: { type: String, default: "" },
+    fileName: { type: String, default: "" },
+    mimeType: { type: String, default: "" },
+    fileSize: { type: Number, default: 0 },
   },
   { timestamps: true }
 );

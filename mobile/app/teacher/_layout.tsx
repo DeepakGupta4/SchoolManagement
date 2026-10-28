@@ -1,8 +1,23 @@
+import { useEffect } from "react";
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useNotifications } from "@/store/notifications";
 import { colors } from "@/theme";
 
 export default function TeacherLayout() {
+  const unread = useNotifications((s) => s.unread);
+  const refresh = useNotifications((s) => s.refresh);
+
+  // Prime the Alerts badge once the teacher is in.
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  const icon =
+    (name: keyof typeof Ionicons.glyphMap) =>
+    ({ color, size }: { color: string; size: number }) =>
+      <Ionicons name={name} color={color} size={size} />;
+
   return (
     <Tabs
       screenOptions={{
@@ -12,18 +27,18 @@ export default function TeacherLayout() {
         tabBarStyle: { backgroundColor: colors.surface, borderTopColor: colors.border },
       }}
     >
+      <Tabs.Screen name="index" options={{ title: "Home", tabBarIcon: icon("home-outline") }} />
+      <Tabs.Screen name="students" options={{ title: "My Class", tabBarIcon: icon("people-outline") }} />
+      <Tabs.Screen name="homework" options={{ title: "Homework", tabBarIcon: icon("document-text-outline") }} />
       <Tabs.Screen
-        name="index"
-        options={{ title: "Home", tabBarIcon: ({ color, size }) => <Ionicons name="home-outline" color={color} size={size} /> }}
+        name="notifications"
+        options={{ title: "Alerts", tabBarIcon: icon("notifications-outline"), tabBarBadge: unread || undefined }}
       />
-      <Tabs.Screen
-        name="timetable"
-        options={{ title: "Timetable", tabBarIcon: ({ color, size }) => <Ionicons name="calendar-outline" color={color} size={size} /> }}
-      />
-      <Tabs.Screen
-        name="more"
-        options={{ title: "More", tabBarIcon: ({ color, size }) => <Ionicons name="grid-outline" color={color} size={size} /> }}
-      />
+      <Tabs.Screen name="more" options={{ title: "More", tabBarIcon: icon("grid-outline") }} />
+
+      {/* Routable, but not their own tabs. */}
+      <Tabs.Screen name="timetable" options={{ href: null }} />
+      <Tabs.Screen name="student-form" options={{ href: null }} />
     </Tabs>
   );
 }

@@ -68,3 +68,23 @@ export async function api<T>(path: string, opts: Options = {}): Promise<T> {
   if (!res.ok) throw new ApiError(res.status, payload?.error ?? `Request failed (${res.status}).`);
   return (payload && "data" in payload ? payload.data : payload) as T;
 }
+
+/** GET that keeps the `{ data, meta }` envelope (e.g. notifications' unread count). */
+export async function apiEnvelope<T>(path: string): Promise<{ data: T; meta?: Record<string, unknown> }> {
+  const token = await getToken();
+  const headers = (t: string | null): Record<string, string> => (t ? { Authorization: `Bearer ${t}` } : {});
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}${path}`, { headers: headers(token) });
+  } catch {
+    throw new ApiError(0, "Can't reach the server. Check your connection.");
+  }
+  if (res.status === 401 && (await tryRefresh())) {
+    res = await fetch(`${API_URL}${path}`, { headers: headers(await getToken()) });
+  }
+  const payload = (await res.json().catch(() => null)) as
+    | { data?: T; meta?: Record<string, unknown>; error?: string }
+    | null;
+  if (!res.ok) throw new ApiError(res.status, payload?.error ?? `Request failed (${res.status}).`);
+  return { data: (payload?.data ?? ([] as unknown)) as T, meta: payload?.meta };
+}

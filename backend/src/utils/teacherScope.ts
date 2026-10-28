@@ -91,6 +91,31 @@ export async function studentRosterScope(req: Request): Promise<Record<string, u
 }
 
 /**
+ * writeScope for creating/editing students. A CLASS TEACHER may add/edit students
+ * only in their OWN class + section, and can't move one out of it (the generic
+ * crud router forces className/section into body + update filter). Non-teachers
+ * return null (unrestricted — office/admin). A teacher who isn't a class teacher
+ * is forbidden. Also strips fields a class teacher must not control: `status`
+ * (lifecycle: active/transferred/alumni…) always, and `admissionNo` on edit (no
+ * renumbering).
+ */
+export async function studentClassTeacherWriteScope(
+  req: Request
+): Promise<Record<string, unknown> | null> {
+  const scope = await loadScope(req);
+  if (!scope) return null; // office/admin — unrestricted
+  if (!scope.isClassTeacher || !scope.classTeacherOf || !scope.classTeacherSection) {
+    throw ApiError.forbidden("Only a class teacher can add or edit students, and only for their own class.");
+  }
+  if (req.body && typeof req.body === "object") {
+    const body = req.body as Record<string, unknown>;
+    delete body.status;
+    if (req.method === "PUT") delete body.admissionNo;
+  }
+  return { className: scope.classTeacherOf, section: scope.classTeacherSection };
+}
+
+/**
  * Guards a class-keyed endpoint (attendance/marks): throws 403 if the caller is a
  * teacher and `className` isn't one they teach or are class teacher of. No-op for
  * office/admin roles, so their access is unchanged.
@@ -100,6 +125,30 @@ export async function assertTeacherMayAccessClass(req: Request, className: strin
   if (!scope) return;
   if (!className || !actionableClasses(scope).includes(className)) {
     throw ApiError.forbidden("You can only access the classes you teach.");
+  }
+}
+
+/**
+ * Section-aware guard for WRITE paths (marking attendance / entering marks). The
+ * data model ties a SUBJECT teacher only to a class (classes[], no section) and a
+ * CLASS teacher to one specific section, so a teacher may write (className, section)
+ * when EITHER className is one they subject-teach (then any section of it), OR it is
+ * exactly their own class-teacher class AND section. This stops a class teacher of
+ * 10-A from marking 10-B — matching the section-lock already enforced on student
+ * record edits. No-op for non-teacher roles (office/admin/custom unrestricted).
+ */
+export async function assertTeacherMayAccessClassSection(
+  req: Request,
+  className: string,
+  section: string
+): Promise<void> {
+  const scope = await loadScope(req);
+  if (!scope) return;
+  const teachesClass = !!className && scope.classes.includes(className);
+  const ownClassSection =
+    scope.isClassTeacher && scope.classTeacherOf === className && scope.classTeacherSection === section;
+  if (!teachesClass && !ownClassSection) {
+    throw ApiError.forbidden("You can only mark the classes and sections you teach.");
   }
 }
 

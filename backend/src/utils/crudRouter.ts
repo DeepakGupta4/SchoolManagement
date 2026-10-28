@@ -52,6 +52,18 @@ export interface CrudOptions<T> {
    * per-module custom route.
    */
   readScope?: (req: Request) => Promise<Record<string, unknown> | null | undefined>;
+  /**
+   * The write-side analogue of `readScope`. Returns fields that are FORCED onto the
+   * body on create and update, and (on update) also constrain WHICH record may be
+   * touched — so a role-scoped writer (e.g. a class teacher) can only create/edit
+   * records inside their own slice and can't move one out of it. Return
+   * null/undefined for no restriction (office/admin). May also sanitise req.body.
+   */
+  writeScope?: (req: Request) => Promise<Record<string, unknown> | null | undefined>;
+  /** Mongoose projection applied to the LIST query only (e.g. "-fileDataUrl" to
+   *  keep big inline blobs out of list responses; the detail route still returns
+   *  the full record). */
+  listSelect?: string;
   /** Default sort. Newest first unless a module wants otherwise. */
   sort?: Record<string, 1 | -1>;
   /** Extra routes mounted before the generic ones (so they can shadow `/:id`). */
@@ -117,6 +129,8 @@ export function createCrudRouter<T>(options: CrudOptions<T>): Router {
     deleteRoles,
     readRoles,
     readScope,
+    writeScope,
+    listSelect,
     sort = { createdAt: -1 },
     extend,
     notifyOnCreate,
@@ -183,14 +197,13 @@ export function createCrudRouter<T>(options: CrudOptions<T>): Router {
         if (scope) Object.assign(filter, scope);
       }
 
-      const [docs, total] = await Promise.all([
-        model
-          .find(filter)
-          .sort(pagedSort)
-          .skip((page - 1) * limit)
-          .limit(limit),
-        model.countDocuments(filter),
-      ]);
+      const listQuery = model
+        .find(filter)
+        .sort(pagedSort)
+        .skip((page - 1) * limit)
+        .limit(limit);
+      if (listSelect) listQuery.select(listSelect);
+      const [docs, total] = await Promise.all([listQuery, model.countDocuments(filter)]);
 
       res.json({
         data: docs.map((d) => toPublic(d as HydratedDocument<T>)),
@@ -220,6 +233,11 @@ export function createCrudRouter<T>(options: CrudOptions<T>): Router {
 
   router.post("/", canWrite, validate(createSchema), async (req, res, next) => {
     try {
+      // A scoped writer (e.g. class teacher) has its slice fields forced onto the body.
+      if (writeScope) {
+        const s = await writeScope(req);
+        if (s) Object.assign(req.body, s);
+      }
       const generated = generate
         ? generate(await model.countDocuments({ schoolId: req.user!.schoolId }))
         : {};
@@ -241,11 +259,20 @@ export function createCrudRouter<T>(options: CrudOptions<T>): Router {
     validate(updateSchema),
     async (req, res, next) => {
       try {
-        const doc = await model.findOneAndUpdate(
-          { _id: req.params.id, schoolId: req.user!.schoolId },
-          req.body,
-          { new: true, runValidators: true }
-        );
+        // A scoped writer can only touch a record already inside its slice, and
+        // can't move it out (slice fields are forced into both filter and body).
+        const filter: Record<string, unknown> = { _id: req.params.id, schoolId: req.user!.schoolId };
+        if (writeScope) {
+          const s = await writeScope(req);
+          if (s) {
+            Object.assign(filter, s);
+            Object.assign(req.body, s);
+          }
+        }
+        const doc = await model.findOneAndUpdate(filter, req.body, {
+          new: true,
+          runValidators: true,
+        });
         if (!doc) throw ApiError.notFound("Record not found.");
         if (afterUpdate) await afterUpdate(doc as HydratedDocument<T>, req);
         res.json({ data: toPublic(doc as HydratedDocument<T>) });

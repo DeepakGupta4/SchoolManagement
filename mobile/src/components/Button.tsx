@@ -1,4 +1,4 @@
-import { ActivityIndicator, Pressable, StyleSheet, type ViewStyle } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, type StyleProp, type ViewStyle } from "react-native";
 import { AppText } from "./AppText";
 import { colors, radius, spacing, fontWeight } from "@/theme";
 
@@ -17,7 +17,7 @@ export function Button({
   variant?: Variant;
   loading?: boolean;
   disabled?: boolean;
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
 }) {
   const off = disabled || loading;
   return (

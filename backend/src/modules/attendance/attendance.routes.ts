@@ -9,7 +9,8 @@ import { Holiday } from "../holidays/holiday.model.js";
 import { sendEmail, isEmailConfigured } from "../../utils/email.js";
 import { notifySchool } from "../notifications/notification.model.js";
 import { ApiError } from "../../utils/ApiError.js";
-import { assertTeacherMayAccessClass } from "../../utils/teacherScope.js";
+import { assertTeacherMayAccessClass, assertTeacherMayAccessClassSection } from "../../utils/teacherScope.js";
+import { activeClassSectionMembers } from "../../utils/rosterGuard.js";
 import { isRealDate, maxToday } from "../../utils/dates.js";
 import { env } from "../../config/env.js";
 
@@ -288,8 +289,9 @@ router.post(
     try {
       const { className, section, date, records } = req.body as z.infer<typeof saveBody>;
       const schoolId = req.user!.schoolId;
-      // A teacher may only mark attendance for a class they teach.
-      await assertTeacherMayAccessClass(req, className);
+      // A teacher may only mark attendance for a section they teach (their
+      // class-teacher section, or any section of a class they subject-teach).
+      await assertTeacherMayAccessClassSection(req, className, section);
 
       // The school is closed on Sundays and on any holiday — attendance isn't taken
       // then (matches the auto-absent sweep and the marking UI).
@@ -303,8 +305,25 @@ router.post(
         );
       }
 
+      // Keep only records for active students of THIS class+section. The register
+      // is keyed by studentId, so a foreign id must never reach the write (it would
+      // overwrite another class's record + that student's attendance %). A stale id
+      // (a student moved/deactivated mid-session) is skipped, not failed.
+      const members = await activeClassSectionMembers(
+        schoolId,
+        className,
+        section,
+        records.map((r) => r.studentId)
+      );
+      const valid = records.filter((r) => members.has(String(r.studentId)));
+      if (valid.length === 0) {
+        throw ApiError.badRequest(
+          "None of these students are in this class and section — refresh the roster and try again."
+        );
+      }
+
       await Attendance.bulkWrite(
-        records.map((r) => ({
+        valid.map((r) => ({
           updateOne: {
             // One mark per student per day — match on (studentId, date) so re-saving
             // (even under a different section) updates the single record, never dups.
@@ -320,13 +339,13 @@ router.post(
       try {
         await recomputeAttendancePercent(
           schoolId,
-          records.map((r) => r.studentId)
+          valid.map((r) => r.studentId)
         );
       } catch (err) {
         console.error("Attendance %, recompute failed:", err);
       }
 
-      res.json({ data: { saved: records.length } });
+      res.json({ data: { saved: valid.length, skipped: records.length - valid.length } });
     } catch (err) {
       next(err);
     }
@@ -355,8 +374,8 @@ router.post(
     try {
       const { className, section, date } = req.body as z.infer<typeof notifyBody>;
       const schoolId = req.user!.schoolId;
-      // A teacher may only notify absentees for a class they teach.
-      await assertTeacherMayAccessClass(req, className);
+      // A teacher may only notify absentees for a section they teach.
+      await assertTeacherMayAccessClassSection(req, className, section);
 
       const absentees = await Attendance.find({
         schoolId,

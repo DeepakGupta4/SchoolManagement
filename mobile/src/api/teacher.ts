@@ -25,19 +25,9 @@ export interface TimetableEntry {
   room?: string;
 }
 
-export interface Assignment {
-  id: string;
-  title: string;
-  className: string;
-  subject?: string;
-  teacher: string;
-  dueDate?: string;
-}
-
 /** The signed-in teacher's own record (scoped server-side to their account). */
 export const getMyTeacher = () => api<Teacher>("/api/teachers/me");
 export const getTimetable = () => api<TimetableEntry[]>("/api/timetable?limit=500");
-export const getAssignments = () => api<Assignment[]>("/api/assignments?limit=500");
 
 export function teacherName(t?: Teacher | null): string {
   if (!t) return "";

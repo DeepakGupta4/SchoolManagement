@@ -8,7 +8,7 @@ import { StoredDocument } from "../documents/document.model.js";
 import { SchoolClass } from "../classes/class.model.js";
 import { ApiError } from "../../utils/ApiError.js";
 import { createCrudRouter } from "../../utils/crudRouter.js";
-import { studentRosterScope } from "../../utils/teacherScope.js";
+import { studentRosterScope, studentClassTeacherWriteScope } from "../../utils/teacherScope.js";
 import { ISO_DATE, isRealDate, serverToday, maxToday } from "../../utils/dates.js";
 
 const PHONE = /^\d{10}$/;
@@ -109,8 +109,13 @@ export default createCrudRouter({
   // /api/portal, never the raw roster (which carries guardian/Aadhaar/medical PII).
   readRoles: ["super_admin", "school_admin", "principal", "teacher", "accountant"],
   // A teacher is further narrowed to the classes they teach (list AND detail);
-  // office/admin roles are unrestricted. Writes stay office-only (default roles).
+  // office/admin roles are unrestricted.
   readScope: studentRosterScope,
+  // A CLASS TEACHER may add/edit students — but writeScope (below) hard-limits
+  // them to their own class+section. writeRoles + writeScope MUST stay together:
+  // adding "teacher" without the scope would let any teacher write any class.
+  writeRoles: ["super_admin", "school_admin", "principal", "teacher"],
+  writeScope: studentClassTeacherWriteScope,
   // Hard delete CASCADES (fee account, payments, documents) — it erases financial
   // and academic history, so it's super-admin-only. Office/admin change the
   // student's status (active/inactive/transferred/alumni) instead of deleting.

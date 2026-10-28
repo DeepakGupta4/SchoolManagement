@@ -94,6 +94,14 @@ export default function MarkEntryPage() {
   // "no restriction" (any non-teacher role). Loaded from the teacher's own
   // record: the classes they teach plus the one they're class-teacher of.
   const [allowedClasses, setAllowedClasses] = useState<string[] | null>(null);
+  // A teacher's section scope: a class they subject-teach allows any section; their
+  // class-teacher class allows only their own section (mirrors the server guard).
+  const [teacherScope, setTeacherScope] = useState<{
+    classes: string[];
+    classTeacherOf: string;
+    classTeacherSection: string;
+    isClassTeacher: boolean;
+  } | null>(null);
   useEffect(() => {
     if (user?.role !== "teacher") return;
     let cancelled = false;
@@ -102,15 +110,24 @@ export default function MarkEntryPage() {
         if (cancelled) return;
         if (!t) {
           setAllowedClasses([]); // fail closed: no record → no selectable classes
+          setTeacherScope(null);
           return;
         }
-        const list = [...t.classes, t.classTeacherOf].filter(
-          (c): c is string => Boolean(c)
-        );
+        const classes = (t.classes ?? []).filter((c): c is string => Boolean(c));
+        const list = [...classes, t.classTeacherOf].filter((c): c is string => Boolean(c));
         setAllowedClasses([...new Set(list)]);
+        setTeacherScope({
+          classes,
+          classTeacherOf: t.classTeacherOf ?? "",
+          classTeacherSection: t.classTeacherSection ?? "",
+          isClassTeacher: !!t.isClassTeacher,
+        });
       })
       .catch(() => {
-        if (!cancelled) setAllowedClasses([]);
+        if (!cancelled) {
+          setAllowedClasses([]);
+          setTeacherScope(null);
+        }
       });
     return () => {
       cancelled = true;
@@ -135,6 +152,31 @@ export default function MarkEntryPage() {
       setSelectedClass(allowedClasses[0]);
     }
   }, [isTeacher, allowedClasses, selectedClass]);
+
+  // Section <Select> options for a teacher: any section of a class they subject-
+  // teach, but only their own section for their class-teacher class (matches the
+  // server's section-lock on marks). Every other role sees all sections.
+  const teacherSectionOptions = useMemo(() => {
+    if (!isTeacher || !teacherScope) return sectionOptions;
+    if (teacherScope.classes.includes(selectedClass)) return sectionOptions;
+    if (
+      teacherScope.isClassTeacher &&
+      teacherScope.classTeacherOf === selectedClass &&
+      teacherScope.classTeacherSection
+    ) {
+      return sectionOptions.filter((o) => o.value === teacherScope.classTeacherSection);
+    }
+    return sectionOptions;
+  }, [isTeacher, teacherScope, selectedClass, sectionOptions]);
+
+  // Snap a teacher off a section they may not enter marks for, for the chosen class.
+  useEffect(() => {
+    if (!isTeacher || !selectedSection) return;
+    if (!teacherSectionOptions.some((o) => o.value === selectedSection)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSelectedSection(teacherSectionOptions[0]?.value ?? "");
+    }
+  }, [isTeacher, teacherSectionOptions, selectedSection]);
 
   const [roster, setRoster] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
@@ -430,7 +472,7 @@ export default function MarkEntryPage() {
             value={selectedSection}
             onChange={(e) => setSelectedSection(e.target.value)}
             placeholder="All sections"
-            options={sectionOptions}
+            options={teacherSectionOptions}
           />
           <Select
             label="Subject"

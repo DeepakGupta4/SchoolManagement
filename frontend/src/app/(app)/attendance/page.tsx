@@ -130,6 +130,14 @@ export default function AttendancePage() {
   // A teacher may only take attendance for the classes they teach. Populated from
   // their own record (stays null for every other role, which keeps all classes).
   const [allowedClasses, setAllowedClasses] = useState<string[] | null>(null);
+  // A teacher's section scope: a class they subject-teach allows any section; their
+  // class-teacher class allows only their own section (mirrors the server guard).
+  const [teacherScope, setTeacherScope] = useState<{
+    classes: string[];
+    classTeacherOf: string;
+    classTeacherSection: string;
+    isClassTeacher: boolean;
+  } | null>(null);
 
   const [roster, setRoster] = useState<Row[]>([]);
   const [attendance, setAttendance] = useState<Record<string, AttendanceStatus>>({});
@@ -180,6 +188,7 @@ export default function AttendancePage() {
   useEffect(() => {
     if (!isTeacher) {
       setAllowedClasses(null);
+      setTeacherScope(null);
       return;
     }
     let cancelled = false;
@@ -188,13 +197,24 @@ export default function AttendancePage() {
         if (cancelled) return;
         if (!t) {
           setAllowedClasses([]); // no record → no selectable classes
+          setTeacherScope(null);
           return;
         }
-        const unique = [...new Set([...t.classes, t.classTeacherOf].filter(Boolean))] as string[];
+        const classes = (t.classes ?? []).filter(Boolean) as string[];
+        const unique = [...new Set([...classes, t.classTeacherOf].filter(Boolean))] as string[];
         setAllowedClasses(unique);
+        setTeacherScope({
+          classes,
+          classTeacherOf: t.classTeacherOf ?? "",
+          classTeacherSection: t.classTeacherSection ?? "",
+          isClassTeacher: !!t.isClassTeacher,
+        });
       })
       .catch(() => {
-        if (!cancelled) setAllowedClasses([]);
+        if (!cancelled) {
+          setAllowedClasses([]);
+          setTeacherScope(null);
+        }
       });
     return () => {
       cancelled = true;
@@ -221,6 +241,30 @@ export default function AttendancePage() {
       setClassName(allowedClasses[0]);
     }
   }, [isTeacher, allowedClasses, className]);
+
+  // Section <Select> options for a teacher: any section of a class they subject-
+  // teach, but only their own section for their class-teacher class (matches the
+  // server's section-lock on marking). Every other role sees all sections.
+  const teacherSectionOptions = useMemo(() => {
+    if (!isTeacher || !teacherScope) return sectionOptions;
+    if (teacherScope.classes.includes(className)) return sectionOptions;
+    if (
+      teacherScope.isClassTeacher &&
+      teacherScope.classTeacherOf === className &&
+      teacherScope.classTeacherSection
+    ) {
+      return sectionOptions.filter((o) => o.value === teacherScope.classTeacherSection);
+    }
+    return sectionOptions;
+  }, [isTeacher, teacherScope, className, sectionOptions]);
+
+  // Snap a teacher off a section they may not mark for the chosen class.
+  useEffect(() => {
+    if (!isTeacher || !section) return;
+    if (!teacherSectionOptions.some((o) => o.value === section)) {
+      setSection(teacherSectionOptions[0]?.value ?? "");
+    }
+  }, [isTeacher, teacherSectionOptions, section]);
 
   // School holidays — a matching date closes the marking UI entirely.
   const [holidays, setHolidays] = useState<Holiday[]>([]);
@@ -724,7 +768,7 @@ export default function AttendancePage() {
             <Select value={className} onChange={(e) => setClassName(e.target.value)} placeholder="Select class" options={teacherClassOptions} aria-label="Select class" />
           </div>
           <div className="w-24">
-            <Select value={section} onChange={(e) => setSection(e.target.value)} placeholder="Section" options={sectionOptions} aria-label="Select section" />
+            <Select value={section} onChange={(e) => setSection(e.target.value)} placeholder="Section" options={teacherSectionOptions} aria-label="Select section" />
           </div>
           <input
             type="date"

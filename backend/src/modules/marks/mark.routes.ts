@@ -4,7 +4,8 @@ import { z } from "zod";
 import { requireAuth, requireRole } from "../../middleware/auth.js";
 import { validate, parsed } from "../../middleware/validate.js";
 import { ApiError } from "../../utils/ApiError.js";
-import { assertTeacherMayAccessClass } from "../../utils/teacherScope.js";
+import { assertTeacherMayAccessClass, assertTeacherMayAccessClassSection } from "../../utils/teacherScope.js";
+import { activeClassSectionMembers } from "../../utils/rosterGuard.js";
 import { Mark } from "./mark.model.js";
 import { Exam } from "../exams/exam.model.js";
 import { Student } from "../students/student.model.js";
@@ -120,8 +121,9 @@ router.post(
     try {
       const { examName, className, section, records } = req.body as z.infer<typeof saveBody>;
       const schoolId = req.user!.schoolId;
-      // A teacher may only enter marks for a class they teach.
-      await assertTeacherMayAccessClass(req, className);
+      // A teacher may only enter marks for a section they teach (their
+      // class-teacher section, or any section of a class they subject-teach).
+      await assertTeacherMayAccessClassSection(req, className, section);
 
       // Marks can't be entered before the exam has taken place. Enforce server-
       // side (matching the UI lock) so the future-date guard can't be bypassed
@@ -139,8 +141,25 @@ router.post(
         );
       }
 
+      // Keep only records for active students of THIS class+section — marks are
+      // keyed by studentId, so a foreign id must never reach the write (it would
+      // inject marks + rewrite that student's performance %). A stale id (a student
+      // moved/deactivated mid-session) is skipped, not failed.
+      const members = await activeClassSectionMembers(
+        schoolId,
+        className,
+        section,
+        records.map((r) => r.studentId)
+      );
+      const valid = records.filter((r) => members.has(String(r.studentId)));
+      if (valid.length === 0) {
+        throw ApiError.badRequest(
+          "None of these students are in this class and section — refresh the roster and try again."
+        );
+      }
+
       await Mark.bulkWrite(
-        records.map((r) => ({
+        valid.map((r) => ({
           updateOne: {
             filter: {
               schoolId,
@@ -162,13 +181,13 @@ router.post(
       try {
         await recomputePerformancePercent(
           schoolId,
-          records.map((r) => r.studentId)
+          valid.map((r) => r.studentId)
         );
       } catch (err) {
         console.error("Performance %, recompute failed:", err);
       }
 
-      res.json({ data: { saved: records.length } });
+      res.json({ data: { saved: valid.length, skipped: records.length - valid.length } });
     } catch (err) {
       next(err);
     }
