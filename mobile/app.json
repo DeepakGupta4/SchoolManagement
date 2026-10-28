@@ -1,0 +1,22 @@
+{
+  "expo": {
+    "name": "SchoolDeck",
+    "slug": "schooldeck-mobile",
+    "scheme": "schooldeck",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "backgroundColor": "#4f46e5"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.schooldeck.app"
+    },
+    "android": {
+      "package": "com.schooldeck.app"
+    },
+    "plugins": ["expo-router", "expo-secure-store"]
+  }
+}
