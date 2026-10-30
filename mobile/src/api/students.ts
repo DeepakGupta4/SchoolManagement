@@ -28,11 +28,14 @@ export interface Student {
 }
 
 /** The class teacher's roster. className/section come from their own class. */
-export function listStudents(params: { className?: string; section?: string; search?: string } = {}) {
+export function listStudents(
+  params: { className?: string; section?: string; search?: string; status?: string } = {}
+) {
   const q = new URLSearchParams({ limit: "500" });
   if (params.className) q.set("className", params.className);
   if (params.section) q.set("section", params.section);
   if (params.search) q.set("search", params.search);
+  if (params.status) q.set("status", params.status);
   return api<Student[]>(`/api/students?${q.toString()}`);
 }
 

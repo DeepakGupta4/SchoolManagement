@@ -41,6 +41,16 @@ export async function fetchMe(): Promise<AppUser> {
   return r.user;
 }
 
+/** Update the signed-in user's own name / avatar (PATCH /api/auth/me → { user }). */
+export async function updateMe(body: { name?: string; avatar?: string }): Promise<AppUser> {
+  const r = await api<{ user: AppUser }>("/api/auth/me", { method: "PATCH", body });
+  return r.user;
+}
+
+/** Change own password; does NOT log the caller out. Wrong current → 400 ApiError. */
+export const changeMyPassword = (body: { currentPassword: string; newPassword: string }) =>
+  api<{ ok: boolean }>("/api/auth/me/password", { method: "PATCH", body });
+
 export async function logout() {
   const refreshToken = await getRefresh();
   try {

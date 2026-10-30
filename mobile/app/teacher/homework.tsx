@@ -2,7 +2,8 @@ import { useCallback, useState } from "react";
 import { Alert, StyleSheet, View } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
-import * as FileSystem from "expo-file-system";
+// SDK 54+ moved the classic readAsStringAsync/EncodingType API to the /legacy entry.
+import * as FileSystem from "expo-file-system/legacy";
 import { useFocusEffect } from "expo-router";
 import { Screen, AppText, Card, TextField, Button, Loading } from "@/components";
 import { getMyTeacher, teacherName } from "@/api/teacher";

@@ -1,11 +1,14 @@
 import { useEffect, useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
+import { useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { Screen, AppText, Card, StatCard, Loading } from "@/components";
 import { getMyTeacher, teacherName, type Teacher } from "@/api/teacher";
 import { useAuth } from "@/store/auth";
 import { colors, radius, spacing } from "@/theme";
 
 export default function TeacherHome() {
+  const router = useRouter();
   const user = useAuth((s) => s.user);
   const [teacher, setTeacher] = useState<Teacher | null>(null);
   const [loading, setLoading] = useState(true);
@@ -44,6 +47,24 @@ export default function TeacherHome() {
         <AppText variant="title">{name} 👋</AppText>
         {classTeacherOf ? <AppText variant="muted">Class teacher · {classTeacherOf}</AppText> : null}
       </View>
+
+      {/* Daily first action for a class teacher. */}
+      {classTeacherOf ? (
+        <Pressable onPress={() => router.push("/teacher/attendance")}>
+          <Card style={styles.cta}>
+            <View style={styles.ctaIcon}>
+              <Ionicons name="checkbox-outline" size={22} color={colors.onPrimary} />
+            </View>
+            <View style={styles.flex}>
+              <AppText variant="heading" style={styles.ctaTitle}>
+                Take today&apos;s attendance
+              </AppText>
+              <AppText variant="muted">{classTeacherOf}</AppText>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.subtle} />
+          </Card>
+        </Pressable>
+      ) : null}
 
       <View style={styles.statRow}>
         <StatCard label="My classes" value={classes.length} icon="school-outline" tone="primary" />
@@ -85,6 +106,17 @@ export default function TeacherHome() {
 
 const styles = StyleSheet.create({
   hero: { gap: spacing.xs },
+  flex: { flex: 1 },
+  cta: { flexDirection: "row", alignItems: "center", gap: spacing.md },
+  ctaIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.md,
+    backgroundColor: colors.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  ctaTitle: { fontSize: 15 },
   statRow: { flexDirection: "row", gap: spacing.md },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginTop: spacing.sm },
   chip: {

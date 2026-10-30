@@ -2,10 +2,20 @@ import { api } from "./client";
 
 export interface Teacher {
   id?: string;
+  employeeId?: string;
   firstName?: string;
   lastName?: string;
   name?: string;
   email?: string;
+  phone?: string;
+  department?: string;
+  qualification?: string;
+  joiningDate?: string;
+  dateOfBirth?: string;
+  gender?: "male" | "female" | "other";
+  experienceYears?: number;
+  employmentType?: string;
+  status?: string;
   classes?: string[];
   subjects?: string[];
   isClassTeacher?: boolean;
