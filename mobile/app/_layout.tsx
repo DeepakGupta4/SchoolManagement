@@ -4,6 +4,7 @@ import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { useAuth } from "@/store/auth";
 import { colors } from "@/theme";
+import "@/lib/tracking"; // registers the background bus-location task at app start
 
 /** Root layout: restore the session once, then let routing take over. */
 export default function RootLayout() {

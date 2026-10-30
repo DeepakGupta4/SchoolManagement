@@ -26,7 +26,16 @@
           "photosPermission": "Allow $(PRODUCT_NAME) to attach photos to homework."
         }
       ],
-      "expo-asset"
+      "expo-asset",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Allow SchoolDeck to share your bus's live location so parents can track it.",
+          "locationAlwaysAndWhenInUsePermission": "Allow SchoolDeck to keep sharing the bus location while you drive, even when the app is in the background.",
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
+        }
+      ]
     ]
   }
 }

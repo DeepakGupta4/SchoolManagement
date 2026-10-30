@@ -17,8 +17,9 @@ export default function Index() {
 
   if (status === "guest" || !user) return <Redirect href="/login" />;
   if (user.role === "teacher") return <Redirect href="/teacher" />;
+  if (user.role === "driver") return <Redirect href="/driver" />;
 
-  // Teacher app is first; other roles land here until their section ships.
+  // Teacher + driver apps are in; other roles land here until their section ships.
   return (
     <Screen scroll={false} style={{ justifyContent: "center", gap: spacing.lg }}>
       <AppText variant="title">Coming soon</AppText>
