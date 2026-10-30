@@ -5,7 +5,6 @@
 export const colors = {
   primary: "#4f46e5",
   primaryDark: "#4338ca",
-  primaryLight: "#6366f1",
   primarySoft: "#eef2ff",
   primaryText: "#4338ca",
 
@@ -20,7 +19,7 @@ export const colors = {
   muted: "#64748b",
   subtle: "#94a3b8",
   onPrimary: "#ffffff",
-  onPrimarySoft: "rgba(255,255,255,0.2)",
+  onPrimaryGlass: "rgba(15,23,42,0.22)",
 
   border: "#e2e8f0",
   borderStrong: "#cbd5e1",

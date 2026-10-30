@@ -18,7 +18,7 @@ export const fontWeight = {
 
 /** Brand gradient — stops come from the colours above, never hardcoded. */
 export const gradients = {
-  primary: [colors.primaryLight, colors.primaryDark],
+  primary: [colors.primary, colors.primaryDark],
 } as const;
 
 export const shadow = {

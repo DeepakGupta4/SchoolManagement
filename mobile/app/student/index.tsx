@@ -1,21 +1,22 @@
 import { useCallback, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
-import { Screen, AppText, Card, Button, Loading } from "@/components";
+import { AppText, Card, DashboardScreen, HeroAction, NoticeCard } from "@/components";
 import { getStudentMe, getStudentReport, type StudentMe, type StudentReport } from "@/api/portal";
 import { ApiError } from "@/api/client";
-import { colors, radius, spacing, fontWeight } from "@/theme";
+import { useAuth } from "@/store/auth";
+import { colors, radius, spacing, fontWeight, fontSize } from "@/theme";
 
 /** Student home: profile + attendance/performance/fee + today's classes + report card. */
 export default function StudentHome() {
   const router = useRouter();
+  const user = useAuth((s) => s.user);
   const [me, setMe] = useState<StudentMe | null>(null);
   const [report, setReport] = useState<StudentReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    setLoading(true);
     setError(null);
     try {
       const [m, r] = await Promise.all([getStudentMe(), getStudentReport().catch(() => null)]);
@@ -34,122 +35,120 @@ export default function StudentHome() {
     }, [load])
   );
 
-  if (loading) {
-    return (
-      <Screen scroll={false}>
-        <Loading label="Loading…" />
-      </Screen>
-    );
-  }
-
-  if (!me) {
-    return (
-      <Screen style={{ gap: spacing.md }}>
-        <AppText variant="title">Hi there 👋</AppText>
-        <Card>
-          <AppText variant="muted">
-            {error ?? "No student record is linked to your account. Ask the office to check your email."}
-          </AppText>
-        </Card>
-        <Button title="Track the school bus" onPress={() => router.push("/track")} />
-      </Screen>
-    );
-  }
-
-  const { profile, stats, todaysPeriods } = me;
+  const name = me?.profile.name || user?.name || "Student";
+  const meta = me
+    ? [me.profile.className, me.profile.section, me.profile.rollNo ? `Roll ${me.profile.rollNo}` : ""]
+        .filter(Boolean)
+        .join(" · ")
+    : undefined;
+  const bus = (
+    <HeroAction icon="bus-outline" onPress={() => router.push("/track")} accessibilityLabel="Track the school bus" />
+  );
 
   return (
-    <Screen style={{ gap: spacing.md }}>
-      <View>
-        <AppText variant="muted">Welcome back,</AppText>
-        <AppText variant="title">{profile.name} 👋</AppText>
-        <AppText variant="muted">
-          {profile.className}
-          {profile.section ? ` · ${profile.section}` : ""}
-          {profile.rollNo ? ` · Roll ${profile.rollNo}` : ""}
-        </AppText>
-      </View>
-
-      <View style={styles.tiles}>
-        <Tile label="Attendance" value={`${stats.attendancePercent}%`} tone={colors.success} />
-        <Tile label="Performance" value={`${stats.performancePercent}%`} tone={colors.primary} />
-        <Tile
-          label="Fee due"
-          value={stats.feeDue > 0 ? `₹${stats.feeDue}` : "₹0"}
-          tone={stats.feeDue > 0 ? colors.danger : colors.success}
+    <DashboardScreen
+      name={name}
+      avatarUri={me?.profile.avatar || undefined}
+      meta={meta}
+      rightSlot={bus}
+      loading={loading && !me}
+    >
+      {!me ? (
+        <NoticeCard
+          error={error}
+          emptyText="No student record is linked to your account. Ask the office to check your email."
+          onRetry={load}
         />
-      </View>
-
-      <Button title="Track the school bus" variant="outline" onPress={() => router.push("/track")} />
-
-      <AppText variant="heading">Today's classes</AppText>
-      {todaysPeriods.length === 0 ? (
-        <AppText variant="muted">No classes scheduled today.</AppText>
       ) : (
-        todaysPeriods.map((p) => (
-          <Card key={p.period} style={styles.row}>
-            <View style={styles.badge}>
-              <AppText variant="small" style={styles.badgeText}>
-                P{p.period}
-              </AppText>
-            </View>
-            <View style={styles.flex}>
-              <AppText variant="heading" style={styles.rowTitle}>
-                {p.subject || "—"}
-              </AppText>
-              <AppText variant="muted">
-                {[p.time, p.teacher, p.room ? `Room ${p.room}` : ""].filter(Boolean).join(" · ") || "—"}
-              </AppText>
-            </View>
-          </Card>
-        ))
-      )}
+        <>
+          <View style={styles.statRow}>
+            <StatMini label="Attendance" value={`${me.stats.attendancePercent}%`} tone={colors.successText} />
+            <StatMini label="Performance" value={`${me.stats.performancePercent}%`} tone={colors.primaryText} />
+            <StatMini
+              label="Fee due"
+              value={me.stats.feeDue > 0 ? `₹${me.stats.feeDue}` : "₹0"}
+              tone={me.stats.feeDue > 0 ? colors.dangerText : colors.successText}
+            />
+          </View>
 
-      <AppText variant="heading">
-        My report card{report && report.gpa ? ` · GPA ${report.gpa}` : ""}
-      </AppText>
-      {!report || report.subjects.length === 0 ? (
-        <AppText variant="muted">No marks published yet.</AppText>
-      ) : (
-        report.subjects.map((s) => (
-          <Card key={s.subject} style={styles.row}>
-            <View style={styles.flex}>
-              <AppText variant="heading" style={styles.rowTitle}>
-                {s.subject}
-              </AppText>
-              <AppText variant="muted">
-                {s.marks}/{s.maxMarks} · {s.percent}%
-              </AppText>
-            </View>
-            <View style={styles.grade}>
-              <AppText variant="small" style={styles.gradeText}>
-                {s.grade}
-              </AppText>
-            </View>
+          <Card style={styles.block}>
+            <AppText variant="heading">Today&apos;s classes</AppText>
+            {me.todaysPeriods.length === 0 ? (
+              <AppText variant="muted">No classes scheduled today.</AppText>
+            ) : (
+              me.todaysPeriods.map((p) => (
+                <View key={p.period} style={styles.row}>
+                  <View style={styles.periodNo}>
+                    <AppText style={styles.periodNoText}>P{p.period}</AppText>
+                  </View>
+                  <View style={styles.flex}>
+                    <AppText variant="heading" style={styles.rowTitle}>
+                      {p.subject || "—"}
+                    </AppText>
+                    <AppText variant="muted">
+                      {[p.time, p.teacher, p.room ? `Room ${p.room}` : ""].filter(Boolean).join(" · ") || "—"}
+                    </AppText>
+                  </View>
+                </View>
+              ))
+            )}
           </Card>
-        ))
+
+          <Card style={styles.block}>
+            <AppText variant="heading">My report card{report?.gpa ? ` · GPA ${report.gpa}` : ""}</AppText>
+            {!report || report.subjects.length === 0 ? (
+              <AppText variant="muted">No marks published yet.</AppText>
+            ) : (
+              report.subjects.map((s, i) => (
+                <View key={`${s.subject}-${i}`} style={styles.row}>
+                  <View style={styles.flex}>
+                    <AppText variant="heading" style={styles.rowTitle}>
+                      {s.subject}
+                    </AppText>
+                    <AppText variant="muted">
+                      {s.marks}/{s.maxMarks} · {s.percent}%
+                    </AppText>
+                  </View>
+                  <View style={styles.grade}>
+                    <AppText variant="small" style={styles.gradeText}>
+                      {s.grade}
+                    </AppText>
+                  </View>
+                </View>
+              ))
+            )}
+          </Card>
+        </>
       )}
-    </Screen>
+    </DashboardScreen>
   );
 }
 
-function Tile({ label, value, tone }: { label: string; value: string; tone: string }) {
+function StatMini({ label, value, tone }: { label: string; value: string; tone: string }) {
   return (
-    <Card style={styles.tile}>
-      <AppText variant="small">{label}</AppText>
-      <AppText style={[styles.tileValue, { color: tone }]}>{value}</AppText>
+    <Card style={styles.stat}>
+      <AppText style={[styles.statValue, { color: tone }]} numberOfLines={1} adjustsFontSizeToFit>
+        {value}
+      </AppText>
+      <AppText style={styles.statLabel} numberOfLines={1}>
+        {label}
+      </AppText>
     </Card>
   );
 }
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  tiles: { flexDirection: "row", gap: spacing.sm },
-  tile: { flex: 1, gap: 4, padding: spacing.md },
-  tileValue: { fontSize: 21, fontWeight: fontWeight.bold },
+  block: { gap: spacing.sm },
+
+  statRow: { flexDirection: "row", gap: spacing.sm, alignItems: "flex-start" },
+  stat: { flex: 1, gap: 4, padding: spacing.md },
+  statValue: { fontSize: fontSize.xl, fontWeight: fontWeight.bold },
+  statLabel: { fontSize: fontSize.xs, color: colors.muted },
+
   row: { flexDirection: "row", alignItems: "center", gap: spacing.md },
-  rowTitle: { fontSize: 15 },
-  badge: {
+  rowTitle: { fontSize: fontSize.md },
+  periodNo: {
     width: 40,
     height: 40,
     borderRadius: radius.md,
@@ -157,7 +156,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  badgeText: { color: colors.primaryText, fontWeight: fontWeight.bold },
+  periodNoText: { color: colors.primaryText, fontWeight: fontWeight.bold, fontSize: fontSize.sm },
   grade: {
     backgroundColor: colors.primarySoft,
     borderRadius: radius.pill,

@@ -68,16 +68,16 @@ export default function Child() {
       </AppText>
 
       <View style={styles.tiles}>
-        <Tile label="Attendance" value={`${stats.attendancePercent}%`} tone={colors.success} />
-        <Tile label="Performance" value={`${stats.performancePercent}%`} tone={colors.primary} />
+        <Tile label="Attendance" value={`${stats.attendancePercent}%`} tone={colors.successText} />
+        <Tile label="Performance" value={`${stats.performancePercent}%`} tone={colors.primaryText} />
       </View>
       <View style={styles.tiles}>
         <Tile
           label="Fee due"
           value={stats.feeDue > 0 ? `₹${stats.feeDue}` : "₹0"}
-          tone={stats.feeDue > 0 ? colors.danger : colors.success}
+          tone={stats.feeDue > 0 ? colors.dangerText : colors.successText}
         />
-        <Tile label="GPA" value={String(stats.gpa)} tone={colors.primary} />
+        <Tile label="GPA" value={String(stats.gpa)} tone={colors.primaryText} />
       </View>
 
       <AppText variant="heading">Report card</AppText>
@@ -122,7 +122,9 @@ function BackRow({ onBack, title }: { onBack: () => void; title: string }) {
 function Tile({ label, value, tone }: { label: string; value: string; tone: string }) {
   return (
     <Card style={styles.tile}>
-      <AppText variant="small">{label}</AppText>
+      <AppText variant="muted" numberOfLines={1}>
+        {label}
+      </AppText>
       <AppText style={[styles.tileValue, { color: tone }]}>{value}</AppText>
     </Card>
   );
