@@ -1,9 +1,11 @@
 import { useCallback, useMemo, useState } from "react";
-import { Image, Pressable, StyleSheet, View } from "react-native";
+import { Image, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { useFocusEffect, useRouter, type Href } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { setStatusBarStyle } from "expo-status-bar";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
-import { Screen, AppText, Card, StatCard, Loading } from "@/components";
+import { AppText, Card, StatCard, Loading } from "@/components";
 import {
   getMyTeacher,
   getTimetable,
@@ -19,7 +21,7 @@ import { colors, radius, spacing, fontWeight, fontSize, gradients, shadow } from
 
 type QuickAction = { label: string; icon: keyof typeof Ionicons.glyphMap; href: Href; bg: string; fg: string };
 
-// Soft-bg + dark-glyph pairs (all from theme) — same system as the chips/StatCard.
+// Soft-bg + dark-glyph pairs (all from theme) — each action owns one hue.
 const ACTIONS: QuickAction[] = [
   { label: "Attendance", icon: "checkbox-outline", href: "/teacher/attendance", bg: colors.primarySoft, fg: colors.primaryText },
   { label: "Homework", icon: "document-text-outline", href: "/teacher/homework", bg: colors.infoSoft, fg: colors.infoText },
@@ -29,6 +31,7 @@ const ACTIONS: QuickAction[] = [
 
 export default function TeacherHome() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const user = useAuth((s) => s.user);
   const unread = useNotifications((s) => s.unread);
   const refreshAlerts = useNotifications((s) => s.refresh);
@@ -47,14 +50,16 @@ export default function TeacherHome() {
       /* keep whatever we already have */
     } finally {
       setLoading(false);
+      setStatusBarStyle("light"); // white icons over the indigo hero
     }
   }, []);
 
-  // Refresh dashboard + alert badge every time Home comes into focus.
+  // Refresh dashboard + alert badge on focus; restore the dark status bar on leave.
   useFocusEffect(
     useCallback(() => {
       load();
       refreshAlerts();
+      return () => setStatusBarStyle("dark");
     }, [load, refreshAlerts])
   );
 
@@ -88,17 +93,22 @@ export default function TeacherHome() {
 
   if (loading && !teacher) {
     return (
-      <Screen scroll={false}>
+      <View style={[styles.root, styles.center]}>
         <Loading label="Loading your dashboard…" />
-      </Screen>
+      </View>
     );
   }
 
   return (
-    <Screen>
-      {/* gradient hero: greeting + date + alerts bell */}
-      <View style={styles.heroShadow}>
-        <LinearGradient colors={gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.hero}>
+    <View style={styles.root}>
+      {/* gradient hero — full-bleed behind the status bar */}
+      <View style={styles.heroWrap}>
+        <LinearGradient
+          colors={gradients.primary}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[styles.hero, { paddingTop: insets.top + spacing.md }]}
+        >
           <View style={styles.heroTop}>
             <View style={styles.heroLeft}>
               {avatarUri ? (
@@ -138,105 +148,107 @@ export default function TeacherHome() {
         </LinearGradient>
       </View>
 
-      {/* class teacher's #1 daily task */}
-      {classTeacherOf ? (
-        <Pressable onPress={() => router.push("/teacher/attendance")} accessibilityRole="button">
-          <Card style={styles.cta}>
-            <View style={styles.ctaIcon}>
-              <Ionicons name="checkbox-outline" size={22} color={colors.onPrimary} />
-            </View>
-            <View style={styles.flex}>
-              <AppText variant="heading" style={styles.ctaTitle}>
-                Take today&apos;s attendance
-              </AppText>
-              <AppText variant="muted">Class {classTeacherOf}</AppText>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={colors.primary} />
-          </Card>
-        </Pressable>
-      ) : null}
-
-      {/* at-a-glance */}
-      <View style={styles.statRow}>
-        <StatCard label="My classes" value={classes.length} icon="school-outline" tone="primary" />
-        <StatCard label="My subjects" value={subjects.length} icon="book-outline" tone="info" />
-      </View>
-
-      {/* quick actions */}
-      <Card style={styles.block}>
-        <AppText variant="heading">Quick actions</AppText>
-        <View style={styles.actions}>
-          {ACTIONS.map((a) => (
-            <Pressable
-              key={a.label}
-              style={styles.action}
-              onPress={() => router.push(a.href)}
-              accessibilityRole="button"
-            >
-              <View style={[styles.actionIcon, { backgroundColor: a.bg }]}>
-                <Ionicons name={a.icon} size={24} color={a.fg} />
-              </View>
-              <AppText variant="small" style={styles.actionLabel}>
-                {a.label}
-              </AppText>
-            </Pressable>
-          ))}
-        </View>
-      </Card>
-
-      {/* today's periods (from the timetable) */}
-      <Card style={styles.block}>
-        <Pressable
-          style={styles.cardHead}
-          onPress={() => router.push("/teacher/timetable")}
-          accessibilityRole="button"
-        >
-          <AppText variant="heading">Today&apos;s classes</AppText>
-          <View style={styles.cardHeadRight}>
-            <AppText variant="muted">{today}</AppText>
-            <Ionicons name="chevron-forward" size={16} color={colors.muted} />
-          </View>
-        </Pressable>
-        {todays === null ? (
-          <EmptyState icon="cloud-offline-outline" text="Couldn't load your timetable just now." />
-        ) : todays.length ? (
-          todays.map((e) => (
-            <View key={e.id} style={styles.period}>
-              <View style={styles.periodNo}>
-                <AppText style={styles.periodNoText}>P{e.period}</AppText>
+      <ScrollView style={styles.flex} contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
+        {/* class teacher's #1 daily task */}
+        {classTeacherOf ? (
+          <Pressable onPress={() => router.push("/teacher/attendance")} accessibilityRole="button">
+            <Card style={styles.cta}>
+              <View style={styles.ctaIcon}>
+                <Ionicons name="checkbox-outline" size={22} color={colors.onPrimary} />
               </View>
               <View style={styles.flex}>
-                <AppText variant="heading" style={styles.periodSubject}>
-                  {e.subject}
+                <AppText variant="heading" style={styles.ctaTitle}>
+                  Take today&apos;s attendance
                 </AppText>
-                <AppText variant="muted">
-                  {e.className}
-                  {e.section ? ` · ${e.section}` : ""}
-                  {e.room ? ` · Room ${e.room}` : ""}
-                </AppText>
+                <AppText variant="muted">Class {classTeacherOf}</AppText>
               </View>
+              <Ionicons name="chevron-forward" size={20} color={colors.primary} />
+            </Card>
+          </Pressable>
+        ) : null}
+
+        {/* at-a-glance */}
+        <View style={styles.statRow}>
+          <StatCard label="My classes" value={classes.length} icon="school-outline" tone="primary" />
+          <StatCard label="My subjects" value={subjects.length} icon="book-outline" tone="info" />
+        </View>
+
+        {/* quick actions — colourful 2×2 tiles */}
+        <Card style={styles.block}>
+          <AppText variant="heading">Quick actions</AppText>
+          <View style={styles.actionGrid}>
+            {ACTIONS.map((a) => (
+              <Pressable
+                key={a.label}
+                style={[styles.actionTile, { backgroundColor: a.bg }]}
+                onPress={() => router.push(a.href)}
+                accessibilityRole="button"
+              >
+                <View style={styles.actionTileIcon}>
+                  <Ionicons name={a.icon} size={20} color={a.fg} />
+                </View>
+                <AppText style={[styles.actionTileLabel, { color: a.fg }]} numberOfLines={1}>
+                  {a.label}
+                </AppText>
+              </Pressable>
+            ))}
+          </View>
+        </Card>
+
+        {/* today's periods (from the timetable) */}
+        <Card style={styles.block}>
+          <Pressable
+            style={styles.cardHead}
+            onPress={() => router.push("/teacher/timetable")}
+            accessibilityRole="button"
+          >
+            <AppText variant="heading">Today&apos;s classes</AppText>
+            <View style={styles.cardHeadRight}>
+              <AppText variant="muted">{today}</AppText>
+              <Ionicons name="chevron-forward" size={16} color={colors.muted} />
             </View>
-          ))
-        ) : (
-          <EmptyState icon="cafe-outline" text={`No periods scheduled for ${today}.`} />
-        )}
-      </Card>
+          </Pressable>
+          {todays === null ? (
+            <EmptyState icon="cloud-offline-outline" text="Couldn't load your timetable just now." />
+          ) : todays.length ? (
+            todays.map((e) => (
+              <View key={e.id} style={styles.period}>
+                <View style={styles.periodNo}>
+                  <AppText style={styles.periodNoText}>P{e.period}</AppText>
+                </View>
+                <View style={styles.flex}>
+                  <AppText variant="heading" style={styles.periodSubject}>
+                    {e.subject}
+                  </AppText>
+                  <AppText variant="muted">
+                    {e.className}
+                    {e.section ? ` · ${e.section}` : ""}
+                    {e.room ? ` · Room ${e.room}` : ""}
+                  </AppText>
+                </View>
+              </View>
+            ))
+          ) : (
+            <EmptyState icon="cafe-outline" text={`No periods scheduled for ${today}.`} />
+          )}
+        </Card>
 
-      {/* classes + subjects */}
-      <Card style={styles.block}>
-        <AppText variant="heading">Your teaching</AppText>
+        {/* classes + subjects */}
+        <Card style={styles.block}>
+          <AppText variant="heading">Your teaching</AppText>
 
-        <AppText variant="label" style={styles.subLabel}>
-          Classes
-        </AppText>
-        <ChipRow items={classes} empty="No classes assigned yet." />
+          <AppText variant="label" style={styles.subLabel}>
+            Classes
+          </AppText>
+          <ChipRow items={classes} empty="No classes assigned yet." />
 
-        <AppText variant="label" style={styles.subLabel}>
-          Subjects
-        </AppText>
-        <ChipRow items={subjects} empty="No subjects assigned yet." />
-      </Card>
-    </Screen>
+          <AppText variant="label" style={styles.subLabel}>
+            Subjects
+          </AppText>
+          <ChipRow items={subjects} empty="No subjects assigned yet." />
+        </Card>
+      </ScrollView>
+    </View>
   );
 }
 
@@ -269,11 +281,27 @@ function EmptyState({ icon, text }: { icon: keyof typeof Ionicons.glyphMap; text
 }
 
 const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: colors.bg },
   flex: { flex: 1 },
+  center: { justifyContent: "center", alignItems: "center" },
 
-  // gradient hero
-  heroShadow: { borderRadius: radius.xl, backgroundColor: colors.primaryDark, ...shadow.lg },
-  hero: { borderRadius: radius.xl, overflow: "hidden", padding: spacing.lg, gap: spacing.md },
+  body: { padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing.xxl },
+
+  // gradient hero (full-bleed under the status bar)
+  heroWrap: {
+    backgroundColor: colors.primaryDark,
+    borderBottomLeftRadius: radius.xl,
+    borderBottomRightRadius: radius.xl,
+    ...shadow.lg,
+  },
+  hero: {
+    borderBottomLeftRadius: radius.xl,
+    borderBottomRightRadius: radius.xl,
+    overflow: "hidden",
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.lg,
+    gap: spacing.md,
+  },
   heroTop: { flexDirection: "row", alignItems: "center", gap: spacing.md },
   heroLeft: { flex: 1, flexDirection: "row", alignItems: "center", gap: spacing.md },
   heroAvatar: {
@@ -306,7 +334,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     backgroundColor: colors.danger,
     borderWidth: 1.5,
-    borderColor: colors.surface,
+    borderColor: colors.primaryDark,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -345,10 +373,26 @@ const styles = StyleSheet.create({
 
   block: { gap: spacing.sm },
 
-  actions: { flexDirection: "row", gap: spacing.sm },
-  action: { flex: 1, alignItems: "center", gap: spacing.xs },
-  actionIcon: { width: 56, height: 56, borderRadius: radius.lg, alignItems: "center", justifyContent: "center" },
-  actionLabel: { color: colors.text, textAlign: "center", fontSize: fontSize.sm },
+  // quick actions
+  actionGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginTop: spacing.xs },
+  actionTile: {
+    flexGrow: 1,
+    flexBasis: "47%",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    padding: spacing.md,
+    borderRadius: radius.md,
+  },
+  actionTileIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  actionTileLabel: { fontSize: fontSize.sm, fontWeight: fontWeight.semibold },
 
   cardHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   cardHeadRight: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
