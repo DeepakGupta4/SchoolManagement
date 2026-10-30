@@ -17,6 +17,15 @@ const busRouteSchema = new Schema(
     distance: { type: String, default: "" },
     /** Monthly transport fee for this route — billed to students assigned to it. */
     fee: { type: Number, default: 0, min: 0 },
+
+    // --- Live GPS tracking: the driver's phone updates these via /api/transport.
+    // Not in the bus-route zod schema, so admin CRUD never touches them.
+    trackingOn: { type: Boolean, default: false },
+    lat: { type: Number, default: null },
+    lng: { type: Number, default: null },
+    speed: { type: Number, default: 0 },
+    heading: { type: Number, default: 0 },
+    lastPingAt: { type: String, default: "" }, // ISO timestamp of the last GPS ping
   },
   { timestamps: true }
 );
