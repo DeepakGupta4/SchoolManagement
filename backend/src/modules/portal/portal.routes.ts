@@ -175,6 +175,46 @@ router.get("/me/student", async (req, res, next) => {
 });
 
 /**
+ * The signed-in STUDENT's own report card — subject-wise marks + grade + GPA,
+ * derived exactly like the parent's children/:id view. Scoped to the one student
+ * (matched by login email); null if no record. Never exposes anyone else's marks.
+ */
+router.get("/me/report", async (req, res, next) => {
+  try {
+    const schoolId = req.user!.schoolId;
+    const email = (req.user!.email || "").trim().toLowerCase();
+    const s = email ? await Student.findOne({ schoolId, email }).lean() : null;
+    if (!s) {
+      res.json({ data: null });
+      return;
+    }
+    const marks = await Mark.find({ schoolId, studentId: String(s._id) }).lean();
+    const bySubject = new Map<string, { marks: number; maxMarks: number }>();
+    for (const m of marks) {
+      const key = m.subject || "—";
+      const cur = bySubject.get(key) ?? { marks: 0, maxMarks: 0 };
+      cur.marks += m.marks ?? 0;
+      cur.maxMarks += m.maxMarks ?? 0;
+      bySubject.set(key, cur);
+    }
+    const school = await School.findOne({ schoolId }).lean();
+    const scheme = effectiveScheme(school?.gradingScheme);
+    const subjects = [...bySubject.entries()].map(([subject, v]) => {
+      const percent = v.maxMarks > 0 ? Math.round((v.marks / v.maxMarks) * 100) : 0;
+      const g = gradeForPercent(scheme, percent);
+      return { subject, marks: v.marks, maxMarks: v.maxMarks, percent, grade: g.grade, gradePoint: g.gradePoint };
+    });
+    const graded = subjects.filter((x) => x.maxMarks > 0);
+    const gpa = graded.length
+      ? Math.round((graded.reduce((sum, x) => sum + x.gradePoint, 0) / graded.length) * 100) / 100
+      : 0;
+    res.json({ data: { profile: { name: `${s.firstName ?? ""} ${s.lastName ?? ""}`.trim(), className: s.className ?? "", section: s.section ?? "" }, subjects, gpa } });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
  * The signed-in DRIVER's assigned route(s). BusRoute.driver is a free-text name,
  * so routes are matched by the driver's own name (case-insensitive). Best-effort
  * until routes are linked to driver accounts by id.
