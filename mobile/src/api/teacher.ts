@@ -37,9 +37,18 @@ export interface TimetableEntry {
 
 /** The signed-in teacher's own record (scoped server-side to their account). */
 export const getMyTeacher = () => api<Teacher>("/api/teachers/me");
-export const getTimetable = () => api<TimetableEntry[]>("/api/timetable?limit=500");
+
+/** Timetable rows. Pass a teacher name so the server scopes it (avoids the 500-row cap). */
+export const getTimetable = (teacher?: string) =>
+  api<TimetableEntry[]>(`/api/timetable?limit=500${teacher ? `&teacher=${encodeURIComponent(teacher)}` : ""}`);
 
 export function teacherName(t?: Teacher | null): string {
   if (!t) return "";
   return t.name || `${t.firstName ?? ""} ${t.lastName ?? ""}`.trim();
 }
+
+/** Normalize a name for matching: trim, collapse inner spaces, lowercase. */
+export const normName = (s?: string) => (s ?? "").trim().replace(/\s+/g, " ").toLowerCase();
+
+/** Timetable stores the teacher by name — the one place that decides "is this my period?". */
+export const isTaughtBy = (e: TimetableEntry, who: string) => normName(e.teacher) === normName(who);

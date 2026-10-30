@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { Screen, AppText, Card, Loading } from "@/components";
-import { getMyTeacher, getTimetable, teacherName, type TimetableEntry } from "@/api/teacher";
+import { getMyTeacher, getTimetable, teacherName, isTaughtBy, type TimetableEntry } from "@/api/teacher";
 import { colors, radius, spacing } from "@/theme";
 
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -13,21 +13,27 @@ export default function TeacherTimetable() {
 
   useEffect(() => {
     let alive = true;
-    Promise.all([getMyTeacher(), getTimetable()])
-      .then(([t, tt]) => {
+    (async () => {
+      try {
+        const t = await getMyTeacher();
         if (!alive) return;
-        setName(teacherName(t));
-        setEntries(tt);
-      })
-      .catch(() => {})
-      .finally(() => alive && setLoading(false));
+        const nm = teacherName(t);
+        setName(nm);
+        const tt = nm ? await getTimetable(nm) : []; // server-scoped to this teacher
+        if (alive) setEntries(tt);
+      } catch {
+        /* ignore */
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
     return () => {
       alive = false;
     };
   }, []);
 
-  // Only this teacher's periods (timetable stores the teacher by name).
-  const mine = useMemo(() => entries.filter((e) => e.teacher === name), [entries, name]);
+  // Only this teacher's periods — same match rule as the Home dashboard.
+  const mine = useMemo(() => entries.filter((e) => isTaughtBy(e, name)), [entries, name]);
 
   if (loading) {
     return (

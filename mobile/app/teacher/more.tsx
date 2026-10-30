@@ -1,9 +1,11 @@
+import { useCallback } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
-import { useRouter, type Href } from "expo-router";
+import { useFocusEffect, useRouter, type Href } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Screen, AppText, Card, Button } from "@/components";
 import { useAuth } from "@/store/auth";
-import { colors, radius, spacing, fontWeight } from "@/theme";
+import { useNotifications } from "@/store/notifications";
+import { colors, radius, spacing, fontWeight, fontSize } from "@/theme";
 
 type LinkItem = { href: Href; icon: keyof typeof Ionicons.glyphMap; label: string; hint: string };
 
@@ -21,6 +23,7 @@ const SECTIONS: { title: string; links: LinkItem[] }[] = [
   {
     title: "School",
     links: [
+      { href: "/teacher/notifications", icon: "notifications-outline", label: "Alerts", hint: "Your notifications" },
       { href: "/teacher/updates", icon: "megaphone-outline", label: "Updates", hint: "Announcements, notices, events" },
       { href: "/teacher/substitutions", icon: "swap-horizontal-outline", label: "Cover duties", hint: "Substitutions assigned to you" },
       { href: "/teacher/messages", icon: "chatbubbles-outline", label: "Message board", hint: "Shared with your school" },
@@ -39,7 +42,16 @@ const SECTIONS: { title: string; links: LinkItem[] }[] = [
 export default function More() {
   const router = useRouter();
   const { user, signOut } = useAuth();
+  const unread = useNotifications((s) => s.unread);
+  const refresh = useNotifications((s) => s.refresh);
   const initial = (user?.name ?? "?").slice(0, 1).toUpperCase();
+
+  // Keep the Alerts count fresh while this tab is open (Home isn't focused here).
+  useFocusEffect(
+    useCallback(() => {
+      refresh();
+    }, [refresh])
+  );
 
   return (
     <Screen style={{ gap: spacing.lg }}>
@@ -54,9 +66,9 @@ export default function More() {
           <View style={styles.flex}>
             <AppText variant="heading">{user?.name}</AppText>
             <AppText variant="muted">{user?.email}</AppText>
-            <AppText variant="small">Tap to edit your profile</AppText>
+            <AppText variant="muted">Tap to edit your profile</AppText>
           </View>
-          <Ionicons name="chevron-forward" size={18} color={colors.subtle} />
+          <Ionicons name="chevron-forward" size={18} color={colors.muted} />
         </Card>
       </Pressable>
 
@@ -75,7 +87,12 @@ export default function More() {
                   </AppText>
                   <AppText variant="muted">{l.hint}</AppText>
                 </View>
-                <Ionicons name="chevron-forward" size={18} color={colors.subtle} />
+                {l.href === "/teacher/notifications" && unread ? (
+                  <View style={styles.badge}>
+                    <AppText style={styles.badgeText}>{unread > 9 ? "9+" : unread}</AppText>
+                  </View>
+                ) : null}
+                <Ionicons name="chevron-forward" size={18} color={colors.muted} />
               </Card>
             </Pressable>
           ))}
@@ -110,4 +127,14 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   rowTitle: { fontSize: 15 },
+  badge: {
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    paddingHorizontal: 5,
+    backgroundColor: colors.danger,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  badgeText: { color: colors.onPrimary, fontSize: fontSize.xs, fontWeight: fontWeight.bold },
 });

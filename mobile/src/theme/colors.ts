@@ -20,6 +20,7 @@ export const colors = {
   muted: "#64748b",
   subtle: "#94a3b8",
   onPrimary: "#ffffff",
+  onPrimarySoft: "rgba(255,255,255,0.2)",
 
   border: "#e2e8f0",
   borderStrong: "#cbd5e1",
