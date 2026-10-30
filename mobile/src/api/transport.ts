@@ -29,3 +29,6 @@ export const sendLocation = (body: { lat: number; lng: number; speed?: number; h
 /** Flip the route's "sharing" flag on/off. */
 export const setTracking = (on: boolean) =>
   api<{ ok: boolean; trackingOn: boolean }>("/api/transport/tracking", { method: "POST", body: { on } });
+
+/** Every bus currently sharing its location — for the parent/student/office map. */
+export const listLiveBuses = () => api<DriverRoute[]>("/api/transport/live");
