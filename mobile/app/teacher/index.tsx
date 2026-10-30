@@ -68,9 +68,13 @@ export default function TeacherHome() {
       ? `${teacher.classTeacherOf}${teacher.classTeacherSection ? ` · ${teacher.classTeacherSection}` : ""}`
       : null;
 
+  const greeting = useMemo(() => {
+    const h = new Date().getHours();
+    return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
+  }, []);
   const today = useMemo(() => new Date().toLocaleDateString("en-US", { weekday: "long" }), []);
-  const todayLabel = useMemo(
-    () => new Date().toLocaleDateString("en-US", { weekday: "short", day: "numeric", month: "short" }),
+  const fullDate = useMemo(
+    () => new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" }),
     []
   );
   // Match only off the authoritative teacher record; null = record not loaded (≠ a free day).
@@ -92,52 +96,63 @@ export default function TeacherHome() {
 
   return (
     <Screen>
-      {/* header: identity + alerts bell */}
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          {avatarUri ? (
-            <Image source={{ uri: avatarUri }} style={styles.avatar} />
-          ) : (
-            <View style={[styles.avatar, styles.avatarFallback]}>
-              <AppText style={styles.avatarText}>{initial}</AppText>
+      {/* gradient hero: greeting + date + alerts bell */}
+      <View style={styles.heroShadow}>
+        <LinearGradient colors={gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.hero}>
+          <View style={styles.heroTop}>
+            <View style={styles.heroLeft}>
+              {avatarUri ? (
+                <Image source={{ uri: avatarUri }} style={styles.heroAvatarImg} />
+              ) : (
+                <View style={styles.heroAvatar}>
+                  <AppText style={styles.heroAvatarText}>{initial}</AppText>
+                </View>
+              )}
+              <View style={styles.flex}>
+                <AppText style={styles.greeting}>{greeting},</AppText>
+                <AppText style={styles.heroName} numberOfLines={1}>
+                  {name}
+                </AppText>
+              </View>
             </View>
-          )}
-          <View style={styles.flex}>
-            <AppText variant="muted">Welcome back 👋</AppText>
-            <AppText variant="heading" style={styles.name} numberOfLines={1}>
-              {name}
-            </AppText>
+            <Pressable
+              onPress={() => router.push("/teacher/notifications")}
+              style={styles.bellHero}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel={unread ? `Alerts, ${unread} unread` : "Alerts"}
+            >
+              <Ionicons name="notifications-outline" size={22} color={colors.onPrimary} />
+              {unread ? (
+                <View style={styles.badge}>
+                  <AppText style={styles.badgeText}>{unread > 9 ? "9+" : unread}</AppText>
+                </View>
+              ) : null}
+            </Pressable>
           </View>
-        </View>
-        <Pressable
-          onPress={() => router.push("/teacher/notifications")}
-          style={styles.bell}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel={unread ? `Alerts, ${unread} unread` : "Alerts"}
-        >
-          <Ionicons name="notifications-outline" size={22} color={colors.text} />
-          {unread ? (
-            <View style={styles.badge}>
-              <AppText style={styles.badgeText}>{unread > 9 ? "9+" : unread}</AppText>
-            </View>
-          ) : null}
-        </Pressable>
+
+          <View style={styles.dateRow}>
+            <Ionicons name="calendar-outline" size={14} color={colors.onPrimary} />
+            <AppText style={styles.dateText}>{fullDate}</AppText>
+          </View>
+        </LinearGradient>
       </View>
 
       {/* class teacher's #1 daily task */}
       {classTeacherOf ? (
         <Pressable onPress={() => router.push("/teacher/attendance")} accessibilityRole="button">
-          <LinearGradient colors={gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.cta}>
+          <Card style={styles.cta}>
             <View style={styles.ctaIcon}>
               <Ionicons name="checkbox-outline" size={22} color={colors.onPrimary} />
             </View>
             <View style={styles.flex}>
-              <AppText style={styles.ctaTitle}>Take today&apos;s attendance</AppText>
-              <AppText style={styles.ctaSub}>Class {classTeacherOf}</AppText>
+              <AppText variant="heading" style={styles.ctaTitle}>
+                Take today&apos;s attendance
+              </AppText>
+              <AppText variant="muted">Class {classTeacherOf}</AppText>
             </View>
-            <Ionicons name="arrow-forward" size={20} color={colors.onPrimary} />
-          </LinearGradient>
+            <Ionicons name="chevron-forward" size={20} color={colors.primary} />
+          </Card>
         </Pressable>
       ) : null}
 
@@ -148,8 +163,8 @@ export default function TeacherHome() {
       </View>
 
       {/* quick actions */}
-      <View style={styles.block}>
-        <AppText variant="label">Quick actions</AppText>
+      <Card style={styles.block}>
+        <AppText variant="heading">Quick actions</AppText>
         <View style={styles.actions}>
           {ACTIONS.map((a) => (
             <Pressable
@@ -159,7 +174,7 @@ export default function TeacherHome() {
               accessibilityRole="button"
             >
               <View style={[styles.actionIcon, { backgroundColor: a.bg }]}>
-                <Ionicons name={a.icon} size={22} color={a.fg} />
+                <Ionicons name={a.icon} size={24} color={a.fg} />
               </View>
               <AppText variant="small" style={styles.actionLabel}>
                 {a.label}
@@ -167,14 +182,21 @@ export default function TeacherHome() {
             </Pressable>
           ))}
         </View>
-      </View>
+      </Card>
 
       {/* today's periods (from the timetable) */}
       <Card style={styles.block}>
-        <View style={styles.cardHead}>
+        <Pressable
+          style={styles.cardHead}
+          onPress={() => router.push("/teacher/timetable")}
+          accessibilityRole="button"
+        >
           <AppText variant="heading">Today&apos;s classes</AppText>
-          <AppText variant="muted">{todayLabel}</AppText>
-        </View>
+          <View style={styles.cardHeadRight}>
+            <AppText variant="muted">{today}</AppText>
+            <Ionicons name="chevron-forward" size={16} color={colors.muted} />
+          </View>
+        </Pressable>
         {todays === null ? (
           <EmptyState icon="cloud-offline-outline" text="Couldn't load your timetable just now." />
         ) : todays.length ? (
@@ -249,19 +271,28 @@ function EmptyState({ icon, text }: { icon: keyof typeof Ionicons.glyphMap; text
 const styles = StyleSheet.create({
   flex: { flex: 1 },
 
-  header: { flexDirection: "row", alignItems: "center", gap: spacing.md },
-  headerLeft: { flex: 1, flexDirection: "row", alignItems: "center", gap: spacing.md },
-  avatar: { width: 48, height: 48, borderRadius: 24 },
-  avatarFallback: { backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
-  avatarText: { color: colors.primaryText, fontSize: fontSize.lg, fontWeight: fontWeight.bold },
-  name: { fontSize: fontSize.xl },
-  bell: {
+  // gradient hero
+  heroShadow: { borderRadius: radius.xl, backgroundColor: colors.primaryDark, ...shadow.lg },
+  hero: { borderRadius: radius.xl, overflow: "hidden", padding: spacing.lg, gap: spacing.md },
+  heroTop: { flexDirection: "row", alignItems: "center", gap: spacing.md },
+  heroLeft: { flex: 1, flexDirection: "row", alignItems: "center", gap: spacing.md },
+  heroAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.onPrimarySoft,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  heroAvatarImg: { width: 48, height: 48, borderRadius: 24, borderWidth: 2, borderColor: colors.onPrimarySoft },
+  heroAvatarText: { color: colors.onPrimary, fontSize: fontSize.lg, fontWeight: fontWeight.bold },
+  greeting: { color: colors.onPrimary, fontSize: fontSize.sm },
+  heroName: { color: colors.onPrimary, fontSize: fontSize.xl, fontWeight: fontWeight.bold },
+  bellHero: {
     width: 44,
     height: 44,
     borderRadius: radius.md,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
+    backgroundColor: colors.onPrimarySoft,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -280,25 +311,35 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   badgeText: { color: colors.onPrimary, fontSize: 10, fontWeight: fontWeight.bold },
+  dateRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    alignSelf: "flex-start",
+    backgroundColor: colors.onPrimarySoft,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+    borderRadius: radius.pill,
+  },
+  dateText: { color: colors.onPrimary, fontSize: fontSize.sm, fontWeight: fontWeight.medium },
 
+  // attendance CTA (light-indigo actionable card)
   cta: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.md,
-    borderRadius: radius.lg,
-    padding: spacing.lg,
-    ...shadow.card,
+    backgroundColor: colors.primarySoft,
+    borderColor: colors.primarySoft,
   },
   ctaIcon: {
     width: 44,
     height: 44,
     borderRadius: radius.md,
-    backgroundColor: colors.onPrimarySoft,
+    backgroundColor: colors.primary,
     alignItems: "center",
     justifyContent: "center",
   },
-  ctaTitle: { color: colors.onPrimary, fontSize: fontSize.md, fontWeight: fontWeight.bold },
-  ctaSub: { color: colors.onPrimary, fontSize: fontSize.sm },
+  ctaTitle: { fontSize: fontSize.md, color: colors.primaryText },
 
   statRow: { flexDirection: "row", gap: spacing.md },
 
@@ -306,10 +347,11 @@ const styles = StyleSheet.create({
 
   actions: { flexDirection: "row", gap: spacing.sm },
   action: { flex: 1, alignItems: "center", gap: spacing.xs },
-  actionIcon: { width: 52, height: 52, borderRadius: radius.lg, alignItems: "center", justifyContent: "center" },
+  actionIcon: { width: 56, height: 56, borderRadius: radius.lg, alignItems: "center", justifyContent: "center" },
   actionLabel: { color: colors.text, textAlign: "center", fontSize: fontSize.sm },
 
   cardHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  cardHeadRight: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
   period: { flexDirection: "row", alignItems: "center", gap: spacing.md },
   periodNo: {
     width: 40,
