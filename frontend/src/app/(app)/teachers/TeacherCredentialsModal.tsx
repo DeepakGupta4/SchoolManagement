@@ -73,6 +73,23 @@ export function TeacherCredentialsModal({
       onClose();
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Something went wrong.";
+      // "already exists" on create → the email has a login. If it's one in THIS
+      // school, re-check and switch to the reset action so the admin can change
+      // its password right here instead of being stuck.
+      if (action === "created" && /already exists/i.test(msg)) {
+        try {
+          const users = await listUsers();
+          const lower = email.toLowerCase();
+          const found = users.find((u) => u.email.toLowerCase() === lower);
+          if (found) {
+            setResult({ email, existing: found }); // footer becomes "Reset password"
+            setError(null);
+            return;
+          }
+        } catch {
+          /* ignore — fall through to the error below */
+        }
+      }
       setError(msg); // persistent, in the modal
       toast({
         title: action === "created" ? "Could not create login" : "Could not reset password",
