@@ -1,5 +1,5 @@
-import { useCallback, useMemo, useState, type ReactNode } from "react";
-import { Image, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { useCallback, useMemo, type ReactNode } from "react";
+import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { setStatusBarStyle } from "expo-status-bar";
@@ -9,6 +9,7 @@ import { AppText } from "./AppText";
 import { Card } from "./Card";
 import { Button } from "./Button";
 import { Loading } from "./Loading";
+import { Avatar } from "./Avatar";
 import { colors, radius, spacing, fontWeight, fontSize, gradients, shadow } from "@/theme";
 
 /**
@@ -32,9 +33,6 @@ export function DashboardScreen({
   children: ReactNode;
 }) {
   const insets = useSafeAreaInsets();
-  const [imgFailed, setImgFailed] = useState(false);
-  const initial = (name.trim()[0] || "?").toUpperCase();
-  const showImg = !!avatarUri && !imgFailed;
 
   useFocusEffect(
     useCallback(() => {
@@ -63,13 +61,7 @@ export function DashboardScreen({
         >
           <View style={styles.heroTop}>
             <View style={styles.heroLeft}>
-              {showImg ? (
-                <Image source={{ uri: avatarUri }} style={styles.avatarImg} onError={() => setImgFailed(true)} />
-              ) : (
-                <View style={styles.avatar}>
-                  <AppText style={styles.avatarText}>{initial}</AppText>
-                </View>
-              )}
+              <Avatar name={name} uri={avatarUri} size={48} tone="glass" />
               <View style={styles.flex}>
                 <AppText style={styles.greeting}>{greeting},</AppText>
                 <AppText style={styles.name} numberOfLines={1}>
@@ -179,16 +171,6 @@ const styles = StyleSheet.create({
   },
   heroTop: { flexDirection: "row", alignItems: "flex-start", gap: spacing.md },
   heroLeft: { flex: 1, flexDirection: "row", alignItems: "flex-start", gap: spacing.md },
-  avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: colors.onPrimaryGlass,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  avatarImg: { width: 48, height: 48, borderRadius: 24, borderWidth: 2, borderColor: colors.onPrimaryGlass },
-  avatarText: { color: colors.onPrimary, fontSize: fontSize.lg, fontWeight: fontWeight.bold },
   greeting: { color: colors.onPrimary, fontSize: fontSize.sm },
   name: { color: colors.onPrimary, fontSize: fontSize.xl, fontWeight: fontWeight.bold },
   meta: { color: colors.onPrimary, fontSize: fontSize.sm, opacity: 0.9 },

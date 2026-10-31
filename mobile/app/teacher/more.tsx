@@ -2,7 +2,7 @@ import { useCallback } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { useFocusEffect, useRouter, type Href } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { Screen, ScreenHeader, AppText, Card, Button } from "@/components";
+import { Screen, ScreenHeader, AppText, Card, Button, Avatar } from "@/components";
 import { useAuth } from "@/store/auth";
 import { useNotifications } from "@/store/notifications";
 import { colors, radius, spacing, fontWeight, fontSize } from "@/theme";
@@ -44,7 +44,6 @@ export default function More() {
   const { user, signOut } = useAuth();
   const unread = useNotifications((s) => s.unread);
   const refresh = useNotifications((s) => s.refresh);
-  const initial = (user?.name ?? "?").slice(0, 1).toUpperCase();
 
   // Keep the Alerts count fresh while this tab is open (Home isn't focused here).
   useFocusEffect(
@@ -60,9 +59,7 @@ export default function More() {
       {/* Tap to edit your own profile (name, photo, password). */}
       <Pressable onPress={() => router.push("/teacher/profile")}>
         <Card style={styles.profile}>
-          <View style={styles.avatar}>
-            <AppText style={styles.avatarText}>{initial}</AppText>
-          </View>
+          <Avatar name={user?.name} uri={user?.avatar} size={52} />
           <View style={styles.flex}>
             <AppText variant="heading">{user?.name}</AppText>
             <AppText variant="muted">{user?.email}</AppText>
@@ -107,15 +104,6 @@ export default function More() {
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   profile: { flexDirection: "row", alignItems: "center", gap: spacing.md },
-  avatar: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: colors.primarySoft,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  avatarText: { color: colors.primaryText, fontSize: 20, fontWeight: fontWeight.bold },
   section: { gap: spacing.sm },
   row: { flexDirection: "row", alignItems: "center", gap: spacing.md },
   icon: {

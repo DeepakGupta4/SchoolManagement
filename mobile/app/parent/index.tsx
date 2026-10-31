@@ -1,8 +1,8 @@
 import { useCallback, useState } from "react";
-import { Image, Pressable, StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { AppText, Card, DashboardScreen, HeroAction, NoticeCard } from "@/components";
+import { AppText, Card, DashboardScreen, HeroAction, NoticeCard, Avatar } from "@/components";
 import { getChildren, type ChildSummary } from "@/api/portal";
 import { ApiError } from "@/api/client";
 import { useAuth } from "@/store/auth";
@@ -63,19 +63,11 @@ export default function ParentHome() {
 }
 
 function ChildCard({ child: c, onPress }: { child: ChildSummary; onPress: () => void }) {
-  const [imgFailed, setImgFailed] = useState(false);
-  const showImg = !!c.avatar && !imgFailed;
   return (
     <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`Open ${c.name}'s report`}>
       <Card style={styles.block}>
         <View style={styles.top}>
-          {showImg ? (
-            <Image source={{ uri: c.avatar }} style={styles.avatarImg} onError={() => setImgFailed(true)} />
-          ) : (
-            <View style={styles.avatar}>
-              <AppText style={styles.avatarText}>{(c.name || "?").slice(0, 1).toUpperCase()}</AppText>
-            </View>
-          )}
+          <Avatar name={c.name} uri={c.avatar} size={46} />
           <View style={styles.flex}>
             <AppText variant="heading" style={styles.name}>
               {c.name}
@@ -120,16 +112,6 @@ const styles = StyleSheet.create({
   block: { gap: spacing.md },
 
   top: { flexDirection: "row", alignItems: "center", gap: spacing.md },
-  avatar: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    backgroundColor: colors.primarySoft,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  avatarImg: { width: 46, height: 46, borderRadius: 23 },
-  avatarText: { color: colors.primaryText, fontSize: fontSize.lg, fontWeight: fontWeight.bold },
   name: { fontSize: fontSize.md },
 
   stats: { flexDirection: "row", gap: spacing.sm, alignItems: "flex-start" },
