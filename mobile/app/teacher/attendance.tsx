@@ -2,7 +2,18 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { FlatList, Modal, Pressable, StyleSheet, View } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { Screen, ScreenHeader, AppText, Card, Button, Loading, Avatar, MonthCalendar } from "@/components";
+import {
+  Screen,
+  ScreenHeader,
+  AppText,
+  Card,
+  Button,
+  Loading,
+  Avatar,
+  MonthCalendar,
+  StudentAttendanceModal,
+} from "@/components";
+import { useAuth } from "@/store/auth";
 import { getMyTeacher } from "@/api/teacher";
 import { listStudents, studentFullName, type Student } from "@/api/students";
 import {
@@ -35,6 +46,9 @@ export default function Attendance() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [alreadyMarked, setAlreadyMarked] = useState(false);
+  const [summaryFor, setSummaryFor] = useState<Student | null>(null);
+  const role = useAuth((s) => s.user?.role);
 
   // Teacher + roster: reload whenever the screen regains focus.
   const loadClass = useCallback(async () => {
@@ -77,10 +91,17 @@ export default function Attendance() {
     getSavedAttendance(cls.className, cls.section, date)
       .then((saved) => {
         if (!alive) return;
+        // Locked only when a real manual save exists — auto-absent rows (source
+        // "auto") don't count, so a teacher's first real save is never blocked.
+        setAlreadyMarked(saved.some((r) => r.source === "manual"));
         const savedMap = new Map(saved.map((s) => [String(s.studentId), s.status]));
         setStatusMap(Object.fromEntries(roster.map((s) => [s.id!, savedMap.get(String(s.id)) ?? "present"])));
       })
-      .catch(() => alive && setStatusMap(fallback()));
+      .catch(() => {
+        if (!alive) return;
+        setAlreadyMarked(false);
+        setStatusMap(fallback());
+      });
     return () => {
       alive = false;
     };
@@ -94,6 +115,10 @@ export default function Attendance() {
 
   const sunday = isSundayIso(date);
   const atToday = date >= todayIso();
+  // A submitted register is read-only for teachers — only office roles can change
+  // it (and they do that on the web). Default to locked for any non-office role.
+  const canOverwrite = role === "super_admin" || role === "school_admin" || role === "principal";
+  const locked = alreadyMarked && !canOverwrite;
 
   const setStatus = (id: string, status: AttendanceStatus) =>
     setStatusMap((p) => ({ ...p, [id]: status }));
@@ -183,6 +208,13 @@ export default function Attendance() {
             Sunday is a weekly holiday — attendance isn&apos;t taken.
           </AppText>
         </Card>
+      ) : locked ? (
+        <Card style={styles.lockBanner}>
+          <Ionicons name="lock-closed" size={16} color={colors.successText} />
+          <AppText style={{ color: colors.successText, flex: 1 }}>
+            Attendance submitted. Only the office can change it now — tap a student to see their record.
+          </AppText>
+        </Card>
       ) : (
         <View style={styles.summaryRow}>
           <AppText variant="muted">
@@ -212,13 +244,19 @@ export default function Attendance() {
           const current = statusMap[item.id!] ?? "present";
           return (
             <Card style={styles.row}>
-              <View style={styles.rowTop}>
+              <Pressable
+                style={styles.rowTop}
+                onPress={() => setSummaryFor(item)}
+                accessibilityRole="button"
+                accessibilityLabel={`View ${studentFullName(item)}'s attendance`}
+              >
                 <AppText style={styles.serial}>{index + 1}</AppText>
                 <Avatar name={studentFullName(item)} uri={item.avatar} size={36} />
                 <AppText style={styles.name} numberOfLines={1}>
                   {studentFullName(item)}
                 </AppText>
-              </View>
+                <Ionicons name="chevron-forward" size={16} color={colors.subtle} />
+              </Pressable>
               <View style={styles.pills}>
                 {STATUSES.map((s) => {
                   const on = current === s.key;
@@ -226,8 +264,14 @@ export default function Attendance() {
                     <Pressable
                       key={s.key}
                       onPress={() => setStatus(item.id!, s.key)}
-                      style={[styles.pill, on && { backgroundColor: s.color, borderColor: s.color }]}
+                      disabled={locked}
+                      style={[
+                        styles.pill,
+                        on && { backgroundColor: s.color, borderColor: s.color },
+                        locked && !on && styles.pillLocked,
+                      ]}
                       accessibilityRole="button"
+                      accessibilityState={{ selected: on, disabled: locked }}
                       accessibilityLabel={`${studentFullName(item)}: ${s.word}`}
                     >
                       <AppText style={[styles.pillText, on && styles.pillTextOn]}>{s.label}</AppText>
@@ -243,10 +287,10 @@ export default function Attendance() {
       {message ? <AppText style={{ color: colors.successText }}>{message}</AppText> : null}
       {error ? <AppText style={{ color: colors.dangerText }}>{error}</AppText> : null}
       <Button
-        title={saving ? "Saving…" : "Save attendance"}
+        title={locked ? "Attendance submitted ✓" : saving ? "Saving…" : "Save attendance"}
         onPress={onSave}
         loading={saving}
-        disabled={sunday || roster.length === 0}
+        disabled={locked || sunday || roster.length === 0}
       />
 
       {/* Calendar picker */}
@@ -264,6 +308,13 @@ export default function Attendance() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      <StudentAttendanceModal
+        studentId={summaryFor?.id ?? null}
+        name={summaryFor ? studentFullName(summaryFor) : ""}
+        avatarUri={summaryFor?.avatar}
+        onClose={() => setSummaryFor(null)}
+      />
     </Screen>
   );
 }
@@ -282,6 +333,14 @@ const styles = StyleSheet.create({
   calCard: { width: "100%", maxWidth: 360, backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.sm, ...shadow.lg },
 
   banner: { backgroundColor: colors.warningSoft, borderColor: colors.warning, paddingVertical: spacing.sm },
+  lockBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    backgroundColor: colors.successSoft,
+    borderColor: colors.success,
+    paddingVertical: spacing.sm,
+  },
   summaryRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   legend: { flexDirection: "row", flexWrap: "wrap", gap: spacing.md },
   legendItem: { fontSize: fontSize.xs, color: colors.muted },
@@ -303,4 +362,5 @@ const styles = StyleSheet.create({
   },
   pillText: { fontSize: fontSize.sm, color: colors.muted, fontWeight: fontWeight.semibold },
   pillTextOn: { color: colors.onPrimary },
+  pillLocked: { opacity: 0.45 },
 });

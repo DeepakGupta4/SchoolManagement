@@ -223,13 +223,16 @@ router.get("/", canRead, validate(listQuery, "query"), async (req, res, next) =>
       className,
       section,
       date,
-    });
+    }).lean();
     res.json({
       data: rows.map((r) => ({
         studentId: r.studentId,
         studentName: r.studentName,
         roll: r.roll,
         status: r.status,
+        // Lets a client tell a submitted register (source "manual") from one that
+        // only has auto-absent rows, so it can lock editing for teachers.
+        source: r.source,
       })),
     });
   } catch (err) {
@@ -305,6 +308,27 @@ router.post(
         );
       }
 
+      // LOCK: once a register has been SUBMITTED for a date, a teacher can't change
+      // it — only the office (admin/principal) may edit it afterwards (from the web).
+      // We key off a real "manual" submission, not bare existence, so the 11:00
+      // auto-absent rows (source "auto") never block a teacher's first real save.
+      const role = req.user!.role;
+      const mayOverwrite = role === "super_admin" || role === "school_admin" || role === "principal";
+      if (!mayOverwrite) {
+        const alreadySubmitted = await Attendance.exists({
+          schoolId,
+          className,
+          section,
+          date,
+          source: "manual",
+        });
+        if (alreadySubmitted) {
+          throw ApiError.conflict(
+            "Attendance for this date has already been submitted. Please ask the office or principal to make any change."
+          );
+        }
+      }
+
       // Keep only records for active students of THIS class+section. The register
       // is keyed by studentId, so a foreign id must never reach the write (it would
       // overwrite another class's record + that student's attendance %). A stale id
@@ -328,7 +352,7 @@ router.post(
             // One mark per student per day — match on (studentId, date) so re-saving
             // (even under a different section) updates the single record, never dups.
             filter: { schoolId, studentId: r.studentId, date },
-            update: { $set: { ...r, schoolId, className, section, date } },
+            update: { $set: { ...r, schoolId, className, section, date, source: "manual" } },
             upsert: true,
           },
         }))

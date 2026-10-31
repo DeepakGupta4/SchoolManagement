@@ -68,6 +68,7 @@ export async function runAutoAbsentForAllSchools(now: Date = new Date()): Promis
           studentName: `${s.firstName} ${s.lastName}`.trim(),
           roll: Number(s.rollNo) || 0,
           status: "absent" as const,
+          source: "auto" as const, // not a teacher submission — never locks the date
         }));
 
       if (toInsert.length === 0) continue;

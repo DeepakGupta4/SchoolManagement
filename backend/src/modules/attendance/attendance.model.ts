@@ -19,6 +19,11 @@ const attendanceSchema = new Schema(
     studentName: { type: String, default: "" },
     roll: { type: Number, default: 0 },
     status: { type: String, enum: ATTENDANCE_STATUSES, default: "present" },
+    // How the record was created: "manual" = submitted via the marking screen
+    // (teacher/admin), "auto" = filled by the 11:00 auto-absent sweep. Used to
+    // lock a date once a teacher has SUBMITTED it (auto rows don't count as a
+    // submission, so a teacher's first real save is never blocked).
+    source: { type: String, enum: ["manual", "auto"], default: "manual" },
   },
   { timestamps: true }
 );

@@ -12,3 +12,4 @@ export { DashboardScreen, HeroAction, NoticeCard } from "./DashboardScreen";
 export { ScreenHeader } from "./ScreenHeader";
 export { Avatar } from "./Avatar";
 export { MonthCalendar } from "./MonthCalendar";
+export { StudentAttendanceModal } from "./StudentAttendanceModal";
