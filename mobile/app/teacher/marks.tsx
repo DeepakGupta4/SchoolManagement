@@ -14,7 +14,7 @@ import {
   PagedList,
   type ChipOption,
 } from "@/components";
-import { getMyTeacher } from "@/api/teacher";
+import { getMyTeacher, getTimetable, teacherName, type TimetableEntry } from "@/api/teacher";
 import { listStudents, studentFullName, type Student } from "@/api/students";
 import { listExams } from "@/api/exams";
 import { listClasses, type SchoolClass } from "@/api/classes";
@@ -40,6 +40,7 @@ export default function Marks() {
   const [scope, setScope] = useState<Scope | null>(null);
   const [exams, setExams] = useState<string[]>([]);
   const [classes, setClasses] = useState<SchoolClass[]>([]);
+  const [timetable, setTimetable] = useState<TimetableEntry[]>([]);
 
   const [examName, setExamName] = useState("");
   const [className, setClassName] = useState("");
@@ -71,6 +72,10 @@ export default function Marks() {
       });
       setExams(ex.map((e) => e.name).filter(Boolean));
       setClasses(cl);
+      // The teacher's own timetable tells us which class+subject they actually
+      // teach — used to scope the subject (and class) pickers below.
+      const nm = teacherName(t);
+      setTimetable(nm ? await getTimetable(nm).catch(() => []) : []);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Could not load exam data.");
     } finally {
@@ -84,18 +89,27 @@ export default function Marks() {
     }, [loadRefs])
   );
 
+  // Classes the teacher teaches: their assigned classes + class-teacher class +
+  // any class they have periods in (timetable).
   const classOptions: ChipOption[] = useMemo(() => {
     if (!scope) return [];
-    return [...new Set([...scope.classes, scope.classTeacherOf].filter(Boolean))].map((c) => ({
+    const ttClasses = timetable.map((e) => e.className);
+    return [...new Set([...scope.classes, scope.classTeacherOf, ...ttClasses].filter(Boolean))].map((c) => ({
       label: c,
       value: c,
     }));
-  }, [scope]);
+  }, [scope, timetable]);
 
-  const subjectOptions: ChipOption[] = useMemo(
-    () => (scope?.subjects ?? []).map((s) => ({ label: s, value: s })),
-    [scope]
-  );
+  // Subjects the teacher teaches IN THE SELECTED CLASS (from their timetable), so
+  // they only enter marks for a subject they actually take there. Falls back to all
+  // their subjects if the timetable has nothing for that class yet.
+  const subjectOptions: ChipOption[] = useMemo(() => {
+    const inClass = [
+      ...new Set(timetable.filter((e) => e.className === className).map((e) => e.subject).filter(Boolean)),
+    ];
+    const list = inClass.length ? inClass : scope?.subjects ?? [];
+    return list.map((s) => ({ label: s, value: s }));
+  }, [timetable, className, scope]);
 
   const examOptions: ChipOption[] = useMemo(() => exams.map((e) => ({ label: e, value: e })), [exams]);
 
