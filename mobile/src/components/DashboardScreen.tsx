@@ -22,6 +22,7 @@ export function DashboardScreen({
   avatarUri,
   meta,
   rightSlot,
+  status,
   loading,
   children,
 }: {
@@ -29,6 +30,8 @@ export function DashboardScreen({
   avatarUri?: string;
   meta?: string;
   rightSlot?: ReactNode;
+  /** School status shown opposite the date (e.g. Open / Holiday). */
+  status?: { label: string; open: boolean };
   loading?: boolean;
   children: ReactNode;
 }) {
@@ -78,8 +81,16 @@ export function DashboardScreen({
           </View>
 
           <View style={styles.dateRow}>
-            <Ionicons name="calendar-outline" size={14} color={colors.onPrimary} />
-            <AppText style={styles.dateText}>{date}</AppText>
+            <View style={styles.dateChip}>
+              <Ionicons name="calendar-outline" size={14} color={colors.onPrimary} />
+              <AppText style={styles.dateText}>{date}</AppText>
+            </View>
+            {status ? (
+              <View style={styles.statusChip}>
+                <View style={[styles.statusDot, { backgroundColor: status.open ? colors.success : colors.warning }]} />
+                <AppText style={styles.dateText}>{status.label}</AppText>
+              </View>
+            ) : null}
           </View>
         </LinearGradient>
       </View>
@@ -199,16 +210,26 @@ const styles = StyleSheet.create({
   },
   badgeText: { color: colors.onPrimary, fontSize: 10, fontWeight: fontWeight.bold },
 
-  dateRow: {
+  dateRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.sm },
+  dateChip: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    alignSelf: "flex-start",
     backgroundColor: colors.onPrimaryGlass,
     paddingHorizontal: spacing.md,
     paddingVertical: 6,
     borderRadius: radius.pill,
   },
+  statusChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: colors.onPrimaryGlass,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+    borderRadius: radius.pill,
+  },
+  statusDot: { width: 8, height: 8, borderRadius: 4 },
   dateText: { color: colors.onPrimary, fontSize: fontSize.sm, fontWeight: fontWeight.medium },
 
   notice: { gap: spacing.md },

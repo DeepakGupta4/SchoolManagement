@@ -12,6 +12,9 @@ import {
   type Teacher,
   type TimetableEntry,
 } from "@/api/teacher";
+import { getSavedAttendance } from "@/api/attendance";
+import { listHolidays, type Holiday } from "@/api/updates";
+import { todayIso, isSundayIso } from "@/lib/date";
 import { useAuth } from "@/store/auth";
 import { useNotifications } from "@/store/notifications";
 import { colors, radius, spacing, fontWeight, fontSize } from "@/theme";
@@ -33,6 +36,8 @@ export default function TeacherHome() {
   const refreshAlerts = useNotifications((s) => s.refresh);
   const [teacher, setTeacher] = useState<Teacher | null>(null);
   const [timetable, setTimetable] = useState<TimetableEntry[]>([]);
+  const [holidays, setHolidays] = useState<Holiday[]>([]);
+  const [attendanceMarked, setAttendanceMarked] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
@@ -45,7 +50,21 @@ export default function TeacherHome() {
       if (t.avatar && auth.user && !auth.user.avatar) auth.setUser({ ...auth.user, avatar: t.avatar });
       // Scope the timetable to this teacher server-side (name is the only join key).
       const nm = teacherName(t);
-      setTimetable(nm ? await getTimetable(nm).catch(() => []) : []);
+      const [tt, hol] = await Promise.all([
+        nm ? getTimetable(nm).catch(() => []) : Promise.resolve([]),
+        listHolidays().catch(() => [] as Holiday[]),
+      ]);
+      setTimetable(tt);
+      setHolidays(hol);
+      // Has today's attendance already been submitted for the class teacher's class?
+      if (t.isClassTeacher && t.classTeacherOf) {
+        const saved = await getSavedAttendance(t.classTeacherOf, t.classTeacherSection ?? "", todayIso()).catch(
+          () => []
+        );
+        setAttendanceMarked(saved.some((r) => r.source === "manual"));
+      } else {
+        setAttendanceMarked(false);
+      }
     } catch {
       /* keep whatever we already have */
     } finally {
@@ -80,6 +99,12 @@ export default function TeacherHome() {
       .sort((a, b) => a.period - b.period);
   }, [timetable, today, myName]);
 
+  // Today's school status: Sunday or a holiday record = closed; else open.
+  const todayIsoStr = useMemo(() => todayIso(), []);
+  const holidayToday = useMemo(() => holidays.find((h) => h.date === todayIsoStr) ?? null, [holidays, todayIsoStr]);
+  const isHoliday = isSundayIso(todayIsoStr) || !!holidayToday;
+  const schoolStatus = { label: isHoliday ? "Holiday" : "Open", open: !isHoliday };
+
   const headerActions = (
     <View style={styles.headerActions}>
       <HeroAction
@@ -97,9 +122,30 @@ export default function TeacherHome() {
   );
 
   return (
-    <DashboardScreen name={name} avatarUri={avatarUri} meta={meta} rightSlot={headerActions} loading={loading && !teacher}>
-      {/* class teacher's #1 daily task */}
-      {classTeacherOf ? (
+    <DashboardScreen
+      name={name}
+      avatarUri={avatarUri}
+      meta={meta}
+      rightSlot={headerActions}
+      status={schoolStatus}
+      loading={loading && !teacher}
+    >
+      {/* Class teacher's #1 daily task — shown only until it's done, and never on a holiday. */}
+      {classTeacherOf && isHoliday ? (
+        <Card style={styles.holiday}>
+          <View style={styles.holidayIcon}>
+            <Ionicons name="sunny-outline" size={22} color={colors.warningText} />
+          </View>
+          <View style={styles.flex}>
+            <AppText variant="heading" style={styles.holidayTitle}>
+              School&apos;s closed today
+            </AppText>
+            <AppText variant="muted">
+              {holidayToday ? holidayToday.name : "Sunday — weekly holiday"} · no attendance
+            </AppText>
+          </View>
+        </Card>
+      ) : classTeacherOf && !attendanceMarked ? (
         <Pressable onPress={() => router.push("/teacher/attendance")} accessibilityRole="button">
           <Card style={styles.cta}>
             <View style={styles.ctaIcon}>
@@ -147,7 +193,14 @@ export default function TeacherHome() {
       {/* today's periods (from the timetable) */}
       <Card style={styles.block}>
         <Pressable style={styles.cardHead} onPress={() => router.push("/teacher/timetable")} accessibilityRole="button">
-          <AppText variant="heading">Today&apos;s classes</AppText>
+          <View style={styles.headLeft}>
+            <AppText variant="heading">Today&apos;s classes</AppText>
+            {todays && todays.length ? (
+              <View style={styles.countPill}>
+                <AppText style={styles.countText}>{todays.length}</AppText>
+              </View>
+            ) : null}
+          </View>
           <View style={styles.cardHeadRight}>
             <AppText variant="muted">{today}</AppText>
             <Ionicons name="chevron-forward" size={16} color={colors.muted} />
@@ -162,10 +215,10 @@ export default function TeacherHome() {
                 <AppText style={styles.periodNoText}>P{e.period}</AppText>
               </View>
               <View style={styles.flex}>
-                <AppText variant="heading" style={styles.periodSubject}>
+                <AppText variant="heading" style={styles.periodSubject} numberOfLines={1}>
                   {e.subject}
                 </AppText>
-                <AppText variant="muted">
+                <AppText variant="muted" numberOfLines={1}>
                   {e.className}
                   {e.section ? ` · ${e.section}` : ""}
                   {e.room ? ` · Room ${e.room}` : ""}
@@ -183,12 +236,12 @@ export default function TeacherHome() {
         <AppText variant="heading">Your teaching</AppText>
 
         <AppText variant="label" style={styles.subLabel}>
-          Classes
+          Classes · {classes.length}
         </AppText>
         <ChipRow items={classes} empty="No classes assigned yet." />
 
         <AppText variant="label" style={styles.subLabel}>
-          Subjects
+          Subjects · {subjects.length}
         </AppText>
         <ChipRow items={subjects} empty="No subjects assigned yet." />
       </Card>
@@ -247,6 +300,24 @@ const styles = StyleSheet.create({
   },
   ctaTitle: { fontSize: fontSize.md, color: colors.primaryText },
 
+  // holiday banner (amber)
+  holiday: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    backgroundColor: colors.warningSoft,
+    borderColor: colors.warning,
+  },
+  holidayIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  holidayTitle: { fontSize: fontSize.md, color: colors.warningText },
+
   statRow: { flexDirection: "row", gap: spacing.md },
 
   // quick actions
@@ -271,8 +342,25 @@ const styles = StyleSheet.create({
   actionTileLabel: { fontSize: fontSize.sm, fontWeight: fontWeight.semibold },
 
   cardHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  headLeft: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  countPill: {
+    backgroundColor: colors.primarySoft,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 1,
+    minWidth: 22,
+    alignItems: "center",
+  },
+  countText: { color: colors.primaryText, fontSize: fontSize.xs, fontWeight: fontWeight.bold },
   cardHeadRight: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
-  period: { flexDirection: "row", alignItems: "center", gap: spacing.md },
+  period: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: radius.md,
+    padding: spacing.sm,
+  },
   periodNo: {
     width: 40,
     height: 40,

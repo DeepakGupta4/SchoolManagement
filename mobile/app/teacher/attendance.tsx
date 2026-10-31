@@ -23,6 +23,7 @@ import {
   type AttendanceStatus,
   type AttendanceMark,
 } from "@/api/attendance";
+import { listHolidays, type Holiday } from "@/api/updates";
 import { ApiError } from "@/api/client";
 import { todayIso, addDays, isSundayIso, fullDate, weekday } from "@/lib/date";
 import { colors, radius, spacing, fontWeight, fontSize, shadow } from "@/theme";
@@ -49,6 +50,7 @@ export default function Attendance() {
   const [message, setMessage] = useState<string | null>(null);
   const [alreadyMarked, setAlreadyMarked] = useState(false);
   const [summaryFor, setSummaryFor] = useState<Student | null>(null);
+  const [holidays, setHolidays] = useState<Holiday[]>([]);
   const role = useAuth((s) => s.user?.role);
 
   // Teacher + roster: reload whenever the screen regains focus.
@@ -84,6 +86,13 @@ export default function Attendance() {
     }, [loadClass])
   );
 
+  // Holidays — used to block marking on a closed day. Fetched once.
+  useEffect(() => {
+    listHolidays()
+      .then(setHolidays)
+      .catch(() => {});
+  }, []);
+
   // Saved marks for the chosen date → prefill; default everyone Present otherwise.
   useEffect(() => {
     if (!isClassTeacher || roster.length === 0) return;
@@ -115,6 +124,8 @@ export default function Attendance() {
   }, [roster, statusMap]);
 
   const sunday = isSundayIso(date);
+  const holidayForDate = holidays.find((h) => h.date === date) ?? null;
+  const closed = sunday || !!holidayForDate;
   const atToday = date >= todayIso();
   // A submitted register is read-only for teachers — only office roles can change
   // it (and they do that on the web). Default to locked for any non-office role.
@@ -203,10 +214,12 @@ export default function Attendance() {
         </Pressable>
       </Card>
 
-      {sunday ? (
+      {closed ? (
         <Card style={styles.banner}>
           <AppText style={{ color: colors.warningText }}>
-            Sunday is a weekly holiday — attendance isn&apos;t taken.
+            {holidayForDate
+              ? `School's closed — ${holidayForDate.name}. Attendance isn't taken.`
+              : "Sunday is a weekly holiday — attendance isn't taken."}
           </AppText>
         </Card>
       ) : locked ? (
@@ -265,14 +278,14 @@ export default function Attendance() {
                     <Pressable
                       key={s.key}
                       onPress={() => setStatus(item.id!, s.key)}
-                      disabled={locked}
+                      disabled={locked || closed}
                       style={[
                         styles.pill,
                         on && { backgroundColor: s.color, borderColor: s.color },
-                        locked && !on && styles.pillLocked,
+                        (locked || closed) && !on && styles.pillLocked,
                       ]}
                       accessibilityRole="button"
-                      accessibilityState={{ selected: on, disabled: locked }}
+                      accessibilityState={{ selected: on, disabled: locked || closed }}
                       accessibilityLabel={`${studentFullName(item)}: ${s.word}`}
                     >
                       <AppText style={[styles.pillText, on && styles.pillTextOn]}>{s.label}</AppText>
@@ -288,10 +301,10 @@ export default function Attendance() {
       {message ? <AppText style={{ color: colors.successText }}>{message}</AppText> : null}
       {error ? <AppText style={{ color: colors.dangerText }}>{error}</AppText> : null}
       <Button
-        title={locked ? "Attendance submitted ✓" : saving ? "Saving…" : "Save attendance"}
+        title={closed ? "School closed" : locked ? "Attendance submitted ✓" : saving ? "Saving…" : "Save attendance"}
         onPress={onSave}
         loading={saving}
-        disabled={locked || sunday || roster.length === 0}
+        disabled={locked || closed || roster.length === 0}
       />
 
       {/* Calendar picker */}
