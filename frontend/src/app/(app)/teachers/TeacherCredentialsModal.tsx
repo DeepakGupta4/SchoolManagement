@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { KeyRound, Loader2, RefreshCw, TriangleAlert, UserPlus } from "lucide-react";
-import { Modal, Button } from "@/components/ui";
+import { Modal, Button, useToast } from "@/components/ui";
 import {
   listUsers,
   createUser,
@@ -26,6 +26,7 @@ export function TeacherCredentialsModal({
   onClose: () => void;
   onDone: (creds: UserCredentials, emailed: boolean, action: "created" | "reset") => void;
 }) {
+  const { toast } = useToast();
   const [result, setResult] = useState<{ email: string; existing: ManagedUser | null } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -71,7 +72,13 @@ export function TeacherCredentialsModal({
       onDone(res.credentials, res.emailed, action);
       onClose();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Something went wrong.");
+      const msg = e instanceof Error ? e.message : "Something went wrong.";
+      setError(msg); // persistent, in the modal
+      toast({
+        title: action === "created" ? "Could not create login" : "Could not reset password",
+        description: msg,
+        variant: "error",
+      });
     } finally {
       setBusy(false);
     }
