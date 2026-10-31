@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { router } from "expo-router";
 import { fetchMe, logout as apiLogout, type AppUser } from "@/api/auth";
 import { getToken } from "@/api/tokens";
 
@@ -21,8 +22,10 @@ export const useAuth = create<AuthState>((set) => ({
   signIn: (user) => set({ user, status: "authed" }),
   setUser: (user) => set({ user }),
   signOut: async () => {
-    await apiLogout();
+    // Clear session + send the user to login right away; tidy up tokens/server after.
     set({ user: null, status: "guest" });
+    router.replace("/login");
+    await apiLogout();
   },
   hydrate: async () => {
     const token = await getToken();
