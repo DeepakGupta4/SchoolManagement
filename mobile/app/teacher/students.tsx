@@ -1,10 +1,11 @@
 import { useCallback, useState } from "react";
-import { FlatList, Pressable, StyleSheet, View } from "react-native";
+import { FlatList, Linking, Pressable, StyleSheet, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { Screen, ScreenHeader, AppText, Card, Button, TextField, Loading } from "@/components";
 import { getMyTeacher } from "@/api/teacher";
 import { listStudents, studentFullName, type Student } from "@/api/students";
-import { colors, radius, spacing } from "@/theme";
+import { colors, radius, spacing, fontWeight, fontSize } from "@/theme";
 
 export default function Students() {
   const router = useRouter();
@@ -21,7 +22,10 @@ export default function Students() {
       const isCt = !!t.isClassTeacher && !!t.classTeacherOf;
       setIsClassTeacher(isCt);
       setCls({ className: t.classTeacherOf ?? "", section: t.classTeacherSection ?? "" });
-      if (isCt) setStudents(await listStudents({ className: t.classTeacherOf, section: t.classTeacherSection }));
+      if (isCt) {
+        const list = await listStudents({ className: t.classTeacherOf, section: t.classTeacherSection });
+        setStudents([...list].sort((a, b) => (Number(a.rollNo) || 0) - (Number(b.rollNo) || 0)));
+      }
     } catch {
       /* fail closed */
     } finally {
@@ -78,36 +82,62 @@ export default function Students() {
         value={search}
         onChangeText={setSearch}
         autoCapitalize="none"
+        leftIcon="search-outline"
       />
 
       <FlatList
-        style={{ flex: 1 }}
+        style={styles.flex}
         data={filtered}
         keyExtractor={(s) => s.id ?? s.admissionNo}
         onRefresh={load}
         refreshing={loading}
-        ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
-        ListEmptyComponent={<AppText variant="muted">No students yet. Tap “Add student”.</AppText>}
-        renderItem={({ item }) => (
-          <Pressable onPress={() => router.push({ pathname: "/teacher/student-form", params: { id: item.id } })}>
-            <Card style={styles.row}>
-              <View style={styles.roll}>
-                <AppText variant="small" style={{ color: colors.primaryText }}>
-                  #{String(item.rollNo)}
-                </AppText>
-              </View>
-              <View style={styles.flex}>
-                <AppText variant="heading" style={styles.name}>
-                  {studentFullName(item)}
-                </AppText>
-                <AppText variant="muted">
-                  {item.admissionNo}
-                  {item.guardian?.phone ? ` · ${item.guardian.phone}` : ""}
-                </AppText>
-              </View>
-            </Card>
-          </Pressable>
-        )}
+        ItemSeparatorComponent={() => <View style={styles.sep} />}
+        ListEmptyComponent={
+          <View style={styles.empty}>
+            <View style={styles.emptyIcon}>
+              <Ionicons name="people-outline" size={22} color={colors.primaryText} />
+            </View>
+            <AppText variant="muted">
+              {q ? "No students match your search." : "No students yet. Tap “Add student”."}
+            </AppText>
+          </View>
+        }
+        renderItem={({ item }) => {
+          const phone = item.guardian?.phone;
+          return (
+            <Pressable
+              onPress={() => router.push({ pathname: "/teacher/student-form", params: { id: item.id } })}
+              accessibilityRole="button"
+              accessibilityLabel={`Open ${studentFullName(item)}`}
+            >
+              <Card style={styles.row}>
+                <View style={styles.avatar}>
+                  <AppText style={styles.avatarText}>{(studentFullName(item)[0] || "?").toUpperCase()}</AppText>
+                </View>
+                <View style={styles.flex}>
+                  <AppText variant="heading" style={styles.name} numberOfLines={1}>
+                    {studentFullName(item)}
+                  </AppText>
+                  <AppText variant="muted" numberOfLines={1}>
+                    Roll {String(item.rollNo)} · {item.admissionNo}
+                  </AppText>
+                </View>
+                {phone ? (
+                  <Pressable
+                    onPress={() => Linking.openURL(`tel:${phone}`)}
+                    style={styles.call}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel="Call guardian"
+                  >
+                    <Ionicons name="call-outline" size={18} color={colors.primary} />
+                  </Pressable>
+                ) : null}
+                <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+              </Card>
+            </Pressable>
+          );
+        }}
       />
 
       <Button title="+ Add student" onPress={() => router.push("/teacher/student-form")} />
@@ -116,15 +146,34 @@ export default function Students() {
 }
 
 const styles = StyleSheet.create({
+  flex: { flex: 1 },
+  sep: { height: spacing.sm },
   row: { flexDirection: "row", alignItems: "center", gap: spacing.md, padding: spacing.md },
-  roll: {
+  avatar: {
     width: 44,
     height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.primarySoft,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarText: { color: colors.primaryText, fontSize: fontSize.md, fontWeight: fontWeight.bold },
+  name: { fontSize: fontSize.md },
+  call: {
+    width: 36,
+    height: 36,
     borderRadius: radius.md,
     backgroundColor: colors.primarySoft,
     alignItems: "center",
     justifyContent: "center",
   },
-  flex: { flex: 1 },
-  name: { fontSize: 15 },
+  empty: { alignItems: "center", gap: spacing.sm, paddingVertical: spacing.xl },
+  emptyIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: radius.pill,
+    backgroundColor: colors.primarySoft,
+    alignItems: "center",
+    justifyContent: "center",
+  },
 });
