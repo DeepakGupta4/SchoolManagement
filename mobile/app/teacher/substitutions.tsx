@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { useFocusEffect } from "expo-router";
-import { Screen, ScreenHeader, AppText, Card, Loading } from "@/components";
+import { Screen, ScreenHeader, AppText, Card, Loading, PagedList } from "@/components";
 import { getMyTeacher } from "@/api/teacher";
 import { listSubstitutions, type Substitution } from "@/api/substitutions";
 import { ApiError } from "@/api/client";
@@ -48,7 +48,7 @@ export default function Substitutions() {
   }
 
   return (
-    <Screen style={{ gap: spacing.md }}>
+    <Screen scroll={false} style={{ gap: spacing.md }}>
       <View>
         <ScreenHeader title="My Cover Duties" back />
         <AppText variant="muted">Classes you've been assigned to cover.</AppText>
@@ -58,32 +58,38 @@ export default function Substitutions() {
         <Card>
           <AppText style={{ color: colors.dangerText }}>{error}</AppText>
         </Card>
-      ) : rows.length === 0 ? (
-        <AppText variant="muted">No cover duties assigned to you. 🎉</AppText>
       ) : (
-        rows.map((s) => (
-          <Card key={s.id} style={styles.item}>
-            <View style={styles.dateCol}>
-              <AppText variant="small" style={styles.dateText}>
-                {prettyDate(s.date)}
-              </AppText>
-              {s.day ? <AppText variant="small">{s.day}</AppText> : null}
-            </View>
-            <View style={styles.flex}>
-              <AppText variant="heading" style={styles.title}>
-                {s.className}
-                {s.subject ? ` · ${s.subject}` : ""}
-              </AppText>
-              <AppText variant="muted">
-                Period {s.period}
-                {s.time ? ` · ${s.time}` : ""}
-                {s.room ? ` · Room ${s.room}` : ""}
-              </AppText>
-              {s.absentTeacher ? <AppText variant="small">Covering {s.absentTeacher}</AppText> : null}
-              {s.note ? <AppText variant="small" style={{ color: colors.muted }}>{s.note}</AppText> : null}
-            </View>
-          </Card>
-        ))
+        <PagedList
+          data={rows}
+          keyExtractor={(s) => s.id}
+          pageSize={15}
+          refreshing={loading}
+          onRefresh={load}
+          emptyText="No cover duties assigned to you. 🎉"
+          renderItem={({ item: s }) => (
+            <Card style={styles.item}>
+              <View style={styles.dateCol}>
+                <AppText variant="small" style={styles.dateText}>
+                  {prettyDate(s.date)}
+                </AppText>
+                {s.day ? <AppText variant="small">{s.day}</AppText> : null}
+              </View>
+              <View style={styles.flex}>
+                <AppText variant="heading" style={styles.title}>
+                  {s.className}
+                  {s.subject ? ` · ${s.subject}` : ""}
+                </AppText>
+                <AppText variant="muted">
+                  Period {s.period}
+                  {s.time ? ` · ${s.time}` : ""}
+                  {s.room ? ` · Room ${s.room}` : ""}
+                </AppText>
+                {s.absentTeacher ? <AppText variant="small">Covering {s.absentTeacher}</AppText> : null}
+                {s.note ? <AppText variant="small" style={{ color: colors.muted }}>{s.note}</AppText> : null}
+              </View>
+            </Card>
+          )}
+        />
       )}
     </Screen>
   );

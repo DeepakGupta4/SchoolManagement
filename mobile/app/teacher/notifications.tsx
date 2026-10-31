@@ -1,6 +1,6 @@
 import { useEffect } from "react";
-import { FlatList, Pressable, StyleSheet, View } from "react-native";
-import { Screen, ScreenHeader, AppText, Card, Loading, Button } from "@/components";
+import { Pressable, StyleSheet, View } from "react-native";
+import { Screen, ScreenHeader, AppText, Card, Loading, Button, PagedList } from "@/components";
 import { useNotifications } from "@/store/notifications";
 import { markRead, markAllRead } from "@/api/notifications";
 import { timeAgo } from "@/lib/time";
@@ -47,14 +47,14 @@ export default function Notifications() {
         {unread > 0 ? <Button title="Mark all read" variant="ghost" onPress={onReadAll} /> : null}
       </View>
 
-      <FlatList
-        style={{ flex: 1 }}
+      <PagedList
         data={items}
         keyExtractor={(n) => n.id}
+        pageSize={15}
         onRefresh={refresh}
         refreshing={loading}
-        ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
-        ListEmptyComponent={<AppText variant="muted">You&apos;re all caught up. 🎉</AppText>}
+        contentContainerStyle={{ gap: spacing.sm }}
+        emptyText="You're all caught up. 🎉"
         renderItem={({ item }) => (
           <Pressable onPress={() => onRead(item.id, item.read)}>
             <Card style={[styles.card, !item.read && styles.unread]}>

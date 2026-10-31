@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { useFocusEffect } from "expo-router";
-import { Screen, ScreenHeader, AppText, Card, Button, TextField, Loading, Chips, type ChipOption } from "@/components";
+import { Screen, ScreenHeader, AppText, Card, Button, TextField, Loading, Chips, PagedList, type ChipOption } from "@/components";
 import { listMyLeave, applyLeave, type LeaveRow } from "@/api/leave";
 import { ApiError } from "@/api/client";
 import { todayIso, prettyDate } from "@/lib/date";
@@ -101,63 +101,72 @@ export default function LeaveScreen() {
   }
 
   return (
-    <Screen style={{ gap: spacing.md }}>
+    <Screen scroll={false} style={{ gap: spacing.md }}>
       <View>
         <ScreenHeader title="My Leave" back />
         <AppText variant="muted">Apply for time off and track approvals.</AppText>
       </View>
 
-      <Card style={{ gap: spacing.md }}>
-        <AppText variant="heading">Apply for leave</AppText>
+      <PagedList
+        data={rows}
+        keyExtractor={(r) => r.id}
+        pageSize={15}
+        refreshing={loading}
+        onRefresh={load}
+        emptyText="You haven't filed any leave yet."
+        contentContainerStyle={{ gap: spacing.md }}
+        ListHeaderComponent={
+          <View style={{ gap: spacing.md }}>
+            <Card style={{ gap: spacing.md }}>
+              <AppText variant="heading">Apply for leave</AppText>
 
-        <View style={styles.field}>
-          <AppText variant="label">Type</AppText>
-          <Chips options={TYPE_OPTIONS} value={type} onChange={setType} />
-        </View>
+              <View style={styles.field}>
+                <AppText variant="label">Type</AppText>
+                <Chips options={TYPE_OPTIONS} value={type} onChange={setType} />
+              </View>
 
-        <View style={styles.dates}>
-          <View style={styles.flex}>
-            <TextField
-              label="From"
-              value={from}
-              onChangeText={setFrom}
-              placeholder="YYYY-MM-DD"
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
+              <View style={styles.dates}>
+                <View style={styles.flex}>
+                  <TextField
+                    label="From"
+                    value={from}
+                    onChangeText={setFrom}
+                    placeholder="YYYY-MM-DD"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                </View>
+                <View style={styles.flex}>
+                  <TextField
+                    label="To"
+                    value={to}
+                    onChangeText={setTo}
+                    placeholder="YYYY-MM-DD"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                </View>
+              </View>
+
+              <TextField
+                label="Reason"
+                value={reason}
+                onChangeText={setReason}
+                placeholder="Briefly, why you need the leave"
+                multiline
+                style={styles.reason}
+              />
+
+              {message ? <AppText style={{ color: colors.successText }}>{message}</AppText> : null}
+              {error ? <AppText style={{ color: colors.dangerText }}>{error}</AppText> : null}
+              <Button title={saving ? "Submitting…" : "Submit request"} onPress={onSubmit} loading={saving} />
+            </Card>
+
+            <AppText variant="heading">My requests</AppText>
           </View>
-          <View style={styles.flex}>
-            <TextField
-              label="To"
-              value={to}
-              onChangeText={setTo}
-              placeholder="YYYY-MM-DD"
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-          </View>
-        </View>
-
-        <TextField
-          label="Reason"
-          value={reason}
-          onChangeText={setReason}
-          placeholder="Briefly, why you need the leave"
-          multiline
-          style={styles.reason}
-        />
-
-        {message ? <AppText style={{ color: colors.successText }}>{message}</AppText> : null}
-        {error ? <AppText style={{ color: colors.dangerText }}>{error}</AppText> : null}
-        <Button title={saving ? "Submitting…" : "Submit request"} onPress={onSubmit} loading={saving} />
-      </Card>
-
-      <AppText variant="heading">My requests</AppText>
-      {rows.length === 0 ? (
-        <AppText variant="muted">You haven&apos;t filed any leave yet.</AppText>
-      ) : (
-        rows.map((r) => (
-          <Card key={r.id} style={styles.item}>
+        }
+        renderItem={({ item: r }) => (
+          <Card style={styles.item}>
             <View style={styles.flex}>
               <AppText variant="heading" style={styles.itemTitle}>
                 {typeLabel(r.type)}
@@ -173,8 +182,8 @@ export default function LeaveScreen() {
             </View>
             <StatusBadge status={r.status} />
           </Card>
-        ))
-      )}
+        )}
+      />
     </Screen>
   );
 }

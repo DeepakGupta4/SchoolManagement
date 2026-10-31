@@ -1,8 +1,8 @@
 import { useCallback, useState } from "react";
-import { FlatList, Linking, Pressable, StyleSheet, View } from "react-native";
+import { Linking, Pressable, StyleSheet, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { Screen, ScreenHeader, AppText, Card, Button, TextField, Loading } from "@/components";
+import { Screen, ScreenHeader, AppText, Card, Button, TextField, Loading, PagedList } from "@/components";
 import { getMyTeacher } from "@/api/teacher";
 import { listStudents, studentFullName, type Student } from "@/api/students";
 import { colors, radius, spacing, fontWeight, fontSize } from "@/theme";
@@ -77,30 +77,22 @@ export default function Students() {
         subtitle={`${cls.className}${cls.section ? ` · ${cls.section}` : ""} · ${students.length} students`}
       />
 
-      <TextField
-        placeholder="Search name / admission / roll…"
-        value={search}
-        onChangeText={setSearch}
-        autoCapitalize="none"
-        leftIcon="search-outline"
-      />
-
-      <FlatList
-        style={styles.flex}
+      <PagedList
         data={filtered}
         keyExtractor={(s) => s.id ?? s.admissionNo}
+        pageSize={20}
         onRefresh={load}
         refreshing={loading}
-        ItemSeparatorComponent={() => <View style={styles.sep} />}
-        ListEmptyComponent={
-          <View style={styles.empty}>
-            <View style={styles.emptyIcon}>
-              <Ionicons name="people-outline" size={22} color={colors.primaryText} />
-            </View>
-            <AppText variant="muted">
-              {q ? "No students match your search." : "No students yet. Tap “Add student”."}
-            </AppText>
-          </View>
+        contentContainerStyle={{ gap: spacing.sm }}
+        emptyText={q ? "No students match your search." : "No students yet. Tap “Add student”."}
+        ListHeaderComponent={
+          <TextField
+            placeholder="Search name / admission / roll…"
+            value={search}
+            onChangeText={setSearch}
+            autoCapitalize="none"
+            leftIcon="search-outline"
+          />
         }
         renderItem={({ item }) => {
           const phone = item.guardian?.phone;

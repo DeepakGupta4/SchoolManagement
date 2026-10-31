@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Linking, StyleSheet, View, type DimensionValue } from "react-native";
 import { useFocusEffect } from "expo-router";
-import { Screen, ScreenHeader, AppText, Card, Button, TextField, Loading, Chips, type ChipOption } from "@/components";
+import { Screen, ScreenHeader, AppText, Card, Button, TextField, Loading, Chips, PagedList, type ChipOption } from "@/components";
 import { getMyTeacher, teacherName } from "@/api/teacher";
 import {
   listStudyMaterial,
@@ -155,95 +155,109 @@ export default function Teaching() {
     }
   };
 
+  // The per-tab input form scrolls with its list (as ListHeaderComponent).
+  const headerForm =
+    tab === "material" ? (
+      <Card style={{ gap: spacing.sm }}>
+        <AppText variant="heading">Share study material</AppText>
+        {me.klass ? <AppText variant="muted">Class: {me.klass}</AppText> : null}
+        <TextField label="Title" value={mTitle} onChangeText={setMTitle} />
+        <TextField label="Subject" value={mSubject} onChangeText={setMSubject} />
+        <TextField label="Link (URL)" value={mUrl} onChangeText={setMUrl} autoCapitalize="none" placeholder="https://…" />
+        <TextField label="Notes" value={mDesc} onChangeText={setMDesc} multiline />
+        <Button title="Share material" onPress={addMaterial} loading={saving} />
+      </Card>
+    ) : tab === "classes" ? (
+      <Card style={{ gap: spacing.sm }}>
+        <AppText variant="heading">Schedule online class</AppText>
+        <TextField label="Topic" value={cTopic} onChangeText={setCTopic} />
+        <TextField label="Subject" value={cSubject} onChangeText={setCSubject} />
+        <TextField label="When" value={cWhen} onChangeText={setCWhen} placeholder="Mon 10:00 AM" />
+        <TextField label="Platform" value={cPlatform} onChangeText={setCPlatform} placeholder="Zoom / Google Meet" />
+        <TextField label="Join link" value={cLink} onChangeText={setCLink} autoCapitalize="none" placeholder="https://…" />
+        <Button title="Schedule class" onPress={scheduleClass} loading={saving} />
+      </Card>
+    ) : null;
+
+  const listData: (StudyMaterial | OnlineClass | Syllabus)[] =
+    tab === "material" ? material : tab === "classes" ? classes : syllabus;
+
   return (
-    <Screen style={{ gap: spacing.md }}>
+    <Screen scroll={false} style={{ gap: spacing.md }}>
       <ScreenHeader title="Teaching" back />
       <Chips options={TABS} value={tab} onChange={(v) => setTab(v as Tab)} />
 
       {message ? <AppText style={{ color: colors.successText }}>{message}</AppText> : null}
       {error ? <AppText style={{ color: colors.dangerText }}>{error}</AppText> : null}
 
-      {tab === "material" ? (
+      {loading ? (
         <>
-          <Card style={{ gap: spacing.sm }}>
-            <AppText variant="heading">Share study material</AppText>
-            {me.klass ? <AppText variant="muted">Class: {me.klass}</AppText> : null}
-            <TextField label="Title" value={mTitle} onChangeText={setMTitle} />
-            <TextField label="Subject" value={mSubject} onChangeText={setMSubject} />
-            <TextField label="Link (URL)" value={mUrl} onChangeText={setMUrl} autoCapitalize="none" placeholder="https://…" />
-            <TextField label="Notes" value={mDesc} onChangeText={setMDesc} multiline />
-            <Button title="Share material" onPress={addMaterial} loading={saving} />
-          </Card>
-          {loading ? (
-            <Loading />
-          ) : (
-            material.map((m) => (
-              <Card key={m.id ?? m.title} style={styles.item}>
-                <View style={styles.flex}>
-                  <AppText variant="heading" style={styles.title}>
-                    {m.title}
-                  </AppText>
-                  <AppText variant="muted">{[m.subject, m.klass].filter(Boolean).join(" · ") || "—"}</AppText>
-                </View>
-                {m.url ? <Button title="Open" variant="ghost" onPress={() => Linking.openURL(m.url!)} /> : null}
-              </Card>
-            ))
-          )}
+          {headerForm}
+          <Loading />
         </>
-      ) : tab === "classes" ? (
-        <>
-          <Card style={{ gap: spacing.sm }}>
-            <AppText variant="heading">Schedule online class</AppText>
-            <TextField label="Topic" value={cTopic} onChangeText={setCTopic} />
-            <TextField label="Subject" value={cSubject} onChangeText={setCSubject} />
-            <TextField label="When" value={cWhen} onChangeText={setCWhen} placeholder="Mon 10:00 AM" />
-            <TextField label="Platform" value={cPlatform} onChangeText={setCPlatform} placeholder="Zoom / Google Meet" />
-            <TextField label="Join link" value={cLink} onChangeText={setCLink} autoCapitalize="none" placeholder="https://…" />
-            <Button title="Schedule class" onPress={scheduleClass} loading={saving} />
-          </Card>
-          {loading ? (
-            <Loading />
-          ) : (
-            classes.map((c) => (
-              <Card key={c.id ?? c.topic} style={styles.item}>
-                <View style={styles.flex}>
-                  <AppText variant="heading" style={styles.title}>
-                    {c.topic}
-                  </AppText>
-                  <AppText variant="muted">{[c.subject, c.when, c.state].filter(Boolean).join(" · ") || "—"}</AppText>
-                </View>
-                {c.link ? <Button title="Join" variant="ghost" onPress={() => Linking.openURL(c.link!)} /> : null}
-              </Card>
-            ))
-          )}
-        </>
-      ) : loading ? (
-        <Loading />
-      ) : syllabus.length === 0 ? (
-        <AppText variant="muted">No syllabus entries yet.</AppText>
       ) : (
-        syllabus.map((s) => {
-          const pct = s.topics > 0 ? Math.round((s.completedTopics / s.topics) * 100) : 0;
-          return (
-            <Card key={s.id} style={styles.item}>
-              <View style={styles.flex}>
-                <AppText variant="heading" style={styles.title}>
-                  {s.className} · {s.subject}
-                </AppText>
-                <AppText variant="muted">{[s.unit, s.chapter].filter(Boolean).join(" · ") || "—"}</AppText>
-                <View style={styles.barTrack}>
-                  <View style={[styles.barFill, { width: `${pct}%` as DimensionValue }]} />
+        <PagedList
+          data={listData}
+          resetKey={tab}
+          keyExtractor={(x) => {
+            if (tab === "material") return (x as StudyMaterial).id ?? (x as StudyMaterial).title;
+            if (tab === "classes") return (x as OnlineClass).id ?? (x as OnlineClass).topic;
+            return (x as Syllabus).id;
+          }}
+          ListHeaderComponent={headerForm}
+          emptyText={tab === "syllabus" ? "No syllabus entries yet." : "Nothing here yet."}
+          renderItem={({ item }) => {
+            if (tab === "material") {
+              const m = item as StudyMaterial;
+              return (
+                <Card style={styles.item}>
+                  <View style={styles.flex}>
+                    <AppText variant="heading" style={styles.title}>
+                      {m.title}
+                    </AppText>
+                    <AppText variant="muted">{[m.subject, m.klass].filter(Boolean).join(" · ") || "—"}</AppText>
+                  </View>
+                  {m.url ? <Button title="Open" variant="ghost" onPress={() => Linking.openURL(m.url!)} /> : null}
+                </Card>
+              );
+            }
+            if (tab === "classes") {
+              const c = item as OnlineClass;
+              return (
+                <Card style={styles.item}>
+                  <View style={styles.flex}>
+                    <AppText variant="heading" style={styles.title}>
+                      {c.topic}
+                    </AppText>
+                    <AppText variant="muted">{[c.subject, c.when, c.state].filter(Boolean).join(" · ") || "—"}</AppText>
+                  </View>
+                  {c.link ? <Button title="Join" variant="ghost" onPress={() => Linking.openURL(c.link!)} /> : null}
+                </Card>
+              );
+            }
+            const s = item as Syllabus;
+            const pct = s.topics > 0 ? Math.round((s.completedTopics / s.topics) * 100) : 0;
+            return (
+              <Card style={styles.item}>
+                <View style={styles.flex}>
+                  <AppText variant="heading" style={styles.title}>
+                    {s.className} · {s.subject}
+                  </AppText>
+                  <AppText variant="muted">{[s.unit, s.chapter].filter(Boolean).join(" · ") || "—"}</AppText>
+                  <View style={styles.barTrack}>
+                    <View style={[styles.barFill, { width: `${pct}%` as DimensionValue }]} />
+                  </View>
+                  <AppText variant="small">
+                    {s.completedTopics}/{s.topics} topics · {pct}%
+                  </AppText>
                 </View>
-                <AppText variant="small">
-                  {s.completedTopics}/{s.topics} topics · {pct}%
-                </AppText>
-              </View>
-              {s.completedTopics < s.topics ? (
-                <Button title="+1" variant="outline" onPress={() => markTopic(s)} />
-              ) : null}
-            </Card>
-          );
-        })
+                {s.completedTopics < s.topics ? (
+                  <Button title="+1" variant="outline" onPress={() => markTopic(s)} />
+                ) : null}
+              </Card>
+            );
+          }}
+        />
       )}
     </Screen>
   );

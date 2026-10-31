@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { Screen, ScreenHeader, AppText, Card, Loading, Chips, type ChipOption } from "@/components";
+import { Screen, ScreenHeader, AppText, Card, Loading, Chips, PagedList, type ChipOption } from "@/components";
 import { getMyTeacher } from "@/api/teacher";
 import { listExams } from "@/api/exams";
 import { listClasses, type SchoolClass } from "@/api/classes";
@@ -212,7 +212,7 @@ export default function ReportCards() {
   const ready = !!examName && !!className && !!section;
 
   return (
-    <Screen style={{ gap: spacing.md }}>
+    <Screen scroll={false} style={{ gap: spacing.md }}>
       <ScreenHeader title="Report Cards" back />
 
       <Card style={{ gap: spacing.md }}>
@@ -257,65 +257,61 @@ export default function ReportCards() {
 
       {ready && sheetLoading && reportRows.length === 0 ? (
         <Loading label="Loading report cards…" />
-      ) : null}
-
-      {ready && !sheetLoading && reportRows.length === 0 ? (
-        <AppText variant="muted">No marks saved for this exam yet.</AppText>
-      ) : null}
-
-      {reportRows.map((r) => {
-        const tone = toneForPercent(r.percent);
-        const open = expandedId === r.studentId;
-        return (
-          <Card key={r.studentId} style={styles.card}>
-            <Pressable
-              onPress={() => setExpandedId(open ? null : r.studentId)}
-              style={styles.header}
-            >
-              <View style={styles.rollName}>
-                <AppText variant="small" style={{ color: colors.primaryText }}>
-                  {`#${r.roll}`}
-                </AppText>
-                <AppText style={styles.name} numberOfLines={1}>
-                  {r.studentName}
-                </AppText>
-              </View>
-              <View style={styles.scoreCol}>
-                <AppText style={styles.score}>{`${r.total}/${r.outOf}`}</AppText>
-                <AppText variant="muted">{`${r.percent}%`}</AppText>
-              </View>
-              <View style={[styles.badge, { backgroundColor: tone.bg }]}>
-                <AppText style={[styles.badgeText, { color: tone.fg }]}>{r.band.grade}</AppText>
-              </View>
-              <Ionicons
-                name={open ? "chevron-up" : "chevron-down"}
-                size={18}
-                color={colors.subtle}
-              />
-            </Pressable>
-
-            {open ? (
-              <View style={styles.subjects}>
-                {r.subjects.map((m) => (
-                  <View key={m.subject} style={styles.subjectRow}>
-                    <AppText variant="muted" style={styles.flex} numberOfLines={1}>
-                      {m.subject}
+      ) : (
+        <PagedList
+          data={ready ? reportRows : []}
+          resetKey={`${examName}|${className}|${section}`}
+          keyExtractor={(r) => r.studentId}
+          pageSize={20}
+          emptyText={ready ? "No marks saved for this exam yet." : "Pick an exam, class and section above."}
+          renderItem={({ item: r }) => {
+            const tone = toneForPercent(r.percent);
+            const open = expandedId === r.studentId;
+            return (
+              <Card style={styles.card}>
+                <Pressable onPress={() => setExpandedId(open ? null : r.studentId)} style={styles.header}>
+                  <View style={styles.rollName}>
+                    <AppText variant="small" style={{ color: colors.primaryText }}>
+                      {`#${r.roll}`}
                     </AppText>
-                    <AppText variant="small" style={styles.subjectMark}>
-                      {`${m.marks}/${m.maxMarks}`}
+                    <AppText style={styles.name} numberOfLines={1}>
+                      {r.studentName}
                     </AppText>
                   </View>
-                ))}
-                <View style={styles.remarkRow}>
-                  <AppText variant="small">
-                    {`${r.band.remark} · Grade point ${r.band.gradePoint}`}
-                  </AppText>
-                </View>
-              </View>
-            ) : null}
-          </Card>
-        );
-      })}
+                  <View style={styles.scoreCol}>
+                    <AppText style={styles.score}>{`${r.total}/${r.outOf}`}</AppText>
+                    <AppText variant="muted">{`${r.percent}%`}</AppText>
+                  </View>
+                  <View style={[styles.badge, { backgroundColor: tone.bg }]}>
+                    <AppText style={[styles.badgeText, { color: tone.fg }]}>{r.band.grade}</AppText>
+                  </View>
+                  <Ionicons name={open ? "chevron-up" : "chevron-down"} size={18} color={colors.subtle} />
+                </Pressable>
+
+                {open ? (
+                  <View style={styles.subjects}>
+                    {r.subjects.map((m) => (
+                      <View key={m.subject} style={styles.subjectRow}>
+                        <AppText variant="muted" style={styles.flex} numberOfLines={1}>
+                          {m.subject}
+                        </AppText>
+                        <AppText variant="small" style={styles.subjectMark}>
+                          {`${m.marks}/${m.maxMarks}`}
+                        </AppText>
+                      </View>
+                    ))}
+                    <View style={styles.remarkRow}>
+                      <AppText variant="small">
+                        {`${r.band.remark} · Grade point ${r.band.gradePoint}`}
+                      </AppText>
+                    </View>
+                  </View>
+                ) : null}
+              </Card>
+            );
+          }}
+        />
+      )}
     </Screen>
   );
 }

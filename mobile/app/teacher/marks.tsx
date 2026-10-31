@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { useFocusEffect } from "expo-router";
-import { Screen, ScreenHeader, AppText, Card, Button, TextField, Loading, Chips, type ChipOption } from "@/components";
+import { Screen, ScreenHeader, AppText, Card, Button, TextField, Loading, Chips, PagedList, type ChipOption } from "@/components";
 import { getMyTeacher } from "@/api/teacher";
 import { listStudents, studentFullName, type Student } from "@/api/students";
 import { listExams } from "@/api/exams";
@@ -216,70 +216,76 @@ export default function Marks() {
   const ready = !!examName && !!className && !!section && !!subject;
 
   return (
-    <Screen style={{ gap: spacing.md }}>
+    <Screen scroll={false} style={{ gap: spacing.md }}>
       <ScreenHeader title="Mark Entry" back />
 
-      <Card style={{ gap: spacing.md }}>
-        {examOptions.length === 0 ? (
-          <AppText variant="muted">No exams created yet — ask the office to add one.</AppText>
-        ) : (
-          <View style={styles.field}>
-            <AppText variant="label">Exam</AppText>
-            <Chips options={examOptions} value={examName} onChange={setExamName} />
-          </View>
-        )}
-        <View style={styles.field}>
-          <AppText variant="label">Class</AppText>
-          <Chips options={classOptions} value={className} onChange={setClassName} />
-        </View>
-        <View style={styles.field}>
-          <AppText variant="label">Section</AppText>
-          <Chips options={sectionOptions} value={section} onChange={setSection} />
-        </View>
-        {subjectOptions.length === 0 ? (
-          <AppText variant="muted">No subjects are assigned to you yet.</AppText>
-        ) : (
-          <View style={styles.field}>
-            <AppText variant="label">Subject</AppText>
-            <Chips options={subjectOptions} value={subject} onChange={setSubject} />
-          </View>
-        )}
-        <TextField
-          label="Max marks (applies to all)"
-          value={maxMarks}
-          onChangeText={(v) => setMaxMarks(v.replace(/[^\d]/g, ""))}
-          keyboardType="number-pad"
-        />
-      </Card>
-
-      {ready && roster.length === 0 ? (
-        <AppText variant="muted">No active students in {className} · {section}.</AppText>
-      ) : null}
-
-      {ready
-        ? roster.map((s) => (
-            <Card key={s.id ?? s.admissionNo} style={styles.row}>
-              <View style={styles.rollName}>
-                <AppText variant="small" style={{ color: colors.primaryText }}>
-                  #{String(s.rollNo)}
-                </AppText>
-                <AppText style={styles.name} numberOfLines={1}>
-                  {studentFullName(s)}
-                </AppText>
+      <PagedList
+        data={ready ? roster : []}
+        resetKey={`${examName}|${className}|${section}|${subject}`}
+        keyExtractor={(s) => s.id ?? s.admissionNo}
+        pageSize={20}
+        emptyText={
+          ready
+            ? `No active students in ${className} · ${section}.`
+            : "Pick an exam, class, section and subject to load the sheet."
+        }
+        ListHeaderComponent={
+          <Card style={{ gap: spacing.md }}>
+            {examOptions.length === 0 ? (
+              <AppText variant="muted">No exams created yet — ask the office to add one.</AppText>
+            ) : (
+              <View style={styles.field}>
+                <AppText variant="label">Exam</AppText>
+                <Chips options={examOptions} value={examName} onChange={setExamName} />
               </View>
-              <View style={styles.markCell}>
-                <TextField
-                  value={marksMap[s.id!] ?? ""}
-                  onChangeText={(v) => setMark(s.id!, v)}
-                  keyboardType="number-pad"
-                  placeholder="—"
-                  style={styles.markInput}
-                />
-                <AppText variant="muted"> / {maxMarks || "—"}</AppText>
+            )}
+            <View style={styles.field}>
+              <AppText variant="label">Class</AppText>
+              <Chips options={classOptions} value={className} onChange={setClassName} />
+            </View>
+            <View style={styles.field}>
+              <AppText variant="label">Section</AppText>
+              <Chips options={sectionOptions} value={section} onChange={setSection} />
+            </View>
+            {subjectOptions.length === 0 ? (
+              <AppText variant="muted">No subjects are assigned to you yet.</AppText>
+            ) : (
+              <View style={styles.field}>
+                <AppText variant="label">Subject</AppText>
+                <Chips options={subjectOptions} value={subject} onChange={setSubject} />
               </View>
-            </Card>
-          ))
-        : null}
+            )}
+            <TextField
+              label="Max marks (applies to all)"
+              value={maxMarks}
+              onChangeText={(v) => setMaxMarks(v.replace(/[^\d]/g, ""))}
+              keyboardType="number-pad"
+            />
+          </Card>
+        }
+        renderItem={({ item: s }) => (
+          <Card style={styles.row}>
+            <View style={styles.rollName}>
+              <AppText variant="small" style={{ color: colors.primaryText }}>
+                #{String(s.rollNo)}
+              </AppText>
+              <AppText style={styles.name} numberOfLines={1}>
+                {studentFullName(s)}
+              </AppText>
+            </View>
+            <View style={styles.markCell}>
+              <TextField
+                value={marksMap[s.id!] ?? ""}
+                onChangeText={(v) => setMark(s.id!, v)}
+                keyboardType="number-pad"
+                placeholder="—"
+                style={styles.markInput}
+              />
+              <AppText variant="muted"> / {maxMarks || "—"}</AppText>
+            </View>
+          </Card>
+        )}
+      />
 
       {message ? <AppText style={{ color: colors.successText }}>{message}</AppText> : null}
       {error ? <AppText style={{ color: colors.dangerText }}>{error}</AppText> : null}

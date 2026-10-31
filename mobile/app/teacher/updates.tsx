@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { StyleSheet, View } from "react-native";
-import { Screen, ScreenHeader, AppText, Card, Loading, Chips, type ChipOption } from "@/components";
+import { Screen, ScreenHeader, AppText, Card, Loading, Chips, PagedList, type ChipOption } from "@/components";
 import {
   listAnnouncements,
   listNotices,
@@ -61,7 +61,7 @@ export default function Updates() {
   }, [load]);
 
   return (
-    <Screen style={{ gap: spacing.md }}>
+    <Screen scroll={false} style={{ gap: spacing.md }}>
       <ScreenHeader title="Updates" back />
       <Chips options={TABS} value={tab} onChange={(v) => setTab(v as Tab)} />
 
@@ -71,51 +71,64 @@ export default function Updates() {
         <Card>
           <AppText variant="muted">{error}</AppText>
         </Card>
-      ) : data.length === 0 ? (
-        <AppText variant="muted">Nothing here yet.</AppText>
-      ) : tab === "holidays" ? (
-        (data as Holiday[]).map((h) => (
-          <Card key={h.id} style={styles.row}>
-            <View style={styles.dateChip}>
-              <AppText variant="small" style={styles.dateText}>
-                {prettyDate(h.date)}
-              </AppText>
-            </View>
-            <View style={styles.flex}>
-              <AppText variant="heading" style={styles.title}>
-                {h.name}
-              </AppText>
-              {h.type ? <AppText variant="muted">{h.type}</AppText> : null}
-            </View>
-          </Card>
-        ))
-      ) : tab === "events" ? (
-        (data as SchoolEvent[]).map((ev) => (
-          <Card key={ev.id} style={styles.gap4}>
-            <View style={styles.titleRow}>
-              <AppText variant="heading" style={styles.title}>
-                {ev.name}
-              </AppText>
-              {ev.status ? <Badge text={ev.status} /> : null}
-            </View>
-            {ev.date || ev.venue ? (
-              <AppText variant="muted">{[ev.date, ev.venue].filter(Boolean).join(" · ")}</AppText>
-            ) : null}
-          </Card>
-        ))
       ) : (
-        [...(data as (Announcement | Notice)[])]
-          .sort((a, b) => Number(b.pinned) - Number(a.pinned))
-          .map((it) => (
-            <Card key={it.id} style={styles.gap4}>
-              <AppText variant="heading" style={styles.title}>
-                {it.pinned ? "📌 " : ""}
-                {it.title}
-              </AppText>
-              {it.body ? <AppText variant="muted">{it.body}</AppText> : null}
-              {it.date ? <AppText variant="small">{it.date}</AppText> : null}
-            </Card>
-          ))
+        <PagedList
+          data={
+            tab === "announcements" || tab === "notices"
+              ? [...(data as (Announcement | Notice)[])].sort((a, b) => Number(b.pinned) - Number(a.pinned))
+              : data
+          }
+          resetKey={tab}
+          keyExtractor={(it) => (it as { id: string }).id}
+          emptyText="Nothing here yet."
+          renderItem={({ item }) => {
+            if (tab === "holidays") {
+              const h = item as Holiday;
+              return (
+                <Card style={styles.row}>
+                  <View style={styles.dateChip}>
+                    <AppText variant="small" style={styles.dateText}>
+                      {prettyDate(h.date)}
+                    </AppText>
+                  </View>
+                  <View style={styles.flex}>
+                    <AppText variant="heading" style={styles.title}>
+                      {h.name}
+                    </AppText>
+                    {h.type ? <AppText variant="muted">{h.type}</AppText> : null}
+                  </View>
+                </Card>
+              );
+            }
+            if (tab === "events") {
+              const ev = item as SchoolEvent;
+              return (
+                <Card style={styles.gap4}>
+                  <View style={styles.titleRow}>
+                    <AppText variant="heading" style={styles.title}>
+                      {ev.name}
+                    </AppText>
+                    {ev.status ? <Badge text={ev.status} /> : null}
+                  </View>
+                  {ev.date || ev.venue ? (
+                    <AppText variant="muted">{[ev.date, ev.venue].filter(Boolean).join(" · ")}</AppText>
+                  ) : null}
+                </Card>
+              );
+            }
+            const it = item as Announcement | Notice;
+            return (
+              <Card style={styles.gap4}>
+                <AppText variant="heading" style={styles.title}>
+                  {it.pinned ? "📌 " : ""}
+                  {it.title}
+                </AppText>
+                {it.body ? <AppText variant="muted">{it.body}</AppText> : null}
+                {it.date ? <AppText variant="small">{it.date}</AppText> : null}
+              </Card>
+            );
+          }}
+        />
       )}
     </Screen>
   );
