@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { Check, Copy, Mail, TriangleAlert } from "lucide-react";
-import { Modal, Button } from "@/components/ui";
+import { Modal } from "./Modal";
+import { Button } from "./Button";
 import type { UserCredentials } from "@/lib/api/users";
 
 /**

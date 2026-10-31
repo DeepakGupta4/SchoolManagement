@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { KeyRound, Loader2, RefreshCw, Search, ShieldCheck, Sparkles, UserCog, UserPlus, Users } from "lucide-react";
 import {
-  Avatar, Badge, Button, Card, CardContent, CardHeader,
+  Avatar, Badge, Button, Card, CardContent, CardHeader, CredentialsDialog,
   EmptyState, Input, Modal, PageHeader, Select, StatCard, useToast,
 } from "@/components/ui";
 import {
@@ -12,7 +12,6 @@ import {
 } from "@/lib/api/users";
 import { rolesApi, type CustomRole } from "@/lib/api/roles";
 import { useAuthStore } from "@/store";
-import { CredentialsDialog } from "./CredentialsDialog";
 
 const BUILTIN_ROLE_OPTIONS = [
   { label: "School Admin", value: "school_admin" },

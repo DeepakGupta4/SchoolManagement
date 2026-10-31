@@ -10,6 +10,7 @@ export { MultiSelect } from "./MultiSelect";
 export { Pagination } from "./Pagination";
 export { Modal } from "./Modal";
 export { ConfirmDialog } from "./ConfirmDialog";
+export { CredentialsDialog } from "./CredentialsDialog";
 export { Table, type Column } from "./Table";
 export { Skeleton, TableSkeleton } from "./Skeleton";
 export { Spinner, Loading, type SpinnerSize } from "./Spinner";

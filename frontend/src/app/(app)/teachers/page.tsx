@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
   Eye,
+  KeyRound,
   FileText,
   Pencil,
   Plus,
@@ -22,6 +23,7 @@ import {
   Card,
   CardContent,
   ConfirmDialog,
+  CredentialsDialog,
   Input,
   Pagination,
   Select,
@@ -45,6 +47,8 @@ import {
 } from "@/types/teacher";
 import { exportTablePdf } from "@/lib/exportPdf";
 import { TeacherFormModal } from "./TeacherFormModal";
+import { TeacherCredentialsModal } from "./TeacherCredentialsModal";
+import type { UserCredentials } from "@/lib/api/users";
 
 const PAGE_SIZE = 8;
 
@@ -153,6 +157,9 @@ function TeachersPageInner() {
   const [deleting, setDeleting] = useState<Teacher | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [credsFor, setCredsFor] = useState<Teacher | null>(null);
+  const [creds, setCreds] = useState<UserCredentials | null>(null);
+  const [credsEmailed, setCredsEmailed] = useState(false);
 
   // Headline tiles come from whole-school server counts, independent of the table
   // filters, so a status/subject filter never turns them into a subtotal. Each
@@ -370,6 +377,13 @@ function TeachersPageInner() {
             <Eye className="size-4" />
           </Link>
           <button
+            onClick={() => setCredsFor(t)}
+            aria-label={`Login credentials for ${teacherName(t)}`}
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+          >
+            <KeyRound className="size-4" />
+          </button>
+          <button
             onClick={() => openEdit(t)}
             aria-label={`Edit ${teacherName(t)}`}
             className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
@@ -554,6 +568,23 @@ function TeachersPageInner() {
         loading={isDeleting}
         onConfirm={handleDelete}
       />
+
+      <TeacherCredentialsModal
+        teacher={credsFor}
+        onClose={() => setCredsFor(null)}
+        onDone={(c, emailed, action) => {
+          setCreds(c);
+          setCredsEmailed(emailed);
+          toast({
+            title: action === "created" ? "Login created" : "Password reset",
+            description: credsFor
+              ? `Share the one-time credentials with ${teacherName(credsFor)}.`
+              : "Share the one-time credentials with the teacher.",
+          });
+        }}
+      />
+
+      <CredentialsDialog data={creds} emailed={credsEmailed} onClose={() => setCreds(null)} />
     </div>
   );
 }
