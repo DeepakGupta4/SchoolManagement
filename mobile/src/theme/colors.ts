@@ -20,6 +20,7 @@ export const colors = {
   subtle: "#94a3b8",
   onPrimary: "#ffffff",
   onPrimaryGlass: "rgba(15,23,42,0.22)",
+  scrim: "rgba(15,23,42,0.5)",
 
   border: "#e2e8f0",
   borderStrong: "#cbd5e1",

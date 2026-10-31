@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { FlatList, Pressable, StyleSheet, View } from "react-native";
+import { FlatList, Modal, Pressable, StyleSheet, View } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { Screen, ScreenHeader, AppText, Card, Button, Loading } from "@/components";
+import { Calendar } from "react-native-calendars";
+import { Screen, ScreenHeader, AppText, Card, Button, Loading, Avatar } from "@/components";
 import { getMyTeacher } from "@/api/teacher";
 import { listStudents, studentFullName, type Student } from "@/api/students";
 import {
@@ -12,17 +13,29 @@ import {
   type AttendanceMark,
 } from "@/api/attendance";
 import { ApiError } from "@/api/client";
-import { todayIso, addDays, isSundayIso, prettyDate } from "@/lib/date";
-import { colors, radius, spacing, fontWeight, fontSize } from "@/theme";
+import { todayIso, addDays, isSundayIso, fullDate, weekday } from "@/lib/date";
+import { colors, radius, spacing, fontWeight, fontSize, shadow } from "@/theme";
 
 // Single source for the status pills (label + colour), reused in the legend + rows.
-const STATUSES: { key: AttendanceStatus; label: string; color: string }[] = [
-  { key: "present", label: "P", color: colors.success },
-  { key: "absent", label: "A", color: colors.danger },
-  { key: "late", label: "L", color: colors.warning },
-  { key: "half-day", label: "½", color: colors.info },
-  { key: "leave", label: "Lv", color: colors.subtle },
+const STATUSES: { key: AttendanceStatus; label: string; word: string; color: string }[] = [
+  { key: "present", label: "P", word: "present", color: colors.success },
+  { key: "absent", label: "A", word: "absent", color: colors.danger },
+  { key: "late", label: "L", word: "late", color: colors.warning },
+  { key: "half-day", label: "½", word: "half", color: colors.info },
+  { key: "leave", label: "Lv", word: "leave", color: colors.subtle },
 ];
+
+const CAL_THEME = {
+  todayTextColor: colors.primary,
+  selectedDayBackgroundColor: colors.primary,
+  selectedDayTextColor: colors.onPrimary,
+  arrowColor: colors.primary,
+  monthTextColor: colors.text,
+  textMonthFontWeight: "700" as const,
+  dayTextColor: colors.text,
+  textDisabledColor: colors.subtle,
+  textSectionTitleColor: colors.muted,
+};
 
 export default function Attendance() {
   const [loading, setLoading] = useState(true);
@@ -31,6 +44,7 @@ export default function Attendance() {
   const [roster, setRoster] = useState<Student[]>([]);
   const [statusMap, setStatusMap] = useState<Record<string, AttendanceStatus>>({});
   const [date, setDate] = useState(todayIso());
+  const [calOpen, setCalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -53,7 +67,8 @@ export default function Attendance() {
         section: t.classTeacherSection,
         status: "active",
       });
-      setRoster([...students].sort((a, b) => (Number(a.rollNo) || 0) - (Number(b.rollNo) || 0)));
+      // Alphabetical by name (no reliance on manually-entered roll numbers).
+      setRoster([...students].sort((a, b) => studentFullName(a).localeCompare(studentFullName(b))));
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Could not load your class.");
     } finally {
@@ -71,15 +86,12 @@ export default function Attendance() {
   useEffect(() => {
     if (!isClassTeacher || roster.length === 0) return;
     let alive = true;
-    const fallback = () =>
-      Object.fromEntries(roster.map((s) => [s.id!, "present" as AttendanceStatus]));
+    const fallback = () => Object.fromEntries(roster.map((s) => [s.id!, "present" as AttendanceStatus]));
     getSavedAttendance(cls.className, cls.section, date)
       .then((saved) => {
         if (!alive) return;
         const savedMap = new Map(saved.map((s) => [String(s.studentId), s.status]));
-        setStatusMap(
-          Object.fromEntries(roster.map((s) => [s.id!, savedMap.get(String(s.id)) ?? "present"]))
-        );
+        setStatusMap(Object.fromEntries(roster.map((s) => [s.id!, savedMap.get(String(s.id)) ?? "present"])));
       })
       .catch(() => alive && setStatusMap(fallback()));
     return () => {
@@ -88,13 +100,7 @@ export default function Attendance() {
   }, [date, roster, isClassTeacher, cls.className, cls.section]);
 
   const counts = useMemo(() => {
-    const c: Record<AttendanceStatus, number> = {
-      present: 0,
-      absent: 0,
-      late: 0,
-      "half-day": 0,
-      leave: 0,
-    };
+    const c: Record<AttendanceStatus, number> = { present: 0, absent: 0, late: 0, "half-day": 0, leave: 0 };
     for (const s of roster) c[statusMap[s.id!] ?? "present"]++;
     return c;
   }, [roster, statusMap]);
@@ -104,8 +110,7 @@ export default function Attendance() {
 
   const setStatus = (id: string, status: AttendanceStatus) =>
     setStatusMap((p) => ({ ...p, [id]: status }));
-  const markAllPresent = () =>
-    setStatusMap(Object.fromEntries(roster.map((s) => [s.id!, "present"])));
+  const markAllPresent = () => setStatusMap(Object.fromEntries(roster.map((s) => [s.id!, "present"])));
 
   const onSave = async () => {
     setSaving(true);
@@ -156,15 +161,31 @@ export default function Attendance() {
         back
       />
 
-      {/* Date stepper — can't go past today (future dates are blocked server-side). */}
-      <Card style={styles.dateRow}>
-        <Pressable onPress={() => setDate(addDays(date, -1))} hitSlop={8}>
+      {/* Date selector — step a day with the arrows, or tap the date for a calendar. */}
+      <Card style={styles.dateCard}>
+        <Pressable onPress={() => setDate(addDays(date, -1))} hitSlop={8} style={styles.arrow}>
           <Ionicons name="chevron-back" size={22} color={colors.primary} />
         </Pressable>
-        <AppText variant="heading" style={styles.dateText}>
-          {atToday ? "Today" : prettyDate(date)}
-        </AppText>
-        <Pressable onPress={() => !atToday && setDate(addDays(date, 1))} hitSlop={8} disabled={atToday}>
+        <Pressable
+          onPress={() => setCalOpen(true)}
+          style={styles.dateCenter}
+          accessibilityRole="button"
+          accessibilityLabel="Pick a date"
+        >
+          <View style={styles.dateTitleRow}>
+            <Ionicons name="calendar-outline" size={16} color={colors.primary} />
+            <AppText variant="heading" style={styles.dateTitle}>
+              {atToday ? "Today" : weekday(date)}
+            </AppText>
+          </View>
+          <AppText variant="muted">{fullDate(date)}</AppText>
+        </Pressable>
+        <Pressable
+          onPress={() => !atToday && setDate(addDays(date, 1))}
+          hitSlop={8}
+          disabled={atToday}
+          style={styles.arrow}
+        >
           <Ionicons name="chevron-forward" size={22} color={atToday ? colors.border : colors.primary} />
         </Pressable>
       </Card>
@@ -178,8 +199,7 @@ export default function Attendance() {
       ) : (
         <View style={styles.summaryRow}>
           <AppText variant="muted">
-            {counts.present} present · {counts.absent} absent
-            {counts.late ? ` · ${counts.late} late` : ""}
+            {counts.present} present · {counts.absent} absent{counts.late ? ` · ${counts.late} late` : ""}
           </AppText>
           <Button title="All present" variant="ghost" onPress={markAllPresent} />
         </View>
@@ -188,28 +208,26 @@ export default function Attendance() {
       <View style={styles.legend}>
         {STATUSES.map((s) => (
           <AppText key={s.key} style={styles.legendItem}>
-            <AppText style={{ color: s.color, fontWeight: fontWeight.bold }}>{s.label}</AppText>{" "}
-            {s.key === "half-day" ? "half" : s.key}
+            <AppText style={{ color: s.color, fontWeight: fontWeight.bold }}>{s.label}</AppText> {s.word}
           </AppText>
         ))}
       </View>
 
       <FlatList
-        style={{ flex: 1 }}
+        style={styles.flex}
         data={roster}
         keyExtractor={(s) => s.id ?? s.admissionNo}
         onRefresh={loadClass}
         refreshing={loading}
-        ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
+        ItemSeparatorComponent={() => <View style={styles.sep} />}
         ListEmptyComponent={<AppText variant="muted">No active students in this class.</AppText>}
-        renderItem={({ item }) => {
+        renderItem={({ item, index }) => {
           const current = statusMap[item.id!] ?? "present";
           return (
             <Card style={styles.row}>
-              <View style={styles.rollName}>
-                <AppText variant="small" style={{ color: colors.primaryText }}>
-                  #{String(item.rollNo)}
-                </AppText>
+              <View style={styles.rowTop}>
+                <AppText style={styles.serial}>{index + 1}</AppText>
+                <Avatar name={studentFullName(item)} uri={item.avatar} size={36} />
                 <AppText style={styles.name} numberOfLines={1}>
                   {studentFullName(item)}
                 </AppText>
@@ -222,10 +240,10 @@ export default function Attendance() {
                       key={s.key}
                       onPress={() => setStatus(item.id!, s.key)}
                       style={[styles.pill, on && { backgroundColor: s.color, borderColor: s.color }]}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${studentFullName(item)}: ${s.word}`}
                     >
-                      <AppText style={[styles.pillText, on && { color: colors.onPrimary }]}>
-                        {s.label}
-                      </AppText>
+                      <AppText style={[styles.pillText, on && styles.pillTextOn]}>{s.label}</AppText>
                     </Pressable>
                   );
                 })}
@@ -243,31 +261,61 @@ export default function Attendance() {
         loading={saving}
         disabled={sunday || roster.length === 0}
       />
+
+      {/* Calendar picker */}
+      <Modal visible={calOpen} transparent animationType="fade" onRequestClose={() => setCalOpen(false)}>
+        <Pressable style={styles.overlay} onPress={() => setCalOpen(false)}>
+          <Pressable style={styles.calCard} onPress={() => {}}>
+            <Calendar
+              current={date}
+              maxDate={todayIso()}
+              onDayPress={(d) => {
+                setDate(d.dateString);
+                setCalOpen(false);
+              }}
+              markedDates={{ [date]: { selected: true, selectedColor: colors.primary } }}
+              theme={CAL_THEME}
+            />
+          </Pressable>
+        </Pressable>
+      </Modal>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  dateRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: spacing.sm },
-  dateText: { fontSize: 15 },
+  flex: { flex: 1 },
+  sep: { height: spacing.sm },
+
+  dateCard: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: spacing.sm },
+  arrow: { padding: spacing.xs },
+  dateCenter: { flex: 1, alignItems: "center", gap: 2 },
+  dateTitleRow: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
+  dateTitle: { fontSize: fontSize.md },
+
+  overlay: { flex: 1, backgroundColor: colors.scrim, alignItems: "center", justifyContent: "center", padding: spacing.lg },
+  calCard: { width: "100%", maxWidth: 360, backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.sm, ...shadow.lg },
+
   banner: { backgroundColor: colors.warningSoft, borderColor: colors.warning, paddingVertical: spacing.sm },
   summaryRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   legend: { flexDirection: "row", flexWrap: "wrap", gap: spacing.md },
   legendItem: { fontSize: fontSize.xs, color: colors.muted },
-  row: { flexDirection: "row", alignItems: "center", gap: spacing.sm, padding: spacing.md },
-  rollName: { flex: 1, gap: 2 },
-  name: { fontSize: 14, fontWeight: fontWeight.medium },
-  pills: { flexDirection: "row", gap: 4 },
+
+  row: { gap: spacing.sm, padding: spacing.md },
+  rowTop: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  serial: { minWidth: 20, textAlign: "center", fontSize: fontSize.sm, color: colors.muted, fontWeight: fontWeight.semibold },
+  name: { flex: 1, fontSize: fontSize.md, fontWeight: fontWeight.medium, color: colors.text },
+  pills: { flexDirection: "row", gap: spacing.xs },
   pill: {
-    minWidth: 32,
-    height: 32,
-    paddingHorizontal: 4,
-    borderRadius: radius.sm,
+    flex: 1,
+    height: 40,
+    borderRadius: radius.md,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surface,
     alignItems: "center",
     justifyContent: "center",
   },
-  pillText: { fontSize: 13, color: colors.muted, fontWeight: fontWeight.semibold },
+  pillText: { fontSize: fontSize.sm, color: colors.muted, fontWeight: fontWeight.semibold },
+  pillTextOn: { color: colors.onPrimary },
 });

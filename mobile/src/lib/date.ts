@@ -24,3 +24,17 @@ export function prettyDate(iso: string): string {
   if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" });
 }
+
+/** "Thursday, 30 October" — a prominent, full-length header. */
+export function fullDate(iso: string): string {
+  const d = new Date(`${iso}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
+}
+
+/** "Thursday" — the weekday name only. */
+export function weekday(iso: string): string {
+  const d = new Date(`${iso}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleDateString("en-US", { weekday: "long" });
+}
