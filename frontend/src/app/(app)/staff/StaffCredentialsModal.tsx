@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { KeyRound, Loader2, RefreshCw, TriangleAlert, UserPlus } from "lucide-react";
+import { KeyRound, Loader2, RefreshCw, TriangleAlert, UserCog, UserPlus } from "lucide-react";
 import { Modal, Button, useToast } from "@/components/ui";
 import {
   listUsers,
   createUser,
+  updateUser,
   resetUserPassword,
   type ManagedUser,
   type UserCredentials,
@@ -14,15 +15,17 @@ import type { UserRole } from "@/types";
 import type { StaffMember } from "@/lib/api/staff";
 
 /**
- * Picks the login role a staff member should get from their department, so a
- * driver account reaches the driver app, a librarian the library, etc. Anything
- * else falls back to the generic "staff" portal.
+ * Picks the login role a staff member should get from their JOB TITLE and
+ * department together, so a driver account reaches the driver app, a librarian
+ * the library, etc. Checks the title too (not just the department) — a "Bus
+ * Driver" in the Administration department is still a driver. Falls back to the
+ * generic "staff" portal.
  */
-export function loginRoleForStaff(dept: string): UserRole {
-  const d = (dept ?? "").toLowerCase();
-  if (d.includes("transport")) return "driver";
-  if (d.includes("library")) return "librarian";
-  if (d.includes("finance")) return "accountant";
+export function loginRoleForStaff(dept: string, role = ""): UserRole {
+  const hay = `${role} ${dept}`.toLowerCase();
+  if (/\b(driver|transport|bus)\b/.test(hay)) return "driver";
+  if (/librar/.test(hay)) return "librarian";
+  if (/account|finance|cashier|bursar/.test(hay)) return "accountant";
   return "staff";
 }
 
@@ -32,6 +35,7 @@ const ROLE_LABEL: Record<string, string> = {
   accountant: "Accountant",
   staff: "Staff",
 };
+const roleLabel = (r: string) => ROLE_LABEL[r] ?? r.replace("_", " ");
 
 /**
  * Create or reset the LOGIN account for a staff member. The staff record and the
@@ -51,9 +55,10 @@ export function StaffCredentialsModal({
   const { toast } = useToast();
   const [result, setResult] = useState<{ email: string; existing: ManagedUser | null } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [switching, setSwitching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const email = (staff?.email ?? "").trim();
-  const role = loginRoleForStaff(staff?.dept ?? "");
+  const role = loginRoleForStaff(staff?.dept ?? "", staff?.role ?? "");
 
   // On open, look up whether a login already exists for this staff member's email.
   useEffect(() => {
@@ -123,15 +128,51 @@ export function StaffCredentialsModal({
     }
   };
 
+  // The existing login carries a role that doesn't match this staff member's job
+  // (e.g. a "Bus Driver" whose login was made as generic "staff") — offer to fix it.
+  const roleMismatch = Boolean(existing) && existing!.role !== "custom" && existing!.role !== role;
+
+  const switchRole = async () => {
+    if (!existing) return;
+    setSwitching(true);
+    setError(null);
+    try {
+      await updateUser(existing.id, { role });
+      setResult({ email, existing: { ...existing, role } }); // reflect the new role in the modal
+      toast({
+        title: `Role updated to ${roleLabel(role)}`,
+        description: "They'll see the right app after signing out and back in.",
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Could not update the role.";
+      setError(msg);
+      toast({ title: "Could not update role", description: msg, variant: "error" });
+    } finally {
+      setSwitching(false);
+    }
+  };
+
   const footer = !email ? (
     <Button variant="outline" onClick={onClose}>
       Close
     </Button>
   ) : existing ? (
-    <Button onClick={() => run(() => resetUserPassword(existing.id), "reset")} disabled={busy || finding}>
-      {busy ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
-      Reset password
-    </Button>
+    <div className="flex items-center gap-2">
+      {roleMismatch ? (
+        <Button onClick={switchRole} disabled={switching || busy || finding}>
+          {switching ? <Loader2 className="size-4 animate-spin" /> : <UserCog className="size-4" />}
+          Switch to {roleLabel(role)}
+        </Button>
+      ) : null}
+      <Button
+        variant={roleMismatch ? "outline" : "primary"}
+        onClick={() => run(() => resetUserPassword(existing.id), "reset")}
+        disabled={busy || switching || finding}
+      >
+        {busy ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
+        Reset password
+      </Button>
+    </div>
   ) : (
     <Button
       onClick={() => run(() => createUser({ name: staff!.name, email, role }), "created")}
@@ -170,11 +211,23 @@ export function StaffCredentialsModal({
               <p className="truncate font-mono text-sm text-text">{email}</p>
               <p className="text-xs text-subtle">
                 {existing
-                  ? `Login exists · ${existing.role.replace("_", " ")}`
-                  : `No login yet · will be created as ${ROLE_LABEL[role] ?? role}`}
+                  ? `Login exists · ${roleLabel(existing.role)}`
+                  : `No login yet · will be created as ${roleLabel(role)}`}
               </p>
             </div>
           </div>
+
+          {roleMismatch && !error ? (
+            <div className="flex items-start gap-2 rounded-md border border-warning/30 bg-warning-soft px-3 py-2.5 text-sm text-warning-text">
+              <UserCog className="mt-0.5 size-4 shrink-0" />
+              <span>
+                This login is a <span className="font-medium">{roleLabel(existing!.role)}</span> account, but{" "}
+                <span className="font-medium">{staff.role || "this staff member"}</span> should be a{" "}
+                <span className="font-medium">{roleLabel(role)}</span>. Switch the role so they open the right
+                section of the app.
+              </span>
+            </div>
+          ) : null}
 
           {error ? (
             <div className="flex items-start gap-2 rounded-md border border-danger/30 bg-danger-soft px-3 py-2.5 text-sm text-danger-text">
