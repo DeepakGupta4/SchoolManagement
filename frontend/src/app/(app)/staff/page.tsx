@@ -10,6 +10,7 @@ import {
   Eye,
   Pencil,
   Trash2,
+  KeyRound,
   Phone,
   Mail,
   Users,
@@ -24,6 +25,7 @@ import {
   Card,
   CardContent,
   ConfirmDialog,
+  CredentialsDialog,
   Input,
   PageHeader,
   Select,
@@ -43,7 +45,9 @@ import {
   type StaffMember,
 } from "@/lib/api/staff";
 import type { StaffSchema } from "@/lib/schemas/staff";
+import type { UserCredentials } from "@/lib/api/users";
 import { StaffFormModal } from "./StaffFormModal";
+import { StaffCredentialsModal } from "./StaffCredentialsModal";
 
 type BadgeVariant = "default" | "success" | "warning" | "danger" | "info";
 
@@ -92,6 +96,9 @@ export default function StaffPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<StaffMember | null>(null);
   const [pendingDelete, setPendingDelete] = useState<StaffMember | null>(null);
+  const [credsFor, setCredsFor] = useState<StaffMember | null>(null);
+  const [creds, setCreds] = useState<UserCredentials | null>(null);
+  const [credsEmailed, setCredsEmailed] = useState(false);
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
 
@@ -325,6 +332,14 @@ export default function StaffPage() {
             <Eye className="size-4" />
           </Link>
           <button
+            onClick={() => setCredsFor(s)}
+            aria-label={`Login credentials for ${s.name}`}
+            title="Login credentials"
+            className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+          >
+            <KeyRound className="size-4" />
+          </button>
+          <button
             onClick={() => {
               setEditing(s);
               setFormOpen(true);
@@ -551,6 +566,23 @@ export default function StaffPage() {
         loading={deleting}
         onConfirm={handleDelete}
       />
+
+      <StaffCredentialsModal
+        staff={credsFor}
+        onClose={() => setCredsFor(null)}
+        onDone={(c, emailed, action) => {
+          setCreds(c);
+          setCredsEmailed(emailed);
+          toast({
+            title: action === "created" ? "Login created" : "Password reset",
+            description: credsFor
+              ? `Share the one-time credentials with ${credsFor.name}.`
+              : "Share the one-time credentials securely.",
+          });
+        }}
+      />
+
+      <CredentialsDialog data={creds} emailed={credsEmailed} onClose={() => setCreds(null)} />
     </div>
   );
 }
