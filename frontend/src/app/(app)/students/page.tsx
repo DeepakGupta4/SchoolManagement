@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Ban, Cake, CalendarCheck, Download, Eye, FileText, Pencil, Plus, Search, Trash2, Users, UsersRound, UserCheck, IndianRupee, TrendingDown } from "lucide-react";
+import { ArrowDownAZ, Ban, Cake, CalendarCheck, Download, Eye, FileText, Pencil, Plus, Search, Trash2, Users, UsersRound, UserCheck, IndianRupee, TrendingDown } from "lucide-react";
 import {
   Avatar,
   Badge,
@@ -20,7 +20,7 @@ import {
 } from "@/components/ui";
 import { useStudents } from "@/hooks/useStudents";
 import { useClassOptions } from "@/hooks/useClassOptions";
-import { createStudent, deleteStudent, updateStudent, fetchAllStudents, setStudentStatus } from "@/lib/api/students";
+import { createStudent, deleteStudent, updateStudent, fetchAllStudents, setStudentStatus, renumberRoll } from "@/lib/api/students";
 import { getDashboardInsights } from "@/lib/api/dashboard";
 import { getFeeSummary } from "@/lib/api/feeLedger";
 import { getMySchool, type SchoolProfile } from "@/lib/api/schools";
@@ -261,6 +261,31 @@ function StudentsPageInner() {
   };
 
   const [exporting, setExporting] = useState(false);
+  const [renumbering, setRenumbering] = useState(false);
+
+  /** Re-sequence roll numbers alphabetically (A–Z by name) for the class currently
+   *  filtered — or the whole school when "All classes" is selected. */
+  const handleRenumber = async () => {
+    setRenumbering(true);
+    try {
+      const res = await renumberRoll(className ? { className } : {});
+      toast({
+        title: "Roll numbers updated",
+        description: `${res.updated} student${res.updated === 1 ? "" : "s"} re-sequenced A–Z${
+          className ? ` in ${className}` : " school-wide"
+        }.`,
+      });
+      refetch();
+    } catch (e) {
+      toast({
+        title: "Couldn't renumber",
+        description: e instanceof Error ? e.message : "Please try again.",
+        variant: "error",
+      });
+    } finally {
+      setRenumbering(false);
+    }
+  };
 
   /** Exports the FULL matching set (all pages), applying the active filters — so
    *  an "all students" PDF is actually complete, not just the loaded page. */
@@ -549,6 +574,10 @@ function StudentsPageInner() {
               <Button variant="outline" onClick={() => setBulkOpen(true)}>
                 <UsersRound className="size-4" />
                 Bulk add
+              </Button>
+              <Button variant="outline" onClick={handleRenumber} disabled={renumbering}>
+                <ArrowDownAZ className="size-4" />
+                {renumbering ? "Renumbering…" : "Renumber A–Z"}
               </Button>
               <Button onClick={openCreate}>
                 <Plus className="size-4" />

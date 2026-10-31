@@ -20,7 +20,7 @@ const studentSchema = new Schema(
     schoolId: { type: String, required: true, default: "school_1", index: true },
 
     admissionNo: { type: String, required: true, trim: true, index: true },
-    rollNo: { type: String, required: true, trim: true },
+    rollNo: { type: String, default: "0", trim: true }, // auto-assigned A–Z; see student.routes renumberClassSection
     firstName: { type: String, required: true, trim: true },
     lastName: { type: String, required: true, trim: true },
     email: { type: String, required: true, lowercase: true, trim: true },

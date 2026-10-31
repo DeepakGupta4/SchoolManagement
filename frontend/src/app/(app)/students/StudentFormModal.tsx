@@ -48,16 +48,8 @@ function nextAdmissionNo(students: Student[]): string {
   return candidate;
 }
 
-/** Next roll number within a class + section (sequential per class). */
-function nextRollNo(students: Student[], className: string, section: string): number {
-  let max = 0;
-  for (const s of students) {
-    if (s.className !== className || s.section !== section) continue;
-    const n = parseInt(String(s.rollNo).replace(/\D/g, ""), 10);
-    if (!Number.isNaN(n)) max = Math.max(max, n);
-  }
-  return max + 1;
-}
+// Roll numbers are assigned alphabetically (A–Z) by the backend on save, so the
+// form no longer pre-fills them client-side.
 
 type FeeMode = "none" | "structure" | "custom";
 
@@ -274,7 +266,6 @@ export function StudentFormModal({
   const firstName = useWatch({ control, name: "firstName" });
   const lastName = useWatch({ control, name: "lastName" });
   const className = useWatch({ control, name: "className" });
-  const section = useWatch({ control, name: "section" });
   const transportRequired = useWatch({ control, name: "transportRequired" });
   const transportRouteCode = useWatch({ control, name: "transportRouteCode" });
 
@@ -402,12 +393,6 @@ export function StudentFormModal({
     if (!open || isEdit) return;
     setValue("admissionNo", nextAdmissionNo(existing));
   }, [open, isEdit, existing, setValue]);
-
-  // Auto roll number, recomputed whenever the class or section changes.
-  useEffect(() => {
-    if (!open || isEdit || !className || !section) return;
-    setValue("rollNo", String(nextRollNo(existing, className, section)));
-  }, [open, isEdit, existing, className, section, setValue]);
 
   // Fee structures for the class picked above, and the derived amounts shown in
   // the Fees section. Cheap to recompute; the React Compiler memoises it.
@@ -576,7 +561,7 @@ export function StudentFormModal({
             <Input label="First name" required {...register("firstName")} error={errors.firstName?.message} />
             <Input label="Last name" required {...register("lastName")} error={errors.lastName?.message} />
             <Input label="Admission no." required hint={!isEdit ? "Auto-generated — editable" : undefined} {...register("admissionNo")} error={errors.admissionNo?.message} />
-            <Input label="Roll no." required hint={!isEdit ? "Auto, class-wise — editable" : undefined} {...register("rollNo")} error={errors.rollNo?.message} />
+            <Input label="Roll no." hint={!isEdit ? "Optional — auto-assigned A–Z on save" : undefined} {...register("rollNo")} error={errors.rollNo?.message} />
             <Input label="Date of birth" type="date" required min={MIN_STUDENT_DOB} max={MAX_STUDENT_DOB} {...register("dateOfBirth")} error={errors.dateOfBirth?.message} />
             <Select label="Gender" required options={GENDER_OPTIONS} {...register("gender")} error={errors.gender?.message} />
           </div>

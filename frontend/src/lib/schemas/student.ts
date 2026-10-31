@@ -10,7 +10,9 @@ const optionalPhone = z
 
 export const studentSchema = z.object({
   admissionNo: z.string().min(1, "Admission number is required"),
-  rollNo: z.string().min(1, "Roll number is required"),
+  // Optional: the backend auto-assigns it alphabetically (A–Z by name) on save,
+  // so the admin need not type one. A typed value is only a seed.
+  rollNo: z.string().optional(),
   firstName: z.string().min(2, "First name must be at least 2 characters"),
   lastName: z.string().min(1, "Last name is required"),
   email: z.email("Enter a valid email address"),

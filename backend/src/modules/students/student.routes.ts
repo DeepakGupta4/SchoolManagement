@@ -23,7 +23,9 @@ const guardianSchema = z.object({
 
 const studentSchema = z.object({
   admissionNo: z.string().min(1),
-  rollNo: z.string().min(1),
+  // Optional: if omitted/blank the backend auto-assigns it alphabetically (see
+  // renumberClassSection + the afterCreate hook). A sent value is just a seed.
+  rollNo: z.string().optional(),
   firstName: z.string().min(2),
   lastName: z.string().min(1),
   email: z.email(),
@@ -100,6 +102,40 @@ const promoteSchema = z.object({
     .max(5000, "Too many students in one batch"),
 });
 
+/**
+ * Re-sequence a class+section's roll numbers 1..N in alphabetical name order.
+ * rollNo is display-only (nothing joins on it) and has no unique index, so a bulk
+ * rewrite is always safe; no-ops are skipped so an unchanged order writes nothing.
+ * Always schoolId-scoped. Returns how many rolls actually changed.
+ */
+async function renumberClassSection(
+  schoolId: string,
+  className: string,
+  section: string
+): Promise<number> {
+  const roster = await Student.find({ schoolId, className, section, status: "active" })
+    .select("firstName lastName rollNo")
+    .lean();
+  roster.sort(
+    (a, b) =>
+      `${a.firstName} ${a.lastName}`
+        .trim()
+        .localeCompare(`${b.firstName} ${b.lastName}`.trim(), undefined, { sensitivity: "base" }) ||
+      String(a._id).localeCompare(String(b._id))
+  );
+  const ops: Parameters<typeof Student.bulkWrite>[0] = roster
+    .map((s, i) => ({ id: s._id, want: String(i + 1), has: String(s.rollNo) }))
+    .filter((x) => x.has !== x.want)
+    .map((x) => ({ updateOne: { filter: { _id: x.id, schoolId }, update: { $set: { rollNo: x.want } } } }));
+  if (ops.length > 0) await Student.bulkWrite(ops);
+  return ops.length;
+}
+
+const renumberSchema = z.object({
+  className: z.string().min(1).optional(),
+  section: z.string().min(1).optional(),
+});
+
 export default createCrudRouter({
   model: Student,
   createSchema: studentSchema,
@@ -142,6 +178,23 @@ export default createCrudRouter({
         ownerId: String(studentId),
       }).catch(() => {}),
     ]);
+  },
+  // Keep each class+section numbered 1..N in alphabetical name order: re-sequence
+  // whenever a student is added or edited (a no-op when the order is unchanged).
+  // Best-effort — a renumber hiccup must never fail the create/update itself.
+  afterCreate: async (doc, req) => {
+    try {
+      await renumberClassSection(req.user!.schoolId, doc.className, doc.section);
+    } catch (err) {
+      console.error("Roll renumber (create) failed:", err);
+    }
+  },
+  afterUpdate: async (doc, req) => {
+    try {
+      await renumberClassSection(req.user!.schoolId, doc.className, doc.section);
+    } catch (err) {
+      console.error("Roll renumber (update) failed:", err);
+    }
   },
   // Custom bulk-promote route. `extend` runs after createCrudRouter's
   // `router.use(requireAuth)`, so the callers here are already authenticated.
@@ -236,6 +289,35 @@ export default createCrudRouter({
 
           const skipped = promotions.length - decisions.length;
           res.json({ data: { promoted, retained, graduated, skipped } });
+        } catch (err) {
+          next(err);
+        }
+      }
+    );
+
+    // Re-sequence roll numbers alphabetically for a class+section, a whole class,
+    // or the entire school (when className/section are omitted). A deliberate admin
+    // action; the afterCreate/afterUpdate hooks keep new additions ordered on their own.
+    router.post(
+      "/renumber",
+      requireRole("super_admin", "school_admin", "principal"),
+      validate(renumberSchema),
+      async (req, res, next) => {
+        try {
+          const schoolId = req.user!.schoolId;
+          const { className, section } = req.body as z.infer<typeof renumberSchema>;
+          const match: Record<string, unknown> = { schoolId, status: "active" };
+          if (className) match.className = className;
+          if (section) match.section = section;
+          const pairs = await Student.aggregate<{ _id: { className: string; section: string } }>([
+            { $match: match },
+            { $group: { _id: { className: "$className", section: "$section" } } },
+          ]);
+          let updated = 0;
+          for (const p of pairs) {
+            updated += await renumberClassSection(schoolId, p._id.className, p._id.section);
+          }
+          res.json({ data: { updated, groups: pairs.length } });
         } catch (err) {
           next(err);
         }

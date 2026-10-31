@@ -136,3 +136,24 @@ export async function promoteStudents(
     body: { session, promotions },
   });
 }
+
+export interface RenumberResult {
+  /** How many students' roll numbers actually changed. */
+  updated: number;
+  /** How many class+section groups were re-sequenced. */
+  groups: number;
+}
+
+/**
+ * Re-sequence roll numbers 1..N in alphabetical (by name) order for a class+section,
+ * a whole class, or the entire school when no filter is given. The backend also does
+ * this automatically whenever a student is added or edited.
+ */
+export async function renumberRoll(
+  filters: { className?: string; section?: string } = {}
+): Promise<RenumberResult> {
+  return apiRequest<RenumberResult>("/api/students/renumber", {
+    method: "POST",
+    body: filters,
+  });
+}
