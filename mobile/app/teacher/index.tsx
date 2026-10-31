@@ -39,6 +39,10 @@ export default function TeacherHome() {
     try {
       const t = await getMyTeacher();
       setTeacher(t);
+      // Mirror the admin-uploaded teacher photo onto the signed-in user so More /
+      // My Profile (which read user.avatar) show it too — not just the dashboard.
+      const auth = useAuth.getState();
+      if (t.avatar && auth.user && !auth.user.avatar) auth.setUser({ ...auth.user, avatar: t.avatar });
       // Scope the timetable to this teacher server-side (name is the only join key).
       const nm = teacherName(t);
       setTimetable(nm ? await getTimetable(nm).catch(() => []) : []);
@@ -57,7 +61,7 @@ export default function TeacherHome() {
   );
 
   const name = teacherName(teacher) || user?.name || "Teacher";
-  const avatarUri = teacher?.avatar || user?.avatar;
+  const avatarUri = user?.avatar || teacher?.avatar;
   const meta = teacher?.department || undefined;
   const classes = teacher?.classes ?? [];
   const subjects = teacher?.subjects ?? [];
