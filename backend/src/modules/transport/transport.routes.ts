@@ -115,25 +115,31 @@ router.get("/me/students", requireRole("driver"), async (req, res, next) => {
   }
 });
 
+// lat/lng are strict (a bad position is meaningless), but speed/heading are
+// tolerant: phones report -1 when they can't determine them, and a ping must
+// never be rejected over that — it's clamped below instead of 400'd.
 const pingSchema = z.object({
   lat: z.number().min(-90).max(90),
   lng: z.number().min(-180).max(180),
-  speed: z.number().min(0).optional(),
-  heading: z.number().min(0).max(360).optional(),
+  speed: z.number().optional(),
+  heading: z.number().optional(),
 });
 
 /** POST /api/transport/location — a GPS ping. Updates ONLY the caller's own route. */
 router.post("/location", validate(pingSchema), async (req, res, next) => {
   try {
     const { lat, lng, speed, heading } = req.body as z.infer<typeof pingSchema>;
+    // Clamp the device's speed/heading into valid ranges (it sends -1 for unknown).
+    const safeSpeed = typeof speed === "number" && speed >= 0 ? speed : 0;
+    const safeHeading = typeof heading === "number" && heading >= 0 && heading <= 360 ? heading : 0;
     const route = await BusRoute.findOneAndUpdate(
       { schoolId: req.user!.schoolId, driverEmail: driverEmail(req) },
       {
         $set: {
           lat,
           lng,
-          speed: speed ?? 0,
-          heading: heading ?? 0,
+          speed: safeSpeed,
+          heading: safeHeading,
           lastPingAt: new Date().toISOString(),
           trackingOn: true,
         },

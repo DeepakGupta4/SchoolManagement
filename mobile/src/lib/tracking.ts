@@ -4,6 +4,22 @@ import { sendLocation } from "@/api/transport";
 
 export const BUS_TASK = "schooldeck-bus-location";
 
+/**
+ * A clean ping body from a GPS reading. The device reports speed/heading as -1
+ * (or null) when it can't determine them — those would fail the server's
+ * range checks ("Validation failed"), so clamp speed to >=0 and DROP an unknown
+ * heading (it's optional). Returns null for a reading with no real position.
+ */
+function pingBody(coords: Location.LocationObjectCoords) {
+  if (!Number.isFinite(coords.latitude) || !Number.isFinite(coords.longitude)) return null;
+  const speed = typeof coords.speed === "number" && coords.speed >= 0 ? coords.speed : 0;
+  const heading =
+    typeof coords.heading === "number" && coords.heading >= 0 && coords.heading <= 360
+      ? coords.heading
+      : undefined;
+  return { lat: coords.latitude, lng: coords.longitude, speed, heading };
+}
+
 // Registered at app start (imported from app/_layout). The OS wakes this with the
 // latest coords — even when the app is backgrounded — and we forward the newest one.
 // Best-effort: a dropped ping is fine, the next one replaces it.
@@ -12,13 +28,10 @@ TaskManager.defineTask(BUS_TASK, async ({ data, error }) => {
   const locations = (data as { locations?: Location.LocationObject[] })?.locations ?? [];
   const loc = locations[locations.length - 1];
   if (!loc) return;
+  const body = pingBody(loc.coords);
+  if (!body) return;
   try {
-    await sendLocation({
-      lat: loc.coords.latitude,
-      lng: loc.coords.longitude,
-      speed: Math.max(0, loc.coords.speed ?? 0),
-      heading: loc.coords.heading ?? 0,
-    });
+    await sendLocation(body);
   } catch {
     /* next ping retries */
   }
@@ -67,12 +80,8 @@ export async function startTracking(): Promise<"background" | "foreground"> {
       fgSub = await Location.watchPositionAsync(
         { accuracy: Location.Accuracy.High, timeInterval: 5000, distanceInterval: 20 },
         (loc) => {
-          void sendLocation({
-            lat: loc.coords.latitude,
-            lng: loc.coords.longitude,
-            speed: Math.max(0, loc.coords.speed ?? 0),
-            heading: loc.coords.heading ?? 0,
-          });
+          const body = pingBody(loc.coords);
+          if (body) void sendLocation(body);
         }
       );
     }
