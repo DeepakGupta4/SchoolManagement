@@ -6,7 +6,7 @@ import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system/legacy";
 import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { Screen, ScreenHeader, AppText, Card, TextField, Button, Loading, PagedList, AddButton, Chips } from "@/components";
+import { Screen, ScreenHeader, AppText, Card, TextField, Button, Loading, PagedList, AddButton } from "@/components";
 import { getMyTeacher, teacherName } from "@/api/teacher";
 import { listHomework, createHomework, type Homework } from "@/api/homework";
 import { ApiError } from "@/api/client";
@@ -155,12 +155,27 @@ export default function HomeworkScreen() {
     <Screen scroll={false} style={{ gap: spacing.md }}>
       <ScreenHeader
         title="Homework"
-        subtitle={klass ? `Class ${klass}` : undefined}
+        subtitle={myClasses.length <= 1 && klass ? `Class ${klass}` : undefined}
         right={!composing && items.length > 0 ? <AddButton label="New" onPress={() => setComposing(true)} /> : undefined}
       />
 
       {myClasses.length > 1 ? (
-        <Chips options={myClasses.map((c) => ({ label: c, value: c }))} value={klass} onChange={setKlass} />
+        <View style={styles.classRow}>
+          {myClasses.map((c) => {
+            const on = c === klass;
+            return (
+              <Pressable
+                key={c}
+                onPress={() => setKlass(c)}
+                style={[styles.classChip, on && styles.classChipOn]}
+                accessibilityRole="button"
+                accessibilityState={{ selected: on }}
+              >
+                <AppText style={[styles.classChipText, on && styles.classChipTextOn]}>{c}</AppText>
+              </Pressable>
+            );
+          })}
+        </View>
       ) : null}
 
       <PagedList
@@ -284,6 +299,16 @@ export default function HomeworkScreen() {
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   emptyAdd: { marginTop: spacing.sm },
+  classRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
+  classChip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceAlt,
+  },
+  classChipOn: { backgroundColor: colors.primary },
+  classChipText: { color: colors.muted, fontWeight: fontWeight.medium, fontSize: fontSize.sm },
+  classChipTextOn: { color: colors.onPrimary, fontWeight: fontWeight.semibold },
   form: { gap: spacing.sm },
   formHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   fileRow: { flexDirection: "row", gap: spacing.sm },
