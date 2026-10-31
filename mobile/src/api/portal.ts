@@ -56,8 +56,23 @@ export interface ChildDetail {
 }
 export const getChild = (id: string) => api<ChildDetail>(`/api/portal/children/${id}`);
 
-// ---------- Staff ----------
+// ---------- Staff / Driver ----------
+export type StaffAttendanceStatus = "present" | "absent" | "late" | "half-day" | "leave";
+
+/** The signed-in staff member's own attendance summary (self-scoped server-side). */
+export interface StaffAttendanceSummary {
+  marked: number;
+  percent: number;
+  present: number;
+  absent: number;
+  late: number;
+  halfDay: number;
+  leave: number;
+  recent: { date: string; status: StaffAttendanceStatus }[];
+}
 export interface StaffMe {
   profile: { name: string; role: string; dept: string; employeeId: string; status: string; avatar: string };
+  /** Added later on the backend — absent on an older deploy. */
+  attendance?: StaffAttendanceSummary;
 }
 export const getStaffMe = () => api<StaffMe | null>("/api/portal/me/staff");

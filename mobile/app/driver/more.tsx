@@ -1,22 +1,31 @@
 import { Pressable, StyleSheet, View } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, type Href } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { Screen, AppText, Card, Button } from "@/components";
+import { Screen, AppText, Card, Button, Avatar } from "@/components";
 import { useAuth } from "@/store/auth";
 import { colors, radius, spacing, fontWeight } from "@/theme";
+
+type LinkItem = { href: Href; icon: keyof typeof Ionicons.glyphMap; label: string; hint: string };
+
+const LINKS: LinkItem[] = [
+  { href: "/driver/tracking", icon: "navigate-outline", label: "Live tracking", hint: "Share the bus location" },
+  { href: "/track", icon: "map-outline", label: "Live map", hint: "See buses on the map" },
+  { href: "/driver/attendance", icon: "checkbox-outline", label: "My attendance", hint: "Your daily attendance" },
+  { href: "/driver/leave", icon: "calendar-clear-outline", label: "My leave", hint: "Apply & track approvals" },
+  { href: "/driver/updates", icon: "megaphone-outline", label: "Updates", hint: "Announcements, notices, holidays" },
+  { href: "/driver/assistant", icon: "sparkles-outline", label: "AI assistant", hint: "Ask about anything in the app" },
+];
 
 export default function DriverMore() {
   const router = useRouter();
   const { user, signOut } = useAuth();
-  const initial = (user?.name ?? "?").slice(0, 1).toUpperCase();
 
   return (
     <Screen style={{ gap: spacing.lg }}>
       <AppText variant="title">More</AppText>
+
       <Card style={styles.profile}>
-        <View style={styles.avatar}>
-          <AppText style={styles.avatarText}>{initial}</AppText>
-        </View>
+        <Avatar name={user?.name} uri={user?.avatar} size={52} />
         <View style={styles.flex}>
           <AppText variant="heading">{user?.name}</AppText>
           <AppText variant="muted">{user?.email}</AppText>
@@ -24,20 +33,24 @@ export default function DriverMore() {
         </View>
       </Card>
 
-      <Pressable onPress={() => router.push("/driver/assistant")} accessibilityLabel="AI assistant">
-        <Card style={styles.row}>
-          <View style={styles.icon}>
-            <Ionicons name="sparkles-outline" size={20} color={colors.primary} />
-          </View>
-          <View style={styles.flex}>
-            <AppText variant="heading" style={styles.rowTitle}>
-              AI assistant
-            </AppText>
-            <AppText variant="muted">Ask about anything in the app</AppText>
-          </View>
-          <Ionicons name="chevron-forward" size={18} color={colors.muted} />
-        </Card>
-      </Pressable>
+      <View style={styles.section}>
+        {LINKS.map((l) => (
+          <Pressable key={l.label} onPress={() => router.push(l.href)}>
+            <Card style={styles.row}>
+              <View style={styles.icon}>
+                <Ionicons name={l.icon} size={20} color={colors.primary} />
+              </View>
+              <View style={styles.flex}>
+                <AppText variant="heading" style={styles.rowTitle}>
+                  {l.label}
+                </AppText>
+                <AppText variant="muted">{l.hint}</AppText>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+            </Card>
+          </Pressable>
+        ))}
+      </View>
 
       <Button title="Sign out" variant="outline" onPress={() => signOut()} />
     </Screen>
@@ -47,15 +60,7 @@ export default function DriverMore() {
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   profile: { flexDirection: "row", alignItems: "center", gap: spacing.md },
-  avatar: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: colors.primarySoft,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  avatarText: { color: colors.primaryText, fontSize: 20, fontWeight: fontWeight.bold },
+  section: { gap: spacing.sm },
   row: { flexDirection: "row", alignItems: "center", gap: spacing.md },
   icon: {
     width: 40,

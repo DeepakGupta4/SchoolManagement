@@ -11,6 +11,7 @@ export default function DriverLayout() {
 
   return (
     <Tabs
+      backBehavior="history"
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: colors.primary,
@@ -18,10 +19,14 @@ export default function DriverLayout() {
         tabBarStyle: { backgroundColor: colors.surface, borderTopColor: colors.border },
       }}
     >
-      <Tabs.Screen name="index" options={{ title: "Tracking", tabBarIcon: icon("navigate-outline") }} />
+      <Tabs.Screen name="index" options={{ title: "Home", tabBarIcon: icon("home-outline") }} />
+      <Tabs.Screen name="tracking" options={{ title: "Tracking", tabBarIcon: icon("navigate-outline") }} />
       <Tabs.Screen name="more" options={{ title: "More", tabBarIcon: icon("grid-outline") }} />
 
-      {/* Reachable via router.push from More, but not its own tab. */}
+      {/* Reachable via router.push from Home / More, but not their own tabs. */}
+      <Tabs.Screen name="attendance" options={{ href: null }} />
+      <Tabs.Screen name="leave" options={{ href: null }} />
+      <Tabs.Screen name="updates" options={{ href: null }} />
       <Tabs.Screen name="assistant" options={{ href: null }} />
     </Tabs>
   );

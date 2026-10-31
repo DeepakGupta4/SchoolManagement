@@ -5,6 +5,7 @@ import { Student } from "../students/student.model.js";
 import { Timetable } from "../timetable/timetable.model.js";
 import { BusRoute } from "../busRoutes/busRoute.model.js";
 import { StaffMember } from "../staff/staff.model.js";
+import { StaffAttendance } from "../staffAttendance/staffAttendance.model.js";
 import { User } from "../auth/user.model.js";
 import { Mark } from "../marks/mark.model.js";
 import { School } from "../schools/school.model.js";
@@ -269,6 +270,24 @@ router.get("/me/staff", async (req, res, next) => {
       res.json({ data: null });
       return;
     }
+
+    // The staff member's OWN attendance (matched by their staff id / employee id).
+    // Self-scoped — never another employee's record. Newest first, capped so one
+    // call stays cheap (~6 months of school days).
+    const match: Record<string, unknown>[] = [{ personId: String(s._id) }];
+    if (s.employeeId) match.push({ employeeId: s.employeeId });
+    const marks = await StaffAttendance.find({ schoolId, type: "staff", $or: match })
+      .sort({ date: -1 })
+      .limit(160)
+      .lean();
+
+    const tally = { present: 0, absent: 0, late: 0, "half-day": 0, leave: 0 } as Record<string, number>;
+    for (const m of marks) tally[m.status] = (tally[m.status] ?? 0) + 1;
+    const marked = marks.length;
+    // "Present" credit counts late + half-day as showing up (half as a half day).
+    const presentCredit = (tally.present ?? 0) + (tally.late ?? 0) + (tally["half-day"] ?? 0) * 0.5;
+    const percent = marked > 0 ? Math.round((presentCredit / marked) * 100) : 0;
+
     res.json({
       data: {
         profile: {
@@ -278,6 +297,16 @@ router.get("/me/staff", async (req, res, next) => {
           employeeId: s.employeeId ?? "",
           status: s.status ?? "active",
           avatar: s.avatar ?? "",
+        },
+        attendance: {
+          marked,
+          percent,
+          present: tally.present ?? 0,
+          absent: tally.absent ?? 0,
+          late: tally.late ?? 0,
+          halfDay: tally["half-day"] ?? 0,
+          leave: tally.leave ?? 0,
+          recent: marks.slice(0, 21).map((m) => ({ date: m.date, status: m.status })),
         },
       },
     });
