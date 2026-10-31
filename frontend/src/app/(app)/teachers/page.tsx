@@ -160,6 +160,8 @@ function TeachersPageInner() {
   const [credsFor, setCredsFor] = useState<Teacher | null>(null);
   const [creds, setCreds] = useState<UserCredentials | null>(null);
   const [credsEmailed, setCredsEmailed] = useState(false);
+  // After adding a teacher, prompt to create their login once the form closes.
+  const [pendingCreds, setPendingCreds] = useState<Teacher | null>(null);
 
   // Headline tiles come from whole-school server counts, independent of the table
   // filters, so a status/subject filter never turns them into a subtotal. Each
@@ -266,6 +268,7 @@ function TeachersPageInner() {
       });
       refetch();
       setStatsVersion((v) => v + 1);
+      if (!editing && saved) setPendingCreds(saved);
       return saved;
     } catch (e) {
       toast({
@@ -548,7 +551,15 @@ function TeachersPageInner() {
         open={formOpen}
         onOpenChange={(o) => {
           setFormOpen(o);
-          if (!o) setEditing(null);
+          if (!o) {
+            setEditing(null);
+            // Opening the credentials prompt only after the form closes avoids
+            // two modals being on screen at once.
+            if (pendingCreds) {
+              setCredsFor(pendingCreds);
+              setPendingCreds(null);
+            }
+          }
         }}
         teacher={editing}
         onSubmit={handleSubmit}
