@@ -14,6 +14,7 @@ export { Avatar } from "./Avatar";
 export { MonthCalendar } from "./MonthCalendar";
 export { StudentAttendanceModal } from "./StudentAttendanceModal";
 export { StudentPreviewModal } from "./StudentPreviewModal";
+export { ReportCardPreview, type ReportCardData } from "./ReportCardPreview";
 export { PagedList } from "./PagedList";
 export { AddButton } from "./AddButton";
 export { AssistantScreen } from "./AssistantScreen";

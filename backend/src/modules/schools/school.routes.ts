@@ -133,6 +133,21 @@ const profileSchema = z.object({
       message: "Grade bands must be contiguous, non-overlapping and cover 0–100%.",
     })
     .optional(),
+  // Report-card template (admin-configured; drives every report card).
+  reportCardTemplate: z
+    .object({
+      title: z.string().default("Report Card"),
+      subtitle: z.string().default(""),
+      footerNote: z.string().default(""),
+      principalName: z.string().default(""),
+      classTeacherLabel: z.string().default("Class Teacher"),
+      showAttendance: z.boolean().default(true),
+      showRank: z.boolean().default(true),
+      showGradePoint: z.boolean().default(true),
+      showRemarks: z.boolean().default(true),
+      showSignatures: z.boolean().default(true),
+    })
+    .optional(),
   // Branding tab
   displayName: z.string().optional(),
   tagline: z.string().optional(),

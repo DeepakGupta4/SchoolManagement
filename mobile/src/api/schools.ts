@@ -16,11 +16,31 @@ export interface GradingScheme {
   bands: GradingBand[];
 }
 
+/** Admin-configured report card layout — the same for every student. */
+export interface ReportCardTemplate {
+  title: string;
+  subtitle: string;
+  footerNote: string;
+  principalName: string;
+  classTeacherLabel: string;
+  showAttendance: boolean;
+  showRank: boolean;
+  showGradePoint: boolean;
+  showRemarks: boolean;
+  showSignatures: boolean;
+}
+
 export interface School {
   name: string;
   logo?: string;
+  affiliation?: string;
+  address?: string;
+  city?: string;
+  signatureUrl?: string;
+  sessionLabel?: string;
   gradingScheme?: GradingScheme;
+  reportCardTemplate?: ReportCardTemplate;
 }
 
-/** The signed-in user's school, including its grading scheme. */
+/** The signed-in user's school, including its grading scheme + report-card template. */
 export const getMySchool = () => api<School>("/api/schools/mine");

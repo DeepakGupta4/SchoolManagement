@@ -25,6 +25,7 @@ export interface Student {
   guardian: Guardian;
   avatar?: string;
   status?: string;
+  attendancePercent?: number; // stored, server-recomputed — shown on the report card
 }
 
 /** The class teacher's roster. className/section come from their own class. */

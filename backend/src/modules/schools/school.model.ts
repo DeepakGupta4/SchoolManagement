@@ -126,6 +126,23 @@ const schoolSchema = new Schema(
       },
     },
 
+    // Report-card layout the admin configures once; every student's report card
+    // (preview/print) uses it. The header (name / logo / affiliation / signature)
+    // comes from the school fields above — this controls the title, notes,
+    // signatory name and which sections appear.
+    reportCardTemplate: {
+      title: { type: String, default: "Report Card" },
+      subtitle: { type: String, default: "" },
+      footerNote: { type: String, default: "" },
+      principalName: { type: String, default: "" },
+      classTeacherLabel: { type: String, default: "Class Teacher" },
+      showAttendance: { type: Boolean, default: true },
+      showRank: { type: Boolean, default: true },
+      showGradePoint: { type: Boolean, default: true },
+      showRemarks: { type: Boolean, default: true },
+      showSignatures: { type: Boolean, default: true },
+    },
+
     // ── Branding ──────────────────────────────────────────────────────────────
     displayName: { type: String, default: "" },
     tagline: { type: String, default: "" },
@@ -276,6 +293,18 @@ export function toPublicSchool(school: SchoolDoc) {
       })),
     },
     status: school.status,
+    reportCardTemplate: {
+      title: school.reportCardTemplate?.title || "Report Card",
+      subtitle: school.reportCardTemplate?.subtitle ?? "",
+      footerNote: school.reportCardTemplate?.footerNote ?? "",
+      principalName: school.reportCardTemplate?.principalName ?? "",
+      classTeacherLabel: school.reportCardTemplate?.classTeacherLabel || "Class Teacher",
+      showAttendance: school.reportCardTemplate?.showAttendance !== false,
+      showRank: school.reportCardTemplate?.showRank !== false,
+      showGradePoint: school.reportCardTemplate?.showGradePoint !== false,
+      showRemarks: school.reportCardTemplate?.showRemarks !== false,
+      showSignatures: school.reportCardTemplate?.showSignatures !== false,
+    },
     // Branding
     displayName: school.displayName ?? "",
     tagline: school.tagline ?? "",

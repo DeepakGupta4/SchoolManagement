@@ -2,12 +2,25 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { Screen, ScreenHeader, AppText, Card, Loading, Chips, PagedList, type ChipOption } from "@/components";
+import {
+  Screen,
+  ScreenHeader,
+  AppText,
+  Card,
+  Button,
+  Loading,
+  Chips,
+  PagedList,
+  ReportCardPreview,
+  type ChipOption,
+  type ReportCardData,
+} from "@/components";
 import { getMyTeacher } from "@/api/teacher";
+import { listStudents, type Student } from "@/api/students";
 import { listExams } from "@/api/exams";
 import { listClasses, type SchoolClass } from "@/api/classes";
 import { getMarks, type MarkRow } from "@/api/marks";
-import { getMySchool, type GradingScheme, type GradingBand } from "@/api/schools";
+import { getMySchool, type School, type GradingScheme, type GradingBand } from "@/api/schools";
 import { DEFAULT_GRADING_SCHEME, gradeForPercent } from "@/lib/grading";
 import { ApiError } from "@/api/client";
 import { colors, radius, spacing, fontSize, fontWeight } from "@/theme";
@@ -44,6 +57,7 @@ export default function ReportCards() {
   const [exams, setExams] = useState<string[]>([]);
   const [classes, setClasses] = useState<SchoolClass[]>([]);
   const [scheme, setScheme] = useState<GradingScheme>(DEFAULT_GRADING_SCHEME);
+  const [school, setSchool] = useState<School | null>(null);
 
   const [examName, setExamName] = useState("");
   const [className, setClassName] = useState("");
@@ -52,6 +66,8 @@ export default function ReportCards() {
   const [marks, setMarks] = useState<MarkRow[]>([]);
   const [sheetLoading, setSheetLoading] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [studentsById, setStudentsById] = useState<Record<string, Student>>({});
+  const [previewFor, setPreviewFor] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Teacher scope, exams, classes + grading scheme — reload on focus.
@@ -59,14 +75,12 @@ export default function ReportCards() {
     setLoading(true);
     setError(null);
     try {
-      const [t, ex, cl, sc] = await Promise.all([
+      const [t, ex, cl, sch] = await Promise.all([
         getMyTeacher(),
         listExams(),
         listClasses(),
-        // A missing/unconfigured scheme must never break the screen.
-        getMySchool()
-          .then((s) => (s.gradingScheme?.bands?.length ? s.gradingScheme : DEFAULT_GRADING_SCHEME))
-          .catch(() => DEFAULT_GRADING_SCHEME),
+        // The school carries the grading scheme + the admin's report-card template.
+        getMySchool().catch(() => null),
       ]);
       setScope({
         classes: (t.classes ?? []).filter(Boolean),
@@ -74,7 +88,8 @@ export default function ReportCards() {
       });
       setExams(ex.map((e) => e.name).filter(Boolean));
       setClasses(cl);
-      setScheme(sc);
+      setSchool(sch);
+      setScheme(sch?.gradingScheme?.bands?.length ? sch.gradingScheme : DEFAULT_GRADING_SCHEME);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Could not load report-card data.");
     } finally {
@@ -138,10 +153,14 @@ export default function ReportCards() {
     let alive = true;
     setSheetLoading(true);
     setExpandedId(null);
-    getMarks(examName, className, section)
-      .then((rows) => {
+    Promise.all([
+      getMarks(examName, className, section),
+      listStudents({ className, section, status: "active" }).catch(() => [] as Student[]),
+    ])
+      .then(([rows, students]) => {
         if (!alive) return;
         setMarks(rows);
+        setStudentsById(Object.fromEntries(students.map((s) => [String(s.id), s])));
         setError(null);
       })
       .catch((e) => {
@@ -187,6 +206,45 @@ export default function ReportCards() {
   const classAvg = reportRows.length
     ? Math.round(reportRows.reduce((s, r) => s + r.percent, 0) / reportRows.length)
     : 0;
+
+  // Rank within the class (by %, highest = 1), for the report card.
+  const rankById = useMemo(() => {
+    const sorted = [...reportRows].sort((a, b) => b.percent - a.percent);
+    const m: Record<string, number> = {};
+    sorted.forEach((r, i) => (m[r.studentId] = i + 1));
+    return m;
+  }, [reportRows]);
+
+  const previewData: ReportCardData | null = useMemo(() => {
+    if (!previewFor) return null;
+    const r = reportRows.find((x) => x.studentId === previewFor);
+    if (!r) return null;
+    const st = studentsById[previewFor];
+    return {
+      examName,
+      studentName: r.studentName,
+      className,
+      section,
+      rollNo: st?.rollNo ?? String(r.roll),
+      admissionNo: st?.admissionNo,
+      avatar: st?.avatar,
+      attendancePercent: st?.attendancePercent,
+      subjects: r.subjects.map((m) => ({
+        subject: m.subject,
+        marks: m.marks,
+        maxMarks: m.maxMarks,
+        grade: gradeForPercent(scheme, m.maxMarks > 0 ? Math.round((m.marks / m.maxMarks) * 100) : 0).grade,
+      })),
+      total: r.total,
+      outOf: r.outOf,
+      percent: r.percent,
+      grade: r.band.grade,
+      gradePoint: r.band.gradePoint,
+      remark: r.band.remark,
+      rank: rankById[r.studentId],
+      classSize: reportRows.length,
+    };
+  }, [previewFor, reportRows, studentsById, examName, className, section, scheme, rankById]);
 
   if (loading && !scope) {
     return (
@@ -305,6 +363,7 @@ export default function ReportCards() {
                         {`${r.band.remark} · Grade point ${r.band.gradePoint}`}
                       </AppText>
                     </View>
+                    <Button title="View report card" variant="outline" onPress={() => setPreviewFor(r.studentId)} />
                   </View>
                 ) : null}
               </Card>
@@ -312,6 +371,8 @@ export default function ReportCards() {
           }}
         />
       )}
+
+      <ReportCardPreview data={previewData} school={school} onClose={() => setPreviewFor(null)} />
     </Screen>
   );
 }
