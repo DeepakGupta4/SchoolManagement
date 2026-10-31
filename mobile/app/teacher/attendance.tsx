@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { FlatList, Modal, Pressable, StyleSheet, View } from "react-native";
+import { Modal, Pressable, StyleSheet, View } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import {
@@ -12,6 +12,7 @@ import {
   Avatar,
   MonthCalendar,
   StudentAttendanceModal,
+  PagedList,
 } from "@/components";
 import { useAuth } from "@/store/auth";
 import { getMyTeacher } from "@/api/teacher";
@@ -232,14 +233,14 @@ export default function Attendance() {
         ))}
       </View>
 
-      <FlatList
-        style={styles.flex}
+      <PagedList
         data={roster}
         keyExtractor={(s) => s.id ?? s.admissionNo}
         onRefresh={loadClass}
         refreshing={loading}
-        ItemSeparatorComponent={() => <View style={styles.sep} />}
-        ListEmptyComponent={<AppText variant="muted">No active students in this class.</AppText>}
+        pageSize={20}
+        contentContainerStyle={{ gap: spacing.sm }}
+        emptyText="No active students in this class."
         renderItem={({ item, index }) => {
           const current = statusMap[item.id!] ?? "present";
           return (

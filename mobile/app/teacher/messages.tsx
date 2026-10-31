@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { useFocusEffect } from "expo-router";
-import { Screen, ScreenHeader, AppText, Card, TextField, Button, Loading } from "@/components";
+import { Screen, ScreenHeader, AppText, Card, TextField, Button, Loading, PagedList } from "@/components";
 import { getMyTeacher, teacherName } from "@/api/teacher";
 import { listMessages, createMessage, type Message } from "@/api/messages";
 import { ApiError } from "@/api/client";
@@ -70,34 +70,42 @@ export default function Messages() {
   }
 
   return (
-    <Screen style={{ gap: spacing.md }}>
+    <Screen scroll={false} style={{ gap: spacing.md }}>
       <View>
         <ScreenHeader title="Message Board" back />
         <AppText variant="muted">Posts are shared with your whole school.</AppText>
       </View>
 
-      <Card style={{ gap: spacing.sm }}>
-        <TextField label="Subject" value={subject} onChangeText={setSubject} />
-        <TextField label="Message" value={body} onChangeText={setBody} multiline style={styles.body} />
-        {error ? <AppText style={{ color: colors.dangerText }}>{error}</AppText> : null}
-        <Button title="Post to board" onPress={onPost} loading={saving} />
-      </Card>
-
-      {rows.map((m) => (
-        <Card key={m.id} style={styles.gap2}>
-          <AppText variant="small">
-            {m.name || "Someone"}
-            {m.role ? ` · ${m.role}` : ""}
-            {m.time ? ` · ${m.time}` : ""}
-          </AppText>
-          {m.subject ? (
-            <AppText variant="heading" style={styles.subject}>
-              {m.subject}
+      <PagedList
+        data={rows}
+        keyExtractor={(m) => m.id}
+        refreshing={loading}
+        onRefresh={load}
+        emptyText="No posts yet — be the first to share something."
+        ListHeaderComponent={
+          <Card style={{ gap: spacing.sm }}>
+            <TextField label="Subject" value={subject} onChangeText={setSubject} />
+            <TextField label="Message" value={body} onChangeText={setBody} multiline style={styles.body} />
+            {error ? <AppText style={{ color: colors.dangerText }}>{error}</AppText> : null}
+            <Button title="Post to board" onPress={onPost} loading={saving} />
+          </Card>
+        }
+        renderItem={({ item: m }) => (
+          <Card style={styles.gap2}>
+            <AppText variant="small">
+              {m.name || "Someone"}
+              {m.role ? ` · ${m.role}` : ""}
+              {m.time ? ` · ${m.time}` : ""}
             </AppText>
-          ) : null}
-          {m.body ? <AppText variant="muted">{m.body}</AppText> : null}
-        </Card>
-      ))}
+            {m.subject ? (
+              <AppText variant="heading" style={styles.subject}>
+                {m.subject}
+              </AppText>
+            ) : null}
+            {m.body ? <AppText variant="muted">{m.body}</AppText> : null}
+          </Card>
+        )}
+      />
     </Screen>
   );
 }
