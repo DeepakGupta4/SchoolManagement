@@ -10,6 +10,7 @@ import {
   Button,
   Loading,
   Chips,
+  Avatar,
   PagedList,
   ReportCardPreview,
   type ChipOption,
@@ -328,17 +329,14 @@ export default function ReportCards() {
             return (
               <Card style={styles.card}>
                 <Pressable onPress={() => setExpandedId(open ? null : r.studentId)} style={styles.header}>
-                  <View style={styles.rollName}>
-                    <AppText variant="small" style={{ color: colors.primaryText }}>
-                      {`#${r.roll}`}
-                    </AppText>
+                  <Avatar name={r.studentName} uri={studentsById[r.studentId]?.avatar} size={40} />
+                  <View style={styles.flex}>
                     <AppText style={styles.name} numberOfLines={1}>
                       {r.studentName}
                     </AppText>
-                  </View>
-                  <View style={styles.scoreCol}>
-                    <AppText style={styles.score}>{`${r.total}/${r.outOf}`}</AppText>
-                    <AppText variant="muted">{`${r.percent}%`}</AppText>
+                    <AppText variant="small" style={styles.sub} numberOfLines={1}>
+                      Roll {studentsById[r.studentId]?.rollNo ?? r.roll} · {r.total}/{r.outOf} · {r.percent}%
+                    </AppText>
                   </View>
                   <View style={[styles.badge, { backgroundColor: tone.bg }]}>
                     <AppText style={[styles.badgeText, { color: tone.fg }]}>{r.band.grade}</AppText>
@@ -383,7 +381,8 @@ const styles = StyleSheet.create({
   card: { padding: spacing.md },
   header: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   rollName: { flex: 1, gap: 2 },
-  name: { fontSize: fontSize.sm, fontWeight: fontWeight.medium, color: colors.text },
+  name: { fontSize: fontSize.md, fontWeight: fontWeight.semibold, color: colors.text },
+  sub: { color: colors.muted },
   scoreCol: { alignItems: "flex-end" },
   score: { fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: colors.text },
   badge: {
