@@ -15,6 +15,7 @@ export { MonthCalendar } from "./MonthCalendar";
 export { StudentAttendanceModal } from "./StudentAttendanceModal";
 export { StudentPreviewModal } from "./StudentPreviewModal";
 export { ReportCardPreview, type ReportCardData } from "./ReportCardPreview";
+export { AdmitCardPreview, type AdmitCardData, type AdmitCardSubject } from "./AdmitCardPreview";
 export { PagedList } from "./PagedList";
 export { AddButton } from "./AddButton";
 export { AssistantScreen } from "./AssistantScreen";

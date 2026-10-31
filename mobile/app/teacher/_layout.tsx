@@ -33,6 +33,7 @@ export default function TeacherLayout() {
       <Tabs.Screen name="attendance" options={{ href: null }} />
       <Tabs.Screen name="marks" options={{ href: null }} />
       <Tabs.Screen name="report-cards" options={{ href: null }} />
+      <Tabs.Screen name="admit-cards" options={{ href: null }} />
       <Tabs.Screen name="teaching" options={{ href: null }} />
       <Tabs.Screen name="updates" options={{ href: null }} />
       <Tabs.Screen name="substitutions" options={{ href: null }} />

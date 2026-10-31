@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { StyleSheet, View } from "react-native";
-import { Screen, ScreenHeader, AppText, Card, Loading, Chips, PagedList, type ChipOption } from "@/components";
+import { Ionicons } from "@expo/vector-icons";
+import { Screen, ScreenHeader, AppText, Card, Loading, Chips, TextField, PagedList, type ChipOption } from "@/components";
 import {
   listAnnouncements,
   listNotices,
@@ -13,7 +14,7 @@ import {
 } from "@/api/updates";
 import { ApiError } from "@/api/client";
 import { prettyDate } from "@/lib/date";
-import { colors, radius, spacing, fontWeight } from "@/theme";
+import { colors, radius, spacing, fontWeight, fontSize } from "@/theme";
 
 type Tab = "announcements" | "notices" | "events" | "holidays";
 const TABS: ChipOption[] = [
@@ -25,12 +26,13 @@ const TABS: ChipOption[] = [
 
 type AnyUpdate = Announcement | Notice | SchoolEvent | Holiday;
 
-/** View-only "Updates" — teachers read these, writes are office-only. */
+/** View-only "Updates" — teachers read these; writes are office-only. */
 export default function Updates() {
   const [tab, setTab] = useState<Tab>("announcements");
   const [data, setData] = useState<AnyUpdate[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -60,6 +62,34 @@ export default function Updates() {
     load();
   }, [load]);
 
+  useEffect(() => {
+    setSearch("");
+  }, [tab]);
+
+  const q = search.trim().toLowerCase();
+  const rows = useMemo<AnyUpdate[]>(() => {
+    const match = (fields: (string | undefined)[]) => !q || fields.some((f) => (f ?? "").toLowerCase().includes(q));
+    if (tab === "announcements" || tab === "notices") {
+      return [...(data as (Announcement | Notice)[])]
+        .filter((it) => match([it.title, it.body, it.category]))
+        .sort((a, b) => Number(b.pinned) - Number(a.pinned));
+    }
+    if (tab === "events") {
+      return (data as SchoolEvent[]).filter((ev) => match([ev.name, ev.venue, ev.category, ev.status]));
+    }
+    return (data as Holiday[]).filter((h) => match([h.name, h.type]));
+  }, [tab, data, q]);
+
+  const header =
+    data.length > 0 ? (
+      <View style={styles.header}>
+        <AppText variant="muted">
+          {data.length} item{data.length === 1 ? "" : "s"}
+        </AppText>
+        <TextField label="" value={search} onChangeText={setSearch} placeholder="Search…" autoCapitalize="none" />
+      </View>
+    ) : null;
+
   return (
     <Screen scroll={false} style={{ gap: spacing.md }}>
       <ScreenHeader title="Updates" back />
@@ -73,14 +103,11 @@ export default function Updates() {
         </Card>
       ) : (
         <PagedList
-          data={
-            tab === "announcements" || tab === "notices"
-              ? [...(data as (Announcement | Notice)[])].sort((a, b) => Number(b.pinned) - Number(a.pinned))
-              : data
-          }
-          resetKey={tab}
+          data={rows}
+          resetKey={`${tab}|${q}`}
           keyExtractor={(it) => (it as { id: string }).id}
-          emptyText="Nothing here yet."
+          ListHeaderComponent={header}
+          emptyText={q ? "No matches." : "Nothing here yet."}
           renderItem={({ item }) => {
             if (tab === "holidays") {
               const h = item as Holiday;
@@ -103,28 +130,45 @@ export default function Updates() {
             if (tab === "events") {
               const ev = item as SchoolEvent;
               return (
-                <Card style={styles.gap4}>
+                <Card style={styles.gap6}>
                   <View style={styles.titleRow}>
                     <AppText variant="heading" style={styles.title}>
                       {ev.name}
                     </AppText>
-                    {ev.status ? <Badge text={ev.status} /> : null}
+                    {ev.status ? <Badge text={ev.status} tone={eventTone(ev.status)} /> : null}
                   </View>
                   {ev.date || ev.venue ? (
-                    <AppText variant="muted">{[ev.date, ev.venue].filter(Boolean).join(" · ")}</AppText>
+                    <View style={styles.metaRow}>
+                      {ev.date ? <Meta icon="calendar-outline" text={ev.date} /> : null}
+                      {ev.venue ? <Meta icon="location-outline" text={ev.venue} /> : null}
+                    </View>
                   ) : null}
+                  {ev.category ? <Badge text={ev.category} tone="soft" /> : null}
                 </Card>
               );
             }
             const it = item as Announcement | Notice;
+            const priority = (it as Notice).priority;
             return (
-              <Card style={styles.gap4}>
-                <AppText variant="heading" style={styles.title}>
-                  {it.pinned ? "📌 " : ""}
-                  {it.title}
-                </AppText>
-                {it.body ? <AppText variant="muted">{it.body}</AppText> : null}
-                {it.date ? <AppText variant="small">{it.date}</AppText> : null}
+              <Card style={styles.gap6}>
+                <View style={styles.titleRow}>
+                  <AppText variant="heading" style={styles.title}>
+                    {it.pinned ? "📌 " : ""}
+                    {it.title}
+                  </AppText>
+                  {priority && priority.toLowerCase() !== "normal" ? (
+                    <Badge text={priority} tone={priorityTone(priority)} />
+                  ) : null}
+                </View>
+                {it.body ? (
+                  <AppText variant="muted" numberOfLines={4}>
+                    {it.body}
+                  </AppText>
+                ) : null}
+                <View style={styles.metaRow}>
+                  {it.category ? <Badge text={it.category} tone="soft" /> : null}
+                  {it.date ? <Meta icon="time-outline" text={it.date} /> : null}
+                </View>
               </Card>
             );
           }}
@@ -134,10 +178,38 @@ export default function Updates() {
   );
 }
 
-function Badge({ text }: { text: string }) {
+type Tone = "soft" | "success" | "warning" | "danger";
+
+function eventTone(status: string): Tone {
+  const s = status.toLowerCase();
+  if (s.includes("complete") || s.includes("done")) return "success";
+  if (s.includes("cancel")) return "danger";
+  if (s.includes("ongoing") || s.includes("live")) return "warning";
+  return "soft";
+}
+
+function priorityTone(priority: string): Tone {
+  const p = priority.toLowerCase();
+  if (p.includes("high") || p.includes("urgent")) return "danger";
+  if (p.includes("medium")) return "warning";
+  return "soft";
+}
+
+function Badge({ text, tone = "soft" }: { text: string; tone?: Tone }) {
   return (
-    <View style={styles.badge}>
-      <AppText variant="small" style={styles.badgeText}>
+    <View style={[styles.badge, styles[`badge_${tone}`]]}>
+      <AppText variant="small" style={[styles.badgeText, styles[`badgeText_${tone}`]]}>
+        {text}
+      </AppText>
+    </View>
+  );
+}
+
+function Meta({ icon, text }: { icon: keyof typeof Ionicons.glyphMap; text: string }) {
+  return (
+    <View style={styles.meta}>
+      <Ionicons name={icon} size={13} color={colors.muted} />
+      <AppText variant="small" style={styles.metaText}>
         {text}
       </AppText>
     </View>
@@ -146,10 +218,15 @@ function Badge({ text }: { text: string }) {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  gap4: { gap: 4 },
+  gap6: { gap: 6 },
+  header: { gap: spacing.sm, marginBottom: spacing.md },
   row: { flexDirection: "row", alignItems: "center", gap: spacing.md },
-  title: { fontSize: 15 },
+  title: { fontSize: 15, flexShrink: 1 },
   titleRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.sm },
+  metaRow: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: spacing.sm },
+  meta: { flexDirection: "row", alignItems: "center", gap: 3 },
+  metaText: { color: colors.muted },
+
   dateChip: {
     backgroundColor: colors.primarySoft,
     borderRadius: radius.md,
@@ -157,6 +234,15 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
   },
   dateText: { color: colors.primaryText, fontWeight: fontWeight.bold },
-  badge: { backgroundColor: colors.primarySoft, borderRadius: radius.pill, paddingHorizontal: spacing.sm, paddingVertical: 2 },
-  badgeText: { color: colors.primaryText, fontWeight: fontWeight.semibold },
+
+  badge: { borderRadius: radius.pill, paddingHorizontal: spacing.sm, paddingVertical: 2, alignSelf: "flex-start" },
+  badgeText: { fontWeight: fontWeight.semibold, textTransform: "capitalize", fontSize: fontSize.xs },
+  badge_soft: { backgroundColor: colors.surfaceAlt },
+  badgeText_soft: { color: colors.muted },
+  badge_success: { backgroundColor: colors.successSoft },
+  badgeText_success: { color: colors.successText },
+  badge_warning: { backgroundColor: colors.warningSoft },
+  badgeText_warning: { color: colors.warningText },
+  badge_danger: { backgroundColor: colors.dangerSoft },
+  badgeText_danger: { color: colors.dangerText },
 });

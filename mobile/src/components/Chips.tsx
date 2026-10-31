@@ -1,13 +1,20 @@
-import { ScrollView, Pressable, StyleSheet } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 import { AppText } from "./AppText";
-import { colors, radius, spacing, fontWeight } from "@/theme";
+import { colors, radius, spacing, fontWeight, shadow } from "@/theme";
 
 export interface ChipOption {
   label: string;
   value: string;
 }
 
-/** A horizontal single-select chip row — the app's lightweight <Select>. */
+/**
+ * A single-select chip row — the app's lightweight <Select> / tab bar.
+ *
+ * Lays out as a WRAPPING flex row (not a horizontal ScrollView): inside a
+ * `scroll={false}` Screen a horizontal ScrollView has no intrinsic height and
+ * flexbox stretches it to fill the column — the giant vertical "pills" bug.
+ * A wrapping View hugs its content height, so it can never stretch.
+ */
 export function Chips({
   options,
   value,
@@ -18,21 +25,29 @@ export function Chips({
   onChange: (v: string) => void;
 }) {
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+    <View style={styles.row}>
       {options.map((o) => {
         const on = o.value === value;
         return (
-          <Pressable key={o.value} onPress={() => onChange(o.value)} style={[styles.chip, on && styles.on]}>
-            <AppText style={[styles.text, on && styles.textOn]}>{o.label}</AppText>
+          <Pressable
+            key={o.value}
+            onPress={() => onChange(o.value)}
+            style={[styles.chip, on && styles.on]}
+            accessibilityRole="button"
+            accessibilityState={{ selected: on }}
+          >
+            <AppText style={[styles.text, on && styles.textOn]} numberOfLines={1}>
+              {o.label}
+            </AppText>
           </Pressable>
         );
       })}
-    </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  row: { gap: spacing.sm, paddingVertical: 2 },
+  row: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
   chip: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
@@ -41,7 +56,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: colors.surface,
   },
-  on: { backgroundColor: colors.primary, borderColor: colors.primary },
+  on: { backgroundColor: colors.primary, borderColor: colors.primary, ...shadow.card },
   text: { color: colors.muted, fontWeight: fontWeight.medium, fontSize: 13 },
-  textOn: { color: colors.onPrimary },
+  textOn: { color: colors.onPrimary, fontWeight: fontWeight.semibold },
 });

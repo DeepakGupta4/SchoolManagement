@@ -17,6 +17,7 @@ const SECTIONS: { title: string; links: LinkItem[] }[] = [
       { href: "/teacher/attendance", icon: "checkbox-outline", label: "Attendance", hint: "Daily roll-call for your class" },
       { href: "/teacher/marks", icon: "create-outline", label: "Enter marks", hint: "Exam marks for your classes" },
       { href: "/teacher/report-cards", icon: "ribbon-outline", label: "Report cards", hint: "Exam results & grades" },
+      { href: "/teacher/admit-cards", icon: "reader-outline", label: "Admit cards", hint: "Exam admit cards for your class" },
       { href: "/teacher/teaching", icon: "library-outline", label: "Teaching", hint: "Material, classes & syllabus" },
     ],
   },
