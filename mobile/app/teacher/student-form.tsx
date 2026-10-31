@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Screen, ScreenHeader, AppText, Card, TextField, Button, Loading } from "@/components";
 import { getMyTeacher } from "@/api/teacher";
-import { createStudent, updateStudent, getStudent, type Student } from "@/api/students";
+import { createStudent, updateStudent, getStudent, listStudents, type Student } from "@/api/students";
 import { ApiError } from "@/api/client";
 import { colors, radius, spacing } from "@/theme";
 
@@ -43,7 +43,9 @@ export default function StudentForm() {
     (async () => {
       try {
         const t = await getMyTeacher();
-        if (alive) setCls({ className: t.classTeacherOf ?? "", section: t.classTeacherSection ?? "" });
+        const className = t.classTeacherOf ?? "";
+        const section = t.classTeacherSection ?? "";
+        if (alive) setCls({ className, section });
         if (isEdit && id) {
           const s = await getStudent(id);
           if (!alive) return;
@@ -63,6 +65,17 @@ export default function StudentForm() {
             gPhone: s.guardian?.phone ?? "",
             gEmail: s.guardian?.email ?? "",
           });
+        } else if (className) {
+          // Roll number is auto-assigned — never typed by the user. Seed it with
+          // the next number after the class's current highest so the (pre-redeploy)
+          // server still gets a value; once the backend is redeployed its hooks
+          // re-sequence the whole class alphabetically (A–Z by name) on save.
+          const roster = await listStudents({ className, section }).catch(() => []);
+          const maxRoll = roster.reduce(
+            (m, s) => Math.max(m, parseInt(String(s.rollNo).replace(/\D/g, ""), 10) || 0),
+            0
+          );
+          if (alive) setF((p) => ({ ...p, rollNo: String(maxRoll + 1) }));
         }
       } catch (e) {
         if (alive) setError(e instanceof ApiError ? e.message : "Could not load.");
@@ -130,7 +143,9 @@ export default function StudentForm() {
       </Card>
 
       <TextField label="Admission no." value={f.admissionNo} onChangeText={(v) => set("admissionNo", v)} editable={!isEdit} />
-      <TextField label="Roll no." value={f.rollNo} onChangeText={(v) => set("rollNo", v)} keyboardType="number-pad" />
+      {!isEdit ? (
+        <AppText variant="muted">Roll number is assigned automatically — alphabetically (A–Z) by name.</AppText>
+      ) : null}
       <TextField label="First name" value={f.firstName} onChangeText={(v) => set("firstName", v)} />
       <TextField label="Last name" value={f.lastName} onChangeText={(v) => set("lastName", v)} />
       <TextField label="Email" value={f.email} onChangeText={(v) => set("email", v)} autoCapitalize="none" keyboardType="email-address" />

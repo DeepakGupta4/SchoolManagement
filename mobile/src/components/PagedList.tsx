@@ -20,6 +20,8 @@ type Props<T> = {
   resetKey?: string | number;
   ItemSeparatorComponent?: ComponentType | null;
   ListHeaderComponent?: ReactElement | null;
+  /** A rich empty state; falls back to a muted `emptyText` line when omitted. */
+  ListEmptyComponent?: ReactElement | null;
   emptyText?: string;
   refreshing?: boolean;
   onRefresh?: () => void;
@@ -44,6 +46,7 @@ export function PagedList<T>({
   resetKey,
   ItemSeparatorComponent,
   ListHeaderComponent,
+  ListEmptyComponent,
   emptyText = "Nothing here yet.",
   refreshing,
   onRefresh,
@@ -70,7 +73,7 @@ export function PagedList<T>({
       keyExtractor={keyExtractor}
       ItemSeparatorComponent={ItemSeparatorComponent ?? undefined}
       ListHeaderComponent={ListHeaderComponent ?? undefined}
-      ListEmptyComponent={<AppText variant="muted">{emptyText}</AppText>}
+      ListEmptyComponent={ListEmptyComponent ?? <AppText variant="muted">{emptyText}</AppText>}
       onEndReached={() => {
         if (hasMore) setCount((c) => c + pageSize);
       }}

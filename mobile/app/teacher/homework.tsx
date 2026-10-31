@@ -6,11 +6,11 @@ import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system/legacy";
 import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { Screen, ScreenHeader, AppText, Card, TextField, Button, Loading, PagedList } from "@/components";
+import { Screen, ScreenHeader, AppText, Card, TextField, Button, GradientButton, Loading, PagedList } from "@/components";
 import { getMyTeacher, teacherName } from "@/api/teacher";
 import { listHomework, createHomework, type Homework } from "@/api/homework";
 import { ApiError } from "@/api/client";
-import { colors, radius, spacing, fontSize } from "@/theme";
+import { colors, radius, spacing, fontSize, fontWeight } from "@/theme";
 
 const MAX_BYTES = 3.5 * 1024 * 1024; // matches the app-wide file cap
 
@@ -142,7 +142,17 @@ export default function HomeworkScreen() {
         pageSize={15}
         refreshing={loading}
         onRefresh={load}
-        emptyText="No homework posted yet."
+        ListEmptyComponent={
+          <View style={styles.empty}>
+            <View style={styles.emptyIcon}>
+              <Ionicons name="document-text-outline" size={30} color={colors.primary} />
+            </View>
+            <AppText variant="heading">No homework yet</AppText>
+            <AppText variant="muted" style={styles.emptyText}>
+              {`Tap "New homework" to post an assignment${klass ? ` for Class ${klass}` : ""} — it'll show up here.`}
+            </AppText>
+          </View>
+        }
         ListHeaderComponent={
           <View style={{ gap: spacing.md }}>
             {composing ? (
@@ -198,7 +208,7 @@ export default function HomeworkScreen() {
                 <Button title="Post homework" onPress={onPost} loading={saving} />
               </Card>
             ) : (
-              <Button title="+ New homework" onPress={() => setComposing(true)} />
+              <GradientButton title="New homework" icon="add" onPress={() => setComposing(true)} />
             )}
 
             <AppText variant="heading">Posted{items.length ? ` · ${items.length}` : ""}</AppText>
@@ -213,12 +223,24 @@ export default function HomeworkScreen() {
               <AppText variant="heading" style={styles.itemTitle} numberOfLines={1}>
                 {h.title}
               </AppText>
-              <AppText variant="muted" numberOfLines={1}>
-                {h.subject || "General"}
-                {h.due ? ` · Due ${h.due}` : ""}
-              </AppText>
+              <View style={styles.metaRow}>
+                <View style={styles.chip}>
+                  <AppText style={styles.chipText}>{h.subject || "General"}</AppText>
+                </View>
+                {h.due ? (
+                  <View style={styles.due}>
+                    <Ionicons name="calendar-outline" size={12} color={colors.warningText} />
+                    <AppText style={styles.dueText}>Due {h.due}</AppText>
+                  </View>
+                ) : null}
+                {h.fileName ? (
+                  <View style={styles.attach}>
+                    <Ionicons name="attach-outline" size={12} color={colors.muted} />
+                    <AppText style={styles.attachText}>File</AppText>
+                  </View>
+                ) : null}
+              </View>
             </View>
-            {h.fileName ? <Ionicons name="attach-outline" size={18} color={colors.muted} /> : null}
           </Card>
         )}
       />
@@ -251,10 +273,26 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   itemTitle: { fontSize: fontSize.md },
-  empty: { alignItems: "center", gap: spacing.sm, paddingVertical: spacing.xl },
+  metaRow: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: spacing.xs, marginTop: 4 },
+  chip: { backgroundColor: colors.primarySoft, borderRadius: radius.pill, paddingHorizontal: spacing.sm, paddingVertical: 2 },
+  chipText: { color: colors.primaryText, fontSize: fontSize.xs, fontWeight: fontWeight.semibold },
+  due: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: colors.warningSoft,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+  },
+  dueText: { color: colors.warningText, fontSize: fontSize.xs, fontWeight: fontWeight.medium },
+  attach: { flexDirection: "row", alignItems: "center", gap: 3 },
+  attachText: { color: colors.muted, fontSize: fontSize.xs },
+  empty: { alignItems: "center", gap: spacing.sm, paddingVertical: spacing.xxl },
+  emptyText: { textAlign: "center" },
   emptyIcon: {
-    width: 48,
-    height: 48,
+    width: 64,
+    height: 64,
     borderRadius: radius.pill,
     backgroundColor: colors.primarySoft,
     alignItems: "center",
