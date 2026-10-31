@@ -1,4 +1,7 @@
-import { Image, Modal, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { useState } from "react";
+import { Alert, Image, Modal, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import * as Print from "expo-print";
+import * as Sharing from "expo-sharing";
 import { Ionicons } from "@expo/vector-icons";
 import { AppText } from "./AppText";
 import { Avatar } from "./Avatar";
@@ -49,6 +52,24 @@ export function ReportCardPreview({
   onClose: () => void;
 }) {
   const t = school?.reportCardTemplate ?? DEFAULT_TEMPLATE;
+  const [sharing, setSharing] = useState(false);
+
+  const onShare = async () => {
+    if (!data) return;
+    setSharing(true);
+    try {
+      const { uri } = await Print.printToFileAsync({ html: reportCardHtml(data, school, t) });
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri, { mimeType: "application/pdf", UTI: "com.adobe.pdf" });
+      } else {
+        Alert.alert("Saved", "The report card PDF was saved to the app's files.");
+      }
+    } catch (e) {
+      Alert.alert("Couldn't share", e instanceof Error ? e.message : "Please try again.");
+    } finally {
+      setSharing(false);
+    }
+  };
 
   return (
     <Modal visible={!!data} transparent animationType="slide" onRequestClose={onClose}>
@@ -56,9 +77,21 @@ export function ReportCardPreview({
         <View style={styles.sheet}>
           <View style={styles.bar}>
             <AppText variant="heading">Report card</AppText>
-            <Pressable onPress={onClose} hitSlop={8} accessibilityLabel="Close">
-              <Ionicons name="close" size={24} color={colors.text} />
-            </Pressable>
+            <View style={styles.barActions}>
+              <Pressable
+                onPress={onShare}
+                disabled={sharing || !data}
+                style={[styles.shareBtn, (sharing || !data) && styles.shareOff]}
+                accessibilityRole="button"
+                accessibilityLabel="Share as PDF"
+              >
+                <Ionicons name="share-outline" size={16} color={colors.onPrimary} />
+                <AppText style={styles.shareText}>{sharing ? "…" : "PDF"}</AppText>
+              </Pressable>
+              <Pressable onPress={onClose} hitSlop={8} accessibilityLabel="Close">
+                <Ionicons name="close" size={24} color={colors.text} />
+              </Pressable>
+            </View>
           </View>
 
           {data ? (
@@ -198,6 +231,67 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
+/** A print-ready HTML report card (used for the Share → PDF export). */
+function reportCardHtml(d: ReportCardData, school: School | null, t: typeof DEFAULT_TEMPLATE): string {
+  const esc = (s: unknown) =>
+    String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const rows = d.subjects
+    .map(
+      (s) =>
+        `<tr><td>${esc(s.subject)}</td><td class="c">${s.marks}/${s.maxMarks}</td><td class="c">${esc(s.grade)}</td></tr>`
+    )
+    .join("");
+  const chip = (v: string, l: string) => `<div class="chip"><b>${esc(v)}</b><span>${esc(l)}</span></div>`;
+  const chips = [
+    chip(d.grade, "Grade"),
+    t.showGradePoint ? chip(String(d.gradePoint), "Grade point") : "",
+    t.showRank && d.rank ? chip(`${d.rank}${d.classSize ? `/${d.classSize}` : ""}`, "Rank") : "",
+    t.showAttendance && d.attendancePercent != null ? chip(`${d.attendancePercent}%`, "Attendance") : "",
+  ].join("");
+  const signs = t.showSignatures
+    ? `<div class="signs"><div class="sign"><div class="line"></div>${esc(t.classTeacherLabel)}</div>` +
+      `<div class="sign">${school?.signatureUrl ? `<img src="${school.signatureUrl}" class="sig"/>` : `<div class="line"></div>`}${esc(t.principalName || "Principal")}</div></div>`
+    : "";
+  return `<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<style>
+*{font-family:-apple-system,Helvetica,Arial,sans-serif;box-sizing:border-box}
+body{margin:0;padding:24px;color:#0f172a}
+.card{border:1px solid #e2e8f0;border-radius:12px;padding:24px}
+.head{display:flex;align-items:center;gap:16px}
+.logo{width:56px;height:56px;object-fit:contain;border-radius:8px}
+.sname{font-size:22px;font-weight:700;margin:0}
+.muted{color:#64748b;font-size:12px}
+.band{border-top:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;padding:10px 0;text-align:center;margin-top:14px}
+.title{font-size:18px;font-weight:700;color:#4338ca}
+.stu{margin-top:16px;font-size:13px}.stu b{font-size:16px}
+table{width:100%;border-collapse:collapse;margin-top:14px;font-size:13px}
+th,td{border:1px solid #e2e8f0;padding:8px 10px;text-align:left}
+th{background:#f1f5f9;font-size:11px;color:#64748b}
+.c{text-align:center}
+tr.total td{background:#f1f5f9;font-weight:700}
+.chips{display:flex;gap:8px;margin-top:14px}
+.chip{flex:1;text-align:center;background:#f1f5f9;border-radius:8px;padding:8px}
+.chip b{display:block;color:#4338ca;font-size:16px}.chip span{font-size:11px;color:#64748b}
+.remark{margin-top:14px;font-size:13px}
+.signs{display:flex;gap:40px;margin-top:40px}
+.sign{flex:1;text-align:center;font-size:12px;color:#64748b}
+.line{border-top:1px solid #94a3b8;margin-bottom:4px}.sig{height:40px}
+.footer{text-align:center;color:#94a3b8;font-size:11px;margin-top:16px}
+</style></head><body><div class="card">
+<div class="head">${school?.logo ? `<img src="${school.logo}" class="logo"/>` : ""}<div>
+<p class="sname">${esc(school?.name || "School")}</p>
+${school?.affiliation ? `<div>${esc(school.affiliation)}</div>` : ""}
+${school?.address ? `<div class="muted">${esc(school.address)}</div>` : ""}</div></div>
+<div class="band"><div class="title">${esc(t.title)}</div>${t.subtitle ? `<div class="muted">${esc(t.subtitle)}</div>` : ""}<div class="muted">${esc(d.examName)}${school?.sessionLabel ? ` &middot; ${esc(school.sessionLabel)}` : ""}</div></div>
+<div class="stu"><b>${esc(d.studentName)}</b><br/>Class ${esc(d.className)}${d.section ? ` &middot; ${esc(d.section)}` : ""} &middot; Roll ${esc(d.rollNo)}${d.admissionNo ? ` &middot; ${esc(d.admissionNo)}` : ""}</div>
+<table><tr><th>Subject</th><th class="c">Marks</th><th class="c">Grade</th></tr>${rows}<tr class="total"><td>Total</td><td class="c">${d.total}/${d.outOf}</td><td class="c">${d.percent}%</td></tr></table>
+<div class="chips">${chips}</div>
+${t.showRemarks && d.remark ? `<div class="remark"><b>Remark:</b> ${esc(d.remark)}</div>` : ""}
+${signs}
+${t.footerNote ? `<div class="footer">${esc(t.footerNote)}</div>` : ""}
+</div></body></html>`;
+}
+
 const styles = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: colors.scrim, justifyContent: "flex-end" },
   sheet: {
@@ -213,6 +307,18 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     padding: spacing.lg,
   },
+  barActions: { flexDirection: "row", alignItems: "center", gap: spacing.md },
+  shareBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: colors.primary,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+  },
+  shareOff: { opacity: 0.5 },
+  shareText: { color: colors.onPrimary, fontWeight: fontWeight.semibold, fontSize: fontSize.sm },
   body: { paddingHorizontal: spacing.lg, paddingBottom: spacing.lg },
 
   card: {
