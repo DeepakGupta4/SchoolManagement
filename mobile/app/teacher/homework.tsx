@@ -6,7 +6,7 @@ import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system/legacy";
 import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { Screen, ScreenHeader, AppText, Card, TextField, Button, GradientButton, Loading, PagedList } from "@/components";
+import { Screen, ScreenHeader, AppText, Card, TextField, Button, Loading, PagedList } from "@/components";
 import { getMyTeacher, teacherName } from "@/api/teacher";
 import { listHomework, createHomework, type Homework } from "@/api/homework";
 import { ApiError } from "@/api/client";
@@ -134,7 +134,11 @@ export default function HomeworkScreen() {
 
   return (
     <Screen scroll={false} style={{ gap: spacing.md }}>
-      <ScreenHeader title="Homework" subtitle={klass ? `Class ${klass}` : undefined} />
+      <ScreenHeader
+        title="Homework"
+        subtitle={klass ? `Class ${klass}` : undefined}
+        right={!composing && items.length > 0 ? <AddPill label="New" onPress={() => setComposing(true)} /> : undefined}
+      />
 
       <PagedList
         data={items}
@@ -143,15 +147,19 @@ export default function HomeworkScreen() {
         refreshing={loading}
         onRefresh={load}
         ListEmptyComponent={
-          <View style={styles.empty}>
-            <View style={styles.emptyIcon}>
-              <Ionicons name="document-text-outline" size={30} color={colors.primary} />
+          composing ? (
+            <View />
+          ) : (
+            <View style={styles.empty}>
+              <View style={styles.emptyIcon}>
+                <Ionicons name="document-text-outline" size={30} color={colors.primary} />
+              </View>
+              <AppText variant="heading">No homework yet</AppText>
+              <AppText variant="muted" style={styles.emptyText}>
+                {`Tap "New homework" below to post an assignment${klass ? ` for Class ${klass}` : ""}.`}
+              </AppText>
             </View>
-            <AppText variant="heading">No homework yet</AppText>
-            <AppText variant="muted" style={styles.emptyText}>
-              {`Tap "New homework" to post an assignment${klass ? ` for Class ${klass}` : ""} — it'll show up here.`}
-            </AppText>
-          </View>
+          )
         }
         ListHeaderComponent={
           <View style={{ gap: spacing.md }}>
@@ -207,11 +215,9 @@ export default function HomeworkScreen() {
                 {error ? <AppText style={styles.error}>{error}</AppText> : null}
                 <Button title="Post homework" onPress={onPost} loading={saving} />
               </Card>
-            ) : (
-              <GradientButton title="New homework" icon="add" onPress={() => setComposing(true)} />
-            )}
+            ) : null}
 
-            <AppText variant="heading">Posted{items.length ? ` · ${items.length}` : ""}</AppText>
+            {items.length > 0 ? <AppText variant="heading">Posted · {items.length}</AppText> : null}
           </View>
         }
         renderItem={({ item: h }) => (
@@ -244,12 +250,39 @@ export default function HomeworkScreen() {
           </Card>
         )}
       />
+
+      {!composing && items.length === 0 ? (
+        <View style={styles.bottomAdd}>
+          <AddPill label="New homework" onPress={() => setComposing(true)} />
+        </View>
+      ) : null}
     </Screen>
+  );
+}
+
+/** Small pill add-button — top-right when there's homework, bottom when empty. */
+function AddPill({ label, onPress }: { label: string; onPress: () => void }) {
+  return (
+    <Pressable onPress={onPress} style={styles.pill} accessibilityRole="button" accessibilityLabel="New homework">
+      <Ionicons name="add" size={18} color={colors.onPrimary} />
+      <AppText style={styles.pillText}>{label}</AppText>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
+  pill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: colors.primary,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  pillText: { color: colors.onPrimary, fontWeight: fontWeight.semibold, fontSize: fontSize.sm },
+  bottomAdd: { alignItems: "center", paddingBottom: spacing.sm },
   form: { gap: spacing.sm },
   formHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   fileRow: { flexDirection: "row", gap: spacing.sm },
