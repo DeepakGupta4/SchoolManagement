@@ -4,7 +4,7 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Screen, ScreenHeader, AppText, Card, Button, TextField, Loading, PagedList, Avatar, StudentPreviewModal } from "@/components";
 import { getMyTeacher } from "@/api/teacher";
-import { listStudents, studentFullName, type Student } from "@/api/students";
+import { listStudents, renumberRoll, studentFullName, type Student } from "@/api/students";
 import { colors, radius, spacing, fontWeight, fontSize } from "@/theme";
 
 export default function Students() {
@@ -24,9 +24,23 @@ export default function Students() {
       setIsClassTeacher(isCt);
       setCls({ className: t.classTeacherOf ?? "", section: t.classTeacherSection ?? "" });
       if (isCt) {
-        const list = await listStudents({ className: t.classTeacherOf, section: t.classTeacherSection });
+        const className = t.classTeacherOf ?? "";
+        const section = t.classTeacherSection ?? "";
         // Alphabetical by name everywhere students are listed (not roll order).
-        setStudents([...list].sort((a, b) => studentFullName(a).localeCompare(studentFullName(b))));
+        const byName = (a: Student, b: Student) =>
+          studentFullName(a).localeCompare(studentFullName(b)) || String(a.id).localeCompare(String(b.id));
+        let sorted = [...(await listStudents({ className, section }))].sort(byName);
+        // If the stored roll numbers aren't already 1..N in that alphabetical order,
+        // have the server re-sequence them (teacher-scoped), then reload once — so
+        // existing students get A–Z rolls without the teacher doing anything.
+        const outOfOrder = sorted.some((s, i) => String(s.rollNo) !== String(i + 1));
+        if (outOfOrder && className && section) {
+          const res = await renumberRoll(className, section).catch(() => null);
+          if (res && res.updated > 0) {
+            sorted = [...(await listStudents({ className, section }))].sort(byName);
+          }
+        }
+        setStudents(sorted);
       }
     } catch {
       /* fail closed */

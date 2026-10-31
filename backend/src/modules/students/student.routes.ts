@@ -8,7 +8,11 @@ import { StoredDocument } from "../documents/document.model.js";
 import { SchoolClass } from "../classes/class.model.js";
 import { ApiError } from "../../utils/ApiError.js";
 import { createCrudRouter } from "../../utils/crudRouter.js";
-import { studentRosterScope, studentClassTeacherWriteScope } from "../../utils/teacherScope.js";
+import {
+  studentRosterScope,
+  studentClassTeacherWriteScope,
+  assertTeacherMayAccessClassSection,
+} from "../../utils/teacherScope.js";
 import { ISO_DATE, isRealDate, serverToday, maxToday } from "../../utils/dates.js";
 
 const PHONE = /^\d{10}$/;
@@ -300,12 +304,18 @@ export default createCrudRouter({
     // action; the afterCreate/afterUpdate hooks keep new additions ordered on their own.
     router.post(
       "/renumber",
-      requireRole("super_admin", "school_admin", "principal"),
+      requireRole("super_admin", "school_admin", "principal", "teacher"),
       validate(renumberSchema),
       async (req, res, next) => {
         try {
           const schoolId = req.user!.schoolId;
           const { className, section } = req.body as z.infer<typeof renumberSchema>;
+          // A teacher may only renumber a class+section they teach, and must name it
+          // (never the whole school); office/admin are unrestricted and may omit it.
+          if (req.user!.role === "teacher") {
+            if (!className || !section) throw ApiError.badRequest("Pick a class and section to renumber.");
+            await assertTeacherMayAccessClassSection(req, className, section);
+          }
           const match: Record<string, unknown> = { schoolId, status: "active" };
           if (className) match.className = className;
           if (section) match.section = section;

@@ -46,4 +46,12 @@ export const createStudent = (body: Partial<Student>) => api<Student>("/api/stud
 export const updateStudent = (id: string, body: Partial<Student>) =>
   api<Student>(`/api/students/${id}`, { method: "PUT", body });
 
+/** Re-sequence a class+section's roll numbers A–Z by name (teacher-scoped to the
+ *  caller's own class on the server). Returns how many rolls changed. */
+export const renumberRoll = (className: string, section: string) =>
+  api<{ updated: number; groups: number }>("/api/students/renumber", {
+    method: "POST",
+    body: { className, section },
+  });
+
 export const studentFullName = (s: Student) => `${s.firstName} ${s.lastName}`.trim();
