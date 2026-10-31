@@ -1,14 +1,26 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 import { useFocusEffect } from "expo-router";
-import { Screen, ScreenHeader, AppText, Card, Button, TextField, Loading, Chips, PagedList, type ChipOption } from "@/components";
+import {
+  Screen,
+  ScreenHeader,
+  AppText,
+  Card,
+  Button,
+  TextField,
+  Loading,
+  Chips,
+  Avatar,
+  PagedList,
+  type ChipOption,
+} from "@/components";
 import { getMyTeacher } from "@/api/teacher";
 import { listStudents, studentFullName, type Student } from "@/api/students";
 import { listExams } from "@/api/exams";
 import { listClasses, type SchoolClass } from "@/api/classes";
 import { getMarks, saveMarks, type MarkRow } from "@/api/marks";
 import { ApiError } from "@/api/client";
-import { colors, radius, spacing, fontWeight } from "@/theme";
+import { colors, radius, spacing, fontWeight, fontSize } from "@/theme";
 
 interface Scope {
   classes: string[];
@@ -17,6 +29,11 @@ interface Scope {
   isClassTeacher: boolean;
   subjects: string[];
 }
+
+/** One student's entry. For a theory-only paper only `theory` is used (as the total). */
+type Entry = { theory: string; practical: string; absent: boolean };
+const BLANK: Entry = { theory: "", practical: "", absent: false };
+const digits = (v: string) => v.replace(/[^\d]/g, "");
 
 export default function Marks() {
   const [loading, setLoading] = useState(true);
@@ -28,10 +45,14 @@ export default function Marks() {
   const [className, setClassName] = useState("");
   const [section, setSection] = useState("");
   const [subject, setSubject] = useState("");
+
+  const [hasPractical, setHasPractical] = useState(false);
   const [maxMarks, setMaxMarks] = useState("100");
+  const [theoryMax, setTheoryMax] = useState("70");
+  const [practicalMax, setPracticalMax] = useState("30");
 
   const [roster, setRoster] = useState<Student[]>([]);
-  const [marksMap, setMarksMap] = useState<Record<string, string>>({});
+  const [entryMap, setEntryMap] = useState<Record<string, Entry>>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -119,11 +140,11 @@ export default function Marks() {
     }
   }, [examOptions, examName]);
 
-  // Roster + saved marks for the chosen exam/class/section/subject.
+  // Roster + saved marks for the chosen exam/class/section/subject; infers the scheme.
   useEffect(() => {
     if (!examName || !className || !section || !subject) {
       setRoster([]);
-      setMarksMap({});
+      setEntryMap({});
       return;
     }
     let alive = true;
@@ -137,12 +158,34 @@ export default function Marks() {
         setRoster(sorted);
         const forSubject = saved.filter((m) => m.subject === subject);
         const byId = new Map(forSubject.map((m) => [String(m.studentId), m]));
-        setMarksMap(
+        // Re-create the scheme the marks were saved under.
+        const sample = forSubject[0];
+        if (sample) {
+          if (sample.theoryMax != null || sample.practicalMax != null) {
+            setHasPractical(true);
+            setTheoryMax(String(sample.theoryMax ?? 70));
+            setPracticalMax(String(sample.practicalMax ?? 30));
+          } else {
+            setHasPractical(false);
+            if (sample.maxMarks) setMaxMarks(String(sample.maxMarks));
+          }
+        }
+        setEntryMap(
           Object.fromEntries(
-            sorted.map((s) => [s.id!, byId.has(String(s.id)) ? String(byId.get(String(s.id))!.marks) : ""])
+            sorted.map((s) => {
+              const m = byId.get(String(s.id));
+              if (!m) return [s.id!, { ...BLANK }];
+              return [
+                s.id!,
+                {
+                  theory: m.theory != null ? String(m.theory) : m.absent ? "" : String(m.marks ?? ""),
+                  practical: m.practical != null ? String(m.practical) : "",
+                  absent: !!m.absent,
+                },
+              ];
+            })
           )
         );
-        if (forSubject[0]?.maxMarks) setMaxMarks(String(forSubject[0].maxMarks));
       })
       .catch((e) => alive && setError(e instanceof ApiError ? e.message : "Could not load the sheet."));
     return () => {
@@ -150,35 +193,68 @@ export default function Marks() {
     };
   }, [examName, className, section, subject]);
 
-  const setMark = (id: string, v: string) =>
-    setMarksMap((p) => ({ ...p, [id]: v.replace(/[^\d]/g, "") }));
+  const setEntry = (id: string, patch: Partial<Entry>) =>
+    setEntryMap((p) => ({ ...p, [id]: { ...(p[id] ?? BLANK), ...patch } }));
+
+  const theoryMaxN = Number(theoryMax) || 0;
+  const practicalMaxN = Number(practicalMax) || 0;
+  const maxN = hasPractical ? theoryMaxN + practicalMaxN : Number(maxMarks) || 0;
+  const entryTotal = (e: Entry) =>
+    hasPractical ? (Number(e.theory) || 0) + (Number(e.practical) || 0) : Number(e.theory) || 0;
 
   const onSave = async () => {
-    const maxN = Number(maxMarks);
-    if (!Number.isFinite(maxN) || maxN < 1) {
-      setError("Max marks must be at least 1.");
+    if (maxN < 1) {
+      setError(hasPractical ? "Set the theory / practical max first." : "Max marks must be at least 1.");
       return;
     }
     const records: MarkRow[] = [];
     for (const s of roster) {
-      const raw = marksMap[s.id!] ?? "";
-      if (raw === "") continue;
-      const m = Number(raw);
-      if (m > maxN) {
-        setError(`${studentFullName(s)}: marks can't exceed ${maxN}.`);
-        return;
+      const e = entryMap[s.id!] ?? BLANK;
+      const base = { studentId: s.id!, studentName: studentFullName(s), roll: Number(s.rollNo) || 0, subject };
+      if (e.absent) {
+        records.push({
+          ...base,
+          marks: 0,
+          maxMarks: maxN,
+          absent: true,
+          ...(hasPractical ? { theoryMax: theoryMaxN, practicalMax: practicalMaxN } : {}),
+        });
+        continue;
       }
-      records.push({
-        studentId: s.id!,
-        studentName: studentFullName(s),
-        roll: Number(s.rollNo) || 0,
-        subject,
-        marks: m,
-        maxMarks: maxN,
-      });
+      if (hasPractical) {
+        if (e.theory === "" && e.practical === "") continue;
+        const t = Number(e.theory) || 0;
+        const p = Number(e.practical) || 0;
+        if (t > theoryMaxN) {
+          setError(`${studentFullName(s)}: theory can't exceed ${theoryMaxN}.`);
+          return;
+        }
+        if (p > practicalMaxN) {
+          setError(`${studentFullName(s)}: practical can't exceed ${practicalMaxN}.`);
+          return;
+        }
+        records.push({
+          ...base,
+          marks: t + p,
+          maxMarks: maxN,
+          theory: t,
+          practical: p,
+          theoryMax: theoryMaxN,
+          practicalMax: practicalMaxN,
+          absent: false,
+        });
+      } else {
+        if (e.theory === "") continue;
+        const m = Number(e.theory) || 0;
+        if (m > maxN) {
+          setError(`${studentFullName(s)}: marks can't exceed ${maxN}.`);
+          return;
+        }
+        records.push({ ...base, marks: m, maxMarks: maxN, absent: false });
+      }
     }
     if (records.length === 0) {
-      setError("Enter at least one student's marks.");
+      setError("Enter at least one student's marks (or mark them absent).");
       return;
     }
     setSaving(true);
@@ -255,36 +331,111 @@ export default function Marks() {
                 <Chips options={subjectOptions} value={subject} onChange={setSubject} />
               </View>
             )}
-            <TextField
-              label="Max marks (applies to all)"
-              value={maxMarks}
-              onChangeText={(v) => setMaxMarks(v.replace(/[^\d]/g, ""))}
-              keyboardType="number-pad"
-            />
+
+            <View style={styles.field}>
+              <AppText variant="label">Marks scheme</AppText>
+              <View style={styles.toggle}>
+                <Pressable
+                  onPress={() => setHasPractical(false)}
+                  style={[styles.toggleBtn, !hasPractical && styles.toggleOn]}
+                >
+                  <AppText style={!hasPractical ? styles.toggleTextOn : styles.toggleText}>Theory only</AppText>
+                </Pressable>
+                <Pressable
+                  onPress={() => setHasPractical(true)}
+                  style={[styles.toggleBtn, hasPractical && styles.toggleOn]}
+                >
+                  <AppText style={hasPractical ? styles.toggleTextOn : styles.toggleText}>Theory + Practical</AppText>
+                </Pressable>
+              </View>
+            </View>
+
+            {hasPractical ? (
+              <>
+                <View style={styles.maxRow}>
+                  <View style={styles.flex}>
+                    <TextField
+                      label="Theory max"
+                      value={theoryMax}
+                      onChangeText={(v) => setTheoryMax(digits(v))}
+                      keyboardType="number-pad"
+                    />
+                  </View>
+                  <View style={styles.flex}>
+                    <TextField
+                      label="Practical max"
+                      value={practicalMax}
+                      onChangeText={(v) => setPracticalMax(digits(v))}
+                      keyboardType="number-pad"
+                    />
+                  </View>
+                </View>
+                <AppText variant="muted">Total per student: {maxN}</AppText>
+              </>
+            ) : (
+              <TextField
+                label="Max marks (applies to all)"
+                value={maxMarks}
+                onChangeText={(v) => setMaxMarks(digits(v))}
+                keyboardType="number-pad"
+              />
+            )}
           </Card>
         }
-        renderItem={({ item: s }) => (
-          <Card style={styles.row}>
-            <View style={styles.rollName}>
-              <AppText variant="small" style={{ color: colors.primaryText }}>
-                #{String(s.rollNo)}
-              </AppText>
-              <AppText style={styles.name} numberOfLines={1}>
-                {studentFullName(s)}
-              </AppText>
-            </View>
-            <View style={styles.markCell}>
-              <TextField
-                value={marksMap[s.id!] ?? ""}
-                onChangeText={(v) => setMark(s.id!, v)}
-                keyboardType="number-pad"
-                placeholder="—"
-                style={styles.markInput}
-              />
-              <AppText variant="muted"> / {maxMarks || "—"}</AppText>
-            </View>
-          </Card>
-        )}
+        renderItem={({ item: s }) => {
+          const e = entryMap[s.id!] ?? BLANK;
+          const total = entryTotal(e);
+          return (
+            <Card style={styles.row}>
+              <View style={styles.rowTop}>
+                <Avatar name={studentFullName(s)} uri={s.avatar} size={40} />
+                <View style={styles.flex}>
+                  <AppText style={styles.name} numberOfLines={1}>
+                    {studentFullName(s)}
+                  </AppText>
+                  <AppText variant="small" style={styles.roll}>
+                    Roll {String(s.rollNo)}
+                  </AppText>
+                </View>
+                <Pressable
+                  onPress={() => setEntry(s.id!, { absent: !e.absent })}
+                  style={[styles.absent, e.absent && styles.absentOn]}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: e.absent }}
+                  accessibilityLabel={`Mark ${studentFullName(s)} absent`}
+                >
+                  <AppText style={e.absent ? styles.absentTextOn : styles.absentText}>
+                    {e.absent ? "Absent" : "Absent?"}
+                  </AppText>
+                </Pressable>
+              </View>
+
+              {e.absent ? null : hasPractical ? (
+                <View style={styles.inputs}>
+                  <MarkBox label="Theory" value={e.theory} max={theoryMax} onChange={(v) => setEntry(s.id!, { theory: v })} />
+                  <MarkBox
+                    label="Practical"
+                    value={e.practical}
+                    max={practicalMax}
+                    onChange={(v) => setEntry(s.id!, { practical: v })}
+                  />
+                  <View style={styles.totalBox}>
+                    <AppText variant="small" style={styles.inputLabel}>
+                      Total
+                    </AppText>
+                    <AppText style={styles.totalVal}>
+                      {total}/{maxN}
+                    </AppText>
+                  </View>
+                </View>
+              ) : (
+                <View style={styles.inputs}>
+                  <MarkBox label="Marks" value={e.theory} max={maxMarks} onChange={(v) => setEntry(s.id!, { theory: v })} />
+                </View>
+              )}
+            </Card>
+          );
+        }}
       />
 
       {message ? <AppText style={{ color: colors.successText }}>{message}</AppText> : null}
@@ -296,11 +447,76 @@ export default function Marks() {
   );
 }
 
+function MarkBox({
+  label,
+  value,
+  max,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  max: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <View style={styles.box}>
+      <AppText variant="small" style={styles.inputLabel}>
+        {label}
+      </AppText>
+      <View style={styles.boxInput}>
+        <TextField
+          value={value}
+          onChangeText={(v) => onChange(v.replace(/[^\d]/g, ""))}
+          keyboardType="number-pad"
+          placeholder="—"
+          style={styles.markInput}
+        />
+        <AppText variant="muted"> /{max || "—"}</AppText>
+      </View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   field: { gap: spacing.xs },
-  row: { flexDirection: "row", alignItems: "center", gap: spacing.md, padding: spacing.md },
-  rollName: { flex: 1, gap: 2 },
-  name: { fontSize: 14, fontWeight: fontWeight.medium },
-  markCell: { flexDirection: "row", alignItems: "center" },
-  markInput: { width: 64, textAlign: "center" },
+  flex: { flex: 1 },
+
+  toggle: { flexDirection: "row", gap: spacing.sm },
+  toggleBtn: {
+    flex: 1,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: "center",
+    backgroundColor: colors.surface,
+  },
+  toggleOn: { backgroundColor: colors.primary, borderColor: colors.primary },
+  toggleText: { color: colors.muted, fontWeight: fontWeight.medium, fontSize: fontSize.sm },
+  toggleTextOn: { color: colors.onPrimary, fontWeight: fontWeight.semibold, fontSize: fontSize.sm },
+  maxRow: { flexDirection: "row", gap: spacing.md },
+
+  row: { gap: spacing.sm, padding: spacing.md },
+  rowTop: { flexDirection: "row", alignItems: "center", gap: spacing.md },
+  name: { fontSize: fontSize.md, fontWeight: fontWeight.medium, color: colors.text },
+  roll: { color: colors.muted },
+
+  absent: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  absentOn: { backgroundColor: colors.dangerSoft, borderColor: colors.danger },
+  absentText: { color: colors.muted, fontSize: fontSize.xs, fontWeight: fontWeight.medium },
+  absentTextOn: { color: colors.dangerText, fontSize: fontSize.xs, fontWeight: fontWeight.semibold },
+
+  inputs: { flexDirection: "row", alignItems: "flex-end", gap: spacing.md },
+  box: { flex: 1, gap: 2 },
+  inputLabel: { color: colors.muted },
+  boxInput: { flexDirection: "row", alignItems: "center" },
+  markInput: { flex: 1, textAlign: "center" },
+  totalBox: { alignItems: "flex-end", gap: 2, minWidth: 64 },
+  totalVal: { fontSize: fontSize.md, fontWeight: fontWeight.bold, color: colors.primaryText },
 });

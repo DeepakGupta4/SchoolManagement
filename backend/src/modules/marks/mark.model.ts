@@ -16,8 +16,15 @@ const markSchema = new Schema(
     studentName: { type: String, default: "" },
     roll: { type: Number, default: 0 },
     subject: { type: String, required: true },
-    marks: { type: Number, default: 0 },
-    maxMarks: { type: Number, default: 100 },
+    marks: { type: Number, default: 0 }, // TOTAL obtained (theory + practical when split)
+    maxMarks: { type: Number, default: 100 }, // TOTAL maximum
+    // Optional theory/practical breakdown for schools that split a paper. `marks`
+    // and `maxMarks` stay the TOTALS, so report cards + performance % are unaffected.
+    theory: { type: Number },
+    practical: { type: Number },
+    theoryMax: { type: Number },
+    practicalMax: { type: Number },
+    absent: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

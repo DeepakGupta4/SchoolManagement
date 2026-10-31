@@ -81,6 +81,11 @@ router.get(
         subject: r.subject,
         marks: r.marks,
         maxMarks: r.maxMarks,
+        theory: r.theory,
+        practical: r.practical,
+        theoryMax: r.theoryMax,
+        practicalMax: r.practicalMax,
+        absent: r.absent,
       })),
     });
   } catch (err) {
@@ -102,11 +107,25 @@ const saveBody = z.object({
           subject: z.string().min(1),
           marks: z.coerce.number<number>().min(0, "Marks can't be negative").default(0),
           maxMarks: z.coerce.number<number>().min(1, "Max marks must be at least 1").default(100),
+          // Optional theory/practical split (absent exempts the max check).
+          theory: z.coerce.number<number>().min(0).optional(),
+          practical: z.coerce.number<number>().min(0).optional(),
+          theoryMax: z.coerce.number<number>().min(0).optional(),
+          practicalMax: z.coerce.number<number>().min(0).optional(),
+          absent: z.boolean().optional(),
         })
-        // A student can't score more than the paper's maximum.
-        .refine((r) => r.marks <= r.maxMarks, {
+        // A student can't score more than the paper's maximum (absent = 0, exempt).
+        .refine((r) => r.absent || r.marks <= r.maxMarks, {
           message: "Marks can't exceed max marks",
           path: ["marks"],
+        })
+        .refine((r) => r.theoryMax == null || r.theory == null || r.theory <= r.theoryMax, {
+          message: "Theory marks can't exceed the theory max",
+          path: ["theory"],
+        })
+        .refine((r) => r.practicalMax == null || r.practical == null || r.practical <= r.practicalMax, {
+          message: "Practical marks can't exceed the practical max",
+          path: ["practical"],
         })
     )
     .min(1, "Nothing to save"),

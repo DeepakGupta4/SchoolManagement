@@ -5,8 +5,15 @@ export interface MarkRow {
   studentName: string;
   roll: number;
   subject: string;
+  /** TOTAL obtained (theory + practical when split). */
   marks: number;
+  /** TOTAL maximum. */
   maxMarks: number;
+  theory?: number;
+  practical?: number;
+  theoryMax?: number;
+  practicalMax?: number;
+  absent?: boolean;
 }
 
 /** Saved marks for an exam + class + section (across all subjects). */
