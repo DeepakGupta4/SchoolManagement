@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { KeyRound, Loader2, RefreshCw, TriangleAlert, UserPlus } from "lucide-react";
-import { Modal, Button, useToast } from "@/components/ui";
+import { Modal, Button } from "@/components/ui";
 import {
   listUsers,
   createUser,
@@ -26,9 +26,9 @@ export function TeacherCredentialsModal({
   onClose: () => void;
   onDone: (creds: UserCredentials, emailed: boolean, action: "created" | "reset") => void;
 }) {
-  const { toast } = useToast();
   const [result, setResult] = useState<{ email: string; existing: ManagedUser | null } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const email = (teacher?.email ?? "").trim();
 
   // On open, look up whether a login already exists for this teacher's email.
@@ -40,10 +40,14 @@ export function TeacherCredentialsModal({
         if (cancelled) return;
         const lower = email.toLowerCase();
         setResult({ email, existing: users.find((u) => u.email.toLowerCase() === lower) ?? null });
+        setError(null);
       })
       .catch(() => {
         // Best-effort — treat as "no login" (createUser 409s if one already exists).
-        if (!cancelled) setResult({ email, existing: null });
+        if (!cancelled) {
+          setResult({ email, existing: null });
+          setError(null);
+        }
       });
     return () => {
       cancelled = true;
@@ -61,16 +65,13 @@ export function TeacherCredentialsModal({
     action: "created" | "reset"
   ) => {
     setBusy(true);
+    setError(null);
     try {
       const res = await fn();
       onDone(res.credentials, res.emailed, action);
       onClose();
     } catch (e) {
-      toast({
-        title: action === "created" ? "Could not create login" : "Could not reset password",
-        description: e instanceof Error ? e.message : "Something went wrong.",
-        variant: "error",
-      });
+      setError(e instanceof Error ? e.message : "Something went wrong.");
     } finally {
       setBusy(false);
     }
@@ -94,6 +95,8 @@ export function TeacherCredentialsModal({
       Create login
     </Button>
   );
+
+  const takenElsewhere = Boolean(error) && /already exists/i.test(error ?? "");
 
   return (
     <Modal
@@ -124,11 +127,28 @@ export function TeacherCredentialsModal({
               </p>
             </div>
           </div>
-          <p className="text-sm text-muted">
-            {existing
-              ? "Generate a new one-time password for this teacher. Their old password stops working immediately."
-              : "Create a login so this teacher can sign in to the app. A one-time password is generated (and emailed)."}
-          </p>
+
+          {error ? (
+            <div className="flex items-start gap-2 rounded-md border border-danger/30 bg-danger-soft px-3 py-2.5 text-sm text-danger-text">
+              <TriangleAlert className="mt-0.5 size-4 shrink-0" />
+              <div className="min-w-0">
+                <p>{error}</p>
+                {takenElsewhere ? (
+                  <p className="mt-1 text-xs">
+                    Every login email must be unique across the whole system — this one already belongs to
+                    another account. Give this teacher a different email (e.g. their school email), then try
+                    again.
+                  </p>
+                ) : null}
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-muted">
+              {existing
+                ? "Generate a new one-time password for this teacher. Their old password stops working immediately."
+                : "Create a login so this teacher can sign in to the app. A one-time password is generated (and emailed)."}
+            </p>
+          )}
         </div>
       )}
     </Modal>
