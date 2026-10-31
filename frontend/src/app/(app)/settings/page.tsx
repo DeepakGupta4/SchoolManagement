@@ -16,6 +16,7 @@ import {
   Bell,
   Building2,
   CalendarRange,
+  FileText,
   GraduationCap,
   Loader2,
   Palette,
@@ -52,6 +53,7 @@ const TABS = [
   { id: "branding", label: "Branding", icon: Palette },
   { id: "session", label: "Academic Session", icon: CalendarRange },
   { id: "grading", label: "Grading", icon: GraduationCap },
+  { id: "reportcard", label: "Report Card", icon: FileText },
   { id: "notifications", label: "Notifications", icon: Bell },
   { id: "integrations", label: "Integrations", icon: Plug },
 ] as const;
@@ -103,6 +105,19 @@ const NOTIFICATION_DEFAULTS = {
   digest: "",
 };
 
+const REPORTCARD_DEFAULTS = {
+  title: "Report Card",
+  subtitle: "",
+  footerNote: "",
+  principalName: "",
+  classTeacherLabel: "Class Teacher",
+  showAttendance: true,
+  showRank: true,
+  showGradePoint: true,
+  showRemarks: true,
+  showSignatures: true,
+};
+
 const THEME_OPTIONS = [
   { label: "Indigo (default)", value: "indigo" },
   { label: "Emerald", value: "emerald" },
@@ -149,6 +164,7 @@ export default function SettingsPage() {
   const [session, setSession] = useState(SESSION_DEFAULTS);
   const [notifications, setNotifications] = useState(NOTIFICATION_DEFAULTS);
   const [grading, setGrading] = useState<GradingScheme>(DEFAULT_GRADING_SCHEME);
+  const [reportCard, setReportCard] = useState(REPORTCARD_DEFAULTS);
   const [enabled, setEnabled] = useState<string[]>([]);
 
   const activeTab = TABS.find((t) => t.id === tab) ?? TABS[0];
@@ -304,6 +320,7 @@ export default function SettingsPage() {
             digest: s.notifDigest || prev.digest,
           }));
           setGrading(effectiveScheme(s.gradingScheme));
+          setReportCard((prev) => ({ ...prev, ...(s.reportCardTemplate ?? {}) }));
         })
         .catch(() => {});
     }, 0);
@@ -381,6 +398,8 @@ export default function SettingsPage() {
           return;
         }
         updates.gradingScheme = grading;
+      } else if (tab === "reportcard") {
+        updates.reportCardTemplate = reportCard;
       }
 
       if (Object.keys(updates).length > 0) {
@@ -1216,6 +1235,81 @@ export default function SettingsPage() {
                 sorted with no gaps or overlaps.
               </p>
             )}
+          </CardContent>
+        </Card>
+      )}
+
+      {tab === "reportcard" && (
+        <Card>
+          <CardHeader>
+            <div>
+              <h2 className="text-sm font-semibold text-text">Report card template</h2>
+              <p className="mt-0.5 text-xs text-muted">
+                The layout every student&apos;s report card uses. The header (school name, logo,
+                affiliation, signature) comes from your School Profile.
+              </p>
+            </div>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <Input
+              label="Title"
+              value={reportCard.title}
+              onChange={(e) => setReportCard({ ...reportCard, title: e.target.value })}
+              hint={'e.g. "Report Card" or "Progress Report"'}
+            />
+            <Input
+              label="Subtitle (optional)"
+              value={reportCard.subtitle}
+              onChange={(e) => setReportCard({ ...reportCard, subtitle: e.target.value })}
+              hint="Shown under the title."
+            />
+            <Input
+              label="Principal name"
+              value={reportCard.principalName}
+              onChange={(e) => setReportCard({ ...reportCard, principalName: e.target.value })}
+              hint="Printed under the principal's signature."
+            />
+            <Input
+              label="Class-teacher signature label"
+              value={reportCard.classTeacherLabel}
+              onChange={(e) => setReportCard({ ...reportCard, classTeacherLabel: e.target.value })}
+            />
+            <div className="lg:col-span-2">
+              <Textarea
+                label="Footer note"
+                rows={2}
+                value={reportCard.footerNote}
+                onChange={(e) => setReportCard({ ...reportCard, footerNote: e.target.value })}
+                hint="A disclaimer printed at the bottom, e.g. “Computer-generated report card.”"
+              />
+            </div>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:col-span-2">
+              {(
+                [
+                  ["showAttendance", "Show attendance %"],
+                  ["showRank", "Show class rank"],
+                  ["showGradePoint", "Show grade point"],
+                  ["showRemarks", "Show remarks"],
+                  ["showSignatures", "Show signatures"],
+                ] as const
+              ).map(([key, label]) => (
+                <label
+                  key={key}
+                  className="flex items-center gap-3 rounded-md border border-border bg-surface p-3"
+                >
+                  <input
+                    type="checkbox"
+                    className="size-4 accent-primary"
+                    checked={reportCard[key]}
+                    onChange={(e) => setReportCard({ ...reportCard, [key]: e.target.checked })}
+                  />
+                  <span className="text-sm font-medium text-text">{label}</span>
+                </label>
+              ))}
+            </div>
+            <p className="text-xs text-muted lg:col-span-2">
+              Saved once here — the same template is used for every student&apos;s report card.
+            </p>
           </CardContent>
         </Card>
       )}

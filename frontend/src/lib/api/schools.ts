@@ -84,6 +84,20 @@ export async function setTrialEnd(schoolId: string, trialEndDate: string): Promi
   });
 }
 
+/** Admin-configured report card layout — applied to every student's report card. */
+export interface ReportCardTemplate {
+  title: string;
+  subtitle: string;
+  footerNote: string;
+  principalName: string;
+  classTeacherLabel: string;
+  showAttendance: boolean;
+  showRank: boolean;
+  showGradePoint: boolean;
+  showRemarks: boolean;
+  showSignatures: boolean;
+}
+
 export interface SchoolProfile {
   id: string;
   schoolId: string;
@@ -105,6 +119,8 @@ export interface SchoolProfile {
   bellSchedule?: { label: string; time: string; isBreak: boolean }[];
   /** Per-school grade bands (A1/A2/…); drives grades on report cards/marks/portal. */
   gradingScheme?: GradingScheme;
+  /** Admin-configured report card layout, applied to every student's report card. */
+  reportCardTemplate?: ReportCardTemplate;
   // Branding
   displayName?: string;
   tagline?: string;
