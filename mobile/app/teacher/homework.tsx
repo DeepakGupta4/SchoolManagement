@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Alert, Pressable, StyleSheet, View } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
@@ -6,7 +6,7 @@ import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system/legacy";
 import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { Screen, ScreenHeader, AppText, Card, TextField, Button, Loading, PagedList, AddButton } from "@/components";
+import { Screen, ScreenHeader, AppText, Card, TextField, Button, Loading, PagedList, AddButton, Chips } from "@/components";
 import { getMyTeacher, teacherName } from "@/api/teacher";
 import { listHomework, createHomework, type Homework } from "@/api/homework";
 import { ApiError } from "@/api/client";
@@ -18,6 +18,7 @@ type Picked = { dataUrl: string; name: string; mime: string; size: number };
 
 export default function HomeworkScreen() {
   const [klass, setKlass] = useState("");
+  const [myClasses, setMyClasses] = useState<string[]>([]);
   const [teacher, setTeacher] = useState("");
   const [items, setItems] = useState<Homework[]>([]);
   const [loading, setLoading] = useState(true);
@@ -35,10 +36,13 @@ export default function HomeworkScreen() {
     setLoading(true);
     try {
       const t = await getMyTeacher();
-      const c = t.classTeacherOf || t.classes?.[0] || "";
-      setKlass(c);
+      // Every class this teacher can post to: their class-teacher class + all the
+      // classes they teach (have periods in). Deduped, order preserved.
+      const list = [...new Set([t.classTeacherOf, ...(t.classes ?? [])].filter(Boolean))] as string[];
+      setMyClasses(list);
       setTeacher(teacherName(t));
-      setItems(await listHomework(c || undefined));
+      // Keep the current selection if still valid; else default to the class-teacher class.
+      setKlass((prev) => (prev && list.includes(prev) ? prev : t.classTeacherOf || list[0] || ""));
     } catch {
       /* ignore */
     } finally {
@@ -51,6 +55,21 @@ export default function HomeworkScreen() {
       load();
     }, [load])
   );
+
+  // Homework for the selected class — refetches whenever the class changes.
+  useEffect(() => {
+    if (!klass) {
+      setItems([]);
+      return;
+    }
+    let alive = true;
+    listHomework(klass)
+      .then((h) => alive && setItems(h))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [klass]);
 
   const tooBig = (size: number) => {
     if (size > MAX_BYTES) {
@@ -113,10 +132,10 @@ export default function HomeworkScreen() {
       ...(file ? { fileDataUrl: file.dataUrl, fileName: file.name, mimeType: file.mime, fileSize: file.size } : {}),
     };
     try {
-      await createHomework(body);
+      const created = await createHomework(body);
+      setItems((p) => [created, ...p]);
       resetForm();
       setComposing(false);
-      load();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Could not post homework.");
     } finally {
@@ -139,6 +158,10 @@ export default function HomeworkScreen() {
         subtitle={klass ? `Class ${klass}` : undefined}
         right={!composing && items.length > 0 ? <AddButton label="New" onPress={() => setComposing(true)} /> : undefined}
       />
+
+      {myClasses.length > 1 ? (
+        <Chips options={myClasses.map((c) => ({ label: c, value: c }))} value={klass} onChange={setKlass} />
+      ) : null}
 
       <PagedList
         data={items}
@@ -182,6 +205,7 @@ export default function HomeworkScreen() {
                     <Ionicons name="close" size={22} color={colors.muted} />
                   </Pressable>
                 </View>
+                {klass ? <AppText variant="muted">Posting to Class {klass}</AppText> : null}
                 <TextField
                   label="Title"
                   leftIcon="create-outline"
