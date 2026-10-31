@@ -32,3 +32,19 @@ export const setTracking = (on: boolean) =>
 
 /** Every bus currently sharing its location — for the parent/student/office map. */
 export const listLiveBuses = () => api<DriverRoute[]>("/api/transport/live");
+
+/** One pupil riding the driver's route. */
+export interface RouteStudent {
+  id: string;
+  name: string;
+  className: string;
+  section: string;
+  rollNo: string;
+  pickupPoint: string;
+  routeCode: string;
+  avatar: string;
+  guardianPhone: string;
+}
+
+/** The students on the signed-in driver's own route(s) (scoped server-side). */
+export const listMyRouteStudents = () => api<RouteStudent[]>("/api/transport/me/students");

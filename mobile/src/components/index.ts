@@ -19,3 +19,5 @@ export { AdmitCardPreview, type AdmitCardData, type AdmitCardSubject } from "./A
 export { PagedList } from "./PagedList";
 export { AddButton } from "./AddButton";
 export { AssistantScreen } from "./AssistantScreen";
+export { ProfileScreen } from "./ProfileScreen";
+export { MessageBoardScreen } from "./MessageBoardScreen";

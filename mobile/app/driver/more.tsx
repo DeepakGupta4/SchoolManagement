@@ -10,9 +10,12 @@ type LinkItem = { href: Href; icon: keyof typeof Ionicons.glyphMap; label: strin
 const LINKS: LinkItem[] = [
   { href: "/driver/tracking", icon: "navigate-outline", label: "Live tracking", hint: "Share the bus location" },
   { href: "/track", icon: "map-outline", label: "Live map", hint: "See buses on the map" },
+  { href: "/driver/students", icon: "people-outline", label: "My students", hint: "Who rides your route" },
   { href: "/driver/attendance", icon: "checkbox-outline", label: "My attendance", hint: "Your daily attendance" },
   { href: "/driver/leave", icon: "calendar-clear-outline", label: "My leave", hint: "Apply & track approvals" },
   { href: "/driver/updates", icon: "megaphone-outline", label: "Updates", hint: "Announcements, notices, holidays" },
+  { href: "/driver/messages", icon: "chatbubbles-outline", label: "Message board", hint: "Shared with your school" },
+  { href: "/driver/id-card", icon: "card-outline", label: "My ID card", hint: "Your staff ID" },
   { href: "/driver/assistant", icon: "sparkles-outline", label: "AI assistant", hint: "Ask about anything in the app" },
 ];
 
@@ -24,14 +27,17 @@ export default function DriverMore() {
     <Screen style={{ gap: spacing.lg }}>
       <AppText variant="title">More</AppText>
 
-      <Card style={styles.profile}>
-        <Avatar name={user?.name} uri={user?.avatar} size={52} />
-        <View style={styles.flex}>
-          <AppText variant="heading">{user?.name}</AppText>
-          <AppText variant="muted">{user?.email}</AppText>
-          <AppText variant="small">Role: {user?.role}</AppText>
-        </View>
-      </Card>
+      <Pressable onPress={() => router.push("/driver/profile")} accessibilityLabel="Edit your profile">
+        <Card style={styles.profile}>
+          <Avatar name={user?.name} uri={user?.avatar} size={52} />
+          <View style={styles.flex}>
+            <AppText variant="heading">{user?.name}</AppText>
+            <AppText variant="muted">{user?.email}</AppText>
+            <AppText variant="muted">Tap to edit your profile</AppText>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+        </Card>
+      </Pressable>
 
       <View style={styles.section}>
         {LINKS.map((l) => (

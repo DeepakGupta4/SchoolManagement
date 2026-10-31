@@ -21,9 +21,11 @@ const STATUS_META: Record<StaffAttendanceStatus, { bg: string; fg: string; icon:
 export default function DriverAttendance() {
   const [me, setMe] = useState<StaffMe | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (opts?: { refresh?: boolean }) => {
+    if (opts?.refresh) setRefreshing(true);
     setError(null);
     try {
       setMe(await getStaffMe());
@@ -31,6 +33,7 @@ export default function DriverAttendance() {
       setError(e instanceof ApiError ? e.message : "Could not load your attendance.");
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, []);
 
@@ -73,8 +76,8 @@ export default function DriverAttendance() {
         <PagedList
           data={att!.recent}
           keyExtractor={(r) => (r as { date: string }).date}
-          refreshing={loading}
-          onRefresh={load}
+          refreshing={refreshing}
+          onRefresh={() => load({ refresh: true })}
           contentContainerStyle={{ gap: spacing.md }}
           ListHeaderComponent={
             <View style={{ gap: spacing.md }}>

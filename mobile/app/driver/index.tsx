@@ -15,9 +15,11 @@ import { colors, radius, spacing, fontWeight, fontSize } from "@/theme";
 type QuickAction = { label: string; icon: keyof typeof Ionicons.glyphMap; href: Href; bg: string; fg: string };
 const ACTIONS: QuickAction[] = [
   { label: "Live tracking", icon: "navigate-outline", href: "/driver/tracking", bg: colors.primarySoft, fg: colors.primaryText },
+  { label: "My students", icon: "people-outline", href: "/driver/students", bg: colors.infoSoft, fg: colors.infoText },
   { label: "My attendance", icon: "checkbox-outline", href: "/driver/attendance", bg: colors.successSoft, fg: colors.successText },
-  { label: "My leave", icon: "calendar-clear-outline", href: "/driver/leave", bg: colors.infoSoft, fg: colors.infoText },
-  { label: "Updates", icon: "megaphone-outline", href: "/driver/updates", bg: colors.warningSoft, fg: colors.warningText },
+  { label: "My leave", icon: "calendar-clear-outline", href: "/driver/leave", bg: colors.warningSoft, fg: colors.warningText },
+  { label: "Updates", icon: "megaphone-outline", href: "/driver/updates", bg: colors.primarySoft, fg: colors.primaryText },
+  { label: "Message board", icon: "chatbubbles-outline", href: "/driver/messages", bg: colors.successSoft, fg: colors.successText },
 ];
 
 /** Driver home: school status, their route, trip + live-share, attendance & quick actions. */
@@ -36,7 +38,12 @@ export default function DriverHome() {
     try {
       const [staff, r, hol, on] = await Promise.all([
         getStaffMe().catch(() => null),
-        getMyRoute().catch(() => null),
+        // Route is the primary card — surface its failure so the retry button shows
+        // (the others degrade silently).
+        getMyRoute().catch((e) => {
+          setError(e instanceof ApiError ? e.message : "Could not load your route.");
+          return null;
+        }),
         listHolidays().catch(() => [] as Holiday[]),
         isTracking().catch(() => false),
       ]);

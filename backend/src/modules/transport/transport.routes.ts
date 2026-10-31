@@ -2,8 +2,13 @@ import { Router } from "express";
 import mongoose from "mongoose";
 import { z } from "zod";
 import { BusRoute, type BusRouteAttrs } from "../busRoutes/busRoute.model.js";
+import { Student } from "../students/student.model.js";
+import { User } from "../auth/user.model.js";
+import { requireRole } from "../../middleware/auth.js";
 import { validate } from "../../middleware/validate.js";
 import { ApiError } from "../../utils/ApiError.js";
+
+const escapeRx = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 /**
  * Live bus tracking. The DRIVER's phone is the GPS source: while sharing is on it
@@ -49,6 +54,62 @@ router.get("/me", async (req, res, next) => {
       ? await BusRoute.findOne({ schoolId: req.user!.schoolId, driverEmail: email })
       : null;
     res.json({ data: route ? toLive(route) : null });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * GET /api/transport/me/students — the pupils riding the signed-in driver's
+ * route(s), so they know who boards. Driver-only, and self-scoped: matches the
+ * driver's own route(s) by the hard driverEmail link, OR by driver name but ONLY
+ * for routes that have no email link — so a name collision can never pull in a
+ * route that belongs to another driver's login. Returns only students whose
+ * transportRouteCode is one of those routes.
+ */
+router.get("/me/students", requireRole("driver"), async (req, res, next) => {
+  try {
+    const schoolId = req.user!.schoolId;
+    const email = driverEmail(req);
+    const me = await User.findOne({ schoolId, email: req.user!.email }).lean();
+    const name = (me?.name || "").trim();
+
+    const or: Record<string, unknown>[] = [];
+    if (email) or.push({ driverEmail: email });
+    // Name fallback is scoped to UNLINKED routes only (driverEmail blank/null),
+    // so it can never match a route hard-linked to someone else's login.
+    if (name) or.push({ driverEmail: { $in: ["", null] }, driver: new RegExp(`^${escapeRx(name)}$`, "i") });
+    const routes = or.length ? await BusRoute.find({ schoolId, $or: or }).lean() : [];
+    const codes = routes.map((r) => r.code).filter(Boolean);
+
+    if (codes.length === 0) {
+      res.json({ data: [] });
+      return;
+    }
+
+    const students = await Student.find({
+      schoolId,
+      status: "active",
+      transportRouteCode: { $in: codes },
+    })
+      .select("firstName lastName className section rollNo pickupPoint transportRouteCode avatar guardian")
+      .lean();
+
+    const rows = students
+      .map((s) => ({
+        id: String(s._id),
+        name: `${s.firstName ?? ""} ${s.lastName ?? ""}`.trim(),
+        className: s.className ?? "",
+        section: s.section ?? "",
+        rollNo: s.rollNo ?? "",
+        pickupPoint: s.pickupPoint ?? "",
+        routeCode: s.transportRouteCode ?? "",
+        avatar: s.avatar ?? "",
+        guardianPhone: s.guardian?.phone ?? "",
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    res.json({ data: rows });
   } catch (err) {
     next(err);
   }
