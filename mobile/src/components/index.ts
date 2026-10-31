@@ -14,3 +14,4 @@ export { Avatar } from "./Avatar";
 export { MonthCalendar } from "./MonthCalendar";
 export { StudentAttendanceModal } from "./StudentAttendanceModal";
 export { PagedList } from "./PagedList";
+export { AssistantScreen } from "./AssistantScreen";

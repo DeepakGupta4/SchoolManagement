@@ -22,6 +22,7 @@ export default function ParentLayout() {
       <Tabs.Screen name="index" options={{ title: "Children", tabBarIcon: icon("people-outline") }} />
       <Tabs.Screen name="more" options={{ title: "More", tabBarIcon: icon("grid-outline") }} />
       <Tabs.Screen name="child" options={{ href: null }} />
+      <Tabs.Screen name="assistant" options={{ href: null }} />
     </Tabs>
   );
 }

@@ -40,6 +40,7 @@ export default function TeacherLayout() {
       <Tabs.Screen name="leave" options={{ href: null }} />
       <Tabs.Screen name="id-card" options={{ href: null }} />
       <Tabs.Screen name="profile" options={{ href: null }} />
+      <Tabs.Screen name="assistant" options={{ href: null }} />
     </Tabs>
   );
 }

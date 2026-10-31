@@ -41,8 +41,15 @@ export default function StudentHome() {
         .filter(Boolean)
         .join(" · ")
     : undefined;
-  const bus = (
-    <HeroAction icon="bus-outline" onPress={() => router.push("/track")} accessibilityLabel="Track the school bus" />
+  const headerActions = (
+    <View style={{ flexDirection: "row", gap: spacing.sm }}>
+      <HeroAction
+        icon="sparkles-outline"
+        onPress={() => router.push("/student/assistant")}
+        accessibilityLabel="AI assistant"
+      />
+      <HeroAction icon="bus-outline" onPress={() => router.push("/track")} accessibilityLabel="Track the school bus" />
+    </View>
   );
 
   return (
@@ -50,7 +57,7 @@ export default function StudentHome() {
       name={name}
       avatarUri={me?.profile.avatar || undefined}
       meta={meta}
-      rightSlot={bus}
+      rightSlot={headerActions}
       loading={loading && !me}
     >
       {!me ? (

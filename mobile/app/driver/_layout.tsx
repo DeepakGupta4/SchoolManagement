@@ -20,6 +20,9 @@ export default function DriverLayout() {
     >
       <Tabs.Screen name="index" options={{ title: "Tracking", tabBarIcon: icon("navigate-outline") }} />
       <Tabs.Screen name="more" options={{ title: "More", tabBarIcon: icon("grid-outline") }} />
+
+      {/* Reachable via router.push from More, but not its own tab. */}
+      <Tabs.Screen name="assistant" options={{ href: null }} />
     </Tabs>
   );
 }

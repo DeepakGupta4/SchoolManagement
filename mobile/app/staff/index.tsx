@@ -44,9 +44,19 @@ export default function StaffHome() {
   const bus = (
     <HeroAction icon="bus-outline" onPress={() => router.push("/track")} accessibilityLabel="Track the school bus" />
   );
+  const headerActions = (
+    <View style={{ flexDirection: "row", gap: spacing.sm }}>
+      <HeroAction
+        icon="sparkles-outline"
+        onPress={() => router.push("/staff/assistant")}
+        accessibilityLabel="AI assistant"
+      />
+      {bus}
+    </View>
+  );
 
   return (
-    <DashboardScreen name={name} avatarUri={me?.profile.avatar || undefined} meta={meta} rightSlot={bus} loading={loading && !me}>
+    <DashboardScreen name={name} avatarUri={me?.profile.avatar || undefined} meta={meta} rightSlot={headerActions} loading={loading && !me}>
       {!me ? (
         <NoticeCard
           error={error}

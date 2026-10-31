@@ -34,12 +34,19 @@ export default function ParentHome() {
   );
 
   const meta = children.length ? `${children.length} ${children.length === 1 ? "child" : "children"}` : undefined;
-  const bus = (
-    <HeroAction icon="bus-outline" onPress={() => router.push("/track")} accessibilityLabel="Track the school bus" />
+  const headerActions = (
+    <View style={{ flexDirection: "row", gap: spacing.sm }}>
+      <HeroAction
+        icon="sparkles-outline"
+        onPress={() => router.push("/parent/assistant")}
+        accessibilityLabel="AI assistant"
+      />
+      <HeroAction icon="bus-outline" onPress={() => router.push("/track")} accessibilityLabel="Track the school bus" />
+    </View>
   );
 
   return (
-    <DashboardScreen name={user?.name || "Parent"} meta={meta} rightSlot={bus} loading={loading && children.length === 0}>
+    <DashboardScreen name={user?.name || "Parent"} meta={meta} rightSlot={headerActions} loading={loading && children.length === 0}>
       <AppText variant="heading">My children</AppText>
 
       {/* Keep cached children visible even if a background refetch fails. */}

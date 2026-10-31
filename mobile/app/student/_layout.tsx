@@ -21,6 +21,9 @@ export default function StudentLayout() {
     >
       <Tabs.Screen name="index" options={{ title: "Home", tabBarIcon: icon("home-outline") }} />
       <Tabs.Screen name="more" options={{ title: "More", tabBarIcon: icon("grid-outline") }} />
+
+      {/* Routable from Home, but not its own tab. */}
+      <Tabs.Screen name="assistant" options={{ href: null }} />
     </Tabs>
   );
 }

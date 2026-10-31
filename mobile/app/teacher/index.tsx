@@ -80,17 +80,24 @@ export default function TeacherHome() {
       .sort((a, b) => a.period - b.period);
   }, [timetable, today, myName]);
 
-  const bell = (
-    <HeroAction
-      icon="notifications-outline"
-      badge={unread ? (unread > 9 ? "9+" : unread) : undefined}
-      onPress={() => router.push("/teacher/notifications")}
-      accessibilityLabel={unread ? `Alerts, ${unread} unread` : "Alerts"}
-    />
+  const headerActions = (
+    <View style={styles.headerActions}>
+      <HeroAction
+        icon="sparkles-outline"
+        onPress={() => router.push("/teacher/assistant")}
+        accessibilityLabel="AI assistant"
+      />
+      <HeroAction
+        icon="notifications-outline"
+        badge={unread ? (unread > 9 ? "9+" : unread) : undefined}
+        onPress={() => router.push("/teacher/notifications")}
+        accessibilityLabel={unread ? `Alerts, ${unread} unread` : "Alerts"}
+      />
+    </View>
   );
 
   return (
-    <DashboardScreen name={name} avatarUri={avatarUri} meta={meta} rightSlot={bell} loading={loading && !teacher}>
+    <DashboardScreen name={name} avatarUri={avatarUri} meta={meta} rightSlot={headerActions} loading={loading && !teacher}>
       {/* class teacher's #1 daily task */}
       {classTeacherOf ? (
         <Pressable onPress={() => router.push("/teacher/attendance")} accessibilityRole="button">
@@ -220,6 +227,7 @@ function EmptyState({ icon, text }: { icon: keyof typeof Ionicons.glyphMap; text
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   block: { gap: spacing.sm },
+  headerActions: { flexDirection: "row", gap: spacing.sm },
 
   // attendance CTA (light-indigo actionable card)
   cta: {
