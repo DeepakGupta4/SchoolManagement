@@ -15,4 +15,5 @@ export { MonthCalendar } from "./MonthCalendar";
 export { StudentAttendanceModal } from "./StudentAttendanceModal";
 export { StudentPreviewModal } from "./StudentPreviewModal";
 export { PagedList } from "./PagedList";
+export { AddButton } from "./AddButton";
 export { AssistantScreen } from "./AssistantScreen";

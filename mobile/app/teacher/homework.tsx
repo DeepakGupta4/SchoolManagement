@@ -6,7 +6,7 @@ import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system/legacy";
 import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { Screen, ScreenHeader, AppText, Card, TextField, Button, Loading, PagedList } from "@/components";
+import { Screen, ScreenHeader, AppText, Card, TextField, Button, Loading, PagedList, AddButton } from "@/components";
 import { getMyTeacher, teacherName } from "@/api/teacher";
 import { listHomework, createHomework, type Homework } from "@/api/homework";
 import { ApiError } from "@/api/client";
@@ -137,7 +137,7 @@ export default function HomeworkScreen() {
       <ScreenHeader
         title="Homework"
         subtitle={klass ? `Class ${klass}` : undefined}
-        right={!composing && items.length > 0 ? <AddPill label="New" onPress={() => setComposing(true)} /> : undefined}
+        right={!composing && items.length > 0 ? <AddButton label="New" onPress={() => setComposing(true)} /> : undefined}
       />
 
       <PagedList
@@ -159,7 +159,7 @@ export default function HomeworkScreen() {
                 {`Post an assignment${klass ? ` for Class ${klass}` : ""} — it'll show up here.`}
               </AppText>
               <View style={styles.emptyAdd}>
-                <AddPill label="New homework" onPress={() => setComposing(true)} />
+                <AddButton label="New homework" onPress={() => setComposing(true)} />
               </View>
             </View>
           )
@@ -257,28 +257,8 @@ export default function HomeworkScreen() {
   );
 }
 
-/** Small pill add-button — top-right when there's homework, bottom when empty. */
-function AddPill({ label, onPress }: { label: string; onPress: () => void }) {
-  return (
-    <Pressable onPress={onPress} style={styles.pill} accessibilityRole="button" accessibilityLabel="New homework">
-      <Ionicons name="add" size={18} color={colors.onPrimary} />
-      <AppText style={styles.pillText}>{label}</AppText>
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  pill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: colors.primary,
-    borderRadius: radius.pill,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-  },
-  pillText: { color: colors.onPrimary, fontWeight: fontWeight.semibold, fontSize: fontSize.sm },
   emptyAdd: { marginTop: spacing.sm },
   form: { gap: spacing.sm },
   formHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },

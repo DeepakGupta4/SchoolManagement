@@ -2,7 +2,7 @@ import { useCallback, useState } from "react";
 import { Linking, Pressable, StyleSheet, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { Screen, ScreenHeader, AppText, Card, Button, TextField, Loading, PagedList, Avatar, StudentPreviewModal } from "@/components";
+import { Screen, ScreenHeader, AppText, Card, TextField, Loading, PagedList, Avatar, StudentPreviewModal, AddButton } from "@/components";
 import { getMyTeacher } from "@/api/teacher";
 import { listStudents, renumberRoll, studentFullName, type Student } from "@/api/students";
 import { colors, radius, spacing, fontWeight, fontSize } from "@/theme";
@@ -91,6 +91,7 @@ export default function Students() {
       <ScreenHeader
         title="My Class"
         subtitle={`${cls.className}${cls.section ? ` · ${cls.section}` : ""} · ${students.length} students`}
+        right={<AddButton label="Add" onPress={() => router.push("/teacher/student-form")} />}
       />
 
       <PagedList
@@ -154,8 +155,6 @@ export default function Students() {
           router.push({ pathname: "/teacher/student-form", params: { id } });
         }}
       />
-
-      <Button title="+ Add student" onPress={() => router.push("/teacher/student-form")} />
     </Screen>
   );
 }
