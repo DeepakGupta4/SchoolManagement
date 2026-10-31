@@ -7,9 +7,9 @@ import { AppText } from "./AppText";
 import { colors, radius, spacing } from "@/theme";
 
 /**
- * Consistent inner-screen header: optional back button, title (+ subtitle) and an
- * optional right action. Also keeps the status bar dark on these light screens
- * (the dashboards flip it to light).
+ * Consistent inner-screen header: title (+ subtitle), an optional right-side
+ * close (✕) button that dismisses the screen, and an optional extra `right` slot.
+ * Also keeps the status bar dark on these light screens (dashboards set it light).
  */
 export function ScreenHeader({
   title,
@@ -32,22 +32,22 @@ export function ScreenHeader({
 
   return (
     <View style={styles.wrap}>
-      {back ? (
-        <Pressable
-          onPress={() => router.back()}
-          style={styles.back}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-        >
-          <Ionicons name="chevron-back" size={22} color={colors.text} />
-        </Pressable>
-      ) : null}
       <View style={styles.flex}>
         <AppText variant="title">{title}</AppText>
         {subtitle ? <AppText variant="muted">{subtitle}</AppText> : null}
       </View>
       {right}
+      {back ? (
+        <Pressable
+          onPress={() => router.back()}
+          style={styles.close}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Close"
+        >
+          <Ionicons name="close" size={22} color={colors.text} />
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -55,7 +55,7 @@ export function ScreenHeader({
 const styles = StyleSheet.create({
   wrap: { flexDirection: "row", alignItems: "center", gap: spacing.md },
   flex: { flex: 1 },
-  back: {
+  close: {
     width: 40,
     height: 40,
     borderRadius: radius.md,
