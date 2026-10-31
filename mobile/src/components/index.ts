@@ -13,5 +13,6 @@ export { ScreenHeader } from "./ScreenHeader";
 export { Avatar } from "./Avatar";
 export { MonthCalendar } from "./MonthCalendar";
 export { StudentAttendanceModal } from "./StudentAttendanceModal";
+export { StudentPreviewModal } from "./StudentPreviewModal";
 export { PagedList } from "./PagedList";
 export { AssistantScreen } from "./AssistantScreen";

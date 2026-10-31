@@ -2,7 +2,7 @@ import { useCallback, useState } from "react";
 import { Linking, Pressable, StyleSheet, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { Screen, ScreenHeader, AppText, Card, Button, TextField, Loading, PagedList } from "@/components";
+import { Screen, ScreenHeader, AppText, Card, Button, TextField, Loading, PagedList, Avatar, StudentPreviewModal } from "@/components";
 import { getMyTeacher } from "@/api/teacher";
 import { listStudents, studentFullName, type Student } from "@/api/students";
 import { colors, radius, spacing, fontWeight, fontSize } from "@/theme";
@@ -14,6 +14,7 @@ export default function Students() {
   const [cls, setCls] = useState({ className: "", section: "" });
   const [students, setStudents] = useState<Student[]>([]);
   const [search, setSearch] = useState("");
+  const [previewFor, setPreviewFor] = useState<Student | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -24,7 +25,8 @@ export default function Students() {
       setCls({ className: t.classTeacherOf ?? "", section: t.classTeacherSection ?? "" });
       if (isCt) {
         const list = await listStudents({ className: t.classTeacherOf, section: t.classTeacherSection });
-        setStudents([...list].sort((a, b) => (Number(a.rollNo) || 0) - (Number(b.rollNo) || 0)));
+        // Alphabetical by name everywhere students are listed (not roll order).
+        setStudents([...list].sort((a, b) => studentFullName(a).localeCompare(studentFullName(b))));
       }
     } catch {
       /* fail closed */
@@ -98,14 +100,12 @@ export default function Students() {
           const phone = item.guardian?.phone;
           return (
             <Pressable
-              onPress={() => router.push({ pathname: "/teacher/student-form", params: { id: item.id } })}
+              onPress={() => setPreviewFor(item)}
               accessibilityRole="button"
-              accessibilityLabel={`Open ${studentFullName(item)}`}
+              accessibilityLabel={`Preview ${studentFullName(item)}`}
             >
               <Card style={styles.row}>
-                <View style={styles.avatar}>
-                  <AppText style={styles.avatarText}>{(studentFullName(item)[0] || "?").toUpperCase()}</AppText>
-                </View>
+                <Avatar name={studentFullName(item)} uri={item.avatar} size={48} />
                 <View style={styles.flex}>
                   <AppText variant="heading" style={styles.name} numberOfLines={1}>
                     {studentFullName(item)}
@@ -129,6 +129,15 @@ export default function Students() {
               </Card>
             </Pressable>
           );
+        }}
+      />
+
+      <StudentPreviewModal
+        student={previewFor}
+        onClose={() => setPreviewFor(null)}
+        onEdit={(id) => {
+          setPreviewFor(null);
+          router.push({ pathname: "/teacher/student-form", params: { id } });
         }}
       />
 

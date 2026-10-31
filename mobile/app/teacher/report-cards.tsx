@@ -181,7 +181,7 @@ export default function ReportCards() {
         band: gradeForPercent(scheme, percent),
       };
     });
-    return rows.sort((a, b) => a.roll - b.roll);
+    return rows.sort((a, b) => a.studentName.localeCompare(b.studentName));
   }, [marks, scheme]);
 
   const classAvg = reportRows.length

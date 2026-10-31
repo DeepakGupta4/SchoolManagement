@@ -133,7 +133,7 @@ export default function Marks() {
     ])
       .then(([students, saved]) => {
         if (!alive) return;
-        const sorted = [...students].sort((a, b) => (Number(a.rollNo) || 0) - (Number(b.rollNo) || 0));
+        const sorted = [...students].sort((a, b) => studentFullName(a).localeCompare(studentFullName(b)));
         setRoster(sorted);
         const forSubject = saved.filter((m) => m.subject === subject);
         const byId = new Map(forSubject.map((m) => [String(m.studentId), m]));
