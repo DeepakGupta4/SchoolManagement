@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import { FlatList, Pressable, StyleSheet, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
-import { Screen, AppText, Card, Button, TextField, Loading } from "@/components";
+import { Screen, ScreenHeader, AppText, Card, Button, TextField, Loading } from "@/components";
 import { getMyTeacher } from "@/api/teacher";
 import { listStudents, studentFullName, type Student } from "@/api/students";
 import { colors, radius, spacing } from "@/theme";
@@ -56,7 +56,7 @@ export default function Students() {
   if (!isClassTeacher) {
     return (
       <Screen>
-        <AppText variant="title">My Class</AppText>
+        <ScreenHeader title="My Class" />
         <Card>
           <AppText variant="muted">
             You&apos;re not a class teacher, so there&apos;s no class roster to manage here.
@@ -68,13 +68,10 @@ export default function Students() {
 
   return (
     <Screen scroll={false} style={{ gap: spacing.md }}>
-      <View>
-        <AppText variant="title">My Class</AppText>
-        <AppText variant="muted">
-          {cls.className}
-          {cls.section ? ` · ${cls.section}` : ""} · {students.length} students
-        </AppText>
-      </View>
+      <ScreenHeader
+        title="My Class"
+        subtitle={`${cls.className}${cls.section ? ` · ${cls.section}` : ""} · ${students.length} students`}
+      />
 
       <TextField
         placeholder="Search name / admission / roll…"

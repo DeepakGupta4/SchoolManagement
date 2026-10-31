@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { useFocusEffect } from "expo-router";
-import { Screen, AppText, Card, TextField, Button, Loading } from "@/components";
+import { Screen, ScreenHeader, AppText, Card, TextField, Button, Loading } from "@/components";
 import { getMyTeacher, teacherName } from "@/api/teacher";
 import { listMessages, createMessage, type Message } from "@/api/messages";
 import { ApiError } from "@/api/client";
@@ -72,7 +72,7 @@ export default function Messages() {
   return (
     <Screen style={{ gap: spacing.md }}>
       <View>
-        <AppText variant="title">Message Board</AppText>
+        <ScreenHeader title="Message Board" back />
         <AppText variant="muted">Posts are shared with your whole school.</AppText>
       </View>
 

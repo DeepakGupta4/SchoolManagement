@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { FlatList, Pressable, StyleSheet, View } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { Screen, AppText, Card, Button, Loading } from "@/components";
+import { Screen, ScreenHeader, AppText, Card, Button, Loading } from "@/components";
 import { getMyTeacher } from "@/api/teacher";
 import { listStudents, studentFullName, type Student } from "@/api/students";
 import {
@@ -13,7 +13,7 @@ import {
 } from "@/api/attendance";
 import { ApiError } from "@/api/client";
 import { todayIso, addDays, isSundayIso, prettyDate } from "@/lib/date";
-import { colors, radius, spacing, fontWeight } from "@/theme";
+import { colors, radius, spacing, fontWeight, fontSize } from "@/theme";
 
 // Single source for the status pills (label + colour), reused in the legend + rows.
 const STATUSES: { key: AttendanceStatus; label: string; color: string }[] = [
@@ -138,7 +138,7 @@ export default function Attendance() {
   if (!isClassTeacher) {
     return (
       <Screen>
-        <AppText variant="title">Attendance</AppText>
+        <ScreenHeader title="Attendance" back />
         <Card>
           <AppText variant="muted">
             You&apos;re not a class teacher, so there&apos;s no roll-call to take here.
@@ -150,13 +150,11 @@ export default function Attendance() {
 
   return (
     <Screen scroll={false} style={{ gap: spacing.md }}>
-      <View>
-        <AppText variant="title">Attendance</AppText>
-        <AppText variant="muted">
-          {cls.className}
-          {cls.section ? ` · ${cls.section}` : ""} · {roster.length} students
-        </AppText>
-      </View>
+      <ScreenHeader
+        title="Attendance"
+        subtitle={`${cls.className}${cls.section ? ` · ${cls.section}` : ""} · ${roster.length} students`}
+        back
+      />
 
       {/* Date stepper — can't go past today (future dates are blocked server-side). */}
       <Card style={styles.dateRow}>
@@ -189,7 +187,7 @@ export default function Attendance() {
 
       <View style={styles.legend}>
         {STATUSES.map((s) => (
-          <AppText key={s.key} variant="small">
+          <AppText key={s.key} style={styles.legendItem}>
             <AppText style={{ color: s.color, fontWeight: fontWeight.bold }}>{s.label}</AppText>{" "}
             {s.key === "half-day" ? "half" : s.key}
           </AppText>
@@ -255,6 +253,7 @@ const styles = StyleSheet.create({
   banner: { backgroundColor: colors.warningSoft, borderColor: colors.warning, paddingVertical: spacing.sm },
   summaryRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   legend: { flexDirection: "row", flexWrap: "wrap", gap: spacing.md },
+  legendItem: { fontSize: fontSize.xs, color: colors.muted },
   row: { flexDirection: "row", alignItems: "center", gap: spacing.sm, padding: spacing.md },
   rollName: { flex: 1, gap: 2 },
   name: { fontSize: 14, fontWeight: fontWeight.medium },

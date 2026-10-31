@@ -2,7 +2,7 @@ import { useCallback, useState } from "react";
 import { Image, StyleSheet, View } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { Screen, AppText, Card, Loading } from "@/components";
+import { Screen, ScreenHeader, AppText, Card, Loading } from "@/components";
 import { getMyTeacher, teacherName, type Teacher } from "@/api/teacher";
 import { ApiError } from "@/api/client";
 import { colors, radius, spacing, fontSize, fontWeight } from "@/theme";
@@ -69,7 +69,7 @@ export default function IdCard() {
   if (errorMsg || !teacher) {
     return (
       <Screen>
-        <AppText variant="title">My ID Card</AppText>
+        <ScreenHeader title="My ID Card" back />
         <Card style={styles.emptyCard}>
           <Ionicons name="card-outline" size={28} color={colors.subtle} />
           <AppText variant="muted" style={styles.emptyText}>
@@ -90,7 +90,7 @@ export default function IdCard() {
 
   return (
     <Screen>
-      <AppText variant="title">My ID Card</AppText>
+      <ScreenHeader title="My ID Card" back />
 
       <Card style={styles.card}>
         {/* Branded header strip. */}

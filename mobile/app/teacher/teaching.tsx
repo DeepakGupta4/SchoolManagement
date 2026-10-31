@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Linking, StyleSheet, View, type DimensionValue } from "react-native";
 import { useFocusEffect } from "expo-router";
-import { Screen, AppText, Card, Button, TextField, Loading, Chips, type ChipOption } from "@/components";
+import { Screen, ScreenHeader, AppText, Card, Button, TextField, Loading, Chips, type ChipOption } from "@/components";
 import { getMyTeacher, teacherName } from "@/api/teacher";
 import {
   listStudyMaterial,
@@ -157,7 +157,7 @@ export default function Teaching() {
 
   return (
     <Screen style={{ gap: spacing.md }}>
-      <AppText variant="title">Teaching</AppText>
+      <ScreenHeader title="Teaching" back />
       <Chips options={TABS} value={tab} onChange={(v) => setTab(v as Tab)} />
 
       {message ? <AppText style={{ color: colors.successText }}>{message}</AppText> : null}

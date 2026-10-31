@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { StyleSheet, View } from "react-native";
-import { Screen, AppText, Card, Loading, Chips, type ChipOption } from "@/components";
+import { Screen, ScreenHeader, AppText, Card, Loading, Chips, type ChipOption } from "@/components";
 import {
   listAnnouncements,
   listNotices,
@@ -62,7 +62,7 @@ export default function Updates() {
 
   return (
     <Screen style={{ gap: spacing.md }}>
-      <AppText variant="title">Updates</AppText>
+      <ScreenHeader title="Updates" back />
       <Chips options={TABS} value={tab} onChange={(v) => setTab(v as Tab)} />
 
       {loading ? (

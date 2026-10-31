@@ -5,7 +5,8 @@ import * as DocumentPicker from "expo-document-picker";
 // SDK 54+ moved the classic readAsStringAsync/EncodingType API to the /legacy entry.
 import * as FileSystem from "expo-file-system/legacy";
 import { useFocusEffect } from "expo-router";
-import { Screen, AppText, Card, TextField, Button, Loading } from "@/components";
+import { Ionicons } from "@expo/vector-icons";
+import { Screen, ScreenHeader, AppText, Card, TextField, Button, Loading } from "@/components";
 import { getMyTeacher, teacherName } from "@/api/teacher";
 import { listHomework, createHomework, type Homework } from "@/api/homework";
 import { ApiError } from "@/api/client";
@@ -130,7 +131,7 @@ export default function HomeworkScreen() {
 
   return (
     <Screen style={{ gap: spacing.md }}>
-      <AppText variant="title">Homework</AppText>
+      <ScreenHeader title="Homework" />
 
       <Card style={{ gap: spacing.sm }}>
         <AppText variant="heading">Post new homework</AppText>
@@ -174,7 +175,7 @@ export default function HomeworkScreen() {
             </View>
             {h.fileName ? (
               <View style={styles.badge}>
-                <AppText variant="small">📎</AppText>
+                <Ionicons name="attach-outline" size={16} color={colors.primary} />
               </View>
             ) : null}
           </Card>

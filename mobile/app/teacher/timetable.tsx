@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { StyleSheet, View } from "react-native";
-import { Screen, AppText, Card, Loading } from "@/components";
+import { Screen, ScreenHeader, AppText, Card, Loading } from "@/components";
 import { getMyTeacher, getTimetable, teacherName, isTaughtBy, type TimetableEntry } from "@/api/teacher";
 import { colors, radius, spacing } from "@/theme";
 
@@ -45,7 +45,7 @@ export default function TeacherTimetable() {
 
   return (
     <Screen>
-      <AppText variant="title">My Timetable</AppText>
+      <ScreenHeader title="My Timetable" back />
       {mine.length === 0 ? (
         <AppText variant="muted">No periods assigned to you yet.</AppText>
       ) : (

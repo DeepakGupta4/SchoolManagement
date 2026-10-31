@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { useFocusEffect } from "expo-router";
-import { Screen, AppText, Card, Button, TextField, Loading, Chips, type ChipOption } from "@/components";
+import { Screen, ScreenHeader, AppText, Card, Button, TextField, Loading, Chips, type ChipOption } from "@/components";
 import { listMyLeave, applyLeave, type LeaveRow } from "@/api/leave";
 import { ApiError } from "@/api/client";
 import { todayIso, prettyDate } from "@/lib/date";
@@ -103,7 +103,7 @@ export default function LeaveScreen() {
   return (
     <Screen style={{ gap: spacing.md }}>
       <View>
-        <AppText variant="title">My Leave</AppText>
+        <ScreenHeader title="My Leave" back />
         <AppText variant="muted">Apply for time off and track approvals.</AppText>
       </View>
 

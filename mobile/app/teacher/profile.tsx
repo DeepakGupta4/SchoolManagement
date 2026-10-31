@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Image, StyleSheet, View } from "react-native";
 import * as ImagePicker from "expo-image-picker";
-import { Screen, AppText, Card, Button, TextField } from "@/components";
+import { Screen, ScreenHeader, AppText, Card, Button, TextField } from "@/components";
 import { useAuth } from "@/store/auth";
 import { updateMe, changeMyPassword } from "@/api/auth";
 import { ApiError } from "@/api/client";
@@ -34,7 +34,7 @@ export default function Profile() {
   if (!user) {
     return (
       <Screen>
-        <AppText variant="title">My Profile</AppText>
+        <ScreenHeader title="My Profile" back />
         <Card>
           <AppText variant="muted">You&apos;re not signed in.</AppText>
         </Card>
@@ -113,7 +113,7 @@ export default function Profile() {
 
   return (
     <Screen style={{ gap: spacing.lg }}>
-      <AppText variant="title">My Profile</AppText>
+      <ScreenHeader title="My Profile" back />
 
       {/* (1) Avatar + name */}
       <Card style={{ gap: spacing.md }}>

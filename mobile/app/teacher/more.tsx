@@ -2,7 +2,7 @@ import { useCallback } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { useFocusEffect, useRouter, type Href } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { Screen, AppText, Card, Button } from "@/components";
+import { Screen, ScreenHeader, AppText, Card, Button } from "@/components";
 import { useAuth } from "@/store/auth";
 import { useNotifications } from "@/store/notifications";
 import { colors, radius, spacing, fontWeight, fontSize } from "@/theme";
@@ -55,7 +55,7 @@ export default function More() {
 
   return (
     <Screen style={{ gap: spacing.lg }}>
-      <AppText variant="title">More</AppText>
+      <ScreenHeader title="More" />
 
       {/* Tap to edit your own profile (name, photo, password). */}
       <Pressable onPress={() => router.push("/teacher/profile")}>

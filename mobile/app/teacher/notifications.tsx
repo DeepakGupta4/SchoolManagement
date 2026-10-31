@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { FlatList, Pressable, StyleSheet, View } from "react-native";
-import { Screen, AppText, Card, Loading, Button } from "@/components";
+import { Screen, ScreenHeader, AppText, Card, Loading, Button } from "@/components";
 import { useNotifications } from "@/store/notifications";
 import { markRead, markAllRead } from "@/api/notifications";
 import { timeAgo } from "@/lib/time";
@@ -43,7 +43,7 @@ export default function Notifications() {
   return (
     <Screen scroll={false} style={{ gap: spacing.md }}>
       <View style={styles.header}>
-        <AppText variant="title">Notifications</AppText>
+        <ScreenHeader title="Notifications" back />
         {unread > 0 ? <Button title="Mark all read" variant="ghost" onPress={onReadAll} /> : null}
       </View>
 

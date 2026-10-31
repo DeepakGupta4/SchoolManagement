@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { useFocusEffect } from "expo-router";
-import { Screen, AppText, Card, Button, TextField, Loading, Chips, type ChipOption } from "@/components";
+import { Screen, ScreenHeader, AppText, Card, Button, TextField, Loading, Chips, type ChipOption } from "@/components";
 import { getMyTeacher } from "@/api/teacher";
 import { listStudents, studentFullName, type Student } from "@/api/students";
 import { listExams } from "@/api/exams";
@@ -205,7 +205,7 @@ export default function Marks() {
   if (!scope) {
     return (
       <Screen>
-        <AppText variant="title">Mark Entry</AppText>
+        <ScreenHeader title="Mark Entry" back />
         <Card>
           <AppText style={{ color: colors.dangerText }}>{error ?? "Could not load your teacher profile."}</AppText>
         </Card>
@@ -217,7 +217,7 @@ export default function Marks() {
 
   return (
     <Screen style={{ gap: spacing.md }}>
-      <AppText variant="title">Mark Entry</AppText>
+      <ScreenHeader title="Mark Entry" back />
 
       <Card style={{ gap: spacing.md }}>
         {examOptions.length === 0 ? (

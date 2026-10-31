@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { useFocusEffect } from "expo-router";
-import { Screen, AppText, Card, Loading } from "@/components";
+import { Screen, ScreenHeader, AppText, Card, Loading } from "@/components";
 import { getMyTeacher } from "@/api/teacher";
 import { listSubstitutions, type Substitution } from "@/api/substitutions";
 import { ApiError } from "@/api/client";
@@ -50,7 +50,7 @@ export default function Substitutions() {
   return (
     <Screen style={{ gap: spacing.md }}>
       <View>
-        <AppText variant="title">My Cover Duties</AppText>
+        <ScreenHeader title="My Cover Duties" back />
         <AppText variant="muted">Classes you've been assigned to cover.</AppText>
       </View>
 

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { Screen, AppText, Card, Loading, Chips, type ChipOption } from "@/components";
+import { Screen, ScreenHeader, AppText, Card, Loading, Chips, type ChipOption } from "@/components";
 import { getMyTeacher } from "@/api/teacher";
 import { listExams } from "@/api/exams";
 import { listClasses, type SchoolClass } from "@/api/classes";
@@ -199,7 +199,7 @@ export default function ReportCards() {
   if (!scope) {
     return (
       <Screen>
-        <AppText variant="title">Report Cards</AppText>
+        <ScreenHeader title="Report Cards" back />
         <Card>
           <AppText style={{ color: colors.dangerText }}>
             {error ?? "Could not load your teacher profile."}
@@ -213,7 +213,7 @@ export default function ReportCards() {
 
   return (
     <Screen style={{ gap: spacing.md }}>
-      <AppText variant="title">Report Cards</AppText>
+      <ScreenHeader title="Report Cards" back />
 
       <Card style={{ gap: spacing.md }}>
         {examOptions.length === 0 ? (

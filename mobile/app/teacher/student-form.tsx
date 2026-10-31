@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Screen, AppText, Card, TextField, Button, Loading } from "@/components";
+import { Screen, ScreenHeader, AppText, Card, TextField, Button, Loading } from "@/components";
 import { getMyTeacher } from "@/api/teacher";
 import { createStudent, updateStudent, getStudent, type Student } from "@/api/students";
 import { ApiError } from "@/api/client";
@@ -119,7 +119,7 @@ export default function StudentForm() {
 
   return (
     <Screen style={{ gap: spacing.md }}>
-      <AppText variant="title">{isEdit ? "Edit student" : "Add student"}</AppText>
+      <ScreenHeader title={isEdit ? "Edit student" : "Add student"} back />
 
       <Card style={{ gap: spacing.xs }}>
         <AppText variant="label">Class (your class — locked)</AppText>
