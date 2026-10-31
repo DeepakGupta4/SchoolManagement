@@ -2,8 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { FlatList, Modal, Pressable, StyleSheet, View } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { Calendar } from "react-native-calendars";
-import { Screen, ScreenHeader, AppText, Card, Button, Loading, Avatar } from "@/components";
+import { Screen, ScreenHeader, AppText, Card, Button, Loading, Avatar, MonthCalendar } from "@/components";
 import { getMyTeacher } from "@/api/teacher";
 import { listStudents, studentFullName, type Student } from "@/api/students";
 import {
@@ -24,18 +23,6 @@ const STATUSES: { key: AttendanceStatus; label: string; word: string; color: str
   { key: "half-day", label: "½", word: "half", color: colors.info },
   { key: "leave", label: "Lv", word: "leave", color: colors.subtle },
 ];
-
-const CAL_THEME = {
-  todayTextColor: colors.primary,
-  selectedDayBackgroundColor: colors.primary,
-  selectedDayTextColor: colors.onPrimary,
-  arrowColor: colors.primary,
-  monthTextColor: colors.text,
-  textMonthFontWeight: "700" as const,
-  dayTextColor: colors.text,
-  textDisabledColor: colors.subtle,
-  textSectionTitleColor: colors.muted,
-};
 
 export default function Attendance() {
   const [loading, setLoading] = useState(true);
@@ -266,15 +253,13 @@ export default function Attendance() {
       <Modal visible={calOpen} transparent animationType="fade" onRequestClose={() => setCalOpen(false)}>
         <Pressable style={styles.overlay} onPress={() => setCalOpen(false)}>
           <Pressable style={styles.calCard} onPress={() => {}}>
-            <Calendar
-              current={date}
+            <MonthCalendar
+              value={date}
               maxDate={todayIso()}
-              onDayPress={(d) => {
-                setDate(d.dateString);
+              onSelect={(d) => {
+                setDate(d);
                 setCalOpen(false);
               }}
-              markedDates={{ [date]: { selected: true, selectedColor: colors.primary } }}
-              theme={CAL_THEME}
             />
           </Pressable>
         </Pressable>
