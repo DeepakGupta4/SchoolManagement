@@ -11,6 +11,7 @@ import {
   CalendarDays,
   GraduationCap,
   IdCard,
+  KeyRound,
   Mail,
   MapPin,
   Pencil,
@@ -26,13 +27,16 @@ import {
   CardContent,
   CardHeader,
   ConfirmDialog,
+  CredentialsDialog,
   EmptyState,
   Skeleton,
   useToast,
 } from "@/components/ui";
 import { staffApi, type StaffMember } from "@/lib/api/staff";
 import type { StaffSchema } from "@/lib/schemas/staff";
+import type { UserCredentials } from "@/lib/api/users";
 import { StaffFormModal } from "../StaffFormModal";
+import { StaffCredentialsModal } from "../StaffCredentialsModal";
 import { DocumentsCard } from "@/components/DocumentsCard";
 
 type BadgeVariant = "default" | "success" | "warning" | "danger" | "info";
@@ -114,6 +118,9 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
   const [saving, setSaving] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [credsOpen, setCredsOpen] = useState(false);
+  const [creds, setCreds] = useState<UserCredentials | null>(null);
+  const [credsEmailed, setCredsEmailed] = useState(false);
 
   useEffect(() => {
     // `cancelled` keeps a response for a previous id from overwriting the
@@ -219,6 +226,10 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
           Back to staff
         </Link>
         <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => setCredsOpen(true)}>
+            <KeyRound className="size-4" />
+            Credentials
+          </Button>
           <Button variant="outline" onClick={() => setEditOpen(true)}>
             <Pencil className="size-4" />
             Edit
@@ -312,6 +323,21 @@ export default function StaffDetailPage({ params }: { params: Promise<{ id: stri
         loading={isDeleting}
         onConfirm={handleDelete}
       />
+
+      <StaffCredentialsModal
+        staff={credsOpen ? staff : null}
+        onClose={() => setCredsOpen(false)}
+        onDone={(c, emailed, action) => {
+          setCreds(c);
+          setCredsEmailed(emailed);
+          toast({
+            title: action === "created" ? "Login created" : "Password reset",
+            description: `Share the one-time credentials with ${staff.name}.`,
+          });
+        }}
+      />
+
+      <CredentialsDialog data={creds} emailed={credsEmailed} onClose={() => setCreds(null)} />
     </div>
   );
 }
