@@ -156,8 +156,11 @@ export default function HomeworkScreen() {
               </View>
               <AppText variant="heading">No homework yet</AppText>
               <AppText variant="muted" style={styles.emptyText}>
-                {`Tap "New homework" below to post an assignment${klass ? ` for Class ${klass}` : ""}.`}
+                {`Post an assignment${klass ? ` for Class ${klass}` : ""} — it'll show up here.`}
               </AppText>
+              <View style={styles.emptyAdd}>
+                <AddPill label="New homework" onPress={() => setComposing(true)} />
+              </View>
             </View>
           )
         }
@@ -250,12 +253,6 @@ export default function HomeworkScreen() {
           </Card>
         )}
       />
-
-      {!composing && items.length === 0 ? (
-        <View style={styles.bottomAdd}>
-          <AddPill label="New homework" onPress={() => setComposing(true)} />
-        </View>
-      ) : null}
     </Screen>
   );
 }
@@ -282,7 +279,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
   },
   pillText: { color: colors.onPrimary, fontWeight: fontWeight.semibold, fontSize: fontSize.sm },
-  bottomAdd: { alignItems: "center", paddingBottom: spacing.sm },
+  emptyAdd: { marginTop: spacing.sm },
   form: { gap: spacing.sm },
   formHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   fileRow: { flexDirection: "row", gap: spacing.sm },
