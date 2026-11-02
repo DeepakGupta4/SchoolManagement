@@ -41,11 +41,25 @@ async function scopeFor(req: Request): Promise<Record<string, unknown>> {
     };
   }
 
+  // Office roles see the whole school feed.
+  if (user.role === "school_admin" || user.role === "principal") {
+    return {
+      schoolId: user.schoolId,
+      $or: [{ audience: "school" }, { audience: "user", recipientEmail: email }],
+    };
+  }
+
+  // Every other role (student, parent, staff, accountant, driver, librarian, …)
+  // sees a school event ONLY if it's a genuine all-roles broadcast (no roles tag)
+  // or one explicitly addressed to their role — never the office/admin feed.
   return {
     schoolId: user.schoolId,
     $or: [
-      { audience: "school" },
       { audience: "user", recipientEmail: email },
+      {
+        audience: "school",
+        $or: [{ roles: { $exists: false } }, { roles: { $size: 0 } }, { roles: user.role }],
+      },
     ],
   };
 }

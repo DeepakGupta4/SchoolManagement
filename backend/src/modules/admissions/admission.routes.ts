@@ -165,6 +165,7 @@ async function enrolIfApproved(doc: HydratedDocument<ApplicationAttrs>, schoolId
       body: `${firstName} ${lastName} · ${className}-${section}`,
       link: "/students",
       className,
+      roles: ["super_admin", "school_admin", "principal", "teacher"],
     });
   } catch (err) {
     console.error("Admission enrolment failed:", err);

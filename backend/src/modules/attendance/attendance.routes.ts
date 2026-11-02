@@ -459,6 +459,7 @@ router.post(
           : `${total} absentee(s). Email is not configured on the server, so no messages were sent.`,
         link: "/attendance",
         className,
+        roles: ["super_admin", "school_admin", "principal", "teacher"],
       });
 
       res.json({ data: { total, emailed, noContact, emailConfigured } });

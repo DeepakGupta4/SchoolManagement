@@ -165,8 +165,10 @@ export default createCrudRouter({
     title: "New student admitted",
     body: `${s.firstName} ${s.lastName} · ${s.className}-${s.section}`,
     link: "/students",
-    // Class-scoped so only that class's teacher (plus office/admin) is notified.
+    // Class-scoped so only that class's teacher (plus office/admin) is notified —
+    // never students/parents.
     className: s.className,
+    roles: ["super_admin", "school_admin", "principal", "teacher"],
   }),
   // Cascade: removing a student also removes their fee account, payments and
   // uploaded documents, so no orphan records linger (e.g. in Fee Defaulters).
