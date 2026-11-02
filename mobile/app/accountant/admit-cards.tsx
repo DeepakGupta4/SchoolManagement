@@ -55,6 +55,8 @@ export default function AdmitCards() {
   const [rosterLoading, setRosterLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [previewId, setPreviewId] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
 
   const loadRefs = useCallback(async () => {
     setLoading(true);
@@ -115,7 +117,17 @@ export default function AdmitCards() {
     return () => {
       alive = false;
     };
-  }, [className, section]);
+  }, [className, section, reloadKey]);
+
+  const refresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await loadRefs();
+      setReloadKey((k) => k + 1); // re-fetch the roster too
+    } finally {
+      setRefreshing(false);
+    }
+  }, [loadRefs]);
 
   // The selected exam's papers for this class → timetable lines.
   const subjects = useMemo(() => {
@@ -165,6 +177,8 @@ export default function AdmitCards() {
         data={roster}
         resetKey={`${exam}|${className}|${section}|${search}`}
         keyExtractor={(s) => (s as Student).id ?? (s as Student).admissionNo}
+        refreshing={refreshing}
+        onRefresh={refresh}
         emptyText={rosterLoading ? "Loading…" : "No students in this class."}
         ListHeaderComponent={
           <View style={styles.header}>

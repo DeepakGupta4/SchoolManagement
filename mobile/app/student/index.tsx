@@ -59,6 +59,7 @@ export default function StudentHome() {
       meta={meta}
       rightSlot={headerActions}
       loading={loading && !me}
+      onRefresh={load}
     >
       {!me ? (
         <NoticeCard

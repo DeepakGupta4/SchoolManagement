@@ -1,5 +1,5 @@
-import { useCallback, useMemo, type ReactNode } from "react";
-import { Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
+import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { setStatusBarStyle } from "expo-status-bar";
@@ -24,6 +24,7 @@ export function DashboardScreen({
   rightSlot,
   status,
   loading,
+  onRefresh,
   children,
 }: {
   name: string;
@@ -33,9 +34,22 @@ export function DashboardScreen({
   /** School status shown opposite the date (e.g. Open / Holiday). */
   status?: { label: string; open: boolean };
   loading?: boolean;
+  /** Pass an async loader to enable pull-to-refresh on the body. */
+  onRefresh?: () => void | Promise<void>;
   children: ReactNode;
 }) {
   const insets = useSafeAreaInsets();
+  const [refreshing, setRefreshing] = useState(false);
+  const handleRefresh = onRefresh
+    ? async () => {
+        setRefreshing(true);
+        try {
+          await onRefresh();
+        } finally {
+          setRefreshing(false);
+        }
+      }
+    : undefined;
 
   useFocusEffect(
     useCallback(() => {
@@ -100,7 +114,16 @@ export function DashboardScreen({
           <Loading label="Loading…" />
         </View>
       ) : (
-        <ScrollView style={styles.flex} contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          style={styles.flex}
+          contentContainerStyle={styles.body}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            handleRefresh ? (
+              <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.onPrimary} colors={[colors.primary]} />
+            ) : undefined
+          }
+        >
           {children}
         </ScrollView>
       )}

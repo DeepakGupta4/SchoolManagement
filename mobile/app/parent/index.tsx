@@ -46,7 +46,7 @@ export default function ParentHome() {
   );
 
   return (
-    <DashboardScreen name={user?.name || "Parent"} meta={meta} rightSlot={headerActions} loading={loading && children.length === 0}>
+    <DashboardScreen name={user?.name || "Parent"} meta={meta} rightSlot={headerActions} loading={loading && children.length === 0} onRefresh={load}>
       <AppText variant="heading">My children</AppText>
 
       {/* Keep cached children visible even if a background refetch fails. */}

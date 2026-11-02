@@ -56,7 +56,7 @@ export default function StaffHome() {
   );
 
   return (
-    <DashboardScreen name={name} avatarUri={me?.profile.avatar || undefined} meta={meta} rightSlot={headerActions} loading={loading && !me}>
+    <DashboardScreen name={name} avatarUri={me?.profile.avatar || undefined} meta={meta} rightSlot={headerActions} loading={loading && !me} onRefresh={load}>
       {!me ? (
         <NoticeCard
           error={error}

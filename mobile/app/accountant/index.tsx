@@ -4,11 +4,10 @@ import { useFocusEffect, useRouter, type Href } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { AppText, Card, StatCard, DashboardScreen, HeroAction, NoticeCard } from "@/components";
 import { getStaffMe, type StaffMe } from "@/api/portal";
-import { getFeeSummary, listPayments, inr, type FeeSummary, type Payment } from "@/api/finance";
+import { getFeeSummary, inr, type FeeSummary } from "@/api/finance";
 import { getMySchool, type School } from "@/api/schools";
 import { listHolidays, type Holiday } from "@/api/updates";
 import { computeSchoolStatus } from "@/lib/schoolStatus";
-import { prettyDate } from "@/lib/date";
 import { ApiError } from "@/api/client";
 import { useAuth } from "@/store/auth";
 import { useNotifications } from "@/store/notifications";
@@ -24,14 +23,7 @@ const ACTIONS: QuickAction[] = [
   { label: "My leave", icon: "calendar-clear-outline", href: "/accountant/leave", bg: colors.warningSoft, fg: colors.warningText },
 ];
 
-const STATUS_TONE: Record<string, { bg: string; fg: string; label: string }> = {
-  paid: { bg: colors.successSoft, fg: colors.successText, label: "Paid" },
-  "pending-clearance": { bg: colors.warningSoft, fg: colors.warningText, label: "Pending" },
-  bounced: { bg: colors.dangerSoft, fg: colors.dangerText, label: "Bounced" },
-  cancelled: { bg: colors.surfaceAlt, fg: colors.muted, label: "Cancelled" },
-};
-
-/** Accountant home: fee day-book — KPIs, today-by-mode, recent payments, actions. */
+/** Accountant home: fee day-book KPIs, today-by-mode and quick actions. */
 export default function AccountantHome() {
   const router = useRouter();
   const user = useAuth((s) => s.user);
@@ -39,7 +31,6 @@ export default function AccountantHome() {
   const refreshAlerts = useNotifications((s) => s.refresh);
   const [me, setMe] = useState<StaffMe | null>(null);
   const [summary, setSummary] = useState<FeeSummary | null>(null);
-  const [payments, setPayments] = useState<Payment[]>([]);
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [school, setSchool] = useState<School | null>(null);
   const [loading, setLoading] = useState(true);
@@ -48,19 +39,17 @@ export default function AccountantHome() {
   const load = useCallback(async () => {
     setError(null);
     try {
-      const [staff, sum, pays, hol, sch] = await Promise.all([
+      const [staff, sum, hol, sch] = await Promise.all([
         getStaffMe().catch(() => null),
         getFeeSummary().catch((e) => {
           setError(e instanceof ApiError ? e.message : "Could not load the fee figures.");
           return null;
         }),
-        listPayments().catch(() => [] as Payment[]),
         listHolidays().catch(() => [] as Holiday[]),
         getMySchool().catch(() => null),
       ]);
       setMe(staff);
       setSummary(sum);
-      setPayments(pays);
       setHolidays(hol);
       setSchool(sch);
     } finally {
@@ -74,6 +63,10 @@ export default function AccountantHome() {
       refreshAlerts();
     }, [load, refreshAlerts])
   );
+
+  const refresh = useCallback(async () => {
+    await Promise.all([load(), refreshAlerts()]);
+  }, [load, refreshAlerts]);
 
   const name = me?.profile.name || user?.name || "Accountant";
   const meta = me ? [me.profile.role || "Accountant", me.profile.dept].filter(Boolean).join(" · ") : "Accountant";
@@ -91,11 +84,6 @@ export default function AccountantHome() {
       .map((mode) => ({ mode, amount: by[mode] ?? 0 }))
       .filter((r) => r.amount > 0);
   }, [summary]);
-
-  const recent = useMemo(
-    () => [...payments].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0)).slice(0, 6),
-    [payments]
-  );
 
   const headerActions = (
     <View style={styles.heroActions}>
@@ -117,10 +105,9 @@ export default function AccountantHome() {
       rightSlot={headerActions}
       status={schoolStatus}
       loading={loading && !summary && !me}
+      onRefresh={refresh}
     >
-      {!summary && error ? (
-        <NoticeCard error={error} emptyText="" onRetry={load} />
-      ) : null}
+      {!summary && error ? <NoticeCard error={error} emptyText="" onRetry={load} /> : null}
 
       {/* Day-book KPIs */}
       <View style={styles.statRow}>
@@ -155,45 +142,6 @@ export default function AccountantHome() {
         </Card>
       ) : null}
 
-      {/* Recent payments */}
-      <Card style={styles.block}>
-        <View style={styles.rowBetween}>
-          <AppText variant="heading">Recent payments</AppText>
-          <Pressable onPress={() => router.push("/accountant/payments")} hitSlop={8}>
-            <AppText style={styles.link}>View all</AppText>
-          </Pressable>
-        </View>
-        {recent.length === 0 ? (
-          <AppText variant="muted">No payments recorded yet.</AppText>
-        ) : (
-          recent.map((p) => {
-            const tone = STATUS_TONE[p.status] ?? STATUS_TONE.paid;
-            const voided = p.status === "cancelled" || p.status === "bounced";
-            return (
-              <View key={p.id} style={styles.payRow}>
-                <View style={styles.payIcon}>
-                  <Ionicons name="receipt-outline" size={16} color={colors.primary} />
-                </View>
-                <View style={styles.flex}>
-                  <AppText style={styles.payName} numberOfLines={1}>
-                    {p.studentName || "—"}
-                  </AppText>
-                  <AppText variant="small" style={styles.muted} numberOfLines={1}>
-                    {[p.receiptNo, p.className, p.method].filter(Boolean).join(" · ")}
-                  </AppText>
-                </View>
-                <View style={styles.payRight}>
-                  <AppText style={[styles.payAmount, voided && styles.voided]}>{inr(p.amount)}</AppText>
-                  <AppText variant="small" style={styles.muted}>
-                    {prettyDate(p.date)}
-                  </AppText>
-                </View>
-              </View>
-            );
-          })
-        )}
-      </Card>
-
       {/* Quick actions */}
       <Card style={styles.block}>
         <AppText variant="heading">Quick actions</AppText>
@@ -211,26 +159,13 @@ export default function AccountantHome() {
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1 },
-  muted: { color: colors.muted },
   heroActions: { flexDirection: "row", gap: spacing.sm },
   block: { gap: spacing.sm },
   statRow: { flexDirection: "row", gap: spacing.md },
-  rowBetween: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  link: { color: colors.primaryText, fontWeight: fontWeight.semibold, fontSize: fontSize.sm },
-
   modeGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
   modeTile: { flexGrow: 1, minWidth: "30%", backgroundColor: colors.surfaceAlt, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
   modeLabel: { color: colors.muted },
   modeValue: { fontSize: fontSize.md, fontWeight: fontWeight.bold, color: colors.text, marginTop: 2 },
-
-  payRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingVertical: spacing.xs },
-  payIcon: { width: 32, height: 32, borderRadius: radius.md, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
-  payName: { fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: colors.text },
-  payRight: { alignItems: "flex-end" },
-  payAmount: { fontSize: fontSize.sm, fontWeight: fontWeight.bold, color: colors.text },
-  voided: { color: colors.muted, textDecorationLine: "line-through" },
-
   actionGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.md },
   actionTile: { width: "47%", flexGrow: 1, borderRadius: radius.lg, padding: spacing.lg, gap: spacing.sm },
   actionLabel: { fontWeight: fontWeight.semibold, fontSize: fontSize.sm },

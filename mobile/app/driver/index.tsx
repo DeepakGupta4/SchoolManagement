@@ -100,6 +100,7 @@ export default function DriverHome() {
       rightSlot={headerActions}
       status={schoolStatus}
       loading={loading && !me && !route}
+      onRefresh={load}
     >
       {/* School-closed banner */}
       {isHoliday ? (

@@ -124,7 +124,7 @@ export default function AccountantTimetable() {
   }
 
   return (
-    <Screen style={{ gap: spacing.md }}>
+    <Screen style={{ gap: spacing.md }} onRefresh={load}>
       <ScreenHeader title="Timetable" back />
 
       {error ? (

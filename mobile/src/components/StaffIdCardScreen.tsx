@@ -92,7 +92,7 @@ export function StaffIdCardScreen() {
   const avatar = me.profile.avatar || user?.avatar || "";
 
   return (
-    <Screen>
+    <Screen onRefresh={load}>
       <ScreenHeader title="My ID Card" back />
 
       <Card style={styles.card}>

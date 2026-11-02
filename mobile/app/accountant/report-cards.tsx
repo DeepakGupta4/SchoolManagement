@@ -60,6 +60,8 @@ export default function ReportCards() {
   const [studentsById, setStudentsById] = useState<Record<string, Student>>({});
   const [previewFor, setPreviewFor] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
 
   const loadRefs = useCallback(async () => {
     setLoading(true);
@@ -133,7 +135,17 @@ export default function ReportCards() {
     return () => {
       alive = false;
     };
-  }, [examName, className, section]);
+  }, [examName, className, section, reloadKey]);
+
+  const refresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await loadRefs();
+      setReloadKey((k) => k + 1); // re-fetch the current marks sheet too
+    } finally {
+      setRefreshing(false);
+    }
+  }, [loadRefs]);
 
   const reportRows = useMemo<ReportRow[]>(() => {
     const groups = new Map<string, MarkRow[]>();
@@ -255,6 +267,8 @@ export default function ReportCards() {
           resetKey={`${examName}|${className}|${section}`}
           keyExtractor={(r) => r.studentId}
           pageSize={20}
+          refreshing={refreshing}
+          onRefresh={refresh}
           emptyText={ready ? "No marks saved for this exam yet." : "Pick an exam, class and section above."}
           renderItem={({ item: r }) => {
             const tone = toneForPercent(r.percent);

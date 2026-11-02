@@ -139,6 +139,7 @@ export default function TeacherHome() {
       rightSlot={headerActions}
       status={schoolStatus}
       loading={loading && !teacher}
+      onRefresh={load}
     >
       {/* Class teacher's #1 daily task — shown only until it's done, and never on a holiday. */}
       {classTeacherOf && isHoliday ? (
