@@ -38,6 +38,9 @@ export interface School {
   city?: string;
   signatureUrl?: string;
   sessionLabel?: string;
+  /** School hours (HH:MM) — drive the time-aware Open/Closed status. */
+  openingTime?: string;
+  closingTime?: string;
   gradingScheme?: GradingScheme;
   reportCardTemplate?: ReportCardTemplate;
 }

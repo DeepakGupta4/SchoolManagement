@@ -25,6 +25,7 @@ export default function AccountantLayout() {
       <Tabs.Screen name="more" options={{ title: "More", tabBarIcon: icon("grid-outline") }} />
 
       {/* Reachable via router.push from Home / More, but not their own tabs. */}
+      <Tabs.Screen name="notifications" options={{ href: null }} />
       <Tabs.Screen name="leave" options={{ href: null }} />
       <Tabs.Screen name="messages" options={{ href: null }} />
       <Tabs.Screen name="id-card" options={{ href: null }} />

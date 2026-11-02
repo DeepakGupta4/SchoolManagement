@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { StyleSheet, View } from "react-native";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Screen, ScreenHeader, AppText, Card, Button, Loading, Chips, TextField, PagedList, type ChipOption } from "@/components";
 import { listPayments, inr, type Payment } from "@/api/finance";
@@ -29,7 +29,11 @@ export default function Payments() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [status, setStatus] = useState("all");
+  // A deep-link (e.g. the dashboard "Pending" card) can preselect the filter.
+  const params = useLocalSearchParams<{ status?: string }>();
+  const [status, setStatus] = useState(
+    typeof params.status === "string" && FILTERS.some((f) => f.value === params.status) ? params.status : "all"
+  );
   const [search, setSearch] = useState("");
 
   const load = useCallback(async (opts?: { refresh?: boolean }) => {

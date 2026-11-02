@@ -14,6 +14,8 @@ import {
 } from "@/api/teacher";
 import { getSavedAttendance } from "@/api/attendance";
 import { listHolidays, type Holiday } from "@/api/updates";
+import { getMySchool, type School } from "@/api/schools";
+import { computeSchoolStatus } from "@/lib/schoolStatus";
 import { todayIso, isSundayIso } from "@/lib/date";
 import { useAuth } from "@/store/auth";
 import { useNotifications } from "@/store/notifications";
@@ -37,6 +39,7 @@ export default function TeacherHome() {
   const [teacher, setTeacher] = useState<Teacher | null>(null);
   const [timetable, setTimetable] = useState<TimetableEntry[]>([]);
   const [holidays, setHolidays] = useState<Holiday[]>([]);
+  const [school, setSchool] = useState<School | null>(null);
   const [attendanceMarked, setAttendanceMarked] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -50,12 +53,14 @@ export default function TeacherHome() {
       if (t.avatar && auth.user && !auth.user.avatar) auth.setUser({ ...auth.user, avatar: t.avatar });
       // Scope the timetable to this teacher server-side (name is the only join key).
       const nm = teacherName(t);
-      const [tt, hol] = await Promise.all([
+      const [tt, hol, sch] = await Promise.all([
         nm ? getTimetable(nm).catch(() => []) : Promise.resolve([]),
         listHolidays().catch(() => [] as Holiday[]),
+        getMySchool().catch(() => null),
       ]);
       setTimetable(tt);
       setHolidays(hol);
+      setSchool(sch);
       // Has today's attendance already been submitted for the class teacher's class?
       if (t.isClassTeacher && t.classTeacherOf) {
         const saved = await getSavedAttendance(t.classTeacherOf, t.classTeacherSection ?? "", todayIso()).catch(
@@ -103,7 +108,12 @@ export default function TeacherHome() {
   const todayIsoStr = useMemo(() => todayIso(), []);
   const holidayToday = useMemo(() => holidays.find((h) => h.date === todayIsoStr) ?? null, [holidays, todayIsoStr]);
   const isHoliday = isSundayIso(todayIsoStr) || !!holidayToday;
-  const schoolStatus = { label: isHoliday ? "Holiday" : "Open", open: !isHoliday };
+  // Open/Closed chip matches the website (Sunday/holiday + school hours); the
+  // holiday banner below still keys off isHoliday for the whole-day message.
+  const schoolStatus = useMemo(
+    () => computeSchoolStatus({ openingTime: school?.openingTime, closingTime: school?.closingTime, holidays }),
+    [school, holidays]
+  );
 
   const headerActions = (
     <View style={styles.headerActions}>

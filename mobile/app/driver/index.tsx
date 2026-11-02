@@ -6,6 +6,8 @@ import { AppText, Card, StatCard, DashboardScreen, HeroAction, NoticeCard } from
 import { getStaffMe, type StaffMe } from "@/api/portal";
 import { getMyRoute, type DriverRoute } from "@/api/transport";
 import { listHolidays, type Holiday } from "@/api/updates";
+import { getMySchool, type School } from "@/api/schools";
+import { computeSchoolStatus } from "@/lib/schoolStatus";
 import { isTracking } from "@/lib/tracking";
 import { todayIso, isSundayIso } from "@/lib/date";
 import { ApiError } from "@/api/client";
@@ -29,6 +31,7 @@ export default function DriverHome() {
   const [me, setMe] = useState<StaffMe | null>(null);
   const [route, setRoute] = useState<DriverRoute | null>(null);
   const [holidays, setHolidays] = useState<Holiday[]>([]);
+  const [school, setSchool] = useState<School | null>(null);
   const [sharing, setSharing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -36,7 +39,7 @@ export default function DriverHome() {
   const load = useCallback(async () => {
     setError(null);
     try {
-      const [staff, r, hol, on] = await Promise.all([
+      const [staff, r, hol, on, sch] = await Promise.all([
         getStaffMe().catch(() => null),
         // Route is the primary card — surface its failure so the retry button shows
         // (the others degrade silently).
@@ -46,11 +49,13 @@ export default function DriverHome() {
         }),
         listHolidays().catch(() => [] as Holiday[]),
         isTracking().catch(() => false),
+        getMySchool().catch(() => null),
       ]);
       setMe(staff);
       setRoute(r);
       setHolidays(hol);
       setSharing(on);
+      setSchool(sch);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Could not load your dashboard.");
     } finally {
@@ -71,7 +76,12 @@ export default function DriverHome() {
   const todayIsoStr = useMemo(() => todayIso(), []);
   const holidayToday = useMemo(() => holidays.find((h) => h.date === todayIsoStr) ?? null, [holidays, todayIsoStr]);
   const isHoliday = isSundayIso(todayIsoStr) || !!holidayToday;
-  const schoolStatus = { label: isHoliday ? "Holiday" : "Open", open: !isHoliday };
+  // Open/Closed chip matches the website (Sunday/holiday + school hours); the
+  // holiday banner below still keys off isHoliday for the whole-day message.
+  const schoolStatus = useMemo(
+    () => computeSchoolStatus({ openingTime: school?.openingTime, closingTime: school?.closingTime, holidays }),
+    [school, holidays]
+  );
 
   const att = me?.attendance;
 

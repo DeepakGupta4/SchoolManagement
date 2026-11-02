@@ -5,10 +5,13 @@ import { Ionicons } from "@expo/vector-icons";
 import { AppText, Card, StatCard, DashboardScreen, HeroAction, NoticeCard } from "@/components";
 import { getStaffMe, type StaffMe } from "@/api/portal";
 import { getFeeSummary, listPayments, inr, type FeeSummary, type Payment } from "@/api/finance";
+import { getMySchool, type School } from "@/api/schools";
 import { listHolidays, type Holiday } from "@/api/updates";
-import { todayIso, isSundayIso, prettyDate } from "@/lib/date";
+import { computeSchoolStatus } from "@/lib/schoolStatus";
+import { prettyDate } from "@/lib/date";
 import { ApiError } from "@/api/client";
 import { useAuth } from "@/store/auth";
+import { useNotifications } from "@/store/notifications";
 import { colors, radius, spacing, fontWeight, fontSize } from "@/theme";
 
 type QuickAction = { label: string; icon: keyof typeof Ionicons.glyphMap; href: Href; bg: string; fg: string };
@@ -30,17 +33,20 @@ const STATUS_TONE: Record<string, { bg: string; fg: string; label: string }> = {
 export default function AccountantHome() {
   const router = useRouter();
   const user = useAuth((s) => s.user);
+  const unread = useNotifications((s) => s.unread);
+  const refreshAlerts = useNotifications((s) => s.refresh);
   const [me, setMe] = useState<StaffMe | null>(null);
   const [summary, setSummary] = useState<FeeSummary | null>(null);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [holidays, setHolidays] = useState<Holiday[]>([]);
+  const [school, setSchool] = useState<School | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
     try {
-      const [staff, sum, pays, hol] = await Promise.all([
+      const [staff, sum, pays, hol, sch] = await Promise.all([
         getStaffMe().catch(() => null),
         getFeeSummary().catch((e) => {
           setError(e instanceof ApiError ? e.message : "Could not load the fee figures.");
@@ -48,11 +54,13 @@ export default function AccountantHome() {
         }),
         listPayments().catch(() => [] as Payment[]),
         listHolidays().catch(() => [] as Holiday[]),
+        getMySchool().catch(() => null),
       ]);
       setMe(staff);
       setSummary(sum);
       setPayments(pays);
       setHolidays(hol);
+      setSchool(sch);
     } finally {
       setLoading(false);
     }
@@ -61,16 +69,18 @@ export default function AccountantHome() {
   useFocusEffect(
     useCallback(() => {
       load();
-    }, [load])
+      refreshAlerts();
+    }, [load, refreshAlerts])
   );
 
   const name = me?.profile.name || user?.name || "Accountant";
   const meta = me ? [me.profile.role || "Accountant", me.profile.dept].filter(Boolean).join(" · ") : "Accountant";
 
-  const todayIsoStr = useMemo(() => todayIso(), []);
-  const holidayToday = useMemo(() => holidays.find((h) => h.date === todayIsoStr) ?? null, [holidays, todayIsoStr]);
-  const isHoliday = isSundayIso(todayIsoStr) || !!holidayToday;
-  const schoolStatus = { label: isHoliday ? "Holiday" : "Open", open: !isHoliday };
+  // Same Open/Closed rule as the website (Sunday/holiday + school hours).
+  const schoolStatus = useMemo(
+    () => computeSchoolStatus({ openingTime: school?.openingTime, closingTime: school?.closingTime, holidays }),
+    [school, holidays]
+  );
 
   // Today's collection split by instrument (Cash/UPI/…), non-zero only.
   const modeRows = useMemo(() => {
@@ -86,7 +96,15 @@ export default function AccountantHome() {
   );
 
   const headerActions = (
-    <HeroAction icon="sparkles-outline" onPress={() => router.push("/accountant/assistant")} accessibilityLabel="AI assistant" />
+    <View style={styles.heroActions}>
+      <HeroAction icon="sparkles-outline" onPress={() => router.push("/accountant/assistant")} accessibilityLabel="AI assistant" />
+      <HeroAction
+        icon="notifications-outline"
+        badge={unread ? (unread > 9 ? "9+" : unread) : undefined}
+        onPress={() => router.push("/accountant/notifications")}
+        accessibilityLabel={unread ? `Alerts, ${unread} unread` : "Alerts"}
+      />
+    </View>
   );
 
   return (
@@ -109,7 +127,7 @@ export default function AccountantHome() {
       </View>
       <View style={styles.statRow}>
         <StatCard label="Outstanding" value={inr(summary?.outstanding)} icon="alert-circle-outline" tone="warning" onPress={() => router.push("/accountant/dues")} />
-        <StatCard label="Dues" value={summary ? summary.defaulters : "—"} icon="people-outline" tone="danger" onPress={() => router.push("/accountant/dues")} />
+        <StatCard label="Pending" value={summary ? summary.pendingClearance : "—"} icon="hourglass-outline" tone="info" onPress={() => router.push("/accountant/payments?status=pending-clearance")} />
       </View>
 
       {/* Today by mode */}
@@ -187,6 +205,7 @@ export default function AccountantHome() {
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   muted: { color: colors.muted },
+  heroActions: { flexDirection: "row", gap: spacing.sm },
   block: { gap: spacing.sm },
   statRow: { flexDirection: "row", gap: spacing.md },
   rowBetween: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
