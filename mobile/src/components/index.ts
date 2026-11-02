@@ -25,5 +25,7 @@ export { MessageBoardScreen } from "./MessageBoardScreen";
 export { LeaveScreen } from "./LeaveScreen";
 export { StaffIdCardScreen } from "./StaffIdCardScreen";
 export { NotificationsScreen } from "./NotificationsScreen";
+export { UpdatesScreen } from "./UpdatesScreen";
 export { FeeDuesPreviewModal } from "./FeeDuesPreviewModal";
 export { PaymentReceiptModal } from "./PaymentReceiptModal";
+export { TimetableGrid } from "./TimetableGrid";

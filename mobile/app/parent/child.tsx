@@ -1,13 +1,13 @@
-import { useEffect, useState } from "react";
-import { Pressable, StyleSheet, View } from "react-native";
+import { useCallback, useEffect, useState } from "react";
+import { StyleSheet, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
-import { Screen, AppText, Card, Loading } from "@/components";
+import { Screen, ScreenHeader, AppText, Card, Button, Loading } from "@/components";
 import { getChild, type ChildDetail } from "@/api/portal";
 import { ApiError } from "@/api/client";
 import { colors, radius, spacing, fontWeight } from "@/theme";
 
-/** One child in detail — stats + subject-wise report card. */
+/** One child in detail — stats, report card, and links to their class
+ *  timetable + homework. */
 export default function Child() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id?: string }>();
@@ -15,29 +15,27 @@ export default function Child() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      if (!id) {
-        setError("No child selected.");
-        setLoading(false);
-        return;
-      }
-      try {
-        const d = await getChild(id);
-        if (alive) setData(d);
-      } catch (e) {
-        if (alive) setError(e instanceof ApiError ? e.message : "Could not load this child.");
-      } finally {
-        if (alive) setLoading(false);
-      }
-    })();
-    return () => {
-      alive = false;
-    };
+  const load = useCallback(async () => {
+    if (!id) {
+      setError("No child selected.");
+      setLoading(false);
+      return;
+    }
+    setError(null);
+    try {
+      setData(await getChild(id));
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Could not load this child.");
+    } finally {
+      setLoading(false);
+    }
   }, [id]);
 
-  if (loading) {
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  if (loading && !data) {
     return (
       <Screen scroll={false}>
         <Loading label="Loading…" />
@@ -48,7 +46,7 @@ export default function Child() {
   if (!data) {
     return (
       <Screen style={{ gap: spacing.md }}>
-        <BackRow onBack={() => router.back()} title="Child" />
+        <ScreenHeader title="Child" back />
         <Card>
           <AppText variant="muted">{error ?? "Not found."}</AppText>
         </Card>
@@ -59,25 +57,46 @@ export default function Child() {
   const { profile, stats, subjects } = data;
 
   return (
-    <Screen style={{ gap: spacing.md }}>
-      <BackRow onBack={() => router.back()} title={profile.name} />
-      <AppText variant="muted">
-        {profile.className}
-        {profile.section ? ` · ${profile.section}` : ""}
-        {profile.rollNo ? ` · Roll ${profile.rollNo}` : ""}
-      </AppText>
+    <Screen style={{ gap: spacing.md }} onRefresh={load}>
+      <View>
+        <ScreenHeader title={profile.name} back />
+        <AppText variant="muted">
+          {profile.className}
+          {profile.section ? ` · ${profile.section}` : ""}
+          {profile.rollNo ? ` · Roll ${profile.rollNo}` : ""}
+        </AppText>
+      </View>
 
       <View style={styles.tiles}>
         <Tile label="Attendance" value={`${stats.attendancePercent}%`} tone={colors.successText} />
         <Tile label="Performance" value={`${stats.performancePercent}%`} tone={colors.primaryText} />
       </View>
       <View style={styles.tiles}>
-        <Tile
-          label="Fee due"
-          value={stats.feeDue > 0 ? `₹${stats.feeDue}` : "₹0"}
-          tone={stats.feeDue > 0 ? colors.dangerText : colors.successText}
-        />
+        <Tile label="Fee due" value={stats.feeDue > 0 ? `₹${stats.feeDue}` : "₹0"} tone={stats.feeDue > 0 ? colors.dangerText : colors.successText} />
         <Tile label="GPA" value={String(stats.gpa)} tone={colors.primaryText} />
+      </View>
+
+      {/* Quick links to this child's class */}
+      <View style={styles.tiles}>
+        <Button
+          title="Timetable"
+          variant="outline"
+          style={styles.flex}
+          onPress={() =>
+            router.push({
+              pathname: "/parent/timetable",
+              params: { class: profile.className, section: profile.section, name: profile.name },
+            })
+          }
+        />
+        <Button
+          title="Homework"
+          variant="outline"
+          style={styles.flex}
+          onPress={() =>
+            router.push({ pathname: "/parent/homework", params: { class: profile.className, name: profile.name } })
+          }
+        />
       </View>
 
       <AppText variant="heading">Report card</AppText>
@@ -106,19 +125,6 @@ export default function Child() {
   );
 }
 
-function BackRow({ onBack, title }: { onBack: () => void; title: string }) {
-  return (
-    <View style={styles.backRow}>
-      <Pressable onPress={onBack} hitSlop={10}>
-        <Ionicons name="chevron-back" size={26} color={colors.text} />
-      </Pressable>
-      <AppText variant="title" style={styles.flex}>
-        {title}
-      </AppText>
-    </View>
-  );
-}
-
 function Tile({ label, value, tone }: { label: string; value: string; tone: string }) {
   return (
     <Card style={styles.tile}>
@@ -132,17 +138,11 @@ function Tile({ label, value, tone }: { label: string; value: string; tone: stri
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  backRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   tiles: { flexDirection: "row", gap: spacing.sm },
   tile: { flex: 1, gap: 4, padding: spacing.md },
   tileValue: { fontSize: 21, fontWeight: fontWeight.bold },
   row: { flexDirection: "row", alignItems: "center", gap: spacing.md },
   rowTitle: { fontSize: 15 },
-  grade: {
-    backgroundColor: colors.primarySoft,
-    borderRadius: radius.pill,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-  },
+  grade: { backgroundColor: colors.primarySoft, borderRadius: radius.pill, paddingHorizontal: spacing.md, paddingVertical: spacing.xs },
   gradeText: { color: colors.primaryText, fontWeight: fontWeight.bold },
 });

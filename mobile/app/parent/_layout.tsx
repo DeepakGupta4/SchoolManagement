@@ -20,8 +20,16 @@ export default function ParentLayout() {
       }}
     >
       <Tabs.Screen name="index" options={{ title: "Children", tabBarIcon: icon("people-outline") }} />
+      <Tabs.Screen name="updates" options={{ title: "Updates", tabBarIcon: icon("megaphone-outline") }} />
       <Tabs.Screen name="more" options={{ title: "More", tabBarIcon: icon("grid-outline") }} />
+
+      {/* Reachable via router.push, but not their own tabs. */}
       <Tabs.Screen name="child" options={{ href: null }} />
+      <Tabs.Screen name="notifications" options={{ href: null }} />
+      <Tabs.Screen name="messages" options={{ href: null }} />
+      <Tabs.Screen name="homework" options={{ href: null }} />
+      <Tabs.Screen name="timetable" options={{ href: null }} />
+      <Tabs.Screen name="profile" options={{ href: null }} />
       <Tabs.Screen name="assistant" options={{ href: null }} />
     </Tabs>
   );

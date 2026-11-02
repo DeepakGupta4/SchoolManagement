@@ -1,25 +1,40 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { AppText, Card, DashboardScreen, HeroAction, NoticeCard, Avatar } from "@/components";
 import { getChildren, type ChildSummary } from "@/api/portal";
+import { getMySchool, type School } from "@/api/schools";
+import { listHolidays, type Holiday } from "@/api/updates";
+import { computeSchoolStatus } from "@/lib/schoolStatus";
 import { ApiError } from "@/api/client";
 import { useAuth } from "@/store/auth";
+import { useNotifications } from "@/store/notifications";
 import { colors, spacing, fontWeight, fontSize } from "@/theme";
 
 /** Parent home: their children, each tappable into a detailed report. */
 export default function ParentHome() {
   const router = useRouter();
   const user = useAuth((s) => s.user);
+  const unread = useNotifications((s) => s.unread);
+  const refreshAlerts = useNotifications((s) => s.refresh);
   const [children, setChildren] = useState<ChildSummary[]>([]);
+  const [holidays, setHolidays] = useState<Holiday[]>([]);
+  const [school, setSchool] = useState<School | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
     try {
-      setChildren(await getChildren());
+      const [kids, hol, sch] = await Promise.all([
+        getChildren(),
+        listHolidays().catch(() => [] as Holiday[]),
+        getMySchool().catch(() => null),
+      ]);
+      setChildren(kids);
+      setHolidays(hol);
+      setSchool(sch);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Could not load your children.");
     } finally {
@@ -30,7 +45,13 @@ export default function ParentHome() {
   useFocusEffect(
     useCallback(() => {
       load();
-    }, [load])
+      refreshAlerts();
+    }, [load, refreshAlerts])
+  );
+
+  const schoolStatus = useMemo(
+    () => computeSchoolStatus({ openingTime: school?.openingTime, closingTime: school?.closingTime, holidays }),
+    [school, holidays]
   );
 
   const meta = children.length ? `${children.length} ${children.length === 1 ? "child" : "children"}` : undefined;
@@ -41,12 +62,24 @@ export default function ParentHome() {
         onPress={() => router.push("/parent/assistant")}
         accessibilityLabel="AI assistant"
       />
-      <HeroAction icon="bus-outline" onPress={() => router.push("/track")} accessibilityLabel="Track the school bus" />
+      <HeroAction
+        icon="notifications-outline"
+        badge={unread ? (unread > 9 ? "9+" : unread) : undefined}
+        onPress={() => router.push("/parent/notifications")}
+        accessibilityLabel={unread ? `Alerts, ${unread} unread` : "Alerts"}
+      />
     </View>
   );
 
   return (
-    <DashboardScreen name={user?.name || "Parent"} meta={meta} rightSlot={headerActions} loading={loading && children.length === 0} onRefresh={load}>
+    <DashboardScreen
+      name={user?.name || "Parent"}
+      meta={meta}
+      rightSlot={headerActions}
+      status={schoolStatus}
+      loading={loading && children.length === 0}
+      onRefresh={load}
+    >
       <AppText variant="heading">My children</AppText>
 
       {/* Keep cached children visible even if a background refetch fails. */}
