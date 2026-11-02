@@ -15,6 +15,12 @@ export const getFeeSummary = () => api<FeeSummary>("/api/fees/summary");
 
 export type PaymentStatus = "paid" | "pending-clearance" | "cancelled" | "bounced";
 
+/** How a payment was split across fee heads. */
+export interface PaymentAllocation {
+  head: string;
+  amount: number;
+}
+
 /** One receipt in the payment register. */
 export interface Payment {
   id: string;
@@ -27,6 +33,14 @@ export interface Payment {
   amount: number;
   method: string;
   status: PaymentStatus;
+  // Receipt detail (returned by the server; optional so an older shape is safe).
+  reference?: string;
+  bank?: string;
+  remarks?: string;
+  collectedBy?: string;
+  allocations?: PaymentAllocation[];
+  reversedAt?: string | null;
+  reversalReason?: string;
 }
 // The server returns the most recent receipts (its own cap); a limit query is ignored.
 export const listPayments = () => api<Payment[]>("/api/fees/payments");

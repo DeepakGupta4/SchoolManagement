@@ -1,9 +1,10 @@
 import { useCallback, useMemo, useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 import { useFocusEffect, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { Screen, ScreenHeader, AppText, Card, Button, Loading, Chips, TextField, PagedList, type ChipOption } from "@/components";
+import { Screen, ScreenHeader, AppText, Card, Button, Loading, Chips, TextField, PagedList, PaymentReceiptModal, type ChipOption } from "@/components";
 import { listPayments, inr, type Payment } from "@/api/finance";
+import { getMySchool, type School } from "@/api/schools";
 import { ApiError } from "@/api/client";
 import { prettyDate } from "@/lib/date";
 import { colors, radius, spacing, fontWeight, fontSize } from "@/theme";
@@ -26,6 +27,8 @@ const STATUS_TONE: Record<string, { bg: string; fg: string; label: string }> = {
 /** Read-only payment register for the accountant: search + status filter. */
 export default function Payments() {
   const [rows, setRows] = useState<Payment[]>([]);
+  const [school, setSchool] = useState<School | null>(null);
+  const [previewId, setPreviewId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -40,7 +43,9 @@ export default function Payments() {
     if (opts?.refresh) setRefreshing(true);
     setError(null);
     try {
-      setRows(await listPayments());
+      const [pays, sch] = await Promise.all([listPayments(), getMySchool().catch(() => null)]);
+      setRows(pays);
+      setSchool(sch);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Could not load payments.");
     } finally {
@@ -73,6 +78,8 @@ export default function Payments() {
     () => filtered.filter((p) => p.status === "paid" || p.status === "pending-clearance").reduce((s, p) => s + (p.amount || 0), 0),
     [filtered]
   );
+
+  const previewPayment = rows.find((p) => p.id === previewId) ?? null;
 
   if (loading && rows.length === 0) {
     return (
@@ -113,9 +120,10 @@ export default function Payments() {
             const tone = STATUS_TONE[p.status] ?? STATUS_TONE.paid;
             const voided = p.status === "cancelled" || p.status === "bounced";
             return (
-              <Card style={styles.row}>
-                <View style={styles.icon}>
-                  <Ionicons name="receipt-outline" size={18} color={colors.primary} />
+              <Pressable onPress={() => setPreviewId(p.id)} accessibilityRole="button">
+                <Card style={styles.row}>
+                  <View style={styles.icon}>
+                    <Ionicons name="receipt-outline" size={18} color={colors.primary} />
                 </View>
                 <View style={styles.flex}>
                   <AppText variant="heading" style={styles.name} numberOfLines={1}>
@@ -136,11 +144,14 @@ export default function Payments() {
                     {prettyDate(p.date)}
                   </AppText>
                 </View>
-              </Card>
+                </Card>
+              </Pressable>
             );
           }}
         />
       )}
+
+      <PaymentReceiptModal payment={previewPayment} school={school} onClose={() => setPreviewId(null)} />
     </Screen>
   );
 }
