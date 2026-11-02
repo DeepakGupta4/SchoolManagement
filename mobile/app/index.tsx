@@ -19,6 +19,7 @@ export default function Index() {
   if (status === "guest" || !user) return <Redirect href="/login" />;
   if (user.role === "teacher") return <Redirect href="/teacher" />;
   if (user.role === "driver") return <Redirect href="/driver" />;
+  if (user.role === "accountant") return <Redirect href="/accountant" />;
   if (user.role === "student") return <Redirect href="/student" />;
   if (user.role === "parent") return <Redirect href="/parent" />;
   if (user.role === "staff") return <Redirect href="/staff" />;

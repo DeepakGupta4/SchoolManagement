@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 import { AppText } from "./AppText";
 import { Card } from "./Card";
 import { colors, spacing, fontSize, fontWeight } from "@/theme";
@@ -19,25 +19,48 @@ export function StatCard({
   value,
   icon,
   tone = "primary",
+  onPress,
 }: {
   label: string;
   value: string | number;
   icon: keyof typeof Ionicons.glyphMap;
   tone?: Tone;
+  /** When set, the whole card is tappable (shows a chevron affordance). */
+  onPress?: () => void;
 }) {
-  return (
-    <Card style={styles.card}>
+  const content = (
+    <>
       <View style={[styles.iconWrap, { backgroundColor: toneColor[tone] + "22" }]}>
         <Ionicons name={icon} size={18} color={toneColor[tone]} />
       </View>
       <AppText style={styles.value}>{value}</AppText>
       <AppText variant="muted">{label}</AppText>
-    </Card>
+      {onPress ? (
+        <Ionicons name="chevron-forward" size={14} color={colors.subtle} style={styles.chev} />
+      ) : null}
+    </>
   );
+
+  if (onPress) {
+    return (
+      <Pressable
+        onPress={onPress}
+        style={({ pressed }) => [styles.wrap, pressed && styles.pressed]}
+        accessibilityRole="button"
+        accessibilityLabel={`${label}: ${value}`}
+      >
+        <Card style={styles.card}>{content}</Card>
+      </Pressable>
+    );
+  }
+
+  return <Card style={[styles.wrap, styles.card]}>{content}</Card>;
 }
 
 const styles = StyleSheet.create({
-  card: { flex: 1, minWidth: 140, gap: spacing.xs },
+  wrap: { flex: 1, minWidth: 140 },
+  pressed: { opacity: 0.7 },
+  card: { gap: spacing.xs },
   iconWrap: {
     width: 36,
     height: 36,
@@ -47,4 +70,5 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
   },
   value: { fontSize: fontSize.xl, fontWeight: fontWeight.bold, color: colors.text },
+  chev: { position: "absolute", top: spacing.md, right: spacing.md },
 });

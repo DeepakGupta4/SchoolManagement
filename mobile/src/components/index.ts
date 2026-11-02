@@ -21,3 +21,5 @@ export { AddButton } from "./AddButton";
 export { AssistantScreen } from "./AssistantScreen";
 export { ProfileScreen } from "./ProfileScreen";
 export { MessageBoardScreen } from "./MessageBoardScreen";
+export { LeaveScreen } from "./LeaveScreen";
+export { StaffIdCardScreen } from "./StaffIdCardScreen";
