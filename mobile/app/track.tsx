@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { WebView } from "react-native-webview";
+import * as Location from "expo-location";
 import { useFocusEffect, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { AppText } from "@/components";
@@ -23,8 +24,11 @@ const MAP_HTML = `<!DOCTYPE html>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
   var map = L.map('map',{zoomControl:true}).setView([20.5937,78.9629],5);
+  map.attributionControl.setPrefix(false); // drop the "Leaflet" credit; keep the OSM one (tile ToS)
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; OpenStreetMap'}).addTo(map);
   var markers = {}, fitted = false;
+  // Center on a point (the viewer's location) until live buses define the view.
+  window.centerOn = function(lat,lng,zoom){ try{ if(!fitted){ map.setView([lat,lng], zoom||13); } }catch(e){} };
   function busIcon(){return L.divIcon({html:'<div style="font-size:28px;line-height:28px">🚌</div>',className:'',iconSize:[30,30],iconAnchor:[15,26]});}
   window.updateBuses = function(list){
     try{
@@ -59,6 +63,26 @@ export default function TrackBus() {
     web.current?.injectJavaScript(`window.updateBuses(${JSON.stringify(withPos)}); true;`);
   }, []);
 
+  // Center the map on the viewer's own area so it never opens on a whole-region
+  // view. Best-effort + silent: only centers if location is (or can be) granted;
+  // live buses still override it (the map's `fitted` guard).
+  const centerOnMe = useCallback(async () => {
+    try {
+      const perm = await Location.getForegroundPermissionsAsync();
+      let status = perm.status;
+      if (status !== "granted" && perm.canAskAgain) {
+        status = (await Location.requestForegroundPermissionsAsync()).status;
+      }
+      if (status !== "granted") return;
+      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      web.current?.injectJavaScript(
+        `window.centerOn(${loc.coords.latitude},${loc.coords.longitude},13); true;`
+      );
+    } catch {
+      /* no location → the default view stays */
+    }
+  }, []);
+
   const load = useCallback(async () => {
     try {
       const list = await listLiveBuses();
@@ -79,9 +103,13 @@ export default function TrackBus() {
     }, [load])
   );
 
-  // Draw whatever we have as soon as the map says it's ready.
+  // Draw whatever we have as soon as the map says it's ready, and center on the
+  // viewer (overridden by live buses if any).
   useEffect(() => {
-    if (ready) inject(buses);
+    if (ready) {
+      inject(buses);
+      centerOnMe();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready]);
 
