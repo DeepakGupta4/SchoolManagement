@@ -6,20 +6,22 @@ import {
   UserRound, ShieldCheck, GraduationCap, KeyRound, MessageSquare,
 } from "lucide-react";
 import {
-  Avatar, Badge, Button, Card, CardContent, ConfirmDialog, Input, Modal, PageHeader, Select,
+  Avatar, Badge, Button, Card, CardContent, ConfirmDialog, CredentialsDialog, Input, Modal, PageHeader, Select,
   StatCard, Table, Textarea, useToast, type Column,
 } from "@/components/ui";
 import { exportToCsv } from "@/lib/exportCsv";
 import { exportTablePdf } from "@/lib/exportPdf";
 import { useAsyncList } from "@/hooks/useAsyncList";
 import {
-  parentApi, getParentDirectory, inviteParent, messageParents, RELATION_OPTIONS,
-  type ParentDirectoryEntry, type ParentRelation, type Parent, type ParentInviteResult,
+  parentApi, getParentDirectory, messageParents, RELATION_OPTIONS,
+  type ParentDirectoryEntry, type ParentRelation, type Parent,
 } from "@/lib/api/parent";
 import type { ParentSchema } from "@/lib/schemas/parent";
+import type { UserCredentials } from "@/lib/api/users";
 import { ApiError } from "@/lib/api/client";
 import { ParentFormModal } from "./ParentFormModal";
 import { ParentDetailModal } from "./ParentDetailModal";
+import { ParentCredentialsModal } from "./ParentCredentialsModal";
 
 type BadgeVariant = "default" | "success" | "warning" | "danger" | "info";
 
@@ -63,8 +65,9 @@ export default function ParentsPage() {
   const [pendingDelete, setPendingDelete] = useState<ParentDirectoryEntry | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [inviting, setInviting] = useState<string | null>(null);
-  const [inviteResult, setInviteResult] = useState<ParentInviteResult | null>(null);
+  const [credsFor, setCredsFor] = useState<ParentDirectoryEntry | null>(null);
+  const [creds, setCreds] = useState<UserCredentials | null>(null);
+  const [credsEmailed, setCredsEmailed] = useState(false);
   const [messageTarget, setMessageTarget] = useState<{ emails: string[]; label: string } | null>(null);
   const [msgTitle, setMsgTitle] = useState("");
   const [msgBody, setMsgBody] = useState("");
@@ -185,24 +188,6 @@ export default function ParentsPage() {
     }
   };
 
-  const invite = async (p: ParentDirectoryEntry) => {
-    if (!p.email) {
-      toast({ title: "No email on file", description: "Add an email before creating a login.", variant: "warning" });
-      return;
-    }
-    try {
-      setInviting(p.id);
-      const r = await inviteParent({ name: p.name, email: p.email });
-      setInviteResult(r);
-      if (r.existing) toast({ title: "Login already exists", description: r.email, variant: "info" });
-      else toast({ title: "Parent login created", description: r.email, variant: "success" });
-    } catch (e) {
-      toast({ title: "Could not create login", description: describeError(e), variant: "error" });
-    } finally {
-      setInviting(null);
-    }
-  };
-
   const openMessage = (emails: string[], label: string) => {
     const unique = [...new Set(emails.filter(Boolean))];
     if (unique.length === 0) {
@@ -310,10 +295,10 @@ export default function ParentsPage() {
       render: (p) => (
         <div className="flex items-center justify-end gap-1">
           <button
-            onClick={() => invite(p)}
-            disabled={!p.email || inviting === p.id}
-            aria-label={p.email ? `Create a portal login for ${p.name}` : `${p.name} has no email on file`}
-            title={p.email ? "Create a parent portal login" : "No email on file — add one to create a login"}
+            onClick={() => setCredsFor(p)}
+            disabled={!p.email}
+            aria-label={p.email ? `Login credentials for ${p.name}` : `${p.name} has no email on file`}
+            title={p.email ? "Create or reset the parent login" : "No email on file — add one to create a login"}
             className="focus-ring rounded-md p-1.5 text-subtle transition-colors hover:bg-primary-soft hover:text-primary-text disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-subtle"
           >
             <KeyRound className="size-4" />
@@ -496,10 +481,10 @@ export default function ParentsPage() {
         parent={viewing}
         open={Boolean(viewing)}
         onOpenChange={(o) => !o && setViewing(null)}
-        inviting={Boolean(viewing) && inviting === viewing?.id}
+        inviting={false}
         onInvite={(p) => {
           setViewing(null);
-          void invite(p);
+          setCredsFor(p);
         }}
         onMessage={(p) => {
           setViewing(null);
@@ -526,41 +511,20 @@ export default function ParentsPage() {
         onConfirm={handleDelete}
       />
 
-      <Modal
-        open={!!inviteResult}
-        onOpenChange={(o) => !o && setInviteResult(null)}
-        size="sm"
-        title="Parent portal login"
-        footer={<Button onClick={() => setInviteResult(null)}>Done</Button>}
-      >
-        {inviteResult?.existing ? (
-          <p className="text-sm text-muted">
-            A parent login already exists for{" "}
-            <strong className="text-text">{inviteResult.email}</strong>. They can sign in with their
-            current password — no new one was created.
-          </p>
-        ) : inviteResult ? (
-          <div className="flex flex-col gap-3 text-sm">
-            <p className="text-muted">
-              Share these credentials with the parent — the temporary password is shown only once.
-            </p>
-            <div className="rounded-md border border-border bg-surface-sunken p-3">
-              <p>
-                <span className="text-subtle">Email:</span>{" "}
-                <strong className="text-text">{inviteResult.email}</strong>
-              </p>
-              <p className="mt-1">
-                <span className="text-subtle">Temp password:</span>{" "}
-                <strong className="font-mono text-text">{inviteResult.temporaryPassword}</strong>
-              </p>
-            </div>
-            <p className="text-xs text-subtle">
-              They sign in at the login page and should change this password. The portal shows only
-              their own children.
-            </p>
-          </div>
-        ) : null}
-      </Modal>
+      <ParentCredentialsModal
+        parent={credsFor}
+        onClose={() => setCredsFor(null)}
+        onDone={(c, _emailed, action) => {
+          setCreds(c);
+          setCredsEmailed(_emailed);
+          toast({
+            title: action === "created" ? "Parent login created" : "Password reset",
+            description: credsFor ? `Share the one-time credentials with ${credsFor.name}.` : "Share the one-time credentials securely.",
+          });
+        }}
+      />
+
+      <CredentialsDialog data={creds} emailed={credsEmailed} onClose={() => setCreds(null)} />
 
       <Modal
         open={!!messageTarget}
