@@ -118,18 +118,27 @@ export function AssistantScreen() {
         />
 
         {!hasUserMsg ? (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.chips}
-            keyboardShouldPersistTaps="handled"
-          >
-            {prompts.map((p) => (
-              <Pressable key={p} style={styles.chip} onPress={() => send(p)} disabled={sending}>
-                <AppText style={styles.chipText}>{p}</AppText>
-              </Pressable>
-            ))}
-          </ScrollView>
+          <View style={styles.suggestWrap}>
+            <AppText variant="label" style={styles.suggestLabel}>
+              Try asking
+            </AppText>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.chipsScroll}
+              contentContainerStyle={styles.chips}
+              keyboardShouldPersistTaps="handled"
+            >
+              {prompts.map((p) => (
+                <Pressable key={p} style={styles.chip} onPress={() => send(p)} disabled={sending}>
+                  <Ionicons name="chatbubble-ellipses-outline" size={14} color={colors.primaryText} />
+                  <AppText style={styles.chipText} numberOfLines={1}>
+                    {p}
+                  </AppText>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
         ) : null}
 
         <View style={styles.composer}>
@@ -160,6 +169,11 @@ function Bubble({ role, content }: { role: ChatMsg["role"]; content: string }) {
   const mine = role === "user";
   return (
     <View style={[styles.bubbleRow, mine ? styles.rowRight : styles.rowLeft]}>
+      {!mine ? (
+        <View style={styles.botAvatar}>
+          <Ionicons name="sparkles" size={14} color={colors.primary} />
+        </View>
+      ) : null}
       <View style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleBot]}>
         <AppText style={mine ? styles.textMine : styles.textBot}>{content}</AppText>
       </View>
@@ -174,14 +188,23 @@ const styles = StyleSheet.create({
 
   list: { padding: spacing.lg, gap: spacing.sm },
 
-  chips: { paddingHorizontal: spacing.lg, paddingBottom: spacing.sm, gap: spacing.sm },
+  // The suggestion row is a horizontal ScrollView — flexGrow:0 stops it filling
+  // (and ballooning its pills into giant ovals) in this flex column.
+  suggestWrap: { paddingBottom: spacing.sm },
+  suggestLabel: { paddingHorizontal: spacing.lg, marginBottom: spacing.xs, color: colors.muted },
+  chipsScroll: { flexGrow: 0 },
+  chips: { paddingHorizontal: spacing.lg, gap: spacing.sm, alignItems: "center" },
   chip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    maxWidth: 260,
     backgroundColor: colors.primarySoft,
     borderRadius: radius.pill,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
   },
-  chipText: { color: colors.primaryText, fontSize: fontSize.sm, fontWeight: fontWeight.medium },
+  chipText: { color: colors.primaryText, fontSize: fontSize.sm, fontWeight: fontWeight.medium, flexShrink: 1 },
 
   composer: {
     flexDirection: "row",
@@ -206,11 +229,20 @@ const styles = StyleSheet.create({
   },
   sendOff: { backgroundColor: colors.borderStrong },
 
-  bubbleRow: { flexDirection: "row" },
+  bubbleRow: { flexDirection: "row", alignItems: "flex-end", gap: spacing.sm },
   rowRight: { justifyContent: "flex-end" },
   rowLeft: { justifyContent: "flex-start" },
+  botAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.primarySoft,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   bubble: {
     maxWidth: "86%",
+    flexShrink: 1,
     borderRadius: radius.lg,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
