@@ -10,12 +10,14 @@ import {
   Button,
   Loading,
   Select,
+  Chips,
   Avatar,
   PagedList,
   ReportCardPreview,
   type ChipOption,
   type ReportCardData,
 } from "@/components";
+import { classSortKey } from "@/lib/classOrder";
 import { listStudents, type Student } from "@/api/students";
 import { listExams } from "@/api/exams";
 import { listClasses, type SchoolClass } from "@/api/classes";
@@ -87,7 +89,10 @@ export default function ReportCards() {
 
   const examOptions = useMemo<ChipOption[]>(() => exams.map((e) => ({ label: e, value: e })), [exams]);
   const classOptions = useMemo<ChipOption[]>(
-    () => classes.map((c) => ({ label: c.name, value: c.name })),
+    () =>
+      [...classes]
+        .sort((a, b) => classSortKey(a.name) - classSortKey(b.name))
+        .map((c) => ({ label: c.name, value: c.name })),
     [classes]
   );
   const sectionOptions = useMemo<ChipOption[]>(() => {
@@ -242,7 +247,10 @@ export default function ReportCards() {
           <Select label="Class" value={className} options={classOptions} onChange={setClassName} />
         )}
         {sectionOptions.length > 0 ? (
-          <Select label="Section" value={section} options={sectionOptions} onChange={setSection} />
+          <View style={styles.field}>
+            <AppText variant="label">Section</AppText>
+            <Chips options={sectionOptions} value={section} onChange={setSection} />
+          </View>
         ) : classOptions.length > 0 ? (
           <AppText variant="muted">This class has no sections set up.</AppText>
         ) : null}

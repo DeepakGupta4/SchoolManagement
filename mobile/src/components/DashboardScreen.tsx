@@ -120,7 +120,7 @@ export function DashboardScreen({
           showsVerticalScrollIndicator={false}
           refreshControl={
             handleRefresh ? (
-              <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.onPrimary} colors={[colors.primary]} />
+              <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} colors={[colors.primary]} />
             ) : undefined
           }
         >

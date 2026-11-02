@@ -18,6 +18,7 @@ import {
 } from "@/components";
 import { listFeeAccounts, accountBalance, inr, type FeeAccount } from "@/api/finance";
 import { listStudents, type Student } from "@/api/students";
+import { classSortKey } from "@/lib/classOrder";
 import { ApiError } from "@/api/client";
 import { colors, radius, spacing, fontWeight, fontSize } from "@/theme";
 
@@ -75,7 +76,10 @@ export default function Dues() {
   const classOptions = useMemo<ChipOption[]>(() => {
     const set = new Set<string>();
     owing.forEach((x) => x.a.className && set.add(x.a.className));
-    return [{ label: "All classes", value: "all" }, ...[...set].sort().map((c) => ({ label: c, value: c }))];
+    return [
+      { label: "All classes", value: "all" },
+      ...[...set].sort((a, b) => classSortKey(a) - classSortKey(b) || a.localeCompare(b)).map((c) => ({ label: c, value: c })),
+    ];
   }, [owing]);
 
   const q = search.trim().toLowerCase();

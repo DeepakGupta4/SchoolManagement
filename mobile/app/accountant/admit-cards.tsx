@@ -10,6 +10,7 @@ import {
   Avatar,
   Loading,
   Select,
+  Chips,
   TextField,
   PagedList,
   AdmitCardPreview,
@@ -17,6 +18,7 @@ import {
   type AdmitCardSubject,
   type ChipOption,
 } from "@/components";
+import { classSortKey } from "@/lib/classOrder";
 import { listStudents, studentFullName, type Student } from "@/api/students";
 import { listExams } from "@/api/exams";
 import { listClasses, type SchoolClass } from "@/api/classes";
@@ -86,7 +88,10 @@ export default function AdmitCards() {
   );
 
   const examOptions = useMemo<ChipOption[]>(() => examNames.map((n) => ({ label: n, value: n })), [examNames]);
-  const classOptions = useMemo<ChipOption[]>(() => classes.map((c) => ({ label: c.name, value: c.name })), [classes]);
+  const classOptions = useMemo<ChipOption[]>(
+    () => [...classes].sort((a, b) => classSortKey(a.name) - classSortKey(b.name)).map((c) => ({ label: c.name, value: c.name })),
+    [classes]
+  );
   const sectionOptions = useMemo<ChipOption[]>(() => {
     const sections = classes.find((c) => c.name === className)?.sections ?? [];
     return sections.map((s) => ({ label: s, value: s }));
@@ -192,7 +197,10 @@ export default function AdmitCards() {
                 <Select label="Class" value={className} options={classOptions} onChange={setClassName} />
               ) : null}
               {sectionOptions.length > 0 ? (
-                <Select label="Section" value={section} options={sectionOptions} onChange={setSection} />
+                <View style={styles.field}>
+                  <AppText variant="label">Section</AppText>
+                  <Chips options={sectionOptions} value={section} onChange={setSection} />
+                </View>
               ) : null}
             </Card>
 

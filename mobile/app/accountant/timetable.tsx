@@ -2,9 +2,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { Screen, ScreenHeader, AppText, Card, Loading, Select, type ChipOption } from "@/components";
+import { Screen, ScreenHeader, AppText, Card, Loading, Select, Chips, type ChipOption } from "@/components";
 import { getTimetable, type TimetableEntry } from "@/api/teacher";
 import { listClasses, type SchoolClass } from "@/api/classes";
+import { classSortKey } from "@/lib/classOrder";
 import { ApiError } from "@/api/client";
 import { colors, radius, spacing, fontSize, fontWeight } from "@/theme";
 
@@ -63,6 +64,7 @@ export default function AccountantTimetable() {
   const [entries, setEntries] = useState<TimetableEntry[]>([]);
   const [classes, setClasses] = useState<SchoolClass[]>([]);
   const [className, setClassName] = useState("");
+  const [section, setSection] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -93,7 +95,7 @@ export default function AccountantTimetable() {
     const set = new Set<string>();
     classes.forEach((c) => c.name && set.add(c.name));
     entries.forEach((e) => e.className && set.add(e.className));
-    return [...set].sort().map((c) => ({ label: c, value: c }));
+    return [...set].sort((a, b) => classSortKey(a) - classSortKey(b) || a.localeCompare(b)).map((c) => ({ label: c, value: c }));
   }, [classes, entries]);
 
   useEffect(() => {
@@ -102,15 +104,32 @@ export default function AccountantTimetable() {
     }
   }, [classOptions, className]);
 
-  // grid[day][periodId] = entry, for the selected class.
+  // Sections of the chosen class (from config + whatever the entries carry).
+  const sectionOptions = useMemo<ChipOption[]>(() => {
+    const set = new Set<string>(classes.find((c) => c.name === className)?.sections ?? []);
+    entries.forEach((e) => {
+      if (e.className === className && e.section) set.add(e.section);
+    });
+    return [...set].sort().map((s) => ({ label: `Sec ${s}`, value: s }));
+  }, [classes, className, entries]);
+
+  useEffect(() => {
+    if (sectionOptions.length && !sectionOptions.some((o) => o.value === section)) {
+      setSection(sectionOptions[0].value);
+    }
+  }, [sectionOptions, section]);
+
+  // grid[day][periodId] = entry, for the selected class + section (a section-less
+  // entry shows under any section so nothing is hidden).
   const grid = useMemo(() => {
     const g: Record<string, Record<number, TimetableEntry>> = {};
     for (const e of entries) {
       if (e.className !== className) continue;
+      if (section && e.section && e.section !== section) continue;
       (g[e.day] ??= {})[e.period] = e;
     }
     return g;
-  }, [entries, className]);
+  }, [entries, className, section]);
 
   const todayName = useMemo(() => new Date().toLocaleDateString("en-US", { weekday: "long" }), []);
   const hasAny = useMemo(() => Object.keys(grid).length > 0, [grid]);
@@ -138,6 +157,7 @@ export default function AccountantTimetable() {
       ) : (
         <>
           <Select label="Class" value={className} options={classOptions} onChange={setClassName} />
+          {sectionOptions.length > 1 ? <Chips options={sectionOptions} value={section} onChange={setSection} /> : null}
 
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.grid}>
             <View>

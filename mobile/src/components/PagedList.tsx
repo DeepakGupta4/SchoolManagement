@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ComponentType, type ReactElement } f
 import {
   ActivityIndicator,
   FlatList,
+  RefreshControl,
   StyleSheet,
   type ListRenderItem,
   type StyleProp,
@@ -82,8 +83,11 @@ export function PagedList<T>({
         hasMore ? <ActivityIndicator style={styles.footer} color={colors.primary} /> : null
       }
       showsVerticalScrollIndicator={false}
-      refreshing={onRefresh ? !!refreshing : undefined}
-      onRefresh={onRefresh}
+      refreshControl={
+        onRefresh ? (
+          <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />
+        ) : undefined
+      }
       keyboardShouldPersistTaps="handled"
     />
   );
