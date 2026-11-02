@@ -8,6 +8,10 @@ interface NotifState {
   setUnread: (n: number) => void;
   /** Refresh the list + unread badge. Safe to call on focus. */
   refresh: () => Promise<void>;
+  /** Mark one item read IN PLACE (no re-fetch) — keeps a tap from reloading the list. */
+  markReadLocal: (id: string) => void;
+  /** Mark every item read in place. */
+  markAllReadLocal: () => void;
 }
 
 export const useNotifications = create<NotifState>((set) => ({
@@ -24,4 +28,11 @@ export const useNotifications = create<NotifState>((set) => ({
       set({ loading: false });
     }
   },
+  markReadLocal: (id) =>
+    set((s) => {
+      const items = s.items.map((n) => (n.id === id ? { ...n, read: true } : n));
+      return { items, unread: items.filter((n) => !n.read).length };
+    }),
+  markAllReadLocal: () =>
+    set((s) => ({ items: s.items.map((n) => ({ ...n, read: true })), unread: 0 })),
 }));

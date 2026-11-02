@@ -14,26 +14,28 @@ import { colors, spacing } from "@/theme";
 
 /** Shared alerts/notifications inbox — per-user, so every role mounts the same screen. */
 export function NotificationsScreen() {
-  const { items, unread, loading, refresh } = useNotifications();
+  const { items, unread, loading, refresh, markReadLocal, markAllReadLocal } = useNotifications();
 
   useEffect(() => {
     refresh();
   }, [refresh]);
 
+  // Update the badge/dot IN PLACE — never re-fetch on a tap, or the whole list
+  // visibly reloads. The server call just persists it in the background.
   const onRead = async (id: string, read: boolean) => {
     if (read) return;
+    markReadLocal(id);
     try {
       await markRead(id);
-      refresh();
     } catch {
       /* 404 = already gone — ignore */
     }
   };
 
   const onReadAll = async () => {
+    markAllReadLocal();
     try {
       await markAllRead();
-      refresh();
     } catch {
       /* ignore */
     }
