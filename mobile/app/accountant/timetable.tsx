@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { Screen, ScreenHeader, AppText, Card, Loading, Chips, type ChipOption } from "@/components";
+import { Screen, ScreenHeader, AppText, Card, Loading, Select, type ChipOption } from "@/components";
 import { getTimetable, type TimetableEntry } from "@/api/teacher";
 import { listClasses, type SchoolClass } from "@/api/classes";
 import { ApiError } from "@/api/client";
@@ -137,7 +137,7 @@ export default function AccountantTimetable() {
         </Card>
       ) : (
         <>
-          <Chips options={classOptions} value={className} onChange={setClassName} />
+          <Select label="Class" value={className} options={classOptions} onChange={setClassName} />
 
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.grid}>
             <View>

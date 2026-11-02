@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { useFocusEffect, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { Screen, ScreenHeader, AppText, Card, Button, Loading, Chips, TextField, PagedList, PaymentReceiptModal, type ChipOption } from "@/components";
+import { Screen, ScreenHeader, AppText, Card, Button, Loading, Select, TextField, PagedList, PaymentReceiptModal, type ChipOption } from "@/components";
 import { listPayments, inr, type Payment } from "@/api/finance";
 import { getMySchool, type School } from "@/api/schools";
 import { ApiError } from "@/api/client";
@@ -112,7 +112,7 @@ export default function Payments() {
                 {filtered.length} receipt{filtered.length === 1 ? "" : "s"} · {inr(total)}
               </AppText>
               <TextField label="" value={search} onChangeText={setSearch} placeholder="Search name, receipt or class…" autoCapitalize="none" />
-              <Chips options={FILTERS} value={status} onChange={setStatus} />
+              <Select label="Status" value={status} options={FILTERS} onChange={setStatus} />
             </View>
           }
           renderItem={({ item }) => {

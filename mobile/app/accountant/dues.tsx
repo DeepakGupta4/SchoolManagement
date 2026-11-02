@@ -10,7 +10,7 @@ import {
   Button,
   Avatar,
   Loading,
-  Chips,
+  Select,
   TextField,
   PagedList,
   FeeDuesPreviewModal,
@@ -130,7 +130,9 @@ export default function Dues() {
                 {dues.length} student{dues.length === 1 ? "" : "s"} · {inr(totalDue)} outstanding
               </AppText>
               <TextField label="" value={search} onChangeText={setSearch} placeholder="Search name, class or roll…" autoCapitalize="none" />
-              {classOptions.length > 2 ? <Chips options={classOptions} value={classFilter} onChange={setClassFilter} /> : null}
+              {classOptions.length > 2 ? (
+                <Select label="Class" value={classFilter} options={classOptions} onChange={setClassFilter} />
+              ) : null}
             </View>
           }
           renderItem={({ item }) => {

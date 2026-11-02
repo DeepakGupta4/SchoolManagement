@@ -7,6 +7,7 @@ export { Card } from "./Card";
 export { StatCard } from "./StatCard";
 export { Loading } from "./Loading";
 export { Chips, type ChipOption } from "./Chips";
+export { Select } from "./Select";
 export { AccountScreen } from "./AccountScreen";
 export { DashboardScreen, HeroAction, NoticeCard } from "./DashboardScreen";
 export { ScreenHeader } from "./ScreenHeader";

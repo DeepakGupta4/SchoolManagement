@@ -9,7 +9,7 @@ import {
   Card,
   Avatar,
   Loading,
-  Chips,
+  Select,
   TextField,
   PagedList,
   AdmitCardPreview,
@@ -172,22 +172,13 @@ export default function AdmitCards() {
               {examOptions.length === 0 ? (
                 <AppText variant="muted">No exams created yet — ask the office to add one.</AppText>
               ) : (
-                <View style={styles.field}>
-                  <AppText variant="label">Examination</AppText>
-                  <Chips options={examOptions} value={exam} onChange={setExam} />
-                </View>
+                <Select label="Examination" value={exam} options={examOptions} onChange={setExam} />
               )}
               {classOptions.length > 0 ? (
-                <View style={styles.field}>
-                  <AppText variant="label">Class</AppText>
-                  <Chips options={classOptions} value={className} onChange={setClassName} />
-                </View>
+                <Select label="Class" value={className} options={classOptions} onChange={setClassName} />
               ) : null}
               {sectionOptions.length > 0 ? (
-                <View style={styles.field}>
-                  <AppText variant="label">Section</AppText>
-                  <Chips options={sectionOptions} value={section} onChange={setSection} />
-                </View>
+                <Select label="Section" value={section} options={sectionOptions} onChange={setSection} />
               ) : null}
             </Card>
 

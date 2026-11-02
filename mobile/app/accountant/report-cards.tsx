@@ -9,7 +9,7 @@ import {
   Card,
   Button,
   Loading,
-  Chips,
+  Select,
   Avatar,
   PagedList,
   ReportCardPreview,
@@ -221,24 +221,15 @@ export default function ReportCards() {
         {examOptions.length === 0 ? (
           <AppText variant="muted">No exams created yet — ask the office to add one.</AppText>
         ) : (
-          <View style={styles.field}>
-            <AppText variant="label">Exam</AppText>
-            <Chips options={examOptions} value={examName} onChange={setExamName} />
-          </View>
+          <Select label="Exam" value={examName} options={examOptions} onChange={setExamName} />
         )}
         {classOptions.length === 0 ? (
           <AppText variant="muted">No classes set up yet.</AppText>
         ) : (
-          <View style={styles.field}>
-            <AppText variant="label">Class</AppText>
-            <Chips options={classOptions} value={className} onChange={setClassName} />
-          </View>
+          <Select label="Class" value={className} options={classOptions} onChange={setClassName} />
         )}
         {sectionOptions.length > 0 ? (
-          <View style={styles.field}>
-            <AppText variant="label">Section</AppText>
-            <Chips options={sectionOptions} value={section} onChange={setSection} />
-          </View>
+          <Select label="Section" value={section} options={sectionOptions} onChange={setSection} />
         ) : classOptions.length > 0 ? (
           <AppText variant="muted">This class has no sections set up.</AppText>
         ) : null}
