@@ -118,9 +118,6 @@ export default function TrackBus() {
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} hitSlop={10}>
-          <Ionicons name="chevron-back" size={26} color={colors.text} />
-        </Pressable>
         <View style={styles.flex}>
           <AppText variant="heading">Live bus tracking</AppText>
           <AppText variant="muted">
@@ -129,8 +126,11 @@ export default function TrackBus() {
               : `${withPos.length} bus${withPos.length > 1 ? "es" : ""} live`}
           </AppText>
         </View>
-        <Pressable onPress={load} hitSlop={10}>
+        <Pressable onPress={load} hitSlop={10} accessibilityLabel="Refresh">
           <Ionicons name="refresh" size={22} color={colors.primary} />
+        </Pressable>
+        <Pressable onPress={() => router.back()} hitSlop={10} accessibilityLabel="Close">
+          <Ionicons name="close" size={26} color={colors.text} />
         </Pressable>
       </View>
 
