@@ -24,6 +24,7 @@ import LOGO from "../assets/logo-mark.png";
 export default function Login() {
   const router = useRouter();
   const signIn = useAuth((s) => s.signIn);
+  const [audience, setAudience] = useState<"students" | "staff">("students");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
@@ -39,6 +40,18 @@ export default function Login() {
       const res = await login(email.trim(), password, twoFa ? code : undefined);
       if ("twoFactorRequired" in res) {
         setTwoFa(true); // password ok → now ask for the code
+        return;
+      }
+      // Keep the two entrances honest: a student/guardian account can't sign in
+      // on the staff tab (or vice versa). Switch the tab for them and let them retry.
+      const role = res.user.role;
+      const isStudentGuardian = role === "student" || role === "parent";
+      if (isStudentGuardian !== (audience === "students")) {
+        setAudience(isStudentGuardian ? "students" : "staff");
+        setTwoFa(false);
+        setError(
+          `That's a ${isStudentGuardian ? "student / guardian" : "teacher / staff"} account — we switched to that tab for you. Tap Sign in again.`
+        );
         return;
       }
       signIn(res.user);
@@ -80,9 +93,40 @@ export default function Login() {
 
           {/* form */}
           <View style={styles.card}>
+            {!twoFa ? (
+              <View style={styles.segTrack}>
+                {([
+                  ["students", "Student & Guardian"],
+                  ["staff", "Teacher & Staff"],
+                ] as const).map(([val, label]) => {
+                  const on = audience === val;
+                  return (
+                    <Pressable
+                      key={val}
+                      style={[styles.seg, on && styles.segOn]}
+                      onPress={() => {
+                        setAudience(val);
+                        setError(null);
+                      }}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: on }}
+                    >
+                      <AppText style={[styles.segText, on && styles.segTextOn]} numberOfLines={1}>
+                        {label}
+                      </AppText>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            ) : null}
+
             <AppText style={styles.title}>{twoFa ? "Almost there" : "Welcome back"}</AppText>
             <AppText variant="muted" style={styles.subtitle}>
-              {twoFa ? "Enter the 6-digit code from your authenticator app" : "Sign in to continue to your dashboard"}
+              {twoFa
+                ? "Enter the 6-digit code from your authenticator app"
+                : audience === "students"
+                  ? "Student & guardian sign-in"
+                  : "Teacher & staff sign-in"}
             </AppText>
 
             {!twoFa ? (
@@ -225,6 +269,12 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: fontSize.xl, fontWeight: fontWeight.bold, color: colors.text },
   subtitle: { marginBottom: spacing.sm },
+
+  segTrack: { flexDirection: "row", backgroundColor: colors.surfaceAlt, borderRadius: radius.pill, padding: 4, gap: 4, marginBottom: spacing.sm },
+  seg: { flex: 1, paddingVertical: spacing.sm, borderRadius: radius.pill, alignItems: "center" },
+  segOn: { backgroundColor: colors.surface, ...shadow.card },
+  segText: { color: colors.muted, fontWeight: fontWeight.semibold, fontSize: fontSize.sm },
+  segTextOn: { color: colors.primaryText },
 
   errorBox: {
     flexDirection: "row",
