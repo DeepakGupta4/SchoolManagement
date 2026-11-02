@@ -8,6 +8,7 @@ import { StaffMember } from "../staff/staff.model.js";
 import { StaffAttendance } from "../staffAttendance/staffAttendance.model.js";
 import { User } from "../auth/user.model.js";
 import { Mark } from "../marks/mark.model.js";
+import { Exam } from "../exams/exam.model.js";
 import { School } from "../schools/school.model.js";
 import { gradeForPercent, effectiveScheme } from "../../utils/grading.js";
 
@@ -16,6 +17,110 @@ router.use(requireAuth);
 
 const WEEKDAY = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const escapeRx = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** The minimal student shape buildReportCard needs (satisfied by a lean Student). */
+interface ReportStudent {
+  _id: unknown;
+  firstName?: string;
+  lastName?: string;
+  className?: string;
+  section?: string;
+  rollNo?: string;
+  admissionNo?: string;
+  avatar?: string;
+  attendancePercent?: number;
+}
+
+/**
+ * A full, print-ready report card for ONE student + exam — the same shape the
+ * office/teacher report-card screen produces, but computed server-side so a
+ * parent or student never fetches the whole class's marks. The class RANK is
+ * derived from every classmate's percent, yet ONLY the rank number and class
+ * size leave the server — never another student's marks. `examName` defaults to
+ * the student's most recent exam (by the exam's date, then name). Returns a null
+ * card when the student has no marks yet.
+ */
+async function buildReportCard(schoolId: string, s: ReportStudent, examNameParam?: string) {
+  const studentId = String(s._id);
+  const examNames = (await Mark.distinct("examName", { schoolId, studentId })).filter(Boolean) as string[];
+  if (examNames.length === 0) return { exams: [], selected: "", reportCard: null };
+
+  // Order the student's exams newest-first by the school's exam date, then name.
+  const exams = await Exam.find({ schoolId, name: { $in: examNames } }, { name: 1, date: 1 }).lean();
+  const dateByName = new Map(exams.map((e) => [e.name, e.date || ""]));
+  const ordered = [...examNames].sort((a, b) => {
+    const da = dateByName.get(a) || "";
+    const db = dateByName.get(b) || "";
+    if (da !== db) return db.localeCompare(da);
+    return a.localeCompare(b);
+  });
+  const selected = examNameParam && ordered.includes(examNameParam) ? examNameParam : ordered[0];
+
+  const school = await School.findOne({ schoolId }).lean();
+  const scheme = effectiveScheme(school?.gradingScheme);
+
+  const mine = await Mark.find({ schoolId, studentId, examName: selected }).lean();
+  const subjects = mine
+    .map((m) => {
+      const pct = (m.maxMarks ?? 0) > 0 ? Math.round(((m.marks ?? 0) / (m.maxMarks ?? 0)) * 100) : 0;
+      return { subject: m.subject || "—", marks: m.marks ?? 0, maxMarks: m.maxMarks ?? 0, grade: gradeForPercent(scheme, pct).grade };
+    })
+    .sort((a, b) => a.subject.localeCompare(b.subject));
+  const total = subjects.reduce((n, x) => n + x.marks, 0);
+  const outOf = subjects.reduce((n, x) => n + x.maxMarks, 0);
+  const percent = outOf > 0 ? Math.round((total / outOf) * 100) : 0;
+  const band = gradeForPercent(scheme, percent);
+
+  // Class rank: every classmate's percent for this exam, sorted (percent desc, then
+  // raw total desc — the office/web tie-break). Only this student's place is kept.
+  const className = s.className ?? "";
+  const section = s.section ?? "";
+  let rank: number | undefined;
+  let classSize: number | undefined;
+  if (className && section) {
+    const classMarks = await Mark.find(
+      { schoolId, examName: selected, className, section },
+      { studentId: 1, marks: 1, maxMarks: 1 }
+    ).lean();
+    const agg = new Map<string, { total: number; outOf: number }>();
+    for (const m of classMarks) {
+      const cur = agg.get(m.studentId) ?? { total: 0, outOf: 0 };
+      cur.total += m.marks ?? 0;
+      cur.outOf += m.maxMarks ?? 0;
+      agg.set(m.studentId, cur);
+    }
+    const ranked = [...agg.entries()]
+      .map(([id, v]) => ({ id, total: v.total, percent: v.outOf > 0 ? (v.total / v.outOf) * 100 : 0 }))
+      .sort((a, b) => b.percent - a.percent || b.total - a.total);
+    classSize = ranked.length;
+    const pos = ranked.findIndex((r) => r.id === studentId);
+    if (pos >= 0) rank = pos + 1;
+  }
+
+  return {
+    exams: ordered,
+    selected,
+    reportCard: {
+      examName: selected,
+      studentName: `${s.firstName ?? ""} ${s.lastName ?? ""}`.trim(),
+      className,
+      section,
+      rollNo: s.rollNo ?? "",
+      admissionNo: s.admissionNo ?? "",
+      avatar: s.avatar ?? "",
+      attendancePercent: s.attendancePercent ?? 0,
+      subjects,
+      total,
+      outOf,
+      percent,
+      grade: band.grade,
+      gradePoint: band.gradePoint,
+      remark: band.remark,
+      rank,
+      classSize,
+    },
+  };
+}
 
 /**
  * The signed-in user's own children — students in their school whose guardian,
@@ -124,6 +229,29 @@ router.get("/children/:id", async (req, res, next) => {
 });
 
 /**
+ * ONE of the signed-in parent's children's full report card for an exam (newest
+ * by default). Ownership-guarded exactly like children/:id; rank is computed
+ * server-side so no classmate's marks ever reach the parent.
+ */
+router.get("/children/:id/report-card", async (req, res, next) => {
+  try {
+    const schoolId = req.user!.schoolId;
+    const email = (req.user!.email || "").trim().toLowerCase();
+    const s = await Student.findOne({ _id: req.params.id, schoolId }).lean();
+    const owns =
+      !!s &&
+      [s.guardian?.email, s.fatherEmail, s.motherEmail]
+        .map((e) => String(e ?? "").trim().toLowerCase())
+        .includes(email);
+    if (!s || !owns) throw ApiError.notFound("Child not found.");
+    const examName = typeof req.query.examName === "string" ? req.query.examName : undefined;
+    res.json({ data: await buildReportCard(schoolId, s, examName) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
  * The signed-in STUDENT's own snapshot — matched to a Student record by login
  * email. Returns their profile, live metrics (attendance/performance/fee) and
  * today's timetable. Scoped to the one student, never school-wide data.
@@ -217,6 +345,26 @@ router.get("/me/report", async (req, res, next) => {
       ? Math.round((graded.reduce((sum, x) => sum + x.gradePoint, 0) / graded.length) * 100) / 100
       : 0;
     res.json({ data: { profile: { name: `${s.firstName ?? ""} ${s.lastName ?? ""}`.trim(), className: s.className ?? "", section: s.section ?? "" }, subjects, gpa } });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * The signed-in STUDENT's own full report card for an exam (newest by default).
+ * Matched by login email; same server-side rank as the parent view.
+ */
+router.get("/me/report-card", async (req, res, next) => {
+  try {
+    const schoolId = req.user!.schoolId;
+    const email = (req.user!.email || "").trim().toLowerCase();
+    const s = email ? await Student.findOne({ schoolId, email }).lean() : null;
+    if (!s) {
+      res.json({ data: { exams: [], selected: "", reportCard: null } });
+      return;
+    }
+    const examName = typeof req.query.examName === "string" ? req.query.examName : undefined;
+    res.json({ data: await buildReportCard(schoolId, s, examName) });
   } catch (err) {
     next(err);
   }

@@ -4,7 +4,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { Screen, ScreenHeader, AppText, Card, Button, Loading } from "@/components";
 import { getChild, type ChildDetail } from "@/api/portal";
 import { ApiError } from "@/api/client";
-import { colors, radius, spacing, fontWeight } from "@/theme";
+import { colors, spacing, fontWeight } from "@/theme";
 
 /** One child in detail — stats, report card, and links to their class
  *  timetable + homework. */
@@ -54,7 +54,7 @@ export default function Child() {
     );
   }
 
-  const { profile, stats, subjects } = data;
+  const { profile, stats } = data;
 
   return (
     <Screen style={{ gap: spacing.md }} onRefresh={load}>
@@ -76,7 +76,7 @@ export default function Child() {
         <Tile label="GPA" value={String(stats.gpa)} tone={colors.primaryText} />
       </View>
 
-      {/* Quick links to this child's class */}
+      {/* Quick links to this child's class + report card */}
       <View style={styles.tiles}>
         <Button
           title="Timetable"
@@ -98,29 +98,10 @@ export default function Child() {
           }
         />
       </View>
-
-      <AppText variant="heading">Report card</AppText>
-      {subjects.length === 0 ? (
-        <AppText variant="muted">No marks published yet.</AppText>
-      ) : (
-        subjects.map((s) => (
-          <Card key={s.subject} style={styles.row}>
-            <View style={styles.flex}>
-              <AppText variant="heading" style={styles.rowTitle}>
-                {s.subject}
-              </AppText>
-              <AppText variant="muted">
-                {s.marks}/{s.maxMarks} · {s.percent}%
-              </AppText>
-            </View>
-            <View style={styles.grade}>
-              <AppText variant="small" style={styles.gradeText}>
-                {s.grade}
-              </AppText>
-            </View>
-          </Card>
-        ))
-      )}
+      <Button
+        title="Report card"
+        onPress={() => router.push({ pathname: "/parent/report-card", params: { id, name: profile.name } })}
+      />
     </Screen>
   );
 }
@@ -141,8 +122,4 @@ const styles = StyleSheet.create({
   tiles: { flexDirection: "row", gap: spacing.sm },
   tile: { flex: 1, gap: 4, padding: spacing.md },
   tileValue: { fontSize: 21, fontWeight: fontWeight.bold },
-  row: { flexDirection: "row", alignItems: "center", gap: spacing.md },
-  rowTitle: { fontSize: 15 },
-  grade: { backgroundColor: colors.primarySoft, borderRadius: radius.pill, paddingHorizontal: spacing.md, paddingVertical: spacing.xs },
-  gradeText: { color: colors.primaryText, fontWeight: fontWeight.bold },
 });

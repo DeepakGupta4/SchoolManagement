@@ -56,6 +56,38 @@ export interface ChildDetail {
 }
 export const getChild = (id: string) => api<ChildDetail>(`/api/portal/children/${id}`);
 
+/** A full, print-ready report card — same fields the ReportCardPreview expects. */
+export interface ReportCardFull {
+  examName: string;
+  studentName: string;
+  className: string;
+  section: string;
+  rollNo: string;
+  admissionNo?: string;
+  avatar?: string;
+  attendancePercent?: number;
+  subjects: { subject: string; marks: number; maxMarks: number; grade: string }[];
+  total: number;
+  outOf: number;
+  percent: number;
+  grade: string;
+  gradePoint: number;
+  remark: string;
+  rank?: number;
+  classSize?: number;
+}
+export interface ReportCardBundle {
+  exams: string[];
+  selected: string;
+  reportCard: ReportCardFull | null;
+}
+/** A parent's child report card for an exam (newest by default). */
+export const getChildReportCard = (id: string, examName?: string) =>
+  api<ReportCardBundle>(`/api/portal/children/${id}/report-card${examName ? `?examName=${encodeURIComponent(examName)}` : ""}`);
+/** The signed-in student's own report card for an exam (newest by default). */
+export const getStudentReportCard = (examName?: string) =>
+  api<ReportCardBundle>(`/api/portal/me/report-card${examName ? `?examName=${encodeURIComponent(examName)}` : ""}`);
+
 // ---------- Staff / Driver ----------
 export type StaffAttendanceStatus = "present" | "absent" | "late" | "half-day" | "leave";
 

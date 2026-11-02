@@ -29,6 +29,7 @@ export default function ParentLayout() {
       <Tabs.Screen name="messages" options={{ href: null }} />
       <Tabs.Screen name="homework" options={{ href: null }} />
       <Tabs.Screen name="timetable" options={{ href: null }} />
+      <Tabs.Screen name="report-card" options={{ href: null }} />
       <Tabs.Screen name="profile" options={{ href: null }} />
       <Tabs.Screen name="assistant" options={{ href: null }} />
     </Tabs>

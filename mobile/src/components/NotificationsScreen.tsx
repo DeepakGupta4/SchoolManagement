@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { Screen } from "./Screen";
 import { ScreenHeader } from "./ScreenHeader";
@@ -14,10 +14,30 @@ import { colors, spacing } from "@/theme";
 
 /** Shared alerts/notifications inbox — per-user, so every role mounts the same screen. */
 export function NotificationsScreen() {
-  const { items, unread, loading, refresh, markReadLocal, markAllReadLocal } = useNotifications();
+  const { items, unread, refresh, markReadLocal, markAllReadLocal } = useNotifications();
+  // Gate the full-screen loader on THIS screen's own first fetch — never the shared
+  // store `loading` flag, which other screens (the home focus-refresh) also drive, or
+  // the spinner can get stuck until a manual pull. Pull-to-refresh uses its own flag.
+  const [firstLoad, setFirstLoad] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
-    refresh();
+    let alive = true;
+    refresh().finally(() => {
+      if (alive) setFirstLoad(false);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [refresh]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await refresh();
+    } finally {
+      setRefreshing(false);
+    }
   }, [refresh]);
 
   // Update the badge/dot IN PLACE — never re-fetch on a tap, or the whole list
@@ -41,7 +61,7 @@ export function NotificationsScreen() {
     }
   };
 
-  if (loading && items.length === 0) {
+  if (firstLoad && items.length === 0) {
     return (
       <Screen scroll={false}>
         <Loading label="Loading notifications…" />
@@ -60,8 +80,8 @@ export function NotificationsScreen() {
         data={items}
         keyExtractor={(n) => n.id}
         pageSize={15}
-        onRefresh={refresh}
-        refreshing={loading}
+        onRefresh={onRefresh}
+        refreshing={refreshing}
         contentContainerStyle={{ gap: spacing.sm }}
         emptyText="You're all caught up. 🎉"
         renderItem={({ item }) => (
