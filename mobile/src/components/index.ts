@@ -24,3 +24,4 @@ export { MessageBoardScreen } from "./MessageBoardScreen";
 export { LeaveScreen } from "./LeaveScreen";
 export { StaffIdCardScreen } from "./StaffIdCardScreen";
 export { NotificationsScreen } from "./NotificationsScreen";
+export { FeeDuesPreviewModal } from "./FeeDuesPreviewModal";

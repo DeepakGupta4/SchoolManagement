@@ -41,6 +41,7 @@ export interface FeeHeadDue {
 export interface FeeAccount {
   id: string;
   studentId: string;
+  admissionNo: string;
   name: string;
   className: string;
   section: string;
@@ -52,6 +53,9 @@ export interface FeeAccount {
   concession: number;
 }
 export const listFeeAccounts = () => api<FeeAccount[]>("/api/fees/accounts");
+
+/** Unpaid balance for a single fee head, never negative. */
+export const headBalance = (h: FeeHeadDue) => Math.max(0, (h.billed || 0) - (h.paid || 0));
 
 /** Outstanding balance for an account (billed + late fee − paid), never negative.
  *  Mirrors the web ledger's balanceOf; concession is already netted into billed. */
