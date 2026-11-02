@@ -60,7 +60,7 @@ const listQuery = z.object({
 /** Saved marks for one exam + class + section (empty if never saved). */
 router.get(
   "/",
-  requireRole("super_admin", "school_admin", "principal", "teacher"),
+  requireRole("super_admin", "school_admin", "principal", "teacher", "accountant"),
   validate(listQuery, "query"),
   async (req, res, next) => {
   try {

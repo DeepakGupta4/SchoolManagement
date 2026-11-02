@@ -10,6 +10,9 @@ type LinkItem = { href: Href; icon: keyof typeof Ionicons.glyphMap; label: strin
 const LINKS: LinkItem[] = [
   { href: "/accountant/payments", icon: "receipt-outline", label: "Payments", hint: "The payment register" },
   { href: "/accountant/dues", icon: "alert-circle-outline", label: "Fee dues", hint: "Students with outstanding fees" },
+  { href: "/accountant/report-cards", icon: "ribbon-outline", label: "Report cards", hint: "View & print report cards" },
+  { href: "/accountant/admit-cards", icon: "reader-outline", label: "Admit cards", hint: "View & print admit cards" },
+  { href: "/accountant/timetable", icon: "calendar-outline", label: "Timetable", hint: "The class timetable" },
   { href: "/accountant/leave", icon: "calendar-clear-outline", label: "My leave", hint: "Apply & track approvals" },
   { href: "/accountant/messages", icon: "chatbubbles-outline", label: "Message board", hint: "Shared with your school" },
   { href: "/accountant/id-card", icon: "card-outline", label: "My ID card", hint: "Your staff ID" },

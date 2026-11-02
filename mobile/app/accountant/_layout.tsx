@@ -26,6 +26,9 @@ export default function AccountantLayout() {
 
       {/* Reachable via router.push from Home / More, but not their own tabs. */}
       <Tabs.Screen name="notifications" options={{ href: null }} />
+      <Tabs.Screen name="report-cards" options={{ href: null }} />
+      <Tabs.Screen name="admit-cards" options={{ href: null }} />
+      <Tabs.Screen name="timetable" options={{ href: null }} />
       <Tabs.Screen name="leave" options={{ href: null }} />
       <Tabs.Screen name="messages" options={{ href: null }} />
       <Tabs.Screen name="id-card" options={{ href: null }} />

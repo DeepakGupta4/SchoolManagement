@@ -71,6 +71,19 @@ export function ReportCardPreview({
     }
   };
 
+  const onPrint = async () => {
+    if (!data) return;
+    setSharing(true);
+    try {
+      await Print.printAsync({ html: reportCardHtml(data, school, t) });
+    } catch (e) {
+      const m = e instanceof Error ? e.message : "";
+      if (m && !/dismiss|cancel/i.test(m)) Alert.alert("Couldn't print", m);
+    } finally {
+      setSharing(false);
+    }
+  };
+
   return (
     <Modal visible={!!data} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.overlay}>
@@ -87,6 +100,16 @@ export function ReportCardPreview({
               >
                 <Ionicons name="share-outline" size={16} color={colors.onPrimary} />
                 <AppText style={styles.shareText}>{sharing ? "…" : "PDF"}</AppText>
+              </Pressable>
+              <Pressable
+                onPress={onPrint}
+                disabled={sharing || !data}
+                style={[styles.shareBtn, (sharing || !data) && styles.shareOff]}
+                accessibilityRole="button"
+                accessibilityLabel="Print"
+              >
+                <Ionicons name="print-outline" size={16} color={colors.onPrimary} />
+                <AppText style={styles.shareText}>Print</AppText>
               </Pressable>
               <Pressable onPress={onClose} hitSlop={8} accessibilityLabel="Close">
                 <Ionicons name="close" size={24} color={colors.text} />

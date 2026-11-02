@@ -18,8 +18,10 @@ type QuickAction = { label: string; icon: keyof typeof Ionicons.glyphMap; href: 
 const ACTIONS: QuickAction[] = [
   { label: "Payments", icon: "receipt-outline", href: "/accountant/payments", bg: colors.primarySoft, fg: colors.primaryText },
   { label: "Fee dues", icon: "alert-circle-outline", href: "/accountant/dues", bg: colors.warningSoft, fg: colors.warningText },
-  { label: "Message board", icon: "chatbubbles-outline", href: "/accountant/messages", bg: colors.infoSoft, fg: colors.infoText },
-  { label: "My leave", icon: "calendar-clear-outline", href: "/accountant/leave", bg: colors.successSoft, fg: colors.successText },
+  { label: "Report cards", icon: "ribbon-outline", href: "/accountant/report-cards", bg: colors.successSoft, fg: colors.successText },
+  { label: "Admit cards", icon: "reader-outline", href: "/accountant/admit-cards", bg: colors.infoSoft, fg: colors.infoText },
+  { label: "Message board", icon: "chatbubbles-outline", href: "/accountant/messages", bg: colors.primarySoft, fg: colors.primaryText },
+  { label: "My leave", icon: "calendar-clear-outline", href: "/accountant/leave", bg: colors.warningSoft, fg: colors.warningText },
 ];
 
 const STATUS_TONE: Record<string, { bg: string; fg: string; label: string }> = {
@@ -127,7 +129,13 @@ export default function AccountantHome() {
       </View>
       <View style={styles.statRow}>
         <StatCard label="Outstanding" value={inr(summary?.outstanding)} icon="alert-circle-outline" tone="warning" onPress={() => router.push("/accountant/dues")} />
-        <StatCard label="Pending" value={summary ? summary.pendingClearance : "—"} icon="hourglass-outline" tone="info" onPress={() => router.push("/accountant/payments?status=pending-clearance")} />
+        <StatCard
+          label="Timetable"
+          value={new Date().toLocaleDateString("en-US", { weekday: "short" })}
+          icon="calendar-outline"
+          tone="info"
+          onPress={() => router.push("/accountant/timetable")}
+        />
       </View>
 
       {/* Today by mode */}
