@@ -39,10 +39,15 @@ export default function AccountantTimetable() {
     }, [load])
   );
 
+  // Timetable rows store a COMPOSITE className ("Class 6 - A"); split it into the
+  // bare class + section so the pickers read clean.
   const classOptions = useMemo<ChipOption[]>(() => {
     const set = new Set<string>();
     classes.forEach((c) => c.name && set.add(c.name));
-    entries.forEach((e) => e.className && set.add(e.className));
+    entries.forEach((e) => {
+      const i = e.className.lastIndexOf(" - ");
+      set.add(i >= 0 ? e.className.slice(0, i) : e.className);
+    });
     return [...set].sort((a, b) => classSortKey(a) - classSortKey(b) || a.localeCompare(b)).map((c) => ({ label: c, value: c }));
   }, [classes, entries]);
 
@@ -53,7 +58,8 @@ export default function AccountantTimetable() {
   const sectionOptions = useMemo<ChipOption[]>(() => {
     const set = new Set<string>(classes.find((c) => c.name === className)?.sections ?? []);
     entries.forEach((e) => {
-      if (e.className === className && e.section) set.add(e.section);
+      const i = e.className.lastIndexOf(" - ");
+      if (i >= 0 && e.className.slice(0, i) === className) set.add(e.className.slice(i + 3));
     });
     return [...set].sort().map((s) => ({ label: `Sec ${s}`, value: s }));
   }, [classes, className, entries]);

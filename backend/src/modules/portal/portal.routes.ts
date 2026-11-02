@@ -142,7 +142,14 @@ router.get("/me/student", async (req, res, next) => {
       return;
     }
     const today = WEEKDAY[new Date().getDay()];
-    const periods = await Timetable.find({ schoolId, className: s.className, day: today })
+    // Timetable rows store a COMPOSITE className ("Class 6 - A"); match that, with
+    // a bare fallback for any legacy rows saved without a section.
+    const classKey = s.section ? `${s.className} - ${s.section}` : s.className;
+    const periods = await Timetable.find({
+      schoolId,
+      className: { $in: [classKey, s.className] },
+      day: today,
+    })
       .sort({ period: 1 })
       .lean();
     res.json({

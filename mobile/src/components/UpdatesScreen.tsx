@@ -59,6 +59,7 @@ export function UpdatesScreen() {
 
   useEffect(() => {
     setSearch("");
+    setData([]); // drop the old tab's rows so they don't flash through the new tab's card type
   }, [tab]);
 
   const q = search.trim().toLowerCase();

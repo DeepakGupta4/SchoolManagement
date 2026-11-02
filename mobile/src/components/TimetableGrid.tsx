@@ -67,10 +67,12 @@ export function TimetableGrid({
   section?: string;
 }) {
   const grid = useMemo(() => {
+    // Timetable rows store a COMPOSITE className ("Class 6 - A"); match that, and
+    // fall back to the bare class for any legacy rows saved without a section.
+    const composite = section ? `${className} - ${section}` : className;
     const g: Record<string, Record<number, TimetableEntry>> = {};
     for (const e of entries) {
-      if (e.className !== className) continue;
-      if (section && e.section && e.section !== section) continue;
+      if (e.className !== composite && e.className !== className) continue;
       (g[e.day] ??= {})[e.period] = e;
     }
     return g;
