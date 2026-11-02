@@ -1,8 +1,8 @@
 import { useCallback, useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { Screen, AppText, Card, Button, Loading } from "@/components";
+import { Screen, ScreenHeader, AppText, Card, Button, Loading } from "@/components";
 import { getMyRoute, setTracking, type DriverRoute } from "@/api/transport";
 import { startTracking, stopTracking, isTracking } from "@/lib/tracking";
 import { ApiError } from "@/api/client";
@@ -77,7 +77,7 @@ export default function DriverTracking() {
   if (!route) {
     return (
       <Screen style={{ gap: spacing.md }}>
-        <AppText variant="title">Live tracking</AppText>
+        <ScreenHeader title="Live tracking" back />
         <Card>
           <AppText variant="muted">
             No bus route is linked to your account yet. Ask the office to assign you a route, then come
@@ -90,7 +90,15 @@ export default function DriverTracking() {
 
   return (
     <Screen style={{ gap: spacing.md }}>
-      <AppText variant="title">Live tracking</AppText>
+      <ScreenHeader
+        title="Live tracking"
+        back
+        right={
+          <Pressable onPress={load} hitSlop={8} accessibilityLabel="Refresh">
+            <Ionicons name="refresh" size={22} color={colors.primary} />
+          </Pressable>
+        }
+      />
 
       <Card style={styles.gap4}>
         <AppText variant="heading">{route.name}</AppText>
@@ -101,7 +109,24 @@ export default function DriverTracking() {
         <AppText variant="muted">
           {route.departure || "—"} → {route.arrival || "—"} · {route.students} students
         </AppText>
-        {route.stops.length ? <AppText variant="small">{route.stops.length} stops</AppText> : null}
+        {route.stops.length ? (
+          <View style={styles.stops}>
+            {route.stops.slice(0, 8).map((s, i) => (
+              <View key={`${s}-${i}`} style={styles.stopPill}>
+                <AppText variant="small" style={styles.stopText}>
+                  {s}
+                </AppText>
+              </View>
+            ))}
+            {route.stops.length > 8 ? (
+              <View style={styles.stopPill}>
+                <AppText variant="small" style={styles.stopText}>
+                  +{route.stops.length - 8} more
+                </AppText>
+              </View>
+            ) : null}
+          </View>
+        ) : null}
       </Card>
 
       <Card style={[styles.status, on && styles.statusOn]}>
@@ -148,6 +173,9 @@ export default function DriverTracking() {
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   gap4: { gap: 4 },
+  stops: { flexDirection: "row", flexWrap: "wrap", gap: spacing.xs, marginTop: spacing.xs },
+  stopPill: { backgroundColor: colors.surfaceAlt, borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: 4 },
+  stopText: { color: colors.text },
   status: { flexDirection: "row", alignItems: "center", gap: spacing.md },
   statusOn: { backgroundColor: colors.successSoft, borderColor: colors.success },
   dot: { width: 14, height: 14, borderRadius: 7 },

@@ -8,7 +8,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { AppText } from "@/components";
 import { listLiveBuses, type DriverRoute } from "@/api/transport";
 import { timeAgo } from "@/lib/time";
-import { colors, spacing } from "@/theme";
+import { colors, radius, spacing } from "@/theme";
 
 // A self-contained Leaflet + OpenStreetMap page. We feed it live bus positions
 // from React Native via window.updateBuses(). Leaflet + OSM = free, no API key.
@@ -126,11 +126,11 @@ export default function TrackBus() {
               : `${withPos.length} bus${withPos.length > 1 ? "es" : ""} live`}
           </AppText>
         </View>
-        <Pressable onPress={load} hitSlop={10} accessibilityLabel="Refresh">
-          <Ionicons name="refresh" size={22} color={colors.primary} />
+        <Pressable onPress={load} hitSlop={10} style={styles.iconBtn} accessibilityLabel="Refresh">
+          <Ionicons name="refresh" size={20} color={colors.primary} />
         </Pressable>
-        <Pressable onPress={() => router.back()} hitSlop={10} accessibilityLabel="Close">
-          <Ionicons name="close" size={26} color={colors.text} />
+        <Pressable onPress={() => router.back()} hitSlop={10} style={styles.iconBtn} accessibilityLabel="Close">
+          <Ionicons name="close" size={22} color={colors.text} />
         </Pressable>
       </View>
 
@@ -179,6 +179,16 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
   },
   flex: { flex: 1 },
+  iconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   map: { flex: 1 },
   list: { maxHeight: 200, backgroundColor: colors.surface, borderTopColor: colors.border, borderTopWidth: 1 },
   listContent: { padding: spacing.lg, gap: spacing.sm },
