@@ -166,7 +166,8 @@ export default function ReportCards() {
     : 0;
 
   const rankById = useMemo(() => {
-    const sorted = [...reportRows].sort((a, b) => b.percent - a.percent);
+    // Match the web's tie-break: equal % → higher raw total ranks first.
+    const sorted = [...reportRows].sort((a, b) => b.percent - a.percent || b.total - a.total);
     const m: Record<string, number> = {};
     sorted.forEach((r, i) => (m[r.studentId] = i + 1));
     return m;
