@@ -1,25 +1,35 @@
 # EAS Build archives from the GIT ROOT, and this repo holds five independent
 # projects under one .git (backend, frontend, showcase-website, marketing, mobile)
-# with NO npm workspaces. So `eas build` from mobile/ was uploading the ENTIRE repo
-# (~379 MB) when the mobile app alone is a few MB. Keep only mobile/.
+# with NO npm workspaces. `eas build` from mobile/ was uploading the ENTIRE repo
+# (~379 MB) when only mobile/ is needed.
 #
-# NOTE: when a .easignore exists, EAS uses it INSTEAD of .gitignore for the upload,
-# so the per-project ignores (node_modules, build output) are re-listed below or
-# they would be swept right back in.
+# IMPORTANT: this is a DENYLIST, not an allowlist. An earlier `/*` + `!/mobile/`
+# allowlist broke the build — EAS's ignore engine does NOT re-include a directory's
+# CONTENTS after a broad `/*` exclude, so mobile/package.json went missing and the
+# build failed with "package.json does not exist". Here mobile/ is never excluded,
+# so every file it needs is uploaded; we only drop the siblings + build junk.
+#
+# NOTE: .easignore REPLACES .gitignore for the upload, so dependencies / build output
+# are re-listed below or they'd be swept back in.
 
-# Ignore every top-level entry in the repo…
-/*
+# Sibling projects — not part of the mobile build.
+/backend/
+/frontend/
+/showcase-website/
+/marketing/
 
-# …except the mobile app (the only thing the mobile build needs).
-!/mobile/
+# Root-level docs / infra not needed by the build.
+/SchoolDeck.pdf
+/SchoolDeck.pptx
+/render.yaml
 
-# Within the mobile app, drop dependencies + build output + caches — these are
+# Dependencies (any project) + the mobile app's build output / caches. These are
 # installed / regenerated on the EAS build servers and must not be uploaded.
-/mobile/node_modules/
+node_modules/
 /mobile/.expo/
 /mobile/dist/
 /mobile/web-build/
 /mobile/ios/
 /mobile/android/
-/mobile/*.log
-/mobile/.DS_Store
+*.log
+.DS_Store
