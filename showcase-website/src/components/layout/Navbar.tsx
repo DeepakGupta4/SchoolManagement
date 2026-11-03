@@ -10,7 +10,7 @@ import { scrollToId } from '@/hooks/useLenis'
 
 // Existing schools sign in to the admin app. Defaults to the deployed admin
 // URL; override with VITE_ADMIN_URL if it changes (e.g. a custom domain).
-const ADMIN_URL = (import.meta.env.VITE_ADMIN_URL ?? 'https://school-management-omega-lemon.vercel.app').replace(/\/$/, '')
+const ADMIN_URL = (import.meta.env.VITE_ADMIN_URL ?? 'https://adminschoolmanagement.vercel.app').replace(/\/$/, '')
 export const LOGIN_HREF = `${ADMIN_URL}/login`
 
 export function Logo({ className }: { className?: string }) {
