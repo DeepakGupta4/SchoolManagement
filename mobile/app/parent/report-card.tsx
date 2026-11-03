@@ -27,35 +27,62 @@ export default function ParentReportCard() {
   const [bundle, setBundle] = useState<ReportCardBundle | null>(null);
   const [school, setSchool] = useState<School | null>(null);
   const [examName, setExamName] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true); // first load only (full-screen)
+  const [switching, setSwitching] = useState(false); // an exam switch / refresh is in flight
+  const [error, setError] = useState<string | null>(null); // first-load failure (full-screen)
+  const [notice, setNotice] = useState<string | null>(null); // transient, non-destructive
   const [preview, setPreview] = useState(false);
 
-  const load = useCallback(
-    async (exam?: string) => {
-      if (!childId) {
-        setError("No child selected.");
-        setLoading(false);
-        return;
-      }
-      setError(null);
+  // First load — the only path that may show a full-screen error (no card yet).
+  const loadInitial = useCallback(async () => {
+    if (!childId) {
+      setError("No child selected.");
+      setLoading(false);
+      return;
+    }
+    setError(null);
+    setNotice(null);
+    try {
+      const [rc, sch] = await Promise.all([getChildReportCard(childId), getMySchool().catch(() => null)]);
+      setBundle(rc);
+      setSchool(sch);
+      setExamName(rc.selected);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Could not load the report card.");
+    } finally {
+      setLoading(false);
+    }
+  }, [childId]);
+
+  useEffect(() => {
+    loadInitial();
+  }, [loadInitial]);
+
+  // Fetch a given exam (switch or pull-to-refresh) WITHOUT tearing down the card
+  // already on screen if it fails — the picker + last card stay, the error is inline.
+  const fetchExam = useCallback(
+    async (exam: string | undefined, optimistic?: string) => {
+      if (!childId) return;
+      if (optimistic !== undefined) setExamName(optimistic); // picker reflects the tap at once
+      setSwitching(true);
+      setNotice(null);
       try {
-        const [rc, sch] = await Promise.all([getChildReportCard(childId, exam), getMySchool().catch(() => null)]);
+        const [rc, sch] = await Promise.all([getChildReportCard(childId, exam), getMySchool().catch(() => school)]);
         setBundle(rc);
         setSchool(sch);
         setExamName(rc.selected);
       } catch (e) {
-        setError(e instanceof ApiError ? e.message : "Could not load the report card.");
+        setNotice(e instanceof ApiError ? e.message : "Couldn't load that — showing the previous card.");
+        setExamName(bundle?.selected ?? examName); // revert the picker to what's shown
       } finally {
-        setLoading(false);
+        setSwitching(false);
       }
     },
-    [childId]
+    [childId, school, bundle, examName]
   );
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  const onRefresh = useCallback(() => fetchExam(examName || undefined), [fetchExam, examName]);
+  const onPickExam = useCallback((v: string) => fetchExam(v, v), [fetchExam]);
 
   const card = bundle?.reportCard ?? null;
   const examOptions: ChipOption[] = (bundle?.exams ?? []).map((e) => ({ label: e, value: e }));
@@ -69,13 +96,13 @@ export default function ParentReportCard() {
   }
 
   return (
-    <Screen style={{ gap: spacing.md }} onRefresh={() => load(examName || undefined)}>
+    <Screen style={{ gap: spacing.md }} onRefresh={onRefresh}>
       <View>
         <ScreenHeader title="Report card" back />
         <AppText variant="muted">{typeof name === "string" ? name : "Your child"}</AppText>
       </View>
 
-      {error ? (
+      {error && !bundle ? (
         <Card>
           <AppText variant="muted">{error}</AppText>
         </Card>
@@ -85,73 +112,87 @@ export default function ParentReportCard() {
         </Card>
       ) : (
         <>
-          {examOptions.length > 1 ? (
-            <Select label="Exam" value={examName} options={examOptions} onChange={(v) => load(v)} />
+          {notice ? (
+            <Card style={styles.notice}>
+              <AppText variant="small" style={styles.noticeText}>
+                {notice}
+              </AppText>
+            </Card>
           ) : null}
 
-          {/* Summary */}
-          <Card style={styles.summary}>
-            <View style={styles.sumHead}>
-              <Avatar name={card.studentName} uri={card.avatar} size={44} />
-              <View style={styles.flex}>
-                <AppText variant="heading" numberOfLines={1}>
-                  {card.studentName}
-                </AppText>
-                <AppText variant="small" style={styles.muted}>
-                  {card.examName}
-                  {card.className ? ` · ${card.className}` : ""}
-                  {card.section ? ` · ${card.section}` : ""}
-                </AppText>
-              </View>
-              <View style={styles.gradeChip}>
-                <AppText style={styles.gradeChipText}>{card.grade || "—"}</AppText>
-              </View>
-            </View>
+          {examOptions.length > 1 ? (
+            <Select label="Exam" value={examName} options={examOptions} onChange={onPickExam} />
+          ) : null}
 
-            <View style={styles.statRow}>
-              <Stat label="Total" value={`${card.total}/${card.outOf}`} />
-              <Stat label="Percent" value={`${card.percent}%`} />
-              {card.rank ? <Stat label="Rank" value={`${card.rank}${card.classSize ? `/${card.classSize}` : ""}`} /> : null}
-              {card.attendancePercent != null ? <Stat label="Attendance" value={`${card.attendancePercent}%`} /> : null}
-            </View>
-          </Card>
-
-          {/* Subjects */}
-          <Card style={styles.subjects}>
-            <View style={[styles.subRow, styles.subHead]}>
-              <AppText variant="small" style={[styles.subName, styles.headText]}>
-                Subject
-              </AppText>
-              <AppText variant="small" style={[styles.subMarks, styles.headText]}>
-                Marks
-              </AppText>
-              <AppText variant="small" style={[styles.subGrade, styles.headText]}>
-                Grade
-              </AppText>
-            </View>
-            {card.subjects.length === 0 ? (
-              <AppText variant="muted" style={styles.pad}>
-                No subjects recorded for this exam.
-              </AppText>
-            ) : (
-              card.subjects.map((s, i) => (
-                <View key={`${s.subject}-${i}`} style={styles.subRow}>
-                  <AppText style={styles.subName} numberOfLines={1}>
-                    {s.subject}
-                  </AppText>
-                  <AppText style={styles.subMarks}>
-                    {s.marks}/{s.maxMarks}
-                  </AppText>
-                  <AppText style={styles.subGrade}>{s.grade}</AppText>
+          {switching ? (
+            <Loading label="Loading…" />
+          ) : (
+            <>
+              {/* Summary */}
+              <Card style={styles.summary}>
+                <View style={styles.sumHead}>
+                  <Avatar name={card.studentName} uri={card.avatar} size={44} />
+                  <View style={styles.flex}>
+                    <AppText variant="heading" numberOfLines={1}>
+                      {card.studentName}
+                    </AppText>
+                    <AppText variant="small" style={styles.muted}>
+                      {card.examName}
+                      {card.className ? ` · ${card.className}` : ""}
+                      {card.section ? ` · ${card.section}` : ""}
+                    </AppText>
+                  </View>
+                  <View style={styles.gradeChip}>
+                    <AppText style={styles.gradeChipText}>{card.grade || "—"}</AppText>
+                  </View>
                 </View>
-              ))
-            )}
-          </Card>
 
-          <Button title="View / Print report card" onPress={() => setPreview(true)} />
-          <AppText variant="small" style={styles.hint}>
-            View-only · opens the full printable report card
-          </AppText>
+                <View style={styles.statRow}>
+                  <Stat label="Total" value={`${card.total}/${card.outOf}`} />
+                  <Stat label="Percent" value={`${card.percent}%`} />
+                  {card.rank ? <Stat label="Rank" value={`${card.rank}${card.classSize ? `/${card.classSize}` : ""}`} /> : null}
+                  {card.attendancePercent != null ? <Stat label="Attendance" value={`${card.attendancePercent}%`} /> : null}
+                </View>
+              </Card>
+
+              {/* Subjects */}
+              <Card style={styles.subjects}>
+                <View style={[styles.subRow, styles.subHead]}>
+                  <AppText variant="small" style={[styles.subName, styles.headText]}>
+                    Subject
+                  </AppText>
+                  <AppText variant="small" style={[styles.subMarks, styles.headText]}>
+                    Marks
+                  </AppText>
+                  <AppText variant="small" style={[styles.subGrade, styles.headText]}>
+                    Grade
+                  </AppText>
+                </View>
+                {card.subjects.length === 0 ? (
+                  <AppText variant="muted" style={styles.pad}>
+                    No subjects recorded for this exam.
+                  </AppText>
+                ) : (
+                  card.subjects.map((s, i) => (
+                    <View key={`${s.subject}-${i}`} style={styles.subRow}>
+                      <AppText style={styles.subName} numberOfLines={1}>
+                        {s.subject}
+                      </AppText>
+                      <AppText style={styles.subMarks}>
+                        {s.marks}/{s.maxMarks}
+                      </AppText>
+                      <AppText style={styles.subGrade}>{s.grade}</AppText>
+                    </View>
+                  ))
+                )}
+              </Card>
+
+              <Button title="View / Print report card" onPress={() => setPreview(true)} />
+              <AppText variant="small" style={styles.hint}>
+                View-only · opens the full printable report card
+              </AppText>
+            </>
+          )}
         </>
       )}
 
@@ -175,6 +216,9 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   muted: { color: colors.muted },
   hint: { color: colors.subtle, textAlign: "center" },
+
+  notice: { backgroundColor: colors.warningSoft, borderColor: colors.warning },
+  noticeText: { color: colors.warningText },
 
   summary: { gap: spacing.md },
   sumHead: { flexDirection: "row", alignItems: "center", gap: spacing.md },

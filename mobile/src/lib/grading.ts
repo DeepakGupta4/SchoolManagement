@@ -7,11 +7,11 @@ export const DEFAULT_GRADING_SCHEME: GradingScheme = {
   bands: [
     { grade: "A1", minPercent: 91, maxPercent: 100, gradePoint: 10, remark: "Outstanding" },
     { grade: "A2", minPercent: 81, maxPercent: 90, gradePoint: 9, remark: "Excellent" },
-    { grade: "B1", minPercent: 71, maxPercent: 80, gradePoint: 8, remark: "Very good" },
+    { grade: "B1", minPercent: 71, maxPercent: 80, gradePoint: 8, remark: "Very Good" },
     { grade: "B2", minPercent: 61, maxPercent: 70, gradePoint: 7, remark: "Good" },
     { grade: "C1", minPercent: 51, maxPercent: 60, gradePoint: 6, remark: "Fair" },
     { grade: "C2", minPercent: 41, maxPercent: 50, gradePoint: 5, remark: "Satisfactory" },
-    { grade: "D", minPercent: 33, maxPercent: 40, gradePoint: 4, remark: "Needs improvement" },
+    { grade: "D", minPercent: 33, maxPercent: 40, gradePoint: 4, remark: "Needs Improvement" },
     { grade: "E", minPercent: 0, maxPercent: 32, gradePoint: 0, remark: "Unsatisfactory" },
   ],
 };

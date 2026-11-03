@@ -60,7 +60,19 @@ async function buildReportCard(schoolId: string, s: ReportStudent, examNameParam
   const scheme = effectiveScheme(school?.gradingScheme);
 
   const mine = await Mark.find({ schoolId, studentId, examName: selected }).lean();
-  const subjects = mine
+  // Key the card off the class/section the MARKS were entered under — a per-row
+  // snapshot taken at exam time — not the student's CURRENT record, which may have
+  // moved on (a section change / promotion never re-keys old marks). This keeps the
+  // card identical to the office card for that exam, keeps the student inside their
+  // own rank cohort, and never double-counts a subject if the same exam was somehow
+  // re-entered under a second section (we use the dominant one).
+  const cohortCount = new Map<string, number>();
+  for (const m of mine) cohortCount.set(`${m.className ?? ""}\u0000${m.section ?? ""}`, (cohortCount.get(`${m.className ?? ""}\u0000${m.section ?? ""}`) ?? 0) + 1);
+  const dominant = [...cohortCount.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+  const [className, section] = dominant !== undefined ? dominant.split("\u0000") : [s.className ?? "", s.section ?? ""];
+  const myRows = mine.filter((m) => (m.className ?? "") === className && (m.section ?? "") === section);
+
+  const subjects = myRows
     .map((m) => {
       const pct = (m.maxMarks ?? 0) > 0 ? Math.round(((m.marks ?? 0) / (m.maxMarks ?? 0)) * 100) : 0;
       return { subject: m.subject || "—", marks: m.marks ?? 0, maxMarks: m.maxMarks ?? 0, grade: gradeForPercent(scheme, pct).grade };
@@ -71,10 +83,9 @@ async function buildReportCard(schoolId: string, s: ReportStudent, examNameParam
   const percent = outOf > 0 ? Math.round((total / outOf) * 100) : 0;
   const band = gradeForPercent(scheme, percent);
 
-  // Class rank: every classmate's percent for this exam, sorted (percent desc, then
-  // raw total desc — the office/web tie-break). Only this student's place is kept.
-  const className = s.className ?? "";
-  const section = s.section ?? "";
+  // Class rank among the same cohort (the marks' class/section). Each classmate's
+  // percent is ROUNDED before sorting — matching the office/web card exactly — then
+  // ties break on raw total. Only this student's place + the cohort size are kept.
   let rank: number | undefined;
   let classSize: number | undefined;
   if (className && section) {
@@ -90,7 +101,7 @@ async function buildReportCard(schoolId: string, s: ReportStudent, examNameParam
       agg.set(m.studentId, cur);
     }
     const ranked = [...agg.entries()]
-      .map(([id, v]) => ({ id, total: v.total, percent: v.outOf > 0 ? (v.total / v.outOf) * 100 : 0 }))
+      .map(([id, v]) => ({ id, total: v.total, percent: v.outOf > 0 ? Math.round((v.total / v.outOf) * 100) : 0 }))
       .sort((a, b) => b.percent - a.percent || b.total - a.total);
     classSize = ranked.length;
     const pos = ranked.findIndex((r) => r.id === studentId);
