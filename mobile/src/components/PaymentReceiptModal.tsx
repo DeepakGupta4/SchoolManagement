@@ -186,7 +186,7 @@ tfoot td.tot{text-align:right;font-family:ui-monospace,monospace;font-size:14px;
 .words{margin-top:8px;font-size:9px;font-style:italic;color:#475569}
 .remarks{margin-top:4px;font-size:9px;color:#475569}
 .foot{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-top:24px;font-size:8px;color:#64748b}
-.foot .note{max-width:55%;line-height:1.35;margin:0}
+.foot .note{max-width:55%;line-height:1.35;margin:0;white-space:pre-line}
 .sign{text-align:center}
 .sign .by{font-weight:500;color:#334155;margin:0 0 2px}
 .sign .line{width:128px;border-top:1px solid #94a3b8;padding-top:2px}
@@ -206,7 +206,7 @@ ${unconfirmed ? `<p class="prov">Subject to realisation — this receipt is prov
 <p class="words">Rupees ${esc(amountInWords(p.amount))} only</p>
 ${p.remarks ? `<p class="remarks"><b>Remarks:</b> ${esc(p.remarks)}</p>` : ""}
 <div class="foot">
-<p class="note">This is a computer-generated receipt. Fees once paid are non-refundable except as provided in the school's refund policy.</p>
+<p class="note">${esc(school?.receiptFooter || "This is a computer-generated receipt. Fees once paid are non-refundable except as provided in the school's refund policy.")}</p>
 <div class="sign"><p class="by">${esc(p.collectedBy || "")}</p><div class="line">Authorised signatory</div></div>
 </div>
 </div></body></html>`;

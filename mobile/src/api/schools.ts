@@ -43,6 +43,8 @@ export interface School {
   closingTime?: string;
   gradingScheme?: GradingScheme;
   reportCardTemplate?: ReportCardTemplate;
+  /** Admin-set footer printed on fee receipts. Empty → a generic default is used. */
+  receiptFooter?: string;
 }
 
 /** The signed-in user's school, including its grading scheme + report-card template. */

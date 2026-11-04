@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { AppText, Card, DashboardScreen, HeroAction, NoticeCard } from "@/components";
@@ -9,7 +9,6 @@ import { useAuth } from "@/store/auth";
 import { colors, radius, spacing, fontWeight, fontSize } from "@/theme";
 
 const SOON: { icon: keyof typeof Ionicons.glyphMap; label: string }[] = [
-  { icon: "calendar-clear-outline", label: "Leave requests" },
   { icon: "checkbox-outline", label: "My attendance" },
   { icon: "cash-outline", label: "Payslips" },
 ];
@@ -74,6 +73,18 @@ export default function StaffHome() {
 
           <Card style={styles.block}>
             <AppText variant="heading">Self-service</AppText>
+            <Pressable
+              onPress={() => router.push("/staff/leave")}
+              style={styles.row}
+              accessibilityRole="button"
+              accessibilityLabel="My leave"
+            >
+              <View style={styles.rowIcon}>
+                <Ionicons name="calendar-clear-outline" size={18} color={colors.primary} />
+              </View>
+              <AppText style={styles.flex}>My leave</AppText>
+              <Ionicons name="chevron-forward" size={18} color={colors.subtle} />
+            </Pressable>
             {SOON.map((s) => (
               <View key={s.label} style={styles.soonRow}>
                 <View style={styles.rowIcon}>
