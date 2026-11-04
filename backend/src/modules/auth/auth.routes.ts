@@ -5,6 +5,7 @@ import { z } from "zod";
 import { User, hashPassword, toPublicUser, isSingletonRole, USER_ROLES, type UserDoc, type UserRole } from "./user.model.js";
 import { generateSecret, verifyTotp, otpauthUri } from "../../utils/totp.js";
 import { RefreshToken, generateRefreshToken, hashRefreshToken } from "./refreshToken.model.js";
+import { issueResetToken, consumeResetToken } from "./resetToken.model.js";
 import { signToken, requireAuth, requireRole } from "../../middleware/auth.js";
 import { Role, permissionsOf } from "../roles/role.model.js";
 import { validate } from "../../middleware/validate.js";
@@ -239,20 +240,17 @@ const forgotLimiter = rateLimit({
 
 const forgotSchema = z.object({ email: z.email() });
 
-// In-memory store: token → { userId, expiresAt }. A real deployment should use
-// Redis or a DB collection; this is sufficient for a single-process server.
-const RESET_TOKENS = new Map<string, { userId: string; expiresAt: number }>();
-
 router.post("/forgot-password", forgotLimiter, validate(forgotSchema), async (req, res, next) => {
   try {
     const { email } = req.body as z.infer<typeof forgotSchema>;
     // Always respond 200 — never reveal whether the email exists.
     const user = await User.findOne({ email: email.toLowerCase() });
     if (user) {
-      const token = (await import("node:crypto")).randomBytes(32).toString("hex");
-      RESET_TOKENS.set(token, { userId: String(user._id), expiresAt: Date.now() + 15 * 60 * 1000 });
-      // Prune expired tokens.
-      for (const [k, v] of RESET_TOKENS) if (v.expiresAt < Date.now()) RESET_TOKENS.delete(k);
+      const token = await issueResetToken({
+        purpose: "password",
+        userId: String(user._id),
+        ttlMs: 15 * 60 * 1000,
+      });
       const { sendEmail, isEmailConfigured } = await import("../../utils/email.js");
       const { env } = await import("../../config/env.js");
       if (isEmailConfigured()) {
@@ -278,16 +276,14 @@ const resetPasswordSchema = z.object({
 router.post("/reset-password", validate(resetPasswordSchema), async (req, res, next) => {
   try {
     const { token, newPassword } = req.body as z.infer<typeof resetPasswordSchema>;
-    const entry = RESET_TOKENS.get(token);
-    if (!entry || entry.expiresAt < Date.now()) {
-      RESET_TOKENS.delete(token);
+    const entry = await consumeResetToken(token, "password");
+    if (!entry) {
       throw ApiError.badRequest("This reset link has expired or is invalid. Please request a new one.");
     }
     const user = await User.findById(entry.userId);
     if (!user) throw ApiError.notFound("Account not found.");
     user.passwordHash = await hashPassword(newPassword);
     await user.save();
-    RESET_TOKENS.delete(token);
     // Invalidate all refresh tokens for this user so old sessions can't continue.
     await RefreshToken.deleteMany({ userId: String(user._id) });
     res.json({ ok: true });

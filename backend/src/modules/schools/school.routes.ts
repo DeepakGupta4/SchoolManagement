@@ -8,6 +8,7 @@ import { ApiError } from "../../utils/ApiError.js";
 import { writeAudit } from "../../utils/auditLog.js";
 import { env } from "../../config/env.js";
 import { User, hashPassword, toPublicUser } from "../auth/user.model.js";
+import { issueResetToken, consumeResetToken } from "../auth/resetToken.model.js";
 import { notifySchool } from "../notifications/notification.model.js";
 import { generateTempPassword } from "../../utils/password.js";
 import { sendEmail, isEmailConfigured } from "../../utils/email.js";
@@ -215,8 +216,6 @@ router.patch(
  * is only issued when the user explicitly opens the danger-zone modal.
  */
 
-const RESET_TOKENS = new Map<string, { schoolId: string; expiresAt: number }>();
-
 /** Issues a short-lived (5 min) confirmation token for the reset-data flow. */
 router.post(
   "/reset-data/token",
@@ -224,10 +223,11 @@ router.post(
   async (req, res, next) => {
     try {
       const schoolId = req.user!.schoolId;
-      const token = require("crypto").randomBytes(24).toString("hex") as string;
-      RESET_TOKENS.set(token, { schoolId, expiresAt: Date.now() + 5 * 60 * 1000 });
-      // Prune expired tokens so the map doesn't grow unbounded.
-      for (const [k, v] of RESET_TOKENS) if (v.expiresAt < Date.now()) RESET_TOKENS.delete(k);
+      const token = await issueResetToken({
+        purpose: "data-reset",
+        schoolId,
+        ttlMs: 5 * 60 * 1000,
+      });
       res.json({ data: { confirmToken: token } });
     } catch (err) {
       next(err);
@@ -242,13 +242,12 @@ router.post(
     try {
       const schoolId = req.user!.schoolId;
 
-      // Verify the server-issued confirmation token.
+      // Verify the server-issued confirmation token (consumed one-time).
       const { confirmToken } = req.body as { confirmToken?: string };
-      const entry = confirmToken ? RESET_TOKENS.get(confirmToken) : null;
-      if (!entry || entry.schoolId !== schoolId || entry.expiresAt < Date.now()) {
+      const entry = confirmToken ? await consumeResetToken(confirmToken, "data-reset") : null;
+      if (!entry || entry.schoolId !== schoolId) {
         throw ApiError.badRequest("Invalid or expired confirmation token. Please try again.");
       }
-      RESET_TOKENS.delete(confirmToken!);
 
       // Wipe every domain collection for this school, but KEEP the logins, the
       // school record and its request so the admin stays signed in and the tenant
