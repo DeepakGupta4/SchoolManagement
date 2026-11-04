@@ -43,6 +43,12 @@ const feeAccountSchema = new Schema(
     session: { type: String, required: true, default: "2025-26" },
     heads: { type: [feeHeadSchema], default: [] },
     concession: { type: Number, default: 0, min: 0 },
+    // The MANUAL portion of the concession (sibling/staff/admission discount),
+    // tracked separately from scholarship-derived waivers so a scholarship resync
+    // can't silently wipe it. No default on purpose: existing accounts read as
+    // undefined and are backfilled once at boot (backfillFeeConcessionProvenance),
+    // inferring manual = concession − active scholarships; new accounts set it.
+    manualConcession: { type: Number, min: 0 },
     lateFee: { type: Number, default: 0, min: 0 },
     lastPaymentDate: { type: String, default: null },
     /** Optional fee deadline; drives the "overdue" status when set. */

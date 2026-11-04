@@ -2,6 +2,7 @@ import { createApp } from "./app.js";
 import { connectDatabase, disconnectDatabase, reportIndexBuilds } from "./config/db.js";
 import { ensureSuperAdmin } from "./utils/ensureSuperAdmin.js";
 import { backfillLeaveIdentity } from "./modules/leaveRequests/backfillLeaveIdentity.js";
+import { backfillFeeConcessionProvenance } from "./modules/fees/feeProvisioning.js";
 import { runSubscriptionReminders } from "./modules/schools/reminders.js";
 import { runAllSchools } from "./modules/workflows/workflow.service.js";
 import { runAutoAbsentForAllSchools } from "./modules/attendance/autoAbsent.js";
@@ -24,6 +25,13 @@ async function start() {
   // email/blank as the applicant name. Idempotent, and wrapped so it can never
   // block boot (the same tolerance ensureSuperAdmin's startup write relies on).
   await backfillLeaveIdentity().catch((e) => console.error("Leave identity backfill failed:", e));
+
+  // One-time: record the manual portion of each fee account's concession so the
+  // first scholarship resync can't wipe a sibling/staff/admission discount.
+  // Idempotent; awaited before the server listens so no scholarship change races it.
+  await backfillFeeConcessionProvenance().catch((e) =>
+    console.error("Fee concession provenance backfill failed:", e)
+  );
 
   // Subscription reminder sweep (trial-ending/expired, paid expiring). Also
   // exposed as a cron endpoint; running it here keeps a live instance nudging

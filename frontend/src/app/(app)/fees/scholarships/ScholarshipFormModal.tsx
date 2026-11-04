@@ -6,7 +6,15 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Modal, Button, Input, Select } from "@/components/ui";
 import { useClassOptions } from "@/hooks/useClassOptions";
 import { listStudents } from "@/lib/api/students";
-import { feeStructuresApi, feeTotal, type FeeStructure } from "@/lib/api/feeStructures";
+import { classMatchesStructure } from "@/lib/classOrder";
+import {
+  feeStructuresApi,
+  annualTotal,
+  structureHeads,
+  DEFAULT_MONTHS_PER_YEAR,
+  DEFAULT_EXAMS_PER_YEAR,
+  type FeeStructure,
+} from "@/lib/api/feeStructures";
 import type { Student } from "@/types/student";
 import { scholarshipSchema, type ScholarshipSchema } from "@/lib/schemas/scholarship";
 import {
@@ -110,11 +118,24 @@ export function ScholarshipFormModal({
   const percentage = useWatch({ control, name: "percentage" });
   const amount = useWatch({ control, name: "amount" });
 
-  /** The annual fee a percentage waiver is measured against, from the structure. */
+  /**
+   * The annual (session) fee a percentage waiver is measured against. Uses the
+   * real annualised bill — unit × periods (monthly × months, per-exam × exams) —
+   * NOT the raw per-period sum, and matches the structure the same band-aware way
+   * the backend bills from (an exact class match wins over a band like "Class 1-5").
+   * So a "50%" waiver on a monthly-tuition structure is sized against the true bill.
+   */
   const basisFor = (className: string) => {
     const key = (className ?? "").trim().toLowerCase();
-    const st = feeStructures.find((f) => f.class.trim().toLowerCase() === key);
-    return st ? feeTotal(st) : 0;
+    if (!key) return 0;
+    const exact = feeStructures.find((f) => f.class.trim().toLowerCase() === key);
+    const st = exact ?? feeStructures.find((f) => classMatchesStructure(f.class, className));
+    if (!st) return 0;
+    return annualTotal(
+      structureHeads(st),
+      st.monthsPerYear ?? DEFAULT_MONTHS_PER_YEAR,
+      st.examsPerYear ?? DEFAULT_EXAMS_PER_YEAR
+    );
   };
   const basis = basisFor(cls ?? "");
 

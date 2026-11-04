@@ -252,7 +252,12 @@ router.post("/accounts", canCollect, validate(feeAccountBody), async (req, res, 
       frequency: (h.frequency ?? "one-time") as FeeFrequency,
       unit: Math.round(h.unit ?? h.billed),
     }));
-    const net = netHeadsFor(gross, body.concession);
+    // body.concession is the MANUAL discount the office typed at admission. The
+    // total applied concession also includes the student's active scholarships,
+    // and the manual part is stored separately so a later scholarship resync can
+    // never wipe it.
+    const scholarshipTotal = await scholarshipConcessionFor(schoolId, body.studentId);
+    const net = netHeadsFor(gross, body.concession + scholarshipTotal);
 
     const account = await FeeAccount.findOneAndUpdate(
       { schoolId, studentId: student._id, session: body.session },
@@ -267,6 +272,7 @@ router.post("/accounts", canCollect, validate(feeAccountBody), async (req, res, 
           guardianPhone: student.guardian.phone,
           heads: toAccountHeads(net.heads),
           concession: net.concession,
+          manualConcession: Math.round(body.concession),
           lateFee: Math.round(body.lateFee),
           dueDate: body.dueDate?.trim() ? body.dueDate.trim() : null,
         },
@@ -386,6 +392,7 @@ async function provisionAccount(
         session: CURRENT_SESSION,
         heads: toAccountHeads(net.heads),
         concession: net.concession,
+        manualConcession: 0,
         lateFee: 0,
       },
     ],

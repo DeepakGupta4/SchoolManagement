@@ -322,13 +322,44 @@ export async function syncStudentConcession(
     account.heads.reduce((sum, h) => sum + h.billed, 0) + (account.concession ?? 0);
   if (accountGross !== grossTotal) return;
 
-  const concession = await scholarshipConcessionFor(schoolId, studentId);
-  const net = netHeadsFor(gross, concession);
+  const scholarshipTotal = await scholarshipConcessionFor(schoolId, studentId);
+  // Keep the MANUAL (non-scholarship) concession intact. For accounts created
+  // before manualConcession existed, infer it once from the current concession.
+  // Total concession = manual part + active-scholarship part, so a pending or
+  // removed scholarship can no longer wipe a sibling/staff/admission discount.
+  const manual =
+    account.manualConcession ?? Math.max(0, (account.concession ?? 0) - scholarshipTotal);
+  const net = netHeadsFor(gross, manual + scholarshipTotal);
 
+  account.set("manualConcession", manual);
   account.set("heads", toAccountHeads(net.heads));
   account.concession = net.concession;
   await account.save();
 
   student.feeDue = balanceOf(account as FeeAccountDoc);
   await student.save();
+}
+
+/**
+ * One-time backfill: records the MANUAL portion of each existing fee account's
+ * concession (manual = current concession − active scholarships), so the first
+ * scholarship resync after this ships can't wipe a sibling/staff/admission
+ * discount. Idempotent — only touches accounts that don't have manualConcession
+ * yet, so it no-ops on every boot after the first. Run quiescently at startup,
+ * where the concession equals manual + active-scholarships, making the inference
+ * exact.
+ */
+export async function backfillFeeConcessionProvenance(): Promise<void> {
+  const accounts = await FeeAccount.find({ manualConcession: { $exists: false } });
+  if (!accounts.length) return;
+  let updated = 0;
+  for (const acc of accounts) {
+    const scholarshipTotal = acc.studentId
+      ? await scholarshipConcessionFor(acc.schoolId, String(acc.studentId))
+      : 0;
+    acc.set("manualConcession", Math.max(0, (acc.concession ?? 0) - scholarshipTotal));
+    await acc.save();
+    updated++;
+  }
+  if (updated) console.log(`Fee concession provenance: backfilled ${updated} account(s).`);
 }
