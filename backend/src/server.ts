@@ -1,5 +1,5 @@
 import { createApp } from "./app.js";
-import { connectDatabase, disconnectDatabase } from "./config/db.js";
+import { connectDatabase, disconnectDatabase, reportIndexBuilds } from "./config/db.js";
 import { ensureSuperAdmin } from "./utils/ensureSuperAdmin.js";
 import { backfillLeaveIdentity } from "./modules/leaveRequests/backfillLeaveIdentity.js";
 import { runSubscriptionReminders } from "./modules/schools/reminders.js";
@@ -10,6 +10,12 @@ import { env } from "./config/env.js";
 async function start() {
   const mode = await connectDatabase();
   console.log(`Database connected — ${mode}`);
+
+  // Surface any silent unique-index build failures (a collection with duplicate
+  // data makes Mongoose skip the index without erroring, so uniqueness quietly
+  // isn't enforced). Fire-and-forget so it never delays boot; run
+  // `npm run migrate` to dedupe + sync whatever it reports.
+  void reportIndexBuilds();
 
   // Guarantee a platform owner exists (real DB and in-memory alike).
   await ensureSuperAdmin();

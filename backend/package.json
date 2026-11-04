@@ -12,6 +12,7 @@
     "start": "node dist/server.js",
     "seed": "tsx src/seed.ts",
     "purge": "tsx src/purge.ts",
+    "migrate": "tsx src/scripts/migrate.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
