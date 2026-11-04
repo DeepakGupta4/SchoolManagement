@@ -30,5 +30,11 @@ const busRouteSchema = new Schema(
   { timestamps: true }
 );
 
+// A route code must be unique within a school — transport fees are looked up by
+// code, so a duplicate would bill an arbitrary (last-wins) fee. DEDUPE existing
+// duplicate codes per school BEFORE this index builds (`npm run migrate` reports
+// BusRoute code dups; they aren't auto-deleted since students reference the route).
+busRouteSchema.index({ schoolId: 1, code: 1 }, { unique: true });
+
 export type BusRouteAttrs = InferSchemaType<typeof busRouteSchema>;
 export const BusRoute = mongoose.model("BusRoute", busRouteSchema);

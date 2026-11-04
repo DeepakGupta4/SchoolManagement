@@ -147,7 +147,13 @@ router.post(
       // Marks can't be entered before the exam has taken place. Enforce server-
       // side (matching the UI lock) so the future-date guard can't be bypassed
       // by calling the API directly. A date of today or in the past is allowed.
-      const exam = await Exam.findOne({ schoolId, name: examName });
+      // Case-INSENSITIVE match: exam names are unique under a strength-2 collation,
+      // so a case-variant examName ("midterm" vs "Midterm") must still find the exam
+      // — otherwise the future-date guard below would be silently skipped.
+      const exam = await Exam.findOne({ schoolId, name: examName }).collation({
+        locale: "en",
+        strength: 2,
+      });
       const today = new Date().toISOString().slice(0, 10);
       if (
         exam &&
