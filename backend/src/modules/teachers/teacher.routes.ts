@@ -1,6 +1,12 @@
 import { z } from "zod";
 import { Teacher } from "./teacher.model.js";
 import { StoredDocument } from "../documents/document.model.js";
+import { SchoolClass } from "../classes/class.model.js";
+import { Timetable } from "../timetable/timetable.model.js";
+import { ScheduledExam } from "../examSchedule/examSchedule.model.js";
+import { Allocation } from "../allocations/allocation.model.js";
+import { Assignment } from "../assignments/assignment.model.js";
+import { Substitution } from "../substitutions/substitution.model.js";
 import { createCrudRouter, toPublic } from "../../utils/crudRouter.js";
 import { requireRole } from "../../middleware/auth.js";
 import { validate } from "../../middleware/validate.js";
@@ -61,6 +67,55 @@ export default createCrudRouter({
   readRoles: ["super_admin", "school_admin", "principal", "accountant"],
   // Performance review: persist a rating + note (rating is otherwise read-only).
   extend: (router) => {
+    // Custom update — a teacher is referenced everywhere by their DISPLAY NAME
+    // ("First Last"): class.classTeacher, timetable.teacher, scheduledExam.
+    // invigilator, allocation.teacher, assignment.teacher and substitution.
+    // absent/substituteTeacher. The generic CRUD PUT renames the record alone and
+    // orphans all of it (e.g. the teacher dashboard filters timetable by name, so a
+    // renamed teacher's periods drop to zero), so cascade the new name across every
+    // by-name reference — mirroring the class/subject rename cascades. Extend routes
+    // are NOT auto-role-gated, so gate explicitly.
+    router.put(
+      "/:id",
+      requireRole("super_admin", "school_admin", "principal"),
+      validate(teacherSchema.partial()),
+      async (req, res, next) => {
+        try {
+          const schoolId = req.user!.schoolId;
+          const existing = await Teacher.findOne({ _id: req.params.id, schoolId });
+          if (!existing) throw ApiError.notFound("Teacher not found.");
+          const oldName = `${existing.firstName} ${existing.lastName}`.trim();
+
+          const updated = await Teacher.findOneAndUpdate(
+            { _id: req.params.id, schoolId },
+            req.body,
+            { new: true, runValidators: true }
+          );
+          if (!updated) throw ApiError.notFound("Teacher not found.");
+          const newName = `${updated.firstName} ${updated.lastName}`.trim();
+
+          if (oldName !== newName) {
+            await Promise.all([
+              SchoolClass.updateMany({ schoolId, classTeacher: oldName }, { $set: { classTeacher: newName } }),
+              Timetable.updateMany({ schoolId, teacher: oldName }, { $set: { teacher: newName } }),
+              ScheduledExam.updateMany({ schoolId, invigilator: oldName }, { $set: { invigilator: newName } }),
+              Allocation.updateMany({ schoolId, teacher: oldName }, { $set: { teacher: newName } }),
+              Assignment.updateMany({ schoolId, teacher: oldName }, { $set: { teacher: newName } }),
+              Substitution.updateMany({ schoolId, absentTeacher: oldName }, { $set: { absentTeacher: newName } }),
+              Substitution.updateMany(
+                { schoolId, substituteTeacher: oldName },
+                { $set: { substituteTeacher: newName } }
+              ),
+            ]);
+          }
+
+          res.json({ data: toPublic(updated) });
+        } catch (err) {
+          next(err);
+        }
+      }
+    );
+
     // A teacher's OWN record, matched by their login email. Teachers are excluded
     // from the full teacher list (readRoles above = office/HR only, since records
     // carry salary/PII), so this scoped self-lookup is how a teacher loads their
