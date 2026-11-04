@@ -46,6 +46,23 @@ function toLive(r: RouteDoc) {
 
 const driverEmail = (req: { user?: { email?: string } }) => (req.user?.email || "").toLowerCase();
 
+/**
+ * The bus-route code(s) a parent/student may see on the live map — their own
+ * (student) or their children's (parent) assigned route. The email match is
+ * whitespace/case-tolerant, mirroring how the portal links guardians to students.
+ */
+async function viewerRouteCodes(req: {
+  user?: { email?: string; role?: string; schoolId?: string };
+}): Promise<string[]> {
+  const schoolId = req.user?.schoolId ?? "";
+  const email = (req.user?.email || "").trim();
+  if (!schoolId || !email) return [];
+  const rx = new RegExp(`^\\s*${escapeRx(email)}\\s*$`, "i");
+  const field = req.user?.role === "parent" ? "guardian.email" : "email";
+  const students = await Student.find({ schoolId, [field]: rx }).select("transportRouteCode").lean();
+  return [...new Set(students.map((s) => (s.transportRouteCode || "").trim()).filter(Boolean))];
+}
+
 /** GET /api/transport/me — the signed-in driver's route + live state (null if none linked). */
 router.get("/me", async (req, res, next) => {
   try {
@@ -186,10 +203,24 @@ router.get("/track/:id", async (req, res, next) => {
   }
 });
 
-/** GET /api/transport/live — every route currently sharing its location (office overview). */
+/** GET /api/transport/live — routes currently sharing location: all of them for
+ *  office/teaching/driver roles, but only their own (child's) route for a
+ *  parent/student. */
 router.get("/live", async (req, res, next) => {
   try {
-    const routes = await BusRoute.find({ schoolId: req.user!.schoolId, trackingOn: true });
+    const role = req.user!.role;
+    const filter: Record<string, unknown> = { schoolId: req.user!.schoolId, trackingOn: true };
+    // Parents/students see ONLY the bus on their (child's) route — not every bus in
+    // the school. Office / teaching / driver roles keep the full live overview.
+    if (role === "parent" || role === "student") {
+      const codes = await viewerRouteCodes(req);
+      if (codes.length === 0) {
+        res.json({ data: [] });
+        return;
+      }
+      filter.code = { $in: codes };
+    }
+    const routes = await BusRoute.find(filter);
     res.json({ data: routes.map(toLive) });
   } catch (err) {
     next(err);
