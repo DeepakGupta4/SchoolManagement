@@ -68,6 +68,43 @@ export default createCrudRouter({
           if (!existing) throw ApiError.notFound("Class not found.");
           const oldName = existing.name;
 
+          // Guard a section REMOVAL: a section still holding active students (or
+          // timetable rows) can't be dropped, or they'd be orphaned — a student's
+          // className/section pointing at a section the class no longer offers, and
+          // dangling "<class> - <section>" timetable rows (the same orphaning the
+          // delete guard prevents). Sections are fixed letters A,B,C…, so a removal
+          // is the only risky `sections` change.
+          const newSections = req.body.sections as string[] | undefined;
+          if (Array.isArray(newSections)) {
+            const removed = existing.sections.filter((s) => !newSections.includes(s));
+            if (removed.length > 0) {
+              const [students, ttRows] = await Promise.all([
+                Student.find({ schoolId, className: oldName, section: { $in: removed }, status: "active" })
+                  .select("section")
+                  .lean(),
+                Timetable.find({ schoolId, className: { $in: removed.map((s) => `${oldName} - ${s}`) } })
+                  .select("className")
+                  .lean(),
+              ]);
+              const studentsBySection = new Map<string, number>();
+              for (const st of students)
+                studentsBySection.set(st.section, (studentsBySection.get(st.section) ?? 0) + 1);
+              const ttSections = new Set(ttRows.map((r) => r.className.slice(oldName.length + 3)));
+              const inUse = removed.filter((s) => (studentsBySection.get(s) ?? 0) > 0 || ttSections.has(s));
+              if (inUse.length > 0) {
+                const detail = inUse
+                  .map((s) => {
+                    const n = studentsBySection.get(s) ?? 0;
+                    return n > 0 ? `${s} (${n} active student${n === 1 ? "" : "s"})` : `${s} (has timetable entries)`;
+                  })
+                  .join(", ");
+                throw ApiError.conflict(
+                  `Can't remove section ${detail} from "${oldName}" — reassign those students/periods to another section first.`
+                );
+              }
+            }
+          }
+
           const updated = await SchoolClass.findOneAndUpdate(
             { _id: req.params.id, schoolId },
             req.body,
