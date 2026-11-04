@@ -1,5 +1,4 @@
 import { Router } from "express";
-import mongoose from "mongoose";
 import net from "node:net";
 import dns from "node:dns/promises";
 import { z } from "zod";
@@ -16,7 +15,7 @@ import { passwordResetEmail } from "./emails.js";
 import { School, evaluateAccess, toPublicSchool, resetReminders, type SchoolDoc } from "./school.model.js";
 import { tierDef } from "./tiers.js";
 import { validateGradingScheme } from "../../utils/grading.js";
-import { SchoolRequest } from "./schoolRequest.model.js";
+import { sweepSchoolCollections } from "./tenantData.js";
 import { Student } from "../students/student.model.js";
 import { Teacher } from "../teachers/teacher.model.js";
 
@@ -251,22 +250,14 @@ router.post(
       }
       RESET_TOKENS.delete(confirmToken!);
 
-      const db = mongoose.connection.db;
-      if (!db) throw new Error("Database not connected");
-
-      const KEEP = new Set(["users", "schools", "schoolrequests"]);
-      const collections = await db.listCollections().toArray();
-      const cleared: Record<string, number> = {};
-      let removed = 0;
-
-      for (const c of collections) {
-        if (KEEP.has(c.name)) continue;
-        const result = await db.collection(c.name).deleteMany({ schoolId });
-        if (result.deletedCount) {
-          cleared[c.name] = result.deletedCount;
-          removed += result.deletedCount;
-        }
-      }
+      // Wipe every domain collection for this school, but KEEP the logins, the
+      // school record and its request so the admin stays signed in and the tenant
+      // survives — only the data is cleared. (Hard-delete reuses this sweep with
+      // no keep-set to remove the tenant entirely.)
+      const { removed, cleared } = await sweepSchoolCollections(
+        schoolId,
+        new Set(["users", "schools", "schoolrequests"])
+      );
 
       res.json({ data: { removed, cleared } });
     } catch (err) {
@@ -590,9 +581,11 @@ router.delete("/:schoolId", async (req, res, next) => {
     const schoolId = String(req.params.schoolId);
     const school = await School.findOne({ schoolId });
     if (!school) throw ApiError.notFound("School not found.");
-    await User.deleteMany({ schoolId });
-    await SchoolRequest.deleteMany({ schoolId });
-    await School.deleteOne({ schoolId });
+    // Wipe the ENTIRE tenant — every collection keyed by this schoolId, including
+    // its logins, the school record and any registration request. Previously this
+    // removed only users/school/request and orphaned all ~45 domain collections
+    // (students, fees, payments, marks, attendance, documents, …) forever.
+    await sweepSchoolCollections(schoolId);
     res.status(204).send();
   } catch (err) {
     next(err);

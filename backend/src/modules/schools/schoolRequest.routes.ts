@@ -9,6 +9,7 @@ import { generateTempPassword, slugify, shortId } from "../../utils/password.js"
 import { sendEmail, isEmailConfigured } from "../../utils/email.js";
 import { SchoolRequest, toPublicRequest, REQUEST_STATUSES } from "./schoolRequest.model.js";
 import { School, evaluateAccess } from "./school.model.js";
+import { sweepSchoolCollections } from "./tenantData.js";
 import { Student } from "../students/student.model.js";
 import { Teacher } from "../teachers/teacher.model.js";
 import { requestReceivedEmail, approvalEmail, rejectionEmail } from "./emails.js";
@@ -351,10 +352,12 @@ router.delete("/:id", async (req, res, next) => {
     const request = await SchoolRequest.findById(req.params.id);
     if (!request) throw ApiError.notFound("Request not found.");
 
-    if (request.schoolId) {
-      await School.deleteOne({ schoolId: request.schoolId });
-      await User.deleteMany({ schoolId: request.schoolId });
-    }
+    // Wipe the whole tenant this request created — every collection keyed by its
+    // schoolId (logins, the school record, and all domain data), not just the
+    // user/school rows (which left students/fees/marks/… orphaned before).
+    if (request.schoolId) await sweepSchoolCollections(request.schoolId);
+    // Always remove this request row too: covers a request that never became a
+    // school (no schoolId), and is harmless if the sweep already took it.
     await SchoolRequest.deleteOne({ _id: request._id });
 
     res.status(204).send();
