@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import {
-  Download, Fingerprint, KeyRound, Loader2,
+  Download, KeyRound, Loader2,
   RefreshCw, Search, ShieldAlert, ShieldCheck, UserCog,
 } from "lucide-react";
 import {
@@ -89,11 +89,10 @@ export default function SecurityPage() {
         }
       />
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <StatCard label="Total events" value={total} icon={ShieldAlert} tone="rose" />
         <StatCard label="Impersonations" value={logs.filter(l => l.action === "impersonate").length} icon={UserCog} tone="amber" />
         <StatCard label="Password resets" value={logs.filter(l => l.action === "reset_password").length} icon={KeyRound} tone="indigo" />
-        <StatCard label="Active sessions" value={0} icon={Fingerprint} tone="cyan" />
       </div>
 
       <TwoFactorCard />

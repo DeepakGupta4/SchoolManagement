@@ -92,7 +92,7 @@ const registerSchema = z
     role: z.enum(USER_ROLES),
     /** Required when role is "custom" — the Role document's key. */
     customRoleKey: z.string().trim().default(""),
-    schoolId: z.string().default("school_1"),
+    schoolId: z.string().default(""),
   })
   .refine((d) => d.role !== "custom" || d.customRoleKey.length > 0, {
     message: "A custom role requires a role to be selected.",
@@ -309,9 +309,19 @@ router.post(
       }
 
       // A school admin can only create accounts in their OWN school; only the
-      // platform owner may target another school. (This also stops the schema's
-      // "school_1" default from silently placing a user in the wrong tenant.)
-      const targetSchoolId = req.user!.role === "super_admin" ? schoolId : req.user!.schoolId;
+      // platform owner may target another school — and must name it explicitly, so
+      // the old "school_1" default can't silently place a user in the wrong tenant.
+      let targetSchoolId: string;
+      if (req.user!.role === "super_admin") {
+        targetSchoolId = schoolId.trim();
+        if (!targetSchoolId) {
+          throw ApiError.badRequest(
+            "A target schoolId is required when creating an account as super admin."
+          );
+        }
+      } else {
+        targetSchoolId = req.user!.schoolId;
+      }
 
       // One school_admin and one principal per school — reject a second.
       await assertSingletonRoleFree(targetSchoolId, role);

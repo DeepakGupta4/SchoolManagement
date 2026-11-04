@@ -26,6 +26,8 @@ export interface SchoolIdentity {
   whiteLabel: boolean;
   /** The school's grade bands, for grades printed on report cards. */
   gradingScheme: GradingScheme;
+  /** Admin-set footer printed on fee receipts. Empty → a generic default is used. */
+  receiptFooter: string;
 }
 
 export const FALLBACK_SCHOOL_IDENTITY: SchoolIdentity = {
@@ -38,6 +40,7 @@ export const FALLBACK_SCHOOL_IDENTITY: SchoolIdentity = {
   displayName: "",
   whiteLabel: false,
   gradingScheme: DEFAULT_GRADING_SCHEME,
+  receiptFooter: "",
 };
 
 /** Pure: compose a SchoolIdentity from a (possibly null) profile. */
@@ -57,6 +60,7 @@ export function schoolIdentity(p: SchoolProfile | null | undefined): SchoolIdent
     displayName: (p.displayName ?? "").trim(),
     whiteLabel: Boolean(p.whiteLabel),
     gradingScheme: effectiveScheme(p.gradingScheme),
+    receiptFooter: (p.receiptFooter ?? "").trim(),
   };
 }
 

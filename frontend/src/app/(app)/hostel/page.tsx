@@ -262,8 +262,7 @@ export default function HostelPage() {
         }
       />
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Total hostels" value={0} icon={Home} tone="indigo" />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <StatCard label="Total rooms" value={totalRooms} icon={DoorOpen} tone="violet" />
         <StatCard label="Occupied" value={totalOccupied} icon={Users} tone="emerald" />
         <StatCard label="Vacant" value={totalVacant} icon={KeyRound} tone="amber" />

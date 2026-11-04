@@ -106,8 +106,7 @@ export function LibrarianDashboard() {
 
       <Card>
         <CardContent className="py-4 text-xs text-muted">
-          Issue / return (circulation) tracking is coming soon — for now the catalog and stock counts are
-          managed from the library page.
+          Issue, return and clearances are managed from the library page.
         </CardContent>
       </Card>
     </div>

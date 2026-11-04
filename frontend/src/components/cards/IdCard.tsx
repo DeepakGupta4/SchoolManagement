@@ -40,7 +40,9 @@ export interface IdCardHolder {
  */
 export function idCardPayload(holder: IdCardHolder, schoolName?: string): string {
   const record: Record<string, string> = {
-    typ: "SCHOOLDECK-ID",
+    // Generic record tag — never the vendor's name, so a white-label school's ID
+    // card QR doesn't reveal "SchoolDeck" when scanned.
+    typ: "ID-CARD",
     role: holder.role,
     name: holder.name,
     id: holder.identifier,

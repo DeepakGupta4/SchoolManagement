@@ -167,9 +167,9 @@ export function PaymentReceipt({
 
         {/* Footer */}
         <div className="mt-auto flex items-end justify-between gap-4 pt-4 text-[8px] text-slate-500">
-          <p className="max-w-[55%] leading-snug">
-            This is a computer-generated receipt. Fees once paid are non-refundable except as
-            provided in the school&apos;s refund policy.
+          <p className="max-w-[55%] leading-snug whitespace-pre-line">
+            {school?.receiptFooter ||
+              "This is a computer-generated receipt. Fees once paid are non-refundable except as provided in the school's refund policy."}
           </p>
           <div className="text-center">
             <p className="mb-0.5 font-medium text-slate-700">{payment.collectedBy}</p>
