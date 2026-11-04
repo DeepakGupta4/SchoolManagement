@@ -21,4 +21,7 @@ export default createCrudRouter({
   searchFields: ["title", "paidTo", "voucherNo", "category"],
   filterFields: ["status", "category"],
   writeRoles: ["super_admin", "school_admin", "principal", "accountant"],
+  // Expense vouchers (vendor, amount, method, notes) are financial data —
+  // office/finance only, matching payroll. Was open to any authenticated role.
+  readRoles: ["super_admin", "school_admin", "principal", "accountant"],
 });

@@ -20,4 +20,7 @@ export default createCrudRouter({
   searchFields: ["name", "phone", "whomToMeet", "passCode"],
   filterFields: ["purpose", "status"],
   writeRoles: ["super_admin", "school_admin", "principal", "accountant"],
+  // Front-desk visitor log carries personal data (names, phones, whom-to-meet) —
+  // office/reception only. Was open to any authenticated role.
+  readRoles: ["super_admin", "school_admin", "principal", "accountant"],
 });

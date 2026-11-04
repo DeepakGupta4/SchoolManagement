@@ -19,4 +19,7 @@ export default createCrudRouter({
   createSchema: studentDocumentSchema,
   searchFields: ["name", "studentId", "guardian"],
   filterFields: ["className"],
+  // Student + guardian identity and per-slot document status — staff only
+  // (was open to any authenticated role, leaking the roster to parents/drivers/etc.).
+  readRoles: ["super_admin", "school_admin", "principal", "teacher", "accountant"],
 });

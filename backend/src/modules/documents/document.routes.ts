@@ -10,6 +10,18 @@ import { StoredDocument, toPublicDocument } from "./document.model.js";
  */
 const router = Router();
 
+// Student/teacher files (Aadhaar, birth certificates, marksheets) are sensitive
+// PII. Reads are office + teaching staff only — never students/parents/drivers/
+// librarians. Writes were already gated; this closes the read side (GET / and
+// GET /summary were previously open to any authenticated role).
+const canReadDocs = requireRole(
+  "super_admin",
+  "school_admin",
+  "principal",
+  "teacher",
+  "accountant"
+);
+
 const createSchema = z.object({
   ownerType: z.enum(["student", "teacher", "staff"]),
   ownerId: z.string().min(1),
@@ -30,7 +42,7 @@ const patchSchema = z.object({ verified: z.boolean() });
  * for the document-vault overview: which slots each owner has filled and whether
  * they're verified. Avoids shipping every base64 file just to render status dots.
  */
-router.get("/summary", async (req, res, next) => {
+router.get("/summary", canReadDocs, async (req, res, next) => {
   try {
     const schoolId = req.user!.schoolId;
     const { ownerType } = req.query as { ownerType?: string };
@@ -54,7 +66,7 @@ router.get("/summary", async (req, res, next) => {
 });
 
 /** GET /api/documents?ownerType=&ownerId= — list a person's documents (with files). */
-router.get("/", async (req, res, next) => {
+router.get("/", canReadDocs, async (req, res, next) => {
   try {
     const schoolId = req.user!.schoolId;
     const { ownerType, ownerId } = req.query as { ownerType?: string; ownerId?: string };

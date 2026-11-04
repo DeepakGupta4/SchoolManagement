@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { requireRole } from "../../middleware/auth.js";
 import { Student } from "../students/student.model.js";
 import { copilotsForRole, copilotByKey } from "./copilots.js";
 import {
@@ -17,6 +18,13 @@ import {
  * req.user.schoolId.
  */
 const router = Router();
+
+// The staff-only AI tools (risk, insights, ask, remarks, remarks-bulk,
+// question-paper, lesson-plan) leak per-student data or school-wide aggregates,
+// so they are gated to office + teaching staff. /status and /copilots stay open,
+// and the in-app /chat assistant stays open to every role but is data-scoped (so
+// a parent/student can't extract school-wide dues/attendance through it).
+const AI_STAFF = requireRole("super_admin", "school_admin", "principal", "accountant", "teacher");
 
 /** The active AI provider label for a response `source` (never "none" here —
  *  callers only use it after checking isLLMConfigured()). */
@@ -101,7 +109,7 @@ router.get("/copilots", (req, res) => {
 });
 
 /** POST /api/ai/risk { studentId } — per-student risk assessment. */
-router.post("/risk", async (req, res, next) => {
+router.post("/risk", AI_STAFF, async (req, res, next) => {
   try {
     const { studentId } = req.body as { studentId?: string };
     if (!studentId) return res.status(400).json({ error: "studentId is required" });
@@ -144,7 +152,7 @@ Keep reason and recommendation concise (max 2 sentences each), practical and spe
 });
 
 /** GET /api/ai/insights — school-wide insights over live data. */
-router.get("/insights", async (req, res, next) => {
+router.get("/insights", AI_STAFF, async (req, res, next) => {
   try {
     const schoolId = req.user!.schoolId;
     const students = await Student.find({ schoolId, status: "active" });
@@ -206,7 +214,7 @@ Each title max 8 words; each detail max 20 words, specific and practical.`;
 });
 
 /** POST /api/ai/remarks { studentId } — report-card remark. */
-router.post("/remarks", async (req, res, next) => {
+router.post("/remarks", AI_STAFF, async (req, res, next) => {
   try {
     const { studentId } = req.body as { studentId?: string };
     if (!studentId) return res.status(400).json({ error: "studentId is required" });
@@ -245,7 +253,7 @@ router.post("/remarks", async (req, res, next) => {
 });
 
 /** POST /api/ai/ask { question } — grounded Q&A over school stats. */
-router.post("/ask", async (req, res, next) => {
+router.post("/ask", AI_STAFF, async (req, res, next) => {
   try {
     const { question } = req.body as { question?: string };
     if (!question || !question.trim()) return res.status(400).json({ error: "question is required" });
@@ -294,7 +302,7 @@ QUESTION: ${question.trim()}`;
 });
 
 /** POST /api/ai/question-paper { className, subject, topics, totalMarks, instructions?, bookContext? } — exam paper generator. */
-router.post("/question-paper", async (req, res, next) => {
+router.post("/question-paper", AI_STAFF, async (req, res, next) => {
   try {
     const { className, subject, topics, totalMarks, instructions, bookContext } = req.body as {
       className?: string;
@@ -348,7 +356,7 @@ Requirements:
 });
 
 /** POST /api/ai/remarks-bulk { className, section? } — report-card remarks for a whole class. */
-router.post("/remarks-bulk", async (req, res, next) => {
+router.post("/remarks-bulk", AI_STAFF, async (req, res, next) => {
   try {
     const { className, section } = req.body as { className?: string; section?: string };
     if (!className) return res.status(400).json({ error: "className is required" });
@@ -420,7 +428,7 @@ Students: ${JSON.stringify(roster)}`;
 });
 
 /** POST /api/ai/lesson-plan { className, subject, topic, duration } — structured lesson plan. */
-router.post("/lesson-plan", async (req, res, next) => {
+router.post("/lesson-plan", AI_STAFF, async (req, res, next) => {
   try {
     const { className, subject, topic, duration } = req.body as {
       className?: string;
@@ -500,24 +508,33 @@ router.post("/chat", async (req, res, next) => {
       });
     }
 
-    // Live, tenant-scoped stats so the bot can answer data questions too.
-    const schoolId = req.user!.schoolId;
-    const students = await Student.find({ schoolId, status: "active" }).catch(() => []);
-    const total = students.length;
-    const byClass: Record<string, number> = {};
-    let attendance = 0;
-    let dues = 0;
-    for (const s of students) {
-      byClass[s.className] = (byClass[s.className] ?? 0) + 1;
-      attendance += s.attendancePercent ?? 0;
-      dues += s.feeDue ?? 0;
+    // Live, tenant-scoped stats so the bot can answer data questions — but ONLY
+    // for staff. Non-staff (student/parent/driver/librarian/staff/custom) get the
+    // app-help assistant WITHOUT school-wide figures, so the chatbot can't be used
+    // to extract dues/attendance/roster data they aren't allowed to see.
+    const AI_DATA_ROLES = ["super_admin", "school_admin", "principal", "accountant", "teacher"];
+    const isStaff = AI_DATA_ROLES.includes(req.user!.role);
+    let statsLine = "";
+    if (isStaff) {
+      const schoolId = req.user!.schoolId;
+      const students = await Student.find({ schoolId, status: "active" }).catch(() => []);
+      const total = students.length;
+      const byClass: Record<string, number> = {};
+      let attendance = 0;
+      let dues = 0;
+      for (const s of students) {
+        byClass[s.className] = (byClass[s.className] ?? 0) + 1;
+        attendance += s.attendancePercent ?? 0;
+        dues += s.feeDue ?? 0;
+      }
+      const stats = {
+        activeStudents: total,
+        classDistribution: byClass,
+        avgAttendance: total ? Math.round(attendance / total) : 0,
+        totalOutstandingDues: dues,
+      };
+      statsLine = `\n\nTHIS SCHOOL'S LIVE DATA: ${JSON.stringify(stats)}`;
     }
-    const stats = {
-      activeStudents: total,
-      classDistribution: byClass,
-      avgAttendance: total ? Math.round(attendance / total) : 0,
-      totalOutstandingDues: dues,
-    };
 
     // A role-aware copilot (if chosen) shapes the persona and focus.
     const persona = copilotByKey(copilot);
@@ -526,9 +543,7 @@ Answer ONLY questions about this SchoolDeck app (how to use its features, where 
 Be concise and practical (usually under 5 sentences). Plain text, no markdown headings. When explaining a feature, name the exact menu path (e.g. "Academic → Attendance"). You may reply in the same language the user writes in (English or Hindi/Hinglish).
 ${persona ? `\nYOUR ROLE AS THIS COPILOT: ${persona.persona}\n` : ""}
 APP CAPABILITIES:
-${APP_OVERVIEW}
-
-THIS SCHOOL'S LIVE DATA: ${JSON.stringify(stats)}`;
+${APP_OVERVIEW}${statsLine}`;
 
     // Keep only the last few turns to bound token usage.
     const trimmed = Array.isArray(history) ? history.slice(-8) : [];
