@@ -10,6 +10,7 @@ import { sendEmail, isEmailConfigured } from "../../utils/email.js";
 import { SchoolRequest, toPublicRequest, REQUEST_STATUSES } from "./schoolRequest.model.js";
 import { School, evaluateAccess } from "./school.model.js";
 import { sweepSchoolCollections } from "./tenantData.js";
+import { tierPriceInr, MIN_BILLED_STUDENTS, type Tier } from "./tiers.js";
 import { Student } from "../students/student.model.js";
 import { Teacher } from "../teachers/teacher.model.js";
 import { requestReceivedEmail, approvalEmail, rejectionEmail } from "./emails.js";
@@ -127,20 +128,30 @@ router.get("/", validate(listQuerySchema, "query"), async (req, res, next) => {
 /** Aggregate counts for the Super Admin dashboard cards. */
 router.get("/stats/overview", async (_req, res, next) => {
   try {
-    const [pending, approved, rejected, schools, totalStudents, totalStaff] = await Promise.all([
-      SchoolRequest.countDocuments({ status: "pending" }),
-      SchoolRequest.countDocuments({ status: "approved" }),
-      SchoolRequest.countDocuments({ status: "rejected" }),
-      School.find(),
-      Student.countDocuments(),
-      Teacher.countDocuments(),
-    ]);
+    const [pending, approved, rejected, schools, totalStudents, totalStaff, activeStudentRows] =
+      await Promise.all([
+        SchoolRequest.countDocuments({ status: "pending" }),
+        SchoolRequest.countDocuments({ status: "approved" }),
+        SchoolRequest.countDocuments({ status: "rejected" }),
+        School.find(),
+        Student.countDocuments(),
+        Teacher.countDocuments(),
+        // Active students per school — drives the per-student subscription revenue.
+        Student.aggregate<{ _id: string; n: number }>([
+          { $match: { status: "active" } },
+          { $group: { _id: "$schoolId", n: { $sum: 1 } } },
+        ]),
+      ]);
+
+    const activeStudentsBySchool = new Map<string, number>(
+      activeStudentRows.map((r) => [r._id, r.n])
+    );
 
     let activeTrials = 0;
     let trialsExpired = 0;
     let paid = 0;
     let suspended = 0;
-    let revenue = 0; // ₹ value of currently-active paid subscriptions
+    let revenue = 0; // ₹ of currently-active paid subscriptions, at each school's TIER × billed students
     for (const s of schools) {
       const a = evaluateAccess(s);
       if (a.status === "suspended") suspended++;
@@ -148,7 +159,12 @@ router.get("/stats/overview", async (_req, res, next) => {
         // Free-access accounts read as "active" but aren't paying.
         if (!s.subscription.freeAccess && s.subscription.plan !== "trial") {
           paid++;
-          revenue += (s.subscription.plan === "yearly" ? env.PLAN_YEARLY_PRICE : env.PLAN_MONTHLY_PRICE) / 100;
+          // Per-student TIERED pricing: the tier's rate × billed count (active
+          // students floored to the minimum), matching what /subscription charges.
+          // (Was a flat PLAN_*_PRICE, disconnected from the live per-student model.)
+          const billed = Math.max(activeStudentsBySchool.get(s.schoolId) ?? 0, MIN_BILLED_STUDENTS);
+          const cycle = s.subscription.plan === "yearly" ? "yearly" : "monthly";
+          revenue += tierPriceInr(s.subscription.tier as Tier, cycle) * billed;
         }
       } else if (a.status === "trial") activeTrials++;
       else if (a.status === "expired") trialsExpired++;
