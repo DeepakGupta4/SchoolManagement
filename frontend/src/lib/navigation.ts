@@ -3,7 +3,7 @@ import {
   DollarSign, Bus, FlaskConical, Library, Home, Calendar,
   Bell, Settings, School, UserCheck, Award,
   FileText, BarChart3, MessageSquare, ShieldCheck, Cpu, Globe,
-  Smartphone, Package, Utensils, HeartPulse, Trophy, Workflow,
+  Package, Utensils, HeartPulse, Trophy, Workflow,
   IdCard, Building2, BookMarked, CalendarX, Contact, UserCog, KeyRound, type LucideIcon,
 } from "lucide-react";
 import type { UserRole } from "@/types";
@@ -201,7 +201,6 @@ export const navGroups: NavGroup[] = [
     items: [
       { title: "AI Suite", href: "/ai", icon: Cpu },
       { title: "Workflow Builder", href: "/workflows", icon: Workflow },
-      { title: "Mobile Apps", href: "/mobile", icon: Smartphone },
     ],
   },
   {
