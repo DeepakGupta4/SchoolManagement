@@ -19,6 +19,8 @@ export default createCrudRouter({
   createSchema: inventoryItemSchema,
   searchFields: ["name", "code", "supplier"],
   filterFields: ["category"],
+  // Stock, suppliers and unit prices — office only (was open to any logged-in role).
+  readRoles: ["super_admin", "school_admin", "principal"],
   // Item codes continue the per-school sequence rather than restarting.
   generate: (seq) => ({ code: `INV-${String(seq + 1).padStart(3, "0")}` }),
 });

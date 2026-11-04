@@ -19,4 +19,6 @@ export default createCrudRouter({
   createSchema: departmentSchema,
   searchFields: ["name", "code", "hod", "block"],
   filterFields: ["block", "status"],
+  // Department config incl. HOD + budgets — office only.
+  readRoles: ["super_admin", "school_admin", "principal"],
 });

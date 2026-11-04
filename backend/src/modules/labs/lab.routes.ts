@@ -22,4 +22,6 @@ export default createCrudRouter({
   createSchema: labSchema,
   searchFields: ["name", "inCharge", "block", "nextPracticalClass"],
   filterFields: ["type", "status"],
+  // Lab / equipment register — office only.
+  readRoles: ["super_admin", "school_admin", "principal"],
 });

@@ -18,4 +18,7 @@ export default createCrudRouter({
   createSchema: allocationSchema,
   searchFields: ["teacher", "empId", "subject", "dept", "room"],
   filterFields: ["dept"],
+  // Teacher workload allocation — office only (teachers see their own teaching via
+  // the teacher dashboard/endpoints, not this list).
+  readRoles: ["super_admin", "school_admin", "principal"],
 });

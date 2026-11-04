@@ -55,6 +55,9 @@ export default createCrudRouter<SubstitutionAttrs>({
   createSchema: substitutionSchema,
   searchFields: ["absentTeacher", "substituteTeacher", "className", "subject"],
   filterFields: ["date", "status", "substituteTeacher", "absentTeacher"],
+  // Office manages cover; teachers READ it (the mobile teacher app lists their
+  // cover duties). Parents/students/drivers/librarians are shut out.
+  readRoles: ["super_admin", "school_admin", "principal", "teacher"],
   // Newest absence first, then in period order within a day.
   sort: { date: -1, period: 1 },
   afterCreate: async (doc) => {

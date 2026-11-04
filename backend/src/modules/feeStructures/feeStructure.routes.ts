@@ -50,4 +50,6 @@ export default createCrudRouter({
   updateSchema: feeStructureUpdateSchema,
   searchFields: ["code", "class"],
   writeRoles: ["super_admin", "school_admin", "principal", "accountant"],
+  // Fee amounts/heads — office + accountant (accountant has /fees/structure in nav).
+  readRoles: ["super_admin", "school_admin", "principal", "accountant"],
 });

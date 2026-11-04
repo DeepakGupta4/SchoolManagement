@@ -16,6 +16,8 @@ export default createCrudRouter({
   createSchema: medicineSchema,
   searchFields: ["name", "category", "code"],
   filterFields: ["status"],
+  // Infirmary stock — office only (matches the patients module).
+  readRoles: ["super_admin", "school_admin", "principal"],
   // Stock references continue the per-school sequence rather than restarting.
   generate: (seq) => ({ code: `MD-${String(seq + 1).padStart(3, "0")}` }),
 });
