@@ -41,6 +41,7 @@ import { busRoutesApi, type BusRoute } from "@/lib/api/busRoutes";
 import type { BusRouteSchema } from "@/lib/schemas/busRoute";
 import { DetailModal } from "@/components/DetailModal";
 import { BusRouteFormModal } from "./BusRouteFormModal";
+import { LiveBusMap } from "./LiveBusMap";
 
 const statusConfig: Record<
   string,
@@ -124,7 +125,7 @@ function RowActions({
 export default function TransportPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
-  const [view, setView] = useState<"grid" | "table">("grid");
+  const [view, setView] = useState<"grid" | "table" | "map">("grid");
 
   // `statusFilter` is deliberately left out of the server filters: the stat
   // cards and today's summary need per-status counts across the whole
@@ -376,7 +377,7 @@ export default function TransportPage() {
                 />
               </div>
               <div className="ml-auto inline-flex gap-1 rounded-md bg-surface-sunken p-1">
-                {(["grid", "table"] as const).map((v) => (
+                {(["grid", "table", "map"] as const).map((v) => (
                   <button
                     key={v}
                     onClick={() => setView(v)}
@@ -403,6 +404,8 @@ export default function TransportPage() {
                 </Button>
               </CardContent>
             </Card>
+          ) : view === "map" ? (
+            <LiveBusMap />
           ) : view === "grid" ? (
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
               {loading && visible.length === 0 ? (
