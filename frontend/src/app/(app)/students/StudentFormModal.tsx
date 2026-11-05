@@ -242,6 +242,7 @@ export function StudentFormModal({
   const [feeStructureId, setFeeStructureId] = useState("");
   const [feeTotalInput, setFeeTotalInput] = useState("");
   const [feeConcession, setFeeConcession] = useState("");
+  const [feePreviousDues, setFeePreviousDues] = useState("");
   // Bus routes for the transport picker. A student rides one route and is billed
   // its monthly fee, which the fee preview mirrors from the backend's billing.
   const [busRoutes, setBusRoutes] = useState<BusRoute[]>([]);
@@ -342,6 +343,7 @@ export function StudentFormModal({
       setFeeStructureId("");
       setFeeTotalInput("");
       setFeeConcession("");
+      setFeePreviousDues("");
     }, 0);
     return () => clearTimeout(t);
   }, [open, student, reset]);
@@ -409,6 +411,10 @@ export function StudentFormModal({
   const feeGross = feeHeads.reduce((sum, h) => sum + h.billed, 0);
   const feeConcessionNum = Math.min(Number(feeConcession) || 0, feeGross);
   const feeNet = Math.max(0, feeGross - feeConcessionNum);
+  // Carried-forward arrears from before the school joined the ERP — billed as a
+  // one-time "Previous Dues" head, on TOP of (and never reduced by) the current
+  // session's concession.
+  const feePrevDuesNum = Math.max(0, Number(feePreviousDues) || 0);
 
   const submit = handleSubmit(async (values) => {
     // On create, a birth certificate and a government ID are mandatory.
@@ -457,8 +463,13 @@ export function StudentFormModal({
 
     // Optional: open a fee account so the student's dues show on their profile
     // and across the Fees pages. Non-fatal — admission still succeeds without it.
-    if (!isEdit && feeMode !== "none") {
-      const heads = feeHeads;
+    if (!isEdit && (feeMode !== "none" || feePrevDuesNum > 0)) {
+      // Append carried-forward arrears LAST, so the session concession (applied
+      // left-to-right on the server) reduces the current fees first, never the dues.
+      const heads = [...feeHeads];
+      if (feePrevDuesNum > 0) {
+        heads.push({ head: "Previous Dues", unit: feePrevDuesNum, frequency: "one-time", billed: feePrevDuesNum });
+      }
       if (heads.length > 0) {
         try {
           await createFeeAccount({
@@ -756,11 +767,21 @@ export function StudentFormModal({
               {feeMode !== "none" && (
                 <Input
                   label="Concession / discount (₹)"
-                  hint="Optional — scholarship or sibling discount"
+                  hint="Optional — staff ward / sibling / merit, off this year's fees"
                   inputMode="numeric"
                   placeholder="0"
                   value={feeConcession}
                   onChange={(e) => setFeeConcession(e.target.value.replace(/[^\d]/g, ""))}
+                />
+              )}
+              {feeMode !== "none" && (
+                <Input
+                  label="Previous year's dues (₹)"
+                  hint="Carried-forward arrears from before joining — billed as 'Previous Dues'"
+                  inputMode="numeric"
+                  placeholder="0"
+                  value={feePreviousDues}
+                  onChange={(e) => setFeePreviousDues(e.target.value.replace(/[^\d]/g, ""))}
                 />
               )}
             </div>
@@ -786,6 +807,19 @@ export function StudentFormModal({
                 {" · payable "}
                 <span className="font-medium text-text">₹{feeNet.toLocaleString("en-IN")}</span>
                 <span className="text-subtle"> for the session — collected in instalments</span>
+                {feePrevDuesNum > 0 && (
+                  <>
+                    {" · + previous dues "}
+                    <span className="font-medium text-warning-text">
+                      ₹{feePrevDuesNum.toLocaleString("en-IN")}
+                    </span>
+                    {" = "}
+                    <span className="font-semibold text-text">
+                      ₹{(feeNet + feePrevDuesNum).toLocaleString("en-IN")}
+                    </span>
+                    <span className="text-subtle"> total due</span>
+                  </>
+                )}
               </p>
             )}
           </section>

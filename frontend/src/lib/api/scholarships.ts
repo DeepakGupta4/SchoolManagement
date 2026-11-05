@@ -21,7 +21,7 @@ export interface ScholarshipFilters {
   status?: string;
 }
 
-export const SCHOLARSHIP_TYPE_OPTIONS = ["Merit", "Need-Based", "Sports", "Cultural"];
+export const SCHOLARSHIP_TYPE_OPTIONS = ["Merit", "Need-Based", "Staff Ward", "Sibling", "Sports", "Cultural"];
 
 export const SCHOLARSHIP_CLASS_OPTIONS = [
   "6-A",
