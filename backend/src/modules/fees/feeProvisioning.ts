@@ -48,6 +48,14 @@ const STRUCTURE_HEADS = [
 /** The canonical transport head name (billed per student from their bus route). */
 export const TRANSPORT_HEAD = "Transport";
 
+/**
+ * Carried-forward arrears head name — billed ON TOP of a session's fees when a
+ * school onboards students mid-stream, and NEVER reduced by a concession. Shared
+ * by the fee routes, the bulk-import and the scholarship resync so they all treat
+ * it identically.
+ */
+export const PREVIOUS_DUES_HEAD = "Previous Dues";
+
 /** How many times a frequency is charged across a session. */
 function periodsFor(freq: FeeFrequency, months: number, exams: number): number {
   return freq === "monthly" ? months : freq === "per-exam" ? exams : 1;
@@ -319,11 +327,20 @@ export async function syncStudentConcession(
   });
   const grossTotal = gross.reduce((sum, h) => sum + h.billed, 0);
 
+  // Carried-forward arrears ("Previous Dues") are billed ON TOP of the structure
+  // and are never concessioned. Keep them OUT of the gross comparison, and
+  // PRESERVE them (with anything already paid) when re-billing — so a scholarship
+  // resync applies to an onboarded student's current fees without ever skipping
+  // the account or wiping its arrears.
+  const isArrears = (h: { head: string }) =>
+    h.head.trim().toLowerCase() === PREVIOUS_DUES_HEAD.toLowerCase();
+  const arrearsHeads = account.heads.filter((h) => isArrears(h));
+  const currentHeads = account.heads.filter((h) => !isArrears(h));
+
   // Only re-bill an account that was actually billed FROM this structure — its
   // current gross (net heads + the concession baked out of them) equals the
   // structure total. A custom or lump-sum bill is left untouched.
-  const accountGross =
-    account.heads.reduce((sum, h) => sum + h.billed, 0) + (account.concession ?? 0);
+  const accountGross = currentHeads.reduce((sum, h) => sum + h.billed, 0) + (account.concession ?? 0);
   if (accountGross !== grossTotal) return;
 
   const scholarshipTotal = await scholarshipConcessionFor(schoolId, studentId);
@@ -336,7 +353,18 @@ export async function syncStudentConcession(
   const net = netHeadsFor(gross, manual + scholarshipTotal);
 
   account.set("manualConcession", manual);
-  account.set("heads", toAccountHeads(net.heads));
+  // Current fees re-billed net of the concession, with the arrears head(s) kept
+  // exactly as they were (name / billed / paid) so nothing collected is lost.
+  account.set("heads", [
+    ...toAccountHeads(net.heads),
+    ...arrearsHeads.map((h) => ({
+      head: h.head,
+      billed: h.billed,
+      paid: h.paid,
+      frequency: (h.frequency ?? "one-time") as FeeFrequency,
+      unit: h.unit ?? 0,
+    })),
+  ]);
   account.concession = net.concession;
   await account.save();
 

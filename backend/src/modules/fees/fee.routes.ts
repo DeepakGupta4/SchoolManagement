@@ -28,6 +28,7 @@ import {
   netHeadsFor,
   provisionalAccountFor,
   scholarshipConcessionFor,
+  PREVIOUS_DUES_HEAD,
   type FeeFrequency,
 } from "./feeProvisioning.js";
 import { requireAuth, requireRole } from "../../middleware/auth.js";
@@ -58,13 +59,8 @@ const canCollect = requireRole("super_admin", "school_admin", "principal", "acco
  */
 const LATE_FEE_HEAD = "Late Fee";
 
-/**
- * Carried-forward arrears from before a school joined the ERP are billed as this
- * one-time head, so they reuse the whole collect / receipt / balance machinery.
- * The admission form, the fee-setup screen and the bulk import all key it by this
- * exact name — keep them in sync.
- */
-const PREVIOUS_DUES_HEAD = "Previous Dues";
+// PREVIOUS_DUES_HEAD (the carried-forward arrears head) is defined in
+// feeProvisioning so the routes, bulk-import and scholarship resync share one name.
 
 /* ------------------------------------------------------------------ */
 /* Student-centric fee rows                                             */

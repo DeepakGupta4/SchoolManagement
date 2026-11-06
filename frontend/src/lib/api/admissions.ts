@@ -61,6 +61,8 @@ export interface Application {
   transportRequired: boolean;
   pickupPoint: string;
   transportRouteCode: string;
+  /** Fee concession (₹) applied to this year's fees when the applicant is enrolled. */
+  feeConcession?: number;
 }
 
 export interface ApplicationFilters {

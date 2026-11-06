@@ -1,8 +1,18 @@
 import { z } from "zod";
 import type { HydratedDocument } from "mongoose";
 import { Application, type ApplicationAttrs } from "./admission.model.js";
-import { Student } from "../students/student.model.js";
+import { Student, type StudentDoc } from "../students/student.model.js";
 import { notifySchool } from "../notifications/notification.model.js";
+import { FeeAccount, CURRENT_SESSION } from "../fees/fee.model.js";
+import {
+  deriveGrossHeads,
+  applyTransportHead,
+  netHeadsFor,
+  toAccountHeads,
+  matchStructure,
+  scholarshipConcessionFor,
+} from "../fees/feeProvisioning.js";
+import { BusRoute } from "../busRoutes/busRoute.model.js";
 import { createCrudRouter } from "../../utils/crudRouter.js";
 import { requireRole } from "../../middleware/auth.js";
 
@@ -62,9 +72,69 @@ const admissionSchema = z.object({
   transportRequired: z.boolean().default(false),
   pickupPoint: z.string().default(""),
   transportRouteCode: z.string().default(""),
+
+  // Optional fee concession (₹) to apply when the applicant is enrolled — a
+  // staff-ward / sibling / merit discount agreed at admission. Billed off this
+  // year's fees only (the account's arrears, if any, are never reduced).
+  feeConcession: z.coerce.number<number>().min(0).default(0),
 });
 
 const BLOOD_GROUPS = ["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"];
+
+/**
+ * Opens a fee account for a newly-enrolled student, billed from their class fee
+ * structure (net of active scholarships and an optional admission concession) —
+ * so an approved applicant starts with their dues already set, instead of the
+ * office having to open the account by hand afterwards. Idempotent and
+ * best-effort: if an account already exists it does nothing, and with no fee
+ * structure for the class (nothing to bill) it leaves the student provisional
+ * (billed live if a structure is added later), exactly like any accountless
+ * student. The concession is applied to the current fees only.
+ */
+async function openFeeAccountForEnrolled(
+  schoolId: string,
+  student: StudentDoc,
+  manualConcession: number
+) {
+  const existing = await FeeAccount.findOne({
+    schoolId,
+    studentId: student._id,
+    session: CURRENT_SESSION,
+  });
+  if (existing) return;
+
+  const structure = await matchStructure(schoolId, student.className);
+  const route =
+    student.transportRequired && student.transportRouteCode
+      ? await BusRoute.findOne({ schoolId, code: student.transportRouteCode })
+      : null;
+  const gross = applyTransportHead(deriveGrossHeads(structure), {
+    transportRequired: student.transportRequired,
+    routeFee: route?.fee ?? null,
+    monthsPerYear: structure?.monthsPerYear,
+  });
+  const scholarshipTotal = await scholarshipConcessionFor(schoolId, String(student._id));
+  const manual = Math.max(0, Math.round(manualConcession));
+  const net = netHeadsFor(gross, manual + scholarshipTotal);
+  if (net.heads.length === 0) return; // no structure to bill from — stay provisional
+
+  await FeeAccount.create({
+    schoolId,
+    studentId: student._id,
+    admissionNo: student.admissionNo,
+    name: `${student.firstName} ${student.lastName}`.trim(),
+    className: student.className,
+    section: student.section,
+    rollNo: student.rollNo,
+    guardian: student.guardian.name,
+    guardianPhone: student.guardian.phone,
+    session: CURRENT_SESSION,
+    heads: toAccountHeads(net.heads),
+    concession: net.concession,
+    manualConcession: manual,
+    lateFee: 0,
+  });
+}
 
 /**
  * When an application reaches the "approved" stage, enrol the applicant as a
@@ -107,7 +177,7 @@ async function enrolIfApproved(doc: HydratedDocument<ApplicationAttrs>, schoolId
 
     const bloodGroup = BLOOD_GROUPS.includes(doc.bloodGroup) ? doc.bloodGroup : null;
 
-    await Student.create({
+    const created = await Student.create({
       schoolId,
       admissionNo,
       rollNo: String(maxRoll + 1),
@@ -158,6 +228,15 @@ async function enrolIfApproved(doc: HydratedDocument<ApplicationAttrs>, schoolId
       pickupPoint: doc.pickupPoint || "",
       transportRouteCode: doc.transportRouteCode || "",
     });
+
+    // Open their fee account from the class structure (+ any admission concession)
+    // so dues are set the moment they're enrolled. Best-effort — a failure here
+    // must never undo the enrolment.
+    try {
+      await openFeeAccountForEnrolled(schoolId, created as StudentDoc, Number(doc.feeConcession) || 0);
+    } catch (feeErr) {
+      console.error("Fee account for enrolled student failed:", feeErr);
+    }
 
     void notifySchool(schoolId, {
       type: "student",

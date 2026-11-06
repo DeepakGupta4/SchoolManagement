@@ -80,6 +80,7 @@ function makeEmpty(): AdmissionSchema {
     transportRequired: false,
     pickupPoint: "",
     transportRouteCode: "",
+    feeConcession: 0,
   };
 }
 
@@ -257,6 +258,7 @@ export function AdmissionFormModal({
       transportRequired: values.transportRequired ?? false,
       pickupPoint: values.pickupPoint ?? "",
       transportRouteCode: values.transportRouteCode ?? "",
+      feeConcession: values.feeConcession ?? 0,
     };
 
     await onSubmit(finalValues);
@@ -462,6 +464,20 @@ export function AdmissionFormModal({
           </div>
           <div className="mt-4">
             <Textarea label="Correspondence address" hint="If different from the address above" {...register("correspondenceAddress")} error={errors.correspondenceAddress?.message} />
+          </div>
+        </section>
+
+        <section>
+          <SectionTitle>Fees (optional)</SectionTitle>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Input
+              label="Concession / discount (₹)"
+              hint="Staff ward / sibling / merit — applied to this year's fees when the applicant is enrolled. The fee account opens automatically from the class structure on approval."
+              inputMode="numeric"
+              placeholder="0"
+              {...register("feeConcession")}
+              error={errors.feeConcession?.message}
+            />
           </div>
         </section>
 

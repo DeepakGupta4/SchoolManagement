@@ -77,6 +77,10 @@ const admissionSchema = new Schema(
     transportRequired: { type: Boolean, default: false },
     pickupPoint: { type: String, default: "" },
     transportRouteCode: { type: String, default: "" },
+
+    // Fee concession (₹) agreed at admission — applied to this year's fees when
+    // the applicant is enrolled (staff ward / sibling / merit).
+    feeConcession: { type: Number, default: 0, min: 0 },
   },
   { timestamps: true }
 );

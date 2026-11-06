@@ -79,6 +79,10 @@ export const admissionSchema = z.object({
   transportRequired: z.boolean().optional(),
   pickupPoint: z.string().optional(),
   transportRouteCode: z.string().optional(),
+
+  // Fee concession (₹) agreed at admission — applied to this year's fees when the
+  // applicant is enrolled. Optional (input === output), per the no-defaults note.
+  feeConcession: z.coerce.number<number>().min(0, "Cannot be negative").optional(),
 });
 
 export type AdmissionSchema = z.infer<typeof admissionSchema>;
