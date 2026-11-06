@@ -5,7 +5,9 @@ import {
   BadgeIndianRupee,
   CalendarClock,
   CheckCircle2,
+  FileUp,
   History,
+  Pencil,
   Printer,
   Search,
   TriangleAlert,
@@ -56,6 +58,8 @@ import {
   type StudentFeeAccount,
 } from "@/lib/api/feeLedger";
 import { ReceiptCopies } from "./ReceiptCopies";
+import { FeeSetupModal } from "./FeeSetupModal";
+import { ArrearsImportModal } from "./ArrearsImportModal";
 
 const inr = (n: number) => `₹${n.toLocaleString("en-IN")}`;
 
@@ -194,6 +198,10 @@ export default function CollectFeePage() {
   const [remarks, setRemarks] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [receipt, setReceipt] = useState<Payment | null>(null);
+
+  // Fee setup / arrears onboarding tools.
+  const [feeSetupOpen, setFeeSetupOpen] = useState(false);
+  const [arrearsOpen, setArrearsOpen] = useState(false);
 
   // The student we've already pre-filled monthly defaults for, so switching
   // students prefills once without clobbering edits or re-filling after a payment.
@@ -363,6 +371,12 @@ export default function CollectFeePage() {
         <PageHeader
           title="Collect Fee"
           description="Record a full or part payment against a student's fee account."
+          actions={
+            <Button variant="outline" onClick={() => setArrearsOpen(true)}>
+              <FileUp className="size-4" />
+              Import arrears
+            </Button>
+          }
         />
       </div>
 
@@ -492,6 +506,12 @@ export default function CollectFeePage() {
                     Due date: {selected.dueDate ? formatDate(selected.dueDate) : "Not set"}
                     {" · "}Session {selected.session}
                   </p>
+                  <div className="mt-2">
+                    <Button variant="outline" size="sm" onClick={() => setFeeSetupOpen(true)}>
+                      <Pencil className="size-3.5" />
+                      Set up / edit fees
+                    </Button>
+                  </div>
                 </div>
                 <div className="flex gap-6">
                   {[
@@ -867,6 +887,24 @@ export default function CollectFeePage() {
           <ReceiptCopies payment={receipt} school={identity} />
         </div>
       )}
+
+      {/* ---------------- Fee setup / arrears onboarding ---------------- */}
+      {selected && (
+        <FeeSetupModal
+          open={feeSetupOpen}
+          account={selected}
+          onClose={() => setFeeSetupOpen(false)}
+          onSaved={() => {
+            refetch();
+            setHistoryNonce((n) => n + 1);
+          }}
+        />
+      )}
+      <ArrearsImportModal
+        open={arrearsOpen}
+        onClose={() => setArrearsOpen(false)}
+        onImported={refetch}
+      />
     </div>
   );
 }

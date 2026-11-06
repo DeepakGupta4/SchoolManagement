@@ -247,6 +247,9 @@ export interface ProvisionalAccount {
   session: string;
   heads: AccountHead[];
   concession: number;
+  /** A provisional account's concession is purely scholarship-derived, so there
+   * is no manual part yet — the fee-setup screen reads this as 0. */
+  manualConcession: number;
   lateFee: number;
   lastPaymentDate: string | null;
   dueDate: string | null;
@@ -272,6 +275,7 @@ export function provisionalAccountFor(
     session: CURRENT_SESSION,
     heads: toAccountHeads(net.heads),
     concession: net.concession,
+    manualConcession: 0,
     lateFee: 0,
     lastPaymentDate: null,
     dueDate: null,

@@ -58,6 +58,14 @@ const canCollect = requireRole("super_admin", "school_admin", "principal", "acco
  */
 const LATE_FEE_HEAD = "Late Fee";
 
+/**
+ * Carried-forward arrears from before a school joined the ERP are billed as this
+ * one-time head, so they reuse the whole collect / receipt / balance machinery.
+ * The admission form, the fee-setup screen and the bulk import all key it by this
+ * exact name — keep them in sync.
+ */
+const PREVIOUS_DUES_HEAD = "Previous Dues";
+
 /* ------------------------------------------------------------------ */
 /* Student-centric fee rows                                             */
 /*                                                                     */
@@ -81,13 +89,16 @@ interface StudentFeeRow {
   session: string;
   heads: { head: string; billed: number; paid: number; frequency: FeeFrequency; unit: number }[];
   concession: number;
+  /** The MANUAL portion of the concession, so the fee-setup screen can edit it
+   * without double-counting scholarship waivers the server re-derives. */
+  manualConcession: number;
   lateFee: number;
   lastPaymentDate: string | null;
   dueDate: string | null;
   provisional: boolean;
 }
 
-function publicAccount(doc: FeeAccountDoc): StudentFeeRow {
+function publicAccount(doc: FeeAccountDoc, scholarshipTotal = 0): StudentFeeRow {
   return {
     id: String(doc._id),
     studentId: String(doc.studentId),
@@ -107,6 +118,10 @@ function publicAccount(doc: FeeAccountDoc): StudentFeeRow {
       unit: h.unit ?? 0,
     })),
     concession: doc.concession,
+    // For an account not yet touched by the boot-time backfill (manualConcession
+    // undefined), infer the manual part as concession − active scholarships, so
+    // the fee-setup screen never re-adds a scholarship that's already baked in.
+    manualConcession: doc.manualConcession ?? Math.max(0, doc.concession - scholarshipTotal),
     lateFee: doc.lateFee,
     lastPaymentDate: doc.lastPaymentDate ?? null,
     dueDate: doc.dueDate ?? null,
@@ -164,7 +179,8 @@ async function loadStudentFeeRows(
 
   return students.map((student) => {
     const existing = accountByStudent.get(String(student._id));
-    if (existing) return publicAccount(existing as FeeAccountDoc);
+    if (existing)
+      return publicAccount(existing as FeeAccountDoc, concessionByStudent.get(String(student._id)) ?? 0);
     const structure = pickStructureForClass(structures, student.className);
     const gross = applyTransportHead(deriveGrossHeads(structure), {
       transportRequired: student.transportRequired,
@@ -252,12 +268,68 @@ router.post("/accounts", canCollect, validate(feeAccountBody), async (req, res, 
       frequency: (h.frequency ?? "one-time") as FeeFrequency,
       unit: Math.round(h.unit ?? h.billed),
     }));
-    // body.concession is the MANUAL discount the office typed at admission. The
-    // total applied concession also includes the student's active scholarships,
-    // and the manual part is stored separately so a later scholarship resync can
-    // never wipe it.
+    // Carried-forward arrears ("Previous Dues") are NEVER reduced by a concession —
+    // a waiver is for THIS year's fees. So the concession is applied only to the
+    // current-fee heads, and the arrears head(s) are billed back in full. This also
+    // protects the admission path, which posts through here.
+    //
+    // body.concession is the MANUAL discount the office typed. The total applied
+    // concession also includes the student's active scholarships, and the manual
+    // part is stored separately so a later scholarship resync can never wipe it.
+    const isArrears = (h: { head: string }) =>
+      h.head.trim().toLowerCase() === PREVIOUS_DUES_HEAD.toLowerCase();
+    const currentGross = gross.filter((h) => !isArrears(h));
+    const arrearsGross = gross.filter(isArrears);
     const scholarshipTotal = await scholarshipConcessionFor(schoolId, body.studentId);
-    const net = netHeadsFor(gross, body.concession + scholarshipTotal);
+    const net = netHeadsFor(currentGross, body.concession + scholarshipTotal);
+    const combinedHeads = [...net.heads, ...arrearsGross];
+
+    // Re-posting an account (the fee-setup screen editing fees after admission)
+    // must NOT wipe what's already been collected. Carry each head's prior `paid`
+    // forward by name, clamped to its new bill so a raised concession can't leave a
+    // head showing more paid than billed (a negative balance). For a brand-new
+    // account there's nothing to carry, so this is a no-op at admission. The
+    // payment register stays the source of truth for collections either way.
+    const existing = await FeeAccount.findOne({
+      schoolId,
+      studentId: student._id,
+      session: body.session,
+    });
+    // Preserve what's already been collected across a re-bill. First match each
+    // head's prior `paid` by name (exact, trim+lowercase) — the common case, where
+    // the bill is unchanged. Then any prior paid whose head was RENAMED or REMOVED
+    // (e.g. the office switched the fee basis from a structure to a custom total)
+    // is redistributed across the new heads oldest-first, so the TOTAL already
+    // collected is always conserved and the balance can never silently inflate.
+    // A name bucket is consumed once, so a duplicate head name can't double-credit.
+    const priorByName = new Map<string, number>();
+    let priorTotal = 0;
+    for (const h of existing?.heads ?? []) {
+      const key = h.head.trim().toLowerCase();
+      const p = Math.max(0, h.paid ?? 0);
+      priorByName.set(key, (priorByName.get(key) ?? 0) + p);
+      priorTotal += p;
+    }
+    const heads = toAccountHeads(combinedHeads).map((h) => {
+      const key = h.head.trim().toLowerCase();
+      const prior = priorByName.get(key) ?? 0;
+      if (prior <= 0) return h;
+      const paid = Math.min(h.billed, prior);
+      priorByName.set(key, 0); // consume so a repeated name isn't credited twice
+      return { ...h, paid };
+    });
+    // Redistribute any prior paid left unmatched (renamed / removed heads) so no
+    // recorded collection is dropped from the account's balance. Anything beyond
+    // the new total bill is an overpayment credit the register still holds.
+    let leftover = Math.max(0, priorTotal - heads.reduce((s, h) => s + h.paid, 0));
+    for (const h of heads) {
+      if (leftover <= 0) break;
+      const room = Math.max(0, h.billed - h.paid);
+      if (room <= 0) continue;
+      const put = Math.min(room, leftover);
+      h.paid += put;
+      leftover -= put;
+    }
 
     const account = await FeeAccount.findOneAndUpdate(
       { schoolId, studentId: student._id, session: body.session },
@@ -270,7 +342,7 @@ router.post("/accounts", canCollect, validate(feeAccountBody), async (req, res, 
           rollNo: student.rollNo,
           guardian: student.guardian.name,
           guardianPhone: student.guardian.phone,
-          heads: toAccountHeads(net.heads),
+          heads,
           concession: net.concession,
           manualConcession: Math.round(body.concession),
           lateFee: Math.round(body.lateFee),
@@ -286,6 +358,113 @@ router.post("/accounts", canCollect, validate(feeAccountBody), async (req, res, 
     await student.save();
 
     res.status(201).json({ data: toPublic(account as FeeAccountDoc) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * Bulk arrears import — for onboarding a school that already has students with
+ * carried-forward unpaid fees. Each row is an admission number and a rupee
+ * amount; for every match it upserts (or, at 0, clears) a one-time
+ * "Previous Dues" head on the student's account. SURGICAL by design: it never
+ * touches any other head or any `paid` figure, so a school's live bill and
+ * collection history are left exactly as they were. A student with no account
+ * yet gets a bare one carrying only the arrears — current fees stay the job of
+ * admission / the fee-setup screen, so an import never guesses a live bill.
+ */
+const arrearsBody = z.object({
+  session: z.string().min(1).default(CURRENT_SESSION),
+  rows: z
+    .array(
+      z.object({
+        admissionNo: z.string().trim().min(1),
+        amount: z.coerce.number<number>().min(0).max(100_000_000),
+      })
+    )
+    .min(1, "Add at least one row")
+    .max(5000, "Import at most 5000 rows at a time"),
+});
+
+router.post("/accounts/arrears", canCollect, validate(arrearsBody), async (req, res, next) => {
+  try {
+    const schoolId = req.user!.schoolId;
+    const { rows, session } = parsed<z.infer<typeof arrearsBody>>(req, "body");
+
+    // Collapse duplicate admission numbers (last wins) so one student can't take
+    // two conflicting arrears writes in a single import.
+    const amountByAdm = new Map<string, number>();
+    for (const r of rows) amountByAdm.set(r.admissionNo.trim(), Math.round(r.amount));
+
+    const isPrevDues = (name: string) => name.trim().toLowerCase() === PREVIOUS_DUES_HEAD.toLowerCase();
+    const results = { updated: 0, cleared: 0, skipped: 0, notFound: [] as string[] };
+
+    for (const [admissionNo, amount] of amountByAdm) {
+      const student = await Student.findOne({ schoolId, admissionNo });
+      if (!student) {
+        results.notFound.push(admissionNo);
+        continue;
+      }
+
+      let account = await FeeAccount.findOne({ schoolId, studentId: student._id, session });
+      if (!account) {
+        account = new FeeAccount({
+          schoolId,
+          studentId: student._id,
+          admissionNo: student.admissionNo,
+          name: `${student.firstName} ${student.lastName}`.trim(),
+          className: student.className,
+          section: student.section,
+          rollNo: student.rollNo,
+          guardian: student.guardian.name,
+          guardianPhone: student.guardian.phone,
+          session,
+          heads: [],
+          concession: 0,
+          manualConcession: 0,
+          lateFee: 0,
+        });
+      }
+
+      // Keep anything already collected against prior arrears; only the billed
+      // figure is replaced. Clamp the carried `paid` to the new bill (no negative
+      // balance). Every non-arrears head is preserved untouched.
+      const prior = account.heads.find((h) => isPrevDues(h.head));
+      const priorPaid = Math.max(0, prior?.paid ?? 0);
+      const rest = account.heads.filter((h) => !isPrevDues(h.head)).map((h) => ({
+        head: h.head,
+        billed: h.billed,
+        paid: h.paid,
+        frequency: h.frequency,
+        unit: h.unit,
+      }));
+
+      if (amount > 0) {
+        rest.push({
+          head: PREVIOUS_DUES_HEAD,
+          billed: amount,
+          paid: Math.min(amount, priorPaid),
+          frequency: "one-time",
+          unit: amount,
+        });
+        results.updated++;
+      } else if (prior) {
+        results.cleared++; // 0 removes the arrears head (prior already excluded from rest)
+      } else {
+        // 0 for a student who had no arrears, and no account worth opening — no-op.
+        results.skipped++;
+        continue;
+      }
+
+      account.set("heads", rest);
+      await account.save();
+      await Student.updateOne(
+        { _id: student._id, schoolId },
+        { $set: { feeDue: balanceOf(account as FeeAccountDoc) } }
+      );
+    }
+
+    res.json({ data: results });
   } catch (err) {
     next(err);
   }

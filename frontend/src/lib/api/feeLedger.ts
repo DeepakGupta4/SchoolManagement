@@ -63,6 +63,12 @@ export interface StudentFeeAccount {
   heads: FeeHeadDue[];
   /** Approved scholarship or sibling concession, already deducted from dues. */
   concession: number;
+  /**
+   * The MANUAL part of the concession (staff ward / sibling / admission discount),
+   * separate from scholarship waivers. The fee-setup screen edits this one so the
+   * server can re-add active scholarships without double-counting them.
+   */
+  manualConcession?: number;
   /** Accrued for overdue instalments. Collected alongside the heads. */
   lateFee: number;
   lastPaymentDate: string | null;
@@ -228,6 +234,35 @@ export async function createFeeAccount(input: NewFeeAccountInput): Promise<Stude
   return apiRequest<StudentFeeAccount>("/api/fees/accounts", {
     method: "POST",
     body: input,
+  });
+}
+
+/** One row of a bulk arrears import: a student's admission no. and carried dues. */
+export interface ArrearsImportRow {
+  admissionNo: string;
+  amount: number;
+}
+
+export interface ArrearsImportResult {
+  /** Students whose "Previous Dues" head was set to a positive amount. */
+  updated: number;
+  /** Students whose existing arrears head was removed (amount 0). */
+  cleared: number;
+  /** Rows that changed nothing (0 for a student with no arrears). */
+  skipped: number;
+  /** Admission numbers that matched no active student. */
+  notFound: string[];
+}
+
+/**
+ * Bulk-sets carried-forward arrears for onboarding an existing school. Surgical
+ * on the server: only each student's one-time "Previous Dues" head is touched —
+ * current fees and all collection history are left exactly as they were.
+ */
+export async function importArrears(rows: ArrearsImportRow[]): Promise<ArrearsImportResult> {
+  return apiRequest<ArrearsImportResult>("/api/fees/accounts/arrears", {
+    method: "POST",
+    body: { rows },
   });
 }
 
