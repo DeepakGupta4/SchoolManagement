@@ -7,6 +7,7 @@ import { requireRole } from "../../middleware/auth.js";
 import { validate } from "../../middleware/validate.js";
 import { ApiError } from "../../utils/ApiError.js";
 import { ISO_DATE, isRealDate } from "../../utils/dates.js";
+import { withTransaction } from "../../utils/txn.js";
 
 // Empty (not scheduled yet) OR a real calendar date — never garbage like "2026-13-45"
 // (which would also silently defeat the mark-entry "before the exam date" guard).
@@ -46,23 +47,27 @@ export default createCrudRouter({
       async (req, res, next) => {
         try {
           const schoolId = req.user!.schoolId;
-          const existing = await Exam.findOne({ _id: req.params.id, schoolId });
-          if (!existing) throw ApiError.notFound("Exam not found.");
-          const oldName = existing.name;
+          // Atomic: the rename + both cascade updates commit together, so a crash
+          // can't leave marks/scheduled papers pointing at the old name.
+          const updated = await withTransaction(async (session) => {
+            const existing = await Exam.findOne({ _id: req.params.id, schoolId }).session(session);
+            if (!existing) throw ApiError.notFound("Exam not found.");
+            const oldName = existing.name;
 
-          const updated = await Exam.findOneAndUpdate(
-            { _id: req.params.id, schoolId },
-            req.body,
-            { new: true, runValidators: true }
-          );
-          if (!updated) throw ApiError.notFound("Exam not found.");
+            const doc = await Exam.findOneAndUpdate({ _id: req.params.id, schoolId }, req.body, {
+              new: true,
+              runValidators: true,
+              session,
+            });
+            if (!doc) throw ApiError.notFound("Exam not found.");
 
-          if (oldName !== updated.name) {
-            await Promise.all([
-              Mark.updateMany({ schoolId, examName: oldName }, { $set: { examName: updated.name } }),
-              ScheduledExam.updateMany({ schoolId, exam: oldName }, { $set: { exam: updated.name } }),
-            ]);
-          }
+            if (oldName !== doc.name) {
+              // Sequential (one session can't run concurrent ops).
+              await Mark.updateMany({ schoolId, examName: oldName }, { $set: { examName: doc.name } }, { session });
+              await ScheduledExam.updateMany({ schoolId, exam: oldName }, { $set: { exam: doc.name } }, { session });
+            }
+            return doc;
+          });
           res.json({ data: toPublic(updated) });
         } catch (err) {
           next(err);

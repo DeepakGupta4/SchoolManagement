@@ -11,6 +11,7 @@ import { createCrudRouter, toPublic } from "../../utils/crudRouter.js";
 import { requireRole } from "../../middleware/auth.js";
 import { validate } from "../../middleware/validate.js";
 import { ApiError } from "../../utils/ApiError.js";
+import { withTransaction } from "../../utils/txn.js";
 
 const SECTION_SEQUENCE = ["A", "B", "C", "D", "E", "F", "G", "H"];
 
@@ -64,92 +65,111 @@ export default createCrudRouter({
       async (req, res, next) => {
         try {
           const schoolId = req.user!.schoolId;
-          const existing = await SchoolClass.findOne({ _id: req.params.id, schoolId });
-          if (!existing) throw ApiError.notFound("Class not found.");
-          const oldName = existing.name;
+          // Atomic: the rename + the whole cascade (students, teachers, timetable,
+          // marks, attendance, scheduled exams, exams) commit together, so a crash
+          // mid-cascade can't leave some references on the new name and some on the
+          // old. The section-removal guard reads the same snapshot it writes under.
+          const updated = await withTransaction(async (session) => {
+            const existing = await SchoolClass.findOne({ _id: req.params.id, schoolId }).session(session);
+            if (!existing) throw ApiError.notFound("Class not found.");
+            const oldName = existing.name;
 
-          // Guard a section REMOVAL: a section still holding active students (or
-          // timetable rows) can't be dropped, or they'd be orphaned — a student's
-          // className/section pointing at a section the class no longer offers, and
-          // dangling "<class> - <section>" timetable rows (the same orphaning the
-          // delete guard prevents). Sections are fixed letters A,B,C…, so a removal
-          // is the only risky `sections` change.
-          const newSections = req.body.sections as string[] | undefined;
-          if (Array.isArray(newSections)) {
-            const removed = existing.sections.filter((s) => !newSections.includes(s));
-            if (removed.length > 0) {
-              const [students, ttRows] = await Promise.all([
-                Student.find({ schoolId, className: oldName, section: { $in: removed }, status: "active" })
+            // Guard a section REMOVAL: a section still holding active students (or
+            // timetable rows) can't be dropped, or they'd be orphaned — a student's
+            // className/section pointing at a section the class no longer offers, and
+            // dangling "<class> - <section>" timetable rows (the same orphaning the
+            // delete guard prevents). Sections are fixed letters A,B,C…, so a removal
+            // is the only risky `sections` change. Reads are sequential (one session).
+            const newSections = req.body.sections as string[] | undefined;
+            if (Array.isArray(newSections)) {
+              const removed = existing.sections.filter((s) => !newSections.includes(s));
+              if (removed.length > 0) {
+                const students = await Student.find({
+                  schoolId,
+                  className: oldName,
+                  section: { $in: removed },
+                  status: "active",
+                })
                   .select("section")
-                  .lean(),
-                Timetable.find({ schoolId, className: { $in: removed.map((s) => `${oldName} - ${s}`) } })
+                  .session(session)
+                  .lean();
+                const ttRows = await Timetable.find({
+                  schoolId,
+                  className: { $in: removed.map((s) => `${oldName} - ${s}`) },
+                })
                   .select("className")
-                  .lean(),
-              ]);
-              const studentsBySection = new Map<string, number>();
-              for (const st of students)
-                studentsBySection.set(st.section, (studentsBySection.get(st.section) ?? 0) + 1);
-              const ttSections = new Set(ttRows.map((r) => r.className.slice(oldName.length + 3)));
-              const inUse = removed.filter((s) => (studentsBySection.get(s) ?? 0) > 0 || ttSections.has(s));
-              if (inUse.length > 0) {
-                const detail = inUse
-                  .map((s) => {
-                    const n = studentsBySection.get(s) ?? 0;
-                    return n > 0 ? `${s} (${n} active student${n === 1 ? "" : "s"})` : `${s} (has timetable entries)`;
-                  })
-                  .join(", ");
-                throw ApiError.conflict(
-                  `Can't remove section ${detail} from "${oldName}" — reassign those students/periods to another section first.`
-                );
+                  .session(session)
+                  .lean();
+                const studentsBySection = new Map<string, number>();
+                for (const st of students)
+                  studentsBySection.set(st.section, (studentsBySection.get(st.section) ?? 0) + 1);
+                const ttSections = new Set(ttRows.map((r) => r.className.slice(oldName.length + 3)));
+                const inUse = removed.filter((s) => (studentsBySection.get(s) ?? 0) > 0 || ttSections.has(s));
+                if (inUse.length > 0) {
+                  const detail = inUse
+                    .map((s) => {
+                      const n = studentsBySection.get(s) ?? 0;
+                      return n > 0 ? `${s} (${n} active student${n === 1 ? "" : "s"})` : `${s} (has timetable entries)`;
+                    })
+                    .join(", ");
+                  throw ApiError.conflict(
+                    `Can't remove section ${detail} from "${oldName}" — reassign those students/periods to another section first.`
+                  );
+                }
               }
             }
-          }
 
-          const updated = await SchoolClass.findOneAndUpdate(
-            { _id: req.params.id, schoolId },
-            req.body,
-            { new: true, runValidators: true }
-          );
-          if (!updated) throw ApiError.notFound("Class not found.");
-          const newName = updated.name;
+            const doc = await SchoolClass.findOneAndUpdate({ _id: req.params.id, schoolId }, req.body, {
+              new: true,
+              runValidators: true,
+              session,
+            });
+            if (!doc) throw ApiError.notFound("Class not found.");
+            const newName = doc.name;
 
-          if (oldName !== newName) {
-            await Promise.all([
-              Student.updateMany({ schoolId, className: oldName }, { $set: { className: newName } }),
-              Teacher.updateMany(
+            if (oldName !== newName) {
+              // Sequential cascade — one session can't run concurrent ops.
+              await Student.updateMany({ schoolId, className: oldName }, { $set: { className: newName } }, { session });
+              await Teacher.updateMany(
                 { schoolId, classes: oldName },
                 { $set: { "classes.$[c]": newName } },
-                { arrayFilters: [{ c: oldName }] }
-              ),
-              Teacher.updateMany(
+                { arrayFilters: [{ c: oldName }], session }
+              );
+              await Teacher.updateMany(
                 { schoolId, classTeacherOf: oldName },
-                { $set: { classTeacherOf: newName } }
-              ),
+                { $set: { classTeacherOf: newName } },
+                { session }
+              );
               // Timetable keys by the COMPOSITE "<class> - <section>", so swap just
               // the class-name prefix, preserving each row's section.
-              Timetable.updateMany({ schoolId, className: { $regex: `^${escapeRegex(oldName)} - ` } }, [
-                {
-                  $set: {
-                    className: {
-                      $concat: [
-                        newName,
-                        { $substrCP: ["$className", oldName.length, { $strLenCP: "$className" }] },
-                      ],
+              await Timetable.updateMany(
+                { schoolId, className: { $regex: `^${escapeRegex(oldName)} - ` } },
+                [
+                  {
+                    $set: {
+                      className: {
+                        $concat: [
+                          newName,
+                          { $substrCP: ["$className", oldName.length, { $strLenCP: "$className" }] },
+                        ],
+                      },
                     },
                   },
-                },
-              ]),
+                ],
+                { session }
+              );
               // Exam-feature + attendance references are BARE class names (no section).
-              Mark.updateMany({ schoolId, className: oldName }, { $set: { className: newName } }),
-              Attendance.updateMany({ schoolId, className: oldName }, { $set: { className: newName } }),
-              ScheduledExam.updateMany({ schoolId, class: oldName }, { $set: { class: newName } }),
-              Exam.updateMany(
+              await Mark.updateMany({ schoolId, className: oldName }, { $set: { className: newName } }, { session });
+              await Attendance.updateMany({ schoolId, className: oldName }, { $set: { className: newName } }, { session });
+              await ScheduledExam.updateMany({ schoolId, class: oldName }, { $set: { class: newName } }, { session });
+              await Exam.updateMany(
                 { schoolId, classes: oldName },
                 { $set: { "classes.$[e]": newName } },
-                { arrayFilters: [{ e: oldName }] }
-              ),
-            ]);
-          }
+                { arrayFilters: [{ e: oldName }], session }
+              );
+            }
+            return doc;
+          });
 
           res.json({ data: toPublic(updated) });
         } catch (err) {
@@ -164,33 +184,41 @@ export default createCrudRouter({
     router.delete("/:id", requireRole("super_admin", "school_admin", "principal"), async (req, res, next) => {
       try {
         const schoolId = req.user!.schoolId;
-        const existing = await SchoolClass.findOne({ _id: req.params.id, schoolId });
-        if (!existing) throw ApiError.notFound("Class not found.");
-        const name = existing.name;
+        // Atomic: the delete + its cleanup commit together, after the enrolment
+        // guard reads the same snapshot — so a crash can't half-remove a class.
+        await withTransaction(async (session) => {
+          const existing = await SchoolClass.findOne({ _id: req.params.id, schoolId }).session(session);
+          if (!existing) throw ApiError.notFound("Class not found.");
+          const name = existing.name;
 
-        const enrolled = await Student.countDocuments({ schoolId, className: name, status: "active" });
-        if (enrolled > 0) {
-          throw ApiError.conflict(
-            `"${name}" still has ${enrolled} active student(s). Move or transfer them to another class before deleting it.`
-          );
-        }
+          const enrolled = await Student.countDocuments({
+            schoolId,
+            className: name,
+            status: "active",
+          }).session(session);
+          if (enrolled > 0) {
+            throw ApiError.conflict(
+              `"${name}" still has ${enrolled} active student(s). Move or transfer them to another class before deleting it.`
+            );
+          }
 
-        await SchoolClass.deleteOne({ _id: req.params.id, schoolId });
+          await SchoolClass.deleteOne({ _id: req.params.id, schoolId }, { session });
 
-        await Promise.all([
-          Teacher.updateMany({ schoolId, classes: name }, { $pull: { classes: name } }),
-          Teacher.updateMany(
+          // Sequential cleanup — one session can't run concurrent ops.
+          await Teacher.updateMany({ schoolId, classes: name }, { $pull: { classes: name } }, { session });
+          await Teacher.updateMany(
             { schoolId, classTeacherOf: name },
-            { $set: { classTeacherOf: "", classTeacherSection: "", isClassTeacher: false } }
-          ),
+            { $set: { classTeacherOf: "", classTeacherSection: "", isClassTeacher: false } },
+            { session }
+          );
           // The class is gone, so its timetable rows ("<class> - <section>") and
           // scheduled exam papers are meaningless — remove them rather than orphan.
-          Timetable.deleteMany({ schoolId, className: { $regex: `^${escapeRegex(name)} - ` } }),
-          ScheduledExam.deleteMany({ schoolId, class: name }),
+          await Timetable.deleteMany({ schoolId, className: { $regex: `^${escapeRegex(name)} - ` } }, { session });
+          await ScheduledExam.deleteMany({ schoolId, class: name }, { session });
           // Drop the class from any multi-class exam (historical marks/attendance keep
           // their className as a record of what was — they're tied to the student).
-          Exam.updateMany({ schoolId, classes: name }, { $pull: { classes: name } }),
-        ]);
+          await Exam.updateMany({ schoolId, classes: name }, { $pull: { classes: name } }, { session });
+        });
 
         res.status(204).send();
       } catch (err) {

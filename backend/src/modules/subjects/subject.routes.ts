@@ -17,6 +17,7 @@ import { createCrudRouter, toPublic } from "../../utils/crudRouter.js";
 import { requireRole } from "../../middleware/auth.js";
 import { validate } from "../../middleware/validate.js";
 import { ApiError } from "../../utils/ApiError.js";
+import { withTransaction } from "../../utils/txn.js";
 
 const subjectCreateSchema = z.object({
   name: z.string().trim().min(1),
@@ -73,34 +74,42 @@ export default createCrudRouter({
       async (req, res, next) => {
         try {
           const schoolId = req.user!.schoolId;
-          const existing = await Subject.findOne({ _id: req.params.id, schoolId });
-          if (!existing) throw ApiError.notFound("Subject not found.");
-          const oldName = existing.name;
+          // Atomic: the rename + every reference update across the ~12 collections
+          // commit together, so a crash can't leave some collections renamed and
+          // others still pointing at the old subject name.
+          const updated = await withTransaction(async (session) => {
+            const existing = await Subject.findOne({ _id: req.params.id, schoolId }).session(session);
+            if (!existing) throw ApiError.notFound("Subject not found.");
+            const oldName = existing.name;
 
-          const updated = await Subject.findOneAndUpdate(
-            { _id: req.params.id, schoolId },
-            req.body,
-            { new: true, runValidators: true }
-          );
-          if (!updated) throw ApiError.notFound("Subject not found.");
-          const newName = updated.name;
+            const doc = await Subject.findOneAndUpdate({ _id: req.params.id, schoolId }, req.body, {
+              new: true,
+              runValidators: true,
+              session,
+            });
+            if (!doc) throw ApiError.notFound("Subject not found.");
+            const newName = doc.name;
 
-          if (oldName !== newName) {
-            await Promise.all(
-              SUBJECT_REFS.map((ref) =>
-                ref.array
-                  ? ref.model.updateMany(
-                      { schoolId, [ref.field]: oldName },
-                      { $set: { [`${ref.field}.$[e]`]: newName } },
-                      { arrayFilters: [{ e: oldName }] }
-                    )
-                  : ref.model.updateMany(
-                      { schoolId, [ref.field]: oldName },
-                      { $set: { [ref.field]: newName } }
-                    )
-              )
-            );
-          }
+            if (oldName !== newName) {
+              // Sequential — one session can't run concurrent ops.
+              for (const ref of SUBJECT_REFS) {
+                if (ref.array) {
+                  await ref.model.updateMany(
+                    { schoolId, [ref.field]: oldName },
+                    { $set: { [`${ref.field}.$[e]`]: newName } },
+                    { arrayFilters: [{ e: oldName }], session }
+                  );
+                } else {
+                  await ref.model.updateMany(
+                    { schoolId, [ref.field]: oldName },
+                    { $set: { [ref.field]: newName } },
+                    { session }
+                  );
+                }
+              }
+            }
+            return doc;
+          });
 
           res.json({ data: toPublic(updated) });
         } catch (err) {
