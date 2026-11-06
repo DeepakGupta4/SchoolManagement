@@ -1,133 +1,187 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
-import {
-  Search,
-  Send,
-  Plus,
-  MoreVertical,
-  Phone,
-  Video,
-  Paperclip,
-  Smile,
-  MessagesSquare,
-} from "lucide-react";
-import {
-  Avatar,
-  Button,
-  ConfirmDialog,
-  EmptyState,
-  Input,
-  Modal,
-  Select,
-  Textarea,
-} from "@/components/ui";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Search, Send, Plus, MessagesSquare, RefreshCw } from "lucide-react";
+import { Avatar, Button, EmptyState, Input, Modal } from "@/components/ui";
 import { cn } from "@/lib/utils";
-import { useResource } from "@/hooks/useResource";
 import {
   messagesApi,
-  MESSAGE_CATEGORY_OPTIONS,
-  type Message,
+  type Conversation,
+  type MessageContact,
+  type ThreadMessage,
 } from "@/lib/api/messages";
 
-const iconButtonClasses =
-  "focus-ring rounded-md p-2 text-subtle transition-colors hover:bg-surface-hover hover:text-text";
+/** A short, friendly timestamp for the sidebar + message rows. */
+function when(iso: string): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const now = new Date();
+  if (d.toDateString() === now.toDateString())
+    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const yest = new Date(now);
+  yest.setDate(now.getDate() - 1);
+  if (d.toDateString() === yest.toDateString()) return "Yesterday";
+  return d.toLocaleDateString([], { day: "2-digit", month: "short" });
+}
 
-type LocalReply = { id: number; from: "me" | "them"; text: string; time: string };
-
-const emptyCompose = { name: "", role: "", subject: "", body: "", category: "Direct", time: "" };
+const roleLabel = (r: string) =>
+  r ? r.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) : "";
 
 export default function MessagesPage() {
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [contacts, setContacts] = useState<MessageContact[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
   const [search, setSearch] = useState("");
-  const filters = useMemo(() => ({ search }), [search]);
+  const [activeEmail, setActiveEmail] = useState<string | null>(null);
+  const [thread, setThread] = useState<ThreadMessage[]>([]);
+  const [threadLoading, setThreadLoading] = useState(false);
 
-  const { items, loading, error, refetch, save, remove, saving, deleting } = useResource(
-    messagesApi,
-    filters,
-    { label: "message", describe: (m) => m.name }
-  );
-
-  const [activeId, setActiveId] = useState<string | null>(null);
   const [input, setInput] = useState("");
-  // Replies typed in this session, keyed by message id. Persisted messaging
-  // would need its own thread model; this keeps the chat panel interactive.
-  const [localReplies, setLocalReplies] = useState<Record<string, LocalReply[]>>({});
+  const [sending, setSending] = useState(false);
 
   const [composeOpen, setComposeOpen] = useState(false);
-  const [compose, setCompose] = useState(emptyCompose);
-  const [pendingDelete, setPendingDelete] = useState<Message | null>(null);
+  const [contactSearch, setContactSearch] = useState("");
 
-  // The list can be filtered down to nothing, and nothing guarantees `activeId`
-  // still points at a message that exists.
-  const active = items.find((m) => m.id === activeId) ?? null;
+  const scrollRef = useRef<HTMLDivElement>(null);
 
-  const chat = useMemo<LocalReply[]>(() => {
-    if (!active) return [];
-    const base: LocalReply[] = active.body
-      ? [{ id: 0, from: "them", text: active.body, time: active.time }]
-      : [];
-    return [...base, ...(localReplies[active.id] ?? [])];
-  }, [active, localReplies]);
+  const loadConversations = useCallback(async () => {
+    try {
+      const [convos, people] = await Promise.all([
+        messagesApi.conversations(),
+        messagesApi.contacts(),
+      ]);
+      setConversations(convos);
+      setContacts(people);
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not load messages.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  function sendMessage() {
-    if (!active || !input.trim()) return;
-    const newMsg: LocalReply = {
-      id: Date.now(),
-      from: "me",
-      text: input.trim(),
-      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+  useEffect(() => {
+    let cancelled = false;
+    const t = setTimeout(() => {
+      if (!cancelled) void loadConversations();
+    }, 0);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
     };
-    setLocalReplies((prev) => ({ ...prev, [active.id]: [...(prev[active.id] ?? []), newMsg] }));
-    setInput("");
+  }, [loadConversations]);
+
+  // Load the selected conversation's thread (and mark it read server-side).
+  const loadThread = useCallback(async (email: string) => {
+    setThreadLoading(true);
+    try {
+      const msgs = await messagesApi.thread(email);
+      setThread(msgs);
+    } catch {
+      setThread([]);
+    } finally {
+      setThreadLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const t = setTimeout(() => {
+      if (cancelled) return;
+      if (!activeEmail) {
+        setThread([]);
+        return;
+      }
+      void loadThread(activeEmail);
+    }, 0);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [activeEmail, loadThread]);
+
+  // Keep the chat scrolled to the newest message.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [thread]);
+
+  // The active party — from an existing conversation, or a contact for a brand-new one.
+  const activeParty = useMemo(() => {
+    if (!activeEmail) return null;
+    const c = conversations.find((x) => x.email === activeEmail);
+    if (c) return { email: c.email, name: c.name, role: c.role };
+    const p = contacts.find((x) => x.email === activeEmail);
+    return p ? { email: p.email, name: p.name, role: p.role } : { email: activeEmail, name: activeEmail, role: "" };
+  }, [activeEmail, conversations, contacts]);
+
+  const visibleConversations = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return conversations;
+    return conversations.filter(
+      (c) => c.name.toLowerCase().includes(q) || c.email.toLowerCase().includes(q)
+    );
+  }, [conversations, search]);
+
+  const visibleContacts = useMemo(() => {
+    const q = contactSearch.trim().toLowerCase();
+    if (!q) return contacts;
+    return contacts.filter(
+      (c) => c.name.toLowerCase().includes(q) || c.role.toLowerCase().includes(q)
+    );
+  }, [contacts, contactSearch]);
+
+  async function handleSend() {
+    const body = input.trim();
+    if (!activeEmail || !body || sending) return;
+    setSending(true);
+    try {
+      const created = await messagesApi.send(activeEmail, body);
+      setThread((prev) => [...prev, created]);
+      setInput("");
+      void loadConversations(); // refresh the sidebar preview + ordering
+    } catch {
+      // keep the typed text so the user can retry
+    } finally {
+      setSending(false);
+    }
   }
 
-  const openCompose = () => {
-    setCompose(emptyCompose);
-    setComposeOpen(true);
+  // Opening a conversation marks it read server-side (in loadThread); clear the
+  // sidebar badge optimistically so it doesn't linger until the next refresh.
+  const openConversation = (email: string) => {
+    setActiveEmail(email);
+    setConversations((prev) => prev.map((c) => (c.email === email ? { ...c, unread: 0 } : c)));
   };
 
-  const handleCompose = async () => {
-    if (!compose.name.trim()) return;
-    const ok = await save(
-      {
-        name: compose.name.trim(),
-        role: compose.role.trim(),
-        subject: compose.subject.trim(),
-        body: compose.body.trim(),
-        category: compose.category,
-        time:
-          compose.time.trim() ||
-          new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-        unread: 0,
-        online: false,
-        read: true,
-      },
-      null
-    );
-    if (ok) setComposeOpen(false);
-  };
-
-  const handleDelete = async () => {
-    if (!pendingDelete) return;
-    const ok = await remove(pendingDelete);
-    if (ok) {
-      if (activeId === pendingDelete.id) setActiveId(null);
-      setPendingDelete(null);
-    }
+  const startConversation = (email: string) => {
+    setActiveEmail(email);
+    setComposeOpen(false);
+    setContactSearch("");
   };
 
   return (
-    // The shell is a fixed-height flex column; every scrolling descendant gets
-    // min-h-0 so it scrolls instead of stretching the shell.
     <div className="flex h-[calc(100vh-140px)] min-h-0 overflow-hidden rounded-lg border border-border bg-surface-raised shadow-sm">
       {/* Conversation sidebar */}
       <div className="flex w-80 min-h-0 shrink-0 flex-col border-r border-border">
         <div className="border-b border-border px-4 pb-3 pt-5">
           <div className="mb-3.5 flex items-center justify-between gap-2">
             <h2 className="text-base font-semibold text-text">Messages</h2>
-            <Button size="sm" aria-label="New conversation" className="px-2 py-2" onClick={openCompose}>
-              <Plus className="size-4" />
-            </Button>
+            <div className="flex items-center gap-1">
+              <button
+                aria-label="Refresh"
+                className="focus-ring rounded-md p-2 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+                onClick={() => void loadConversations()}
+              >
+                <RefreshCw className="size-4" />
+              </button>
+              <Button size="sm" aria-label="New message" className="px-2 py-2" onClick={() => setComposeOpen(true)}>
+                <Plus className="size-4" />
+              </Button>
+            </div>
           </div>
           <Input
             type="search"
@@ -146,74 +200,52 @@ export default function MessagesPage() {
               title="Could not load messages"
               description={error}
               action={
-                <Button variant="outline" size="sm" onClick={refetch}>
+                <Button variant="outline" size="sm" onClick={() => void loadConversations()}>
                   Try again
                 </Button>
               }
             />
           ) : loading ? (
             <p className="px-3 py-4 text-sm text-subtle">Loading conversations…</p>
-          ) : items.length === 0 ? (
+          ) : visibleConversations.length === 0 ? (
             <EmptyState
-              icon={<Search className="size-5" />}
-              title="No conversations found"
+              icon={<MessagesSquare className="size-5" />}
+              title={search ? "No matches" : "No conversations yet"}
               description={
                 search
-                  ? `Nothing matches “${search}”. Try a different name or role.`
-                  : "You have no conversations yet."
+                  ? `Nothing matches “${search}”.`
+                  : "Start a conversation with someone at your school."
               }
               action={
-                search ? (
-                  <Button variant="outline" size="sm" onClick={() => setSearch("")}>
-                    Clear search
-                  </Button>
-                ) : (
-                  <Button variant="outline" size="sm" onClick={openCompose}>
-                    New conversation
-                  </Button>
-                )
+                <Button variant="outline" size="sm" onClick={() => setComposeOpen(true)}>
+                  New message
+                </Button>
               }
             />
           ) : (
-            items.map((c) => {
-              const isActive = c.id === activeId;
+            visibleConversations.map((c) => {
+              const isActive = c.email === activeEmail;
               return (
                 <button
-                  key={c.id}
-                  onClick={() => setActiveId(c.id)}
+                  key={c.email}
+                  onClick={() => openConversation(c.email)}
                   aria-current={isActive}
                   className={cn(
                     "focus-ring mb-0.5 flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left transition-colors",
                     isActive ? "bg-primary-soft" : "hover:bg-surface-hover"
                   )}
                 >
-                  <div className="relative shrink-0">
-                    <Avatar name={c.name} size="md" />
-                    {c.online && (
-                      <span className="absolute bottom-0 right-0 size-2.5 rounded-full border-2 border-surface-raised bg-success" />
-                    )}
-                  </div>
-
+                  <Avatar name={c.name} size="md" />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between gap-2">
-                      <p
-                        className={cn(
-                          "truncate text-sm text-text",
-                          c.unread > 0 ? "font-semibold" : "font-medium"
-                        )}
-                      >
+                      <p className={cn("truncate text-sm text-text", c.unread > 0 ? "font-semibold" : "font-medium")}>
                         {c.name}
                       </p>
-                      <span className="shrink-0 text-xs text-subtle">{c.time}</span>
+                      <span className="shrink-0 text-xs text-subtle">{when(c.lastAt)}</span>
                     </div>
                     <div className="mt-0.5 flex items-center justify-between gap-2">
-                      <p
-                        className={cn(
-                          "flex-1 truncate text-xs",
-                          c.unread > 0 ? "font-medium text-text" : "text-subtle"
-                        )}
-                      >
-                        {c.body}
+                      <p className={cn("flex-1 truncate text-xs", c.unread > 0 ? "font-medium text-text" : "text-subtle")}>
+                        {c.lastBody}
                       </p>
                       {c.unread > 0 && (
                         <span className="flex size-4.5 shrink-0 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-white">
@@ -231,104 +263,74 @@ export default function MessagesPage() {
 
       {/* Chat area */}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        {!active ? (
+        {!activeParty ? (
           <div className="flex min-h-0 flex-1 items-center justify-center p-6">
             <EmptyState
               icon={<MessagesSquare className="size-5" />}
               title="Select a conversation"
-              description="Choose someone from the list on the left to read and reply to their messages."
+              description="Choose someone from the list, or start a new message, to read and reply."
             />
           </div>
         ) : (
           <>
-            <div className="flex items-center justify-between gap-3 border-b border-border px-6 py-4">
-              <div className="flex min-w-0 items-center gap-3">
-                <div className="relative shrink-0">
-                  <Avatar name={active.name} size="md" />
-                  {active.online && (
-                    <span className="absolute bottom-0 right-0 size-2.5 rounded-full border-2 border-surface-raised bg-success" />
-                  )}
-                </div>
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-text">{active.name}</p>
-                  <p className={cn("mt-0.5 truncate text-xs", active.online ? "text-success" : "text-subtle")}>
-                    {active.online ? "Online" : active.role}
-                  </p>
-                </div>
-              </div>
-              <div className="flex shrink-0 items-center gap-1">
-                <button aria-label="Voice call" className={iconButtonClasses}>
-                  <Phone className="size-4.5" />
-                </button>
-                <button aria-label="Video call" className={iconButtonClasses}>
-                  <Video className="size-4.5" />
-                </button>
-                <button
-                  aria-label="Delete conversation"
-                  className={iconButtonClasses}
-                  onClick={() => setPendingDelete(active)}
-                >
-                  <MoreVertical className="size-4.5" />
-                </button>
+            <div className="flex items-center gap-3 border-b border-border px-6 py-4">
+              <Avatar name={activeParty.name} size="md" />
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-text">{activeParty.name}</p>
+                <p className="mt-0.5 truncate text-xs text-subtle">
+                  {roleLabel(activeParty.role) || activeParty.email}
+                </p>
               </div>
             </div>
 
-            <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-6">
-              {chat.length === 0 && (
+            <div ref={scrollRef} className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-6">
+              {threadLoading ? (
+                <p className="text-center text-sm text-subtle">Loading…</p>
+              ) : thread.length === 0 ? (
                 <div className="flex flex-1 items-center justify-center">
                   <p className="text-sm text-subtle">No messages yet. Say hi! 👋</p>
                 </div>
-              )}
-              {chat.map((msg) => {
-                const mine = msg.from === "me";
-                return (
-                  <div key={msg.id} className={cn("flex", mine ? "justify-end" : "justify-start")}>
+              ) : (
+                thread.map((msg) => (
+                  <div key={msg.id} className={cn("flex", msg.mine ? "justify-end" : "justify-start")}>
                     <div className="max-w-[65%]">
                       <div
                         className={cn(
                           "px-3.5 py-2.5 text-sm leading-relaxed",
-                          mine
+                          msg.mine
                             ? "rounded-lg rounded-br-sm bg-primary text-white shadow-sm"
                             : "rounded-lg rounded-bl-sm bg-surface-hover text-text"
                         )}
                       >
-                        {msg.text}
+                        {msg.body}
                       </div>
-                      <p
-                        className={cn("mt-1 text-xs text-subtle", mine ? "text-right" : "text-left")}
-                      >
-                        {msg.time}
+                      <p className={cn("mt-1 text-xs text-subtle", msg.mine ? "text-right" : "text-left")}>
+                        {when(msg.at)}
                       </p>
                     </div>
                   </div>
-                );
-              })}
+                ))
+              )}
             </div>
 
             <div className="border-t border-border px-6 py-4">
               <div className="flex items-center gap-2 rounded-md border border-border bg-surface px-2 py-2 pl-3">
-                <button aria-label="Attach file" className={cn(iconButtonClasses, "p-1.5")}>
-                  <Paperclip className="size-4" />
-                </button>
                 <input
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !e.shiftKey) {
                       e.preventDefault();
-                      sendMessage();
+                      void handleSend();
                     }
                   }}
                   placeholder="Type a message…"
                   aria-label="Message"
                   className="min-w-0 flex-1 border-none bg-transparent text-sm text-text outline-none placeholder:text-subtle"
                 />
-                <button aria-label="Insert emoji" className={cn(iconButtonClasses, "p-1.5")}>
-                  <Smile className="size-4" />
-                </button>
-                <Button onClick={sendMessage} disabled={!input.trim()} size="sm">
+                <Button onClick={() => void handleSend()} disabled={!input.trim() || sending} size="sm">
                   <Send className="size-4" />
-                  Send
+                  {sending ? "Sending…" : "Send"}
                 </Button>
               </div>
             </div>
@@ -336,74 +338,46 @@ export default function MessagesPage() {
         )}
       </div>
 
+      {/* New-message: pick a recipient from the school */}
       <Modal
         open={composeOpen}
         onOpenChange={setComposeOpen}
-        title="New conversation"
-        description="Start a conversation. It is saved and appears in the list."
-        footer={
-          <>
-            <Button variant="outline" onClick={() => setComposeOpen(false)} disabled={saving}>
-              Cancel
-            </Button>
-            <Button onClick={handleCompose} disabled={saving || !compose.name.trim()}>
-              {saving ? "Saving…" : "Create"}
-            </Button>
-          </>
-        }
+        title="New message"
+        description="Choose someone at your school to start a conversation with."
       >
-        <div className="flex flex-col gap-4">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Input
-              label="Name"
-              required
-              placeholder="Dr. Priya Sharma"
-              value={compose.name}
-              onChange={(e) => setCompose((c) => ({ ...c, name: e.target.value }))}
-            />
-            <Input
-              label="Role"
-              placeholder="Math Teacher"
-              value={compose.role}
-              onChange={(e) => setCompose((c) => ({ ...c, role: e.target.value }))}
-            />
-            <Select
-              label="Category"
-              options={MESSAGE_CATEGORY_OPTIONS.map((o) => ({ label: o, value: o }))}
-              value={compose.category}
-              onChange={(e) => setCompose((c) => ({ ...c, category: e.target.value }))}
-            />
-            <Input
-              label="Subject"
-              placeholder="Exam schedule"
-              value={compose.subject}
-              onChange={(e) => setCompose((c) => ({ ...c, subject: e.target.value }))}
-            />
-          </div>
-          <Textarea
-            label="Message"
-            rows={3}
-            placeholder="Type the first message…"
-            value={compose.body}
-            onChange={(e) => setCompose((c) => ({ ...c, body: e.target.value }))}
+        <div className="flex flex-col gap-3">
+          <Input
+            type="search"
+            autoFocus
+            value={contactSearch}
+            onChange={(e) => setContactSearch(e.target.value)}
+            placeholder="Search by name or role…"
+            icon={<Search className="size-4" />}
+            aria-label="Search people"
           />
+          <div className="max-h-80 overflow-y-auto rounded-md border border-border">
+            {visibleContacts.length === 0 ? (
+              <p className="px-4 py-6 text-center text-sm text-subtle">
+                {contacts.length === 0 ? "No other users in your school yet." : "No one matches that search."}
+              </p>
+            ) : (
+              visibleContacts.map((p) => (
+                <button
+                  key={p.email}
+                  onClick={() => startConversation(p.email)}
+                  className="focus-ring flex w-full items-center gap-3 border-b border-border px-4 py-2.5 text-left transition-colors last:border-0 hover:bg-surface-hover"
+                >
+                  <Avatar name={p.name} size="sm" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-text">{p.name}</p>
+                    <p className="truncate text-xs text-subtle">{roleLabel(p.role) || p.email}</p>
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
         </div>
       </Modal>
-
-      <ConfirmDialog
-        open={Boolean(pendingDelete)}
-        onOpenChange={(open) => !open && setPendingDelete(null)}
-        title="Delete conversation?"
-        description={
-          pendingDelete
-            ? `The conversation with ${pendingDelete.name} will be permanently removed. This cannot be undone.`
-            : ""
-        }
-        confirmLabel="Delete"
-        destructive
-        loading={deleting}
-        onConfirm={handleDelete}
-      />
     </div>
   );
 }

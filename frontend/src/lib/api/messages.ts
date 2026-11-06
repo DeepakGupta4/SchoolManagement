@@ -1,29 +1,49 @@
-import { createApiResource } from "./createApiResource";
+import { apiRequest } from "./client";
 
-export interface Message {
-  id: string;
-  /** Conversation / sender name shown in the sidebar and chat header. */
+/**
+ * Per-user messaging. Every message has a sender and a recipient, so a user's
+ * inbox is only their own conversations — not a flat school-wide list. A
+ * conversation is all the messages between the signed-in user and one other
+ * person; replies are ordinary messages, so threads persist on the server.
+ */
+
+/** One conversation in the sidebar — the other party + a last-message preview. */
+export interface Conversation {
+  /** The other party's login email — the conversation key. */
+  email: string;
   name: string;
-  /** Sender role / subtitle, e.g. "Math Teacher", "Group · 48 members". */
   role: string;
-  subject: string;
-  /** Message content — also used as the sidebar preview line. */
-  body: string;
-  /** Conversation type, e.g. "Direct" or "Group". */
-  category: string;
-  /** Display timestamp, e.g. "10:42 AM", "Yesterday", "Mon". */
-  time: string;
-  /** Unread badge count. */
+  lastBody: string;
+  lastAt: string;
+  /** Unread messages this party has sent me. */
   unread: number;
-  online: boolean;
-  read: boolean;
 }
 
-export interface MessageFilters {
-  search?: string;
-  category?: string;
+/** One message in an open thread. `mine` = sent by the signed-in user. */
+export interface ThreadMessage {
+  id: string;
+  mine: boolean;
+  fromName?: string;
+  body: string;
+  at: string;
 }
 
-export const MESSAGE_CATEGORY_OPTIONS = ["Direct", "Group"];
+/** Someone in the school the user can start a conversation with. */
+export interface MessageContact {
+  email: string;
+  name: string;
+  role: string;
+}
 
-export const messagesApi = createApiResource<Message, MessageFilters>("/api/messages");
+export const messagesApi = {
+  /** My conversations, most-recent activity first. */
+  conversations: () => apiRequest<Conversation[]>("/api/messages"),
+  /** People I can message (active users in my school). */
+  contacts: () => apiRequest<MessageContact[]>("/api/messages/contacts"),
+  /** The full thread with one person (marks their messages to me read). */
+  thread: (email: string) =>
+    apiRequest<ThreadMessage[]>(`/api/messages/thread/${encodeURIComponent(email)}`),
+  /** Send a message; returns the created message. */
+  send: (toEmail: string, body: string) =>
+    apiRequest<ThreadMessage>("/api/messages", { method: "POST", body: { toEmail, body } }),
+};
